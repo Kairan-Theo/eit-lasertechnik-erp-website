@@ -27,6 +27,7 @@ export default function AppGrid() {
                   </div>
                   <p className="text-center font-semibold text-gray-900 text-sm">{app.name}</p>
                 </div>
+                <p className="text-center font-semibold text-gray-900 text-sm">{app.name}</p>
               </div>
             )
             return app.href ? (
