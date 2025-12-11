@@ -22,7 +22,7 @@ export default function AppGrid() {
             const card = (
               <div className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group">
                 <div className="flex flex-col items-center gap-4">
-                  <div className={`${app.color} w-16 h-16 rounded-lg flex items-center justify-center text-3xl`}>
+                  <div className={`${app.color} w-16 h-16 rounded-lg flex items-center justify-center text-3xl group-hover:scale-110 transition-transform`}>
                     {app.icon}
                   </div>
                   <p className="text-center font-semibold text-gray-900 text-sm">{app.name}</p>
