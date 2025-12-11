@@ -26,6 +26,9 @@ export default function Navigation() {
 
           {/* Center Navigation Links */}
           <div className="hidden md:flex items-center gap-8">
+            <a href="/" className="text-white hover:text-gray-200 transition">
+              Home
+            </a>
             <a href="#" onClick={handleNavClick} className="text-white hover:text-gray-200 transition">
               App
             </a>
@@ -45,12 +48,12 @@ export default function Navigation() {
 
           {/* Right Side - Log In and CTA */}
           <div className="flex items-center gap-4">
-            <a href="#" onClick={handleNavClick} className="text-white hover:text-gray-200 transition hidden sm:block">
+            <a href="/login.html" className="text-white hover:text-gray-200 transition">
               Log in
             </a>
-            <button className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-6 py-2 font-semibold transition">
+            <a href="/login.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-6 py-2 font-semibold transition">
               Try it for free
-            </button>
+            </a>
           </div>
         </div>
       </div>
