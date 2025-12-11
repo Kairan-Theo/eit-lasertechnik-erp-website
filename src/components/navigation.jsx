@@ -13,22 +13,15 @@ export default function Navigation() {
     <nav className="sticky top-0 z-50 w-full bg-[#3D56A6] text-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
           <button
             onClick={handleLogoClick}
-            className="flex items-center gap-2 font-bold text-lg cursor-pointer hover:opacity-90 transition"
+            className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition"
           >
-            <div className="w-8 h-8 bg-white rounded flex items-center justify-center">
-              <span className="text-[#3D56A6] font-bold">EIT</span>
-            </div>
-            <span>EIT Lasertechnik</span>
+            <img src="/icon.svg" alt="EIT" className="h-8 w-8 rounded" />
+            <span className="font-semibold text-lg"> Lasertechnik</span>
           </button>
 
-          {/* Center Navigation Links */}
           <div className="hidden md:flex items-center gap-8">
-            <a href="/" className="text-white hover:text-gray-200 transition">
-              Home
-            </a>
             <a href="#" onClick={handleNavClick} className="text-white hover:text-gray-200 transition">
               App
             </a>
@@ -46,14 +39,13 @@ export default function Navigation() {
             </a>
           </div>
 
-          {/* Right Side - Log In and CTA */}
-          <div className="flex items-center gap-4">
-            <a href="/login.html" className="text-white hover:text-gray-200 transition">
+          <div className="flex items-center gap-3">
+            <a href="/login" className="hidden sm:block rounded-full px-4 py-2 bg-white/10 hover:bg-white/20 transition">
               Log in
             </a>
-            <a href="/login.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-6 py-2 font-semibold transition">
+            <button className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-5 py-2 font-semibold shadow-sm transition">
               Try it for free
-            </a>
+            </button>
           </div>
         </div>
       </div>
