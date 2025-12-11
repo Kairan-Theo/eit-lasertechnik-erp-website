@@ -1,16 +1,10 @@
 const apps = [ // hello
-  { name: "Accounting", color: "bg-blue-500", icon: "📊" },
   { name: "Manufacturing", color: "bg-orange-500", icon: "🏭" },
   { name: "Inventory", color: "bg-green-500", icon: "📦" },
   { name: "CRM", color: "bg-red-500", icon: "👥" },
-  { name: "Sales", color: "bg-purple-500", icon: "💼" },
-  { name: "Purchasing", color: "bg-yellow-500", icon: "🛒" },
-  { name: "HR", color: "bg-pink-500", icon: "👔" },
-  { name: "Production Planning", color: "bg-indigo-500", icon: "📋" },
-  { name: "Quality Control", color: "bg-teal-500", icon: "✓" },
-  { name: "Warehouse", color: "bg-cyan-500", icon: "🏢" },
+  { name: "Admin", color: "bg-pink-500", icon: "👔" },
   { name: "Project Management", color: "bg-lime-500", icon: "🎯" },
-  { name: "Dashboard", color: "bg-gray-500", icon: "📈" },
+
 ]
 
 export default function AppGrid() {

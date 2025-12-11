@@ -39,7 +39,7 @@ const EyeOffIcon = (props) => (
 function LoginPage() {
   const handleSubmit = (e) => {
     e.preventDefault()
-    alert("Logged in (demo)")
+    window.location.href = "/apps.html"
   }
 
   const [showPassword, setShowPassword] = React.useState(false)
@@ -98,7 +98,7 @@ function LoginPage() {
             </button>
           </form>
           <p className="text-center text-sm text-gray-500 mt-4">
-            Don’t have an account? <a href="#" className="text-[#3D56A6] hover:underline">Sign in</a>
+            Don’t have an account? <a href="/apps.html" className="text-[#3D56A6] hover:underline">Sign in</a>
           </p>
         </div>
       </section>
