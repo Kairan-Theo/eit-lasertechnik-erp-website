@@ -33,6 +33,7 @@ export default function AppGrid() {
                 >
                   {app.icon}
                 </div>
+                <p className="text-center font-semibold text-gray-900 text-sm">{app.name}</p>
               </div>
             </button>
           ))}
