@@ -39,21 +39,7 @@ export default function HeroSection() {
             </div>
           </div>
 
-          {/* Right Side - Price Tag */}
-          <div className="flex-1 flex justify-center lg:justify-end">
-            <div className="relative w-full max-w-sm">
-              {/* Decorative price tag */}
-              <div className="bg-white border-2 border-[#3D56A6] rounded-lg p-6 shadow-lg transform rotate-3">
-                <div className="text-center space-y-2">
-                  <p className="text-sm text-gray-600 font-semibold">Pricing</p>
-                  <p className="text-3xl font-bold text-[#3D56A6]">US$ 13.50</p>
-                  <p className="text-sm text-gray-600">per user — unlimited ERP apps</p>
-                </div>
-                {/* Arrow decoration */}
-                <div className="absolute -top-6 -right-4 text-[#3D56A6] text-2xl">↗</div>
-              </div>
-            </div>
-          </div>
+          {/* Right Side removed: pricing tag no longer shown */}
         </div>
       </div>
     </section>
