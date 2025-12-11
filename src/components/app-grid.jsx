@@ -1,4 +1,4 @@
-const apps = [
+const apps = [ // hello
   { name: "Accounting", color: "bg-blue-500", icon: "📊" },
   { name: "Manufacturing", color: "bg-orange-500", icon: "🏭" },
   { name: "Inventory", color: "bg-green-500", icon: "📦" },
