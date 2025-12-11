@@ -17,8 +17,10 @@ export default function Navigation() {
             onClick={handleLogoClick}
             className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition"
           >
-            <img src="/icon.svg" alt="EIT" className="h-8 w-8 rounded" />
-            <span className="font-semibold text-lg"> Lasertechnik</span>
+            <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
+              <span className="text-[#3D56A6] font-bold text-xs">EIT</span>
+            </div>
+            <span className="font-semibold text-lg">EIT Lasertechnik</span>
           </button>
 
           <div className="hidden md:flex items-center gap-8">

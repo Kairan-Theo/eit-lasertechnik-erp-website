@@ -9,7 +9,7 @@ export default function Footer() {
               <div className="w-8 h-8 bg-white rounded flex items-center justify-center">
                 <span className="text-[#3D56A6] font-bold text-xs">EIT</span>
               </div>
-              <span>EIT Lasertechnik</span>
+              <span>Lasertechnik</span>
             </div>
             <p className="text-sm text-gray-100">Enterprise resource planning for precision manufacturing teams.</p>
           </div>
