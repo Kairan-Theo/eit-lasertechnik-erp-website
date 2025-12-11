@@ -26,6 +26,19 @@ function CRMPage() {
   )
   const [menuOpenIndex, setMenuOpenIndex] = React.useState(null)
   const [openCardMenu, setOpenCardMenu] = React.useState(null) // { stageIndex, cardIndex }
+  const [showNewForm, setShowNewForm] = React.useState(false)
+  const defaultNewDeal = {
+    company: "",
+    contact: "",
+    opportunity: "",
+    email: "",
+    phone: "",
+    amount: 0,
+    currency: "฿",
+    priority: "none",
+    stageIndex: 0,
+  }
+  const [newDeal, setNewDeal] = React.useState(defaultNewDeal)
 
   const totalFor = (deals) => deals.reduce((acc, d) => acc + (d.amount || 0), 0)
 
@@ -136,7 +149,33 @@ function CRMPage() {
       <section className="w-full py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
         <div className="max-w-7xl mx-auto">
           <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">CRM — Sales Pipeline</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">CRM — Sales Pipeline</h1>
+              <button
+                onClick={() => {
+                  setNewDeal(defaultNewDeal)
+                  setShowNewForm(true)
+                }}
+                className="px-3 py-2 rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                title="New opportunity"
+              >
+                New
+              </button>
+              <button
+                onClick={() => alert("Lead generation not implemented yet")}
+                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                title="Generate leads"
+              >
+                Generate Leads
+              </button>
+              <button
+                onClick={() => alert("Pipeline settings not implemented yet")}
+                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                title="Pipeline settings"
+              >
+                Pipeline ⚙️
+              </button>
+            </div>
             <button
               onClick={addStage}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -253,6 +292,82 @@ function CRMPage() {
               </div>
             ))}
           </div>
+          {showNewForm && (
+            <div className="fixed inset-0 bg-black/30 z-30" onClick={() => setShowNewForm(false)}>
+              <div className="absolute left-1/2 top-20 -translate-x-1/2 w-[420px]" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+                  <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">New Opportunity</h3>
+                    <button className="text-gray-500 hover:text-gray-900" onClick={() => setShowNewForm(false)}>✕</button>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span>🏢</span>
+                      <input value={newDeal.company} onChange={(e)=>setNewDeal({...newDeal, company:e.target.value})} placeholder="Company" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>👤</span>
+                      <input value={newDeal.contact} onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} placeholder="Contact" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>💼</span>
+                      <input value={newDeal.opportunity} onChange={(e)=>setNewDeal({...newDeal, opportunity:e.target.value})} placeholder="Opportunity's Name" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>✉️</span>
+                      <input value={newDeal.email} onChange={(e)=>setNewDeal({...newDeal, email:e.target.value})} placeholder="Contact Email" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>📱</span>
+                      <input value={newDeal.phone} onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} placeholder="Contact Phone" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>💰</span>
+                      <input type="number" value={newDeal.amount} onChange={(e)=>setNewDeal({...newDeal, amount:Number(e.target.value)})} placeholder="0.00" className="w-40 border-b border-gray-300 focus:outline-none py-1" />
+                      <input value={newDeal.currency} onChange={(e)=>setNewDeal({...newDeal, currency:e.target.value})} className="w-16 border-b border-gray-300 focus:outline-none py-1" />
+                      <div className="ml-auto flex items-center gap-1">
+                        {[1,2,3].map(n => (
+                          <button key={n} className={`text-xl ${newDeal.priority==='high' || (newDeal.priority==='medium' && n<=2) || (newDeal.priority==='low' && n===1) ? (n===3 && newDeal.priority!=='high' ? 'text-gray-300':'text-purple-600') : 'text-gray-300'}`} onClick={()=>setNewDeal({...newDeal, priority: n===1 ? 'low' : n===2 ? 'medium' : 'high'})}>★</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>📊</span>
+                      <select value={newDeal.stageIndex} onChange={(e)=>setNewDeal({...newDeal, stageIndex:Number(e.target.value)})} className="flex-1 border-b border-gray-300 focus:outline-none py-1">
+                        {stages.map((s, i) => (
+                          <option key={s.id} value={i}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="px-4 py-2 rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                          onClick={() => {
+                            const deal = {
+                              id: Date.now(),
+                              title: newDeal.opportunity || newDeal.company || "Untitled",
+                              customer: newDeal.company || newDeal.contact || "",
+                              amount: Number(newDeal.amount) || 0,
+                              currency: newDeal.currency || "฿",
+                              priority: newDeal.priority,
+                            }
+                            setStages((prev)=>prev.map((s,i)=> i===newDeal.stageIndex ? { ...s, deals: [...s.deals, deal] } : s))
+                            setShowNewForm(false)
+                            setNewDeal(defaultNewDeal)
+                          }}
+                        >
+                          Add
+                        </button>
+                        <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setShowNewForm(false)}>Cancel</button>
+                      </div>
+                      <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setNewDeal(defaultNewDeal)} title="Clear form">🗑️</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
       <Footer />
