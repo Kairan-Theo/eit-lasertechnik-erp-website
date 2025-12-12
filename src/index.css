@@ -123,3 +123,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  html, body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: white !important;
+  }
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}

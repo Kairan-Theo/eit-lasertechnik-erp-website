@@ -2,7 +2,6 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import AppGrid from "./components/app-grid.jsx"
-import Footer from "./components/footer.jsx"
 import "./index.css"
 
 function AppsPage() {
@@ -16,7 +15,6 @@ function AppsPage() {
         </div>
         <AppGrid />
       </section>
-      <Footer />
     </main>
   )
 }

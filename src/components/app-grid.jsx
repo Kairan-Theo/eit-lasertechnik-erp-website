@@ -1,6 +1,6 @@
 const apps = [
   { name: "Manufacturing", color: "bg-orange-500", icon: "🏭" },
-  { name: "Inventory", color: "bg-green-500", icon: "📦" },
+  { name: "Inventory", color: "bg-green-500", icon: "📦", href: "/inventory.html" },
   { name: "CRM", color: "bg-red-500", icon: "👥", href: "/crm.html" },
   { name: "Admin", color: "bg-pink-500", icon: "👔", href: "/admin.html" },
   { name: "Project Management", color: "bg-lime-500", icon: "🎯" },
