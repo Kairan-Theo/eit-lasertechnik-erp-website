@@ -1,6 +1,4 @@
 import React from "react"
-import ReactDOM from "react-dom/client"
-import "./index.css"
 
 function useInvoiceState() {
   const [customer, setCustomer] = React.useState({
@@ -11,6 +9,7 @@ function useInvoiceState() {
     billingAddress1: "",
     billingAddress2: "",
   })
+
   const [details, setDetails] = React.useState({
     number: "",
     date: new Date().toISOString().slice(0, 10),
@@ -18,36 +17,86 @@ function useInvoiceState() {
     currency: "THB",
     notes: "",
     addressChoice: "1",
+    paymentTermsDays: 7,
   })
+
   const [items, setItems] = React.useState([{ product: "", description: "", qty: 1, price: 0, tax: 0 }])
 
+  // Initialization: load confirmedQuotation if present and set number + dueDate once
   React.useEffect(() => {
     try {
       const fromQuotation = localStorage.getItem("confirmedQuotation")
       if (fromQuotation) {
         const q = JSON.parse(fromQuotation)
         setCustomer((prev) => ({ ...prev, ...q.customer }))
-        setItems(Array.isArray(q.items) && q.items.length ? q.items : items)
-        setDetails((prev) => ({ ...prev, currency: q.details?.currency || prev.currency }))
+        setItems(Array.isArray(q.items) && q.items.length ? q.items : [{ product: "", description: "", qty: 1, price: 0, tax: 0 }])
+        setDetails((prev) => {
+          const date = q.details?.date || prev.date
+          const paymentTermsDays = Number(q.details?.paymentTermsDays ?? prev.paymentTermsDays)
+          const base = new Date(date)
+          const due = new Date(base)
+          if (!Number.isNaN(paymentTermsDays)) due.setDate(due.getDate() + paymentTermsDays)
+
+          const number =
+            prev.number ||
+            q.details?.number ||
+            (() => {
+              const d = new Date()
+              return `INV-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`
+            })()
+
+          return {
+            ...prev,
+            ...q.details,
+            currency: q.details?.currency || prev.currency,
+            date,
+            paymentTermsDays,
+            number,
+            dueDate: due.toISOString().slice(0, 10),
+          }
+        })
         localStorage.removeItem("confirmedQuotation")
+        return
       }
-    } catch {}
-    if (!details.number) {
-      const d = new Date()
-      const id = `INV-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`
-      setDetails((prev) => ({ ...prev, number: id }))
+    } catch (err) {
+      // ignore parse errors
     }
+
+    // default when no quotation loaded: ensure number and dueDate exist
+    setDetails((prev) => {
+      const d = new Date(prev.date || new Date().toISOString().slice(0, 10))
+      const number =
+        prev.number ||
+        `INV-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`
+      const due = new Date(d)
+      due.setDate(due.getDate() + Number(prev.paymentTermsDays || 0))
+      return { ...prev, number, dueDate: due.toISOString().slice(0, 10) }
+    })
   }, [])
 
-  const subtotal = items.reduce((sum, it) => sum + it.qty * it.price, 0)
-  const taxTotal = items.reduce((sum, it) => sum + it.qty * it.price * (it.tax / 100), 0)
+  // Recalculate dueDate when date or paymentTermsDays change
+  React.useEffect(() => {
+    try {
+      const base = new Date(details.date)
+      if (isNaN(base.getTime())) return
+      const due = new Date(base)
+      due.setDate(due.getDate() + Number(details.paymentTermsDays || 0))
+      const dueStr = due.toISOString().slice(0, 10)
+      setDetails((prev) => ({ ...prev, dueDate: dueStr }))
+    } catch {}
+  }, [details.date, details.paymentTermsDays])
+
+  const subtotal = items.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.price) || 0), 0)
+  const taxTotal = items.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.price) || 0) * ((Number(it.tax) || 0) / 100), 0)
   const total = subtotal + taxTotal
 
   const addItem = () => setItems((prev) => [...prev, { product: "", description: "", qty: 1, price: 0, tax: 0 }])
   const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, value) =>
     setItems((prev) =>
-      prev.map((row, idx) => (idx === i ? { ...row, [field]: field === "qty" || field === "price" || field === "tax" ? Number(value) : value } : row)),
+      prev.map((row, idx) =>
+        idx === i ? { ...row, [field]: field === "qty" || field === "price" || field === "tax" ? (value === "" ? "" : Number(value)) : value } : row,
+      ),
     )
 
   const save = () => {
@@ -61,7 +110,9 @@ function useInvoiceState() {
       localStorage.setItem(key, JSON.stringify({ ...existing, customer, invoices }))
     } catch {}
   }
+
   const print = () => window.print()
+
   const exportPdf = async () => {
     const el = document.getElementById("invoice-document")
     if (!el) return
@@ -101,13 +152,16 @@ function useInvoiceState() {
       document.body.removeChild(clone)
     }
   }
+
   const emailTo = (choice = details.addressChoice) => {
+    if (!customer.email) {
+      // no recipient — abort and optionally show a UI notice from caller
+      return { ok: false, message: "No customer email provided" }
+    }
     const subject = encodeURIComponent(`Invoice ${details.number}`)
     const addr = choice === "2" ? customer.billingAddress2 || customer.billingAddress1 || "-" : customer.billingAddress1 || customer.billingAddress2 || "-"
     const body = encodeURIComponent(
-      `Dear ${customer.name || customer.company},\n\nPlease find your invoice ${details.number} dated ${details.date}.\n\nTotal: ${total.toFixed(2)} ${
-        details.currency
-      }\nDue Date: ${details.dueDate || "-"}\nInvoice Address:\n${addr}\n\nNotes:\n${details.notes || "-"}\n\nRegards,\nEIT Lasertechnik`,
+      `Dear ${customer.name || customer.company},\n\nPlease find your invoice ${details.number} dated ${details.date}.\n\nTotal: ${total.toFixed(2)} ${details.currency}\nDue Date: ${details.dueDate || "-"}\nInvoice Address:\n${addr}\n\nNotes:\n${details.notes || "-"}\n\nRegards,\nEIT Lasertechnik`,
     )
     const link = `mailto:${customer.email}?subject=${subject}&body=${body}`
     window.location.href = link
@@ -118,6 +172,7 @@ function useInvoiceState() {
       emails.push({ type: "invoice", number: details.number, sentAt: new Date().toISOString(), addressChoice: choice })
       localStorage.setItem(key, JSON.stringify({ ...existing, customer, emails }))
     } catch {}
+    return { ok: true }
   }
 
   return {
@@ -148,14 +203,15 @@ function InvoiceDocument({ inv }) {
       <div className="relative">
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white rounded flex items-center justify-center">
-              <img src="/eit-icon.png" alt="EIT" className="w-10 h-10" />
+            <div className="w-12 h-12 bg-white rounded flex items-center justify-center overflow-hidden">
+              <img src="/eit-icon.png" alt="EIT" className="w-10 h-10 object-contain" />
             </div>
             <div className="leading-tight">
               <div className="text-[#2D4485] font-bold text-lg">EIT Lasertechnik</div>
               <div className="text-gray-500 text-sm">Invoice</div>
             </div>
           </div>
+
           <div className="text-right">
             <div className="text-2xl font-bold text-[#2D4485] tracking-wide">INVOICE</div>
             <div className="mt-2 text-sm text-gray-700">Invoice Number : <span className="font-semibold">{inv.details.number}</span></div>
@@ -163,6 +219,7 @@ function InvoiceDocument({ inv }) {
             <div className="text-sm text-gray-700">Invoice Date : <span className="font-semibold">{inv.details.date}</span></div>
           </div>
         </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <div className="text-sm text-gray-600">Invoice to:</div>
@@ -176,16 +233,7 @@ function InvoiceDocument({ inv }) {
             <div className="text-gray-900 font-semibold">{inv.details.currency}</div>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-gray-50 border rounded-md p-4">
-            <div className="text-sm font-semibold text-gray-900 mb-2">Billing Address 1</div>
-            <div className="text-sm text-gray-700 whitespace-pre-line">{inv.customer.billingAddress1 || "-"}</div>
-          </div>
-          <div className="bg-gray-50 border rounded-md p-4 md:text-right">
-            <div className="text-sm font-semibold text-gray-900 mb-2">Billing Address 2</div>
-            <div className="text-sm text-gray-700 whitespace-pre-line">{inv.customer.billingAddress2 || "-"}</div>
-          </div>
-        </div>
+
         <div className="overflow-x-auto mb-6">
           <table className="min-w-full text-sm">
             <thead>
@@ -198,12 +246,12 @@ function InvoiceDocument({ inv }) {
             </thead>
             <tbody>
               {inv.items.map((it, i) => {
-                const amount = it.qty * it.price
+                const amount = (Number(it.qty) || 0) * (Number(it.price) || 0)
                 return (
                   <tr key={i} className="border-t">
                     <td className="p-2">{it.qty}</td>
                     <td className="p-2">{it.description || it.product}</td>
-                    <td className="p-2">{sym} {Number(it.price).toFixed(2)}</td>
+                    <td className="p-2">{sym} {Number(it.price || 0).toFixed(2)}</td>
                     <td className="p-2">{sym} {amount.toFixed(2)}</td>
                   </tr>
                 )
@@ -211,6 +259,7 @@ function InvoiceDocument({ inv }) {
             </tbody>
           </table>
         </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div>
             <div className="text-sm font-semibold text-gray-900 mb-2">Payment Method :</div>
@@ -228,6 +277,7 @@ function InvoiceDocument({ inv }) {
             </div>
           </div>
         </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <div className="text-sm font-semibold text-gray-900 mb-2">Terms & Conditions :</div>
@@ -241,21 +291,8 @@ function InvoiceDocument({ inv }) {
             </div>
           </div>
         </div>
-        <div className="mt-10 text-[#2D4485] font-bold">Thank for your business with us!</div>
-      </div>
-    </div>
-  )
-}
 
-function AddressBlock({ title, value, onChange, onSave }) {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">{title}</h2>
-      <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder="Street, City, Zip, Country" className="w-full rounded-md border border-gray-300 px-3 py-2 mb-3" />
-      <div className="flex justify-end">
-        <button type="button" onClick={onSave} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">
-          Save
-        </button>
+        <div className="mt-10 text-[#2D4485] font-bold">Thank for your business with us!</div>
       </div>
     </div>
   )
@@ -263,6 +300,32 @@ function AddressBlock({ title, value, onChange, onSave }) {
 
 function InvoicePage() {
   const inv = useInvoiceState()
+  const [confirmSend, setConfirmSend] = React.useState({ open: false, choice: "1" })
+  const [notice, setNotice] = React.useState({ show: false, text: "" })
+
+  const openConfirm = (choice) => setConfirmSend({ open: true, choice })
+  const cancelConfirm = () => setConfirmSend((prev) => ({ ...prev, open: false }))
+  const doConfirmSend = () => {
+    const choice = confirmSend.choice
+    setConfirmSend((prev) => ({ ...prev, open: false }))
+    const res = inv.emailTo(choice)
+    if (!res || !res.ok) {
+      setNotice({ show: true, text: res?.message || "No email provided" })
+    } else {
+      setNotice({ show: true, text: "Sent" })
+    }
+    setTimeout(() => setNotice({ show: false, text: "" }), 2000)
+  }
+
+  const today = new Date()
+  const todayLabel = today.toLocaleDateString()
+  const invDateLabel = inv.details.date ? new Date(inv.details.date).toLocaleDateString() : "-"
+  const dueDateLabel = inv.details.dueDate ? new Date(inv.details.dueDate).toLocaleDateString() : "-"
+  const daysFromInvoice =
+    inv.details.dueDate && inv.details.date
+      ? Math.round((new Date(inv.details.dueDate).getTime() - new Date(inv.details.date).getTime()) / (1000 * 60 * 60 * 24))
+      : null
+
   return (
     <main className="min-h-screen bg-white">
       <section className="w-full py-10 px-4 sm:px-6 lg:px-8">
@@ -272,13 +335,34 @@ function InvoicePage() {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Invoice</h1>
               <div className="flex gap-2">
                 <button type="button" onClick={inv.save} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Save</button>
-                <button type="button" onClick={inv.exportPdf} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Download</button>
-                <button type="button" onClick={inv.print} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
-                <button type="button" onClick={() => inv.emailTo("1")} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 1</button>
-                <button type="button" onClick={() => inv.emailTo("2")} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 2</button>
+                <button type="button" onClick={inv.exportPdf} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Download PDF</button>
+                <button type="button" onClick={inv.print} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Print</button>
+                <button type="button" onClick={() => openConfirm("1")} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 1</button>
+                <button type="button" onClick={() => openConfirm("2")} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 2</button>
               </div>
             </div>
           </div>
+
+          {confirmSend.open && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center print:hidden">
+              <div className="bg-white rounded-lg shadow-lg w-full max-w-sm p-5">
+                <div className="text-lg font-semibold text-gray-900 mb-2">Confirm Send</div>
+                <div className="text-gray-700 text-sm mb-4">Send invoice to Billing Address {confirmSend.choice}?</div>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={cancelConfirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Cancel</button>
+                  <button type="button" onClick={doConfirmSend} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {notice.show && (
+            <div className="fixed bottom-4 right-4 z-50 print:hidden">
+              <div className="bg-[#2D4485] text-white rounded-md shadow-md px-4 py-2 text-sm">
+                {notice.text}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:hidden">
             <div className="lg:col-span-2 space-y-6">
@@ -325,7 +409,7 @@ function InvoicePage() {
                           <td className="p-2">
                             <input type="number" min="0" step="0.1" value={it.tax} onChange={(e) => inv.updateItem(i, "tax", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" />
                           </td>
-                          <td className="p-2 text-right">{(it.qty * it.price * (1 + it.tax / 100)).toFixed(2)}</td>
+                          <td className="p-2 text-right">{((Number(it.qty) || 0) * (Number(it.price) || 0) * (1 + (Number(it.tax) || 0) / 100)).toFixed(2)}</td>
                           <td className="p-2 text-right">
                             <button onClick={() => inv.removeItem(i)} className="px-3 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100">Remove</button>
                           </td>
@@ -334,6 +418,7 @@ function InvoicePage() {
                     </tbody>
                   </table>
                 </div>
+
                 <div className="flex justify-between mt-4">
                   <button onClick={inv.addItem} className="px-4 py-2 bg-gray-100 text-gray-900 rounded-md hover:bg-gray-200">Add Item</button>
                   <div className="w-64">
@@ -358,45 +443,103 @@ function InvoicePage() {
                   </div>
                 </div>
               </div>
+
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Billing Addresses</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gray-50 border rounded-md p-4">
+                    <div className="text-sm font-semibold text-gray-900 mb-2">Billing Address 1</div>
+                    <textarea
+                      value={inv.customer.billingAddress1}
+                      onChange={(e) => inv.setCustomer({ ...inv.customer, billingAddress1: e.target.value })}
+                      onBlur={inv.save}
+                      placeholder="Street, City, Zip, Country"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    />
+                    <div className="flex justify-end mt-2">
+                      <button type="button" onClick={inv.save} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Save</button>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 border rounded-md p-4">
+                    <div className="text-sm font-semibold text-gray-900 mb-2">Billing Address 2</div>
+                    <textarea
+                      value={inv.customer.billingAddress2}
+                      onChange={(e) => inv.setCustomer({ ...inv.customer, billingAddress2: e.target.value })}
+                      onBlur={inv.save}
+                      placeholder="Street, City, Zip, Country"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    />
+                    <div className="flex justify-end mt-2">
+                      <button type="button" onClick={inv.save} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Save</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6"></div>
+
+            <div className="mt-6 print:hidden flex justify-start">
+              <button type="button" onClick={inv.save} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Save</button>
+            </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="lg:col-span-1 space-y-6">
               <div className="bg-white rounded-xl shadow-sm border p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Invoice Details</h2>
                 <div className="grid grid-cols-1 gap-4">
                   <input value={inv.details.number} onChange={(e) => inv.setDetails({ ...inv.details, number: e.target.value })} placeholder="Invoice number" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+                  <label className="text-sm text-gray-700">Invoice Date</label>
                   <input type="date" value={inv.details.date} onChange={(e) => inv.setDetails({ ...inv.details, date: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2" />
+                  <label className="text-sm text-gray-700">Due Date</label>
                   <input type="date" value={inv.details.dueDate} onChange={(e) => inv.setDetails({ ...inv.details, dueDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2" />
+                  <select
+                    value={inv.details.paymentTermsDays}
+                    onChange={(e) => {
+                      const days = Number(e.target.value)
+                      const base = new Date(inv.details.date)
+                      base.setDate(base.getDate() + days)
+                      inv.setDetails({ ...inv.details, paymentTermsDays: days, dueDate: base.toISOString().slice(0, 10) })
+                    }}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  >
+                    <option value={7}>Payment Terms: 7 days</option>
+                    <option value={14}>Payment Terms: 14 days</option>
+                    <option value={30}>Payment Terms: 30 days</option>
+                    <option value={45}>Payment Terms: 45 days</option>
+                    <option value={60}>Payment Terms: 60 days</option>
+                  </select>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-gray-50 border rounded-md p-3">
+                    <div className="text-sm text-gray-700">Today: <span className="font-semibold">{todayLabel}</span></div>
+                    <div className="text-sm text-gray-700">
+                      Due Date: <span className="font-semibold">{dueDateLabel}</span>
+                      {daysFromInvoice !== null && (
+                        <span className="ml-2 text-gray-500">({daysFromInvoice} days from invoice date)</span>
+                      )}
+                    </div>
+                  </div>
+
                   <select value={inv.details.currency} onChange={(e) => inv.setDetails({ ...inv.details, currency: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
                     <option value="THB">THB</option>
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>
                   </select>
+
                   <select value={inv.details.addressChoice} onChange={(e) => inv.setDetails({ ...inv.details, addressChoice: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
                     <option value="1">Use Billing Address 1</option>
                     <option value="2">Use Billing Address 2</option>
                   </select>
+
                   <textarea value={inv.details.notes} onChange={(e) => inv.setDetails({ ...inv.details, notes: e.target.value })} placeholder="Billing notes" className="w-full rounded-md border border-gray-300 px-3 py-2" />
                 </div>
               </div>
-
-              <AddressBlock
-                title="Billing Address 1"
-                value={inv.customer.billingAddress1}
-                onChange={(v) => inv.setCustomer({ ...inv.customer, billingAddress1: v })}
-                onSave={() => inv.save()}
-              />
-              <AddressBlock
-                title="Billing Address 2"
-                value={inv.customer.billingAddress2}
-                onChange={(v) => inv.setCustomer({ ...inv.customer, billingAddress2: v })}
-                onSave={() => inv.save()}
-              />
             </div>
-          </div>
-          <div className="mt-8 print:mt-0 hidden print:block" id="invoice-document" aria-hidden="true">
-            <InvoiceDocument inv={inv} />
+
+            <div className="mt-8 print:mt-0 hidden print:block" id="invoice-document" aria-hidden="true">
+              <InvoiceDocument inv={inv} />
+            </div>
           </div>
         </div>
       </section>
@@ -404,8 +547,4 @@ function InvoicePage() {
   )
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <InvoicePage />
-  </React.StrictMode>,
-)
+export default InvoicePage

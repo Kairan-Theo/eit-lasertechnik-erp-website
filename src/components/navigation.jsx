@@ -20,12 +20,18 @@ export default function Navigation() {
             <div className="h-8 w-8 bg-white rounded flex items-center justify-center">
               <span className="text-[#3D56A6] font-bold text-xs">EIT</span>
             </div>
-            <span className="font-semibold text-lg">EIT Lasertechnik</span>
+            <span className="font-semibold text-lg">Lasertechnik</span>
           </button>
 
           <div className="hidden md:flex items-center gap-8">
-            <a href="#" onClick={handleNavClick} className="text-white hover:text-gray-200 transition">
+            <a href="/apps.html" className="text-white hover:text-gray-200 transition">
               App
+            </a>
+            <a href="/quotation.html" className="text-white hover:text-gray-200 transition">
+              Quotation
+            </a>
+            <a href="/invoice.html" className="text-white hover:text-gray-200 transition">
+              Invoice
             </a>
             <a href="#" onClick={handleNavClick} className="text-white hover:text-gray-200 transition">
               Industry
