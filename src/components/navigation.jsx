@@ -27,12 +27,6 @@ export default function Navigation() {
             <a href="/apps.html" className="text-white hover:text-gray-200 transition">
               App
             </a>
-            <a href="/quotation.html" className="text-white hover:text-gray-200 transition">
-              Quotation
-            </a>
-            <a href="/invoice.html" className="text-white hover:text-gray-200 transition">
-              Invoice
-            </a>
             <a href="#" onClick={handleNavClick} className="text-white hover:text-gray-200 transition">
               Industry
             </a>
