@@ -6,16 +6,16 @@ import "./index.css"
 
 const initialPipeline = {
   New: [
-    { id: 1, title: "Big C Supercenter", customer: "Big C Supercenter PLC", amount: 0, currency: "฿", priority: "none", contact: "", email: "", phone: "", notes: "" },
+    { id: 1, title: "Disscuing Goods Price", customer: "Big C Supercenter PLC", amount: 0, currency: "฿", priority: "none", contact: "", email: "", phone: "", notes: "" },
   ],
   Qualified: [
-    { id: 2, title: "SIANGHAI EITING TRADING COMPANY LIMITED's opportunity", customer: "SIANGHAI EITING TRADING COMPANY", amount: 50000, currency: "฿", priority: "high", contact: "", email: "", phone: "", notes: "" },
+    { id: 2, title: "Selling New Machines", customer: "SIANGHAI EITING TRADING COMPANY", amount: 50000, currency: "฿", priority: "high", contact: "", email: "", phone: "", notes: "" },
   ],
   Proposition: [
-    { id: 3, title: "METRO MACHINERY COMPANY LIMITED's opportunity", customer: "METRO MACHINERY", amount: 100, currency: "฿", priority: "medium", contact: "", email: "", phone: "", notes: "" },
+    { id: 3, title: "Introduced New Plan about Manufacturing", customer: "METRO MACHINERY", amount: 100, currency: "฿", priority: "medium", contact: "", email: "", phone: "", notes: "" },
   ],
   Won: [
-    { id: 4, title: "Konvy", customer: "Konvy", amount: 80000, currency: "฿", priority: "low", contact: "", email: "", phone: "", notes: "" },
+    { id: 4, title: "Negotitated and made contract", customer: "Konvy", amount: 80000, currency: "฿", priority: "low", contact: "", email: "", phone: "", notes: "" },
   ],
   Lost: [],
 }
@@ -172,7 +172,7 @@ function CRMPage() {
     <main className="min-h-screen bg-white">
       <Navigation />
       <section className="w-full py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-[92rem] mx-auto">
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">CRM — Sales Pipeline</h1>
@@ -181,12 +181,12 @@ function CRMPage() {
                   setNewDeal(defaultNewDeal)
                   setShowNewForm(true)
                 }}
-                className="px-3 py-2 rounded-md bg-purple-700 text-white hover:bg-purple-800"
-                title="New opportunity"
+                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                title="New customer"
               >
                 New
               </button>
-              <button
+              {/*<button
                 onClick={() => alert("Lead generation not implemented yet")}
                 className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
                 title="Generate leads"
@@ -199,7 +199,7 @@ function CRMPage() {
                 title="Pipeline settings"
               >
                 Pipeline ⚙️
-              </button>
+              </button>*/}
             </div>
             <button
               onClick={addStage}
@@ -209,7 +209,7 @@ function CRMPage() {
               + Add stage
             </button>
           </div>
-          <div className="flex flex-row gap-4 overflow-x-auto pb-4">
+          <div className="flex flex-row flex-wrap gap-4 overflow-y-auto overflow-x-hidden pb-4">
             {stages.map((stage, stageIndex) => (
               <div
                 key={stage.id}
@@ -360,45 +360,60 @@ function CRMPage() {
           {showNewForm && (
             <div className="fixed inset-0 bg-black/30 z-30" onClick={() => setShowNewForm(false)}>
               <div className="absolute left-1/2 top-20 -translate-x-1/2 w-[420px]" onClick={(e) => e.stopPropagation()}>
-                <div className="bg-white rounded-xl shadow-lg border border-gray-200">
-                  <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900">New Opportunity</h3>
+                <div className="bg-white rounded-xl shadow-lg border-2 border-white">
+                  <div className="px-4 py-3 border-b-2 border-white flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">New Customer</h3>
                     <button className="text-gray-500 hover:text-gray-900" onClick={() => setShowNewForm(false)}>✕</button>
                   </div>
                   <div className="p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span>🏢</span>
-                      <input value={newDeal.company} onChange={(e)=>setNewDeal({...newDeal, company:e.target.value})} placeholder="Company" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                      <div className="text-sm text-gray-500">Company</div>
+                      <input value={newDeal.company} onChange={(e)=>setNewDeal({...newDeal, company:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span>👤</span>
-                      <input value={newDeal.contact} onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} placeholder="Contact" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                      <div className="text-sm text-gray-500">Contact</div>
+                      <input value={newDeal.contact} onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span>💼</span>
-                      <input value={newDeal.opportunity} onChange={(e)=>setNewDeal({...newDeal, opportunity:e.target.value})} placeholder="Opportunity's Name" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                      <div className="text-sm text-gray-500">Opportunity</div>
+                      <input value={newDeal.opportunity} onChange={(e)=>setNewDeal({...newDeal, opportunity:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span>✉️</span>
-                      <input value={newDeal.email} onChange={(e)=>setNewDeal({...newDeal, email:e.target.value})} placeholder="Contact Email" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                      <div className="text-sm text-gray-500">Email</div>
+                      <input value={newDeal.email} onChange={(e)=>setNewDeal({...newDeal, email:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span>📱</span>
-                      <input value={newDeal.phone} onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} placeholder="Contact Phone" className="flex-1 border-b border-gray-300 focus:outline-none py-1" />
+                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                      <div className="text-sm text-gray-500">Phone</div>
+                      <input value={newDeal.phone} onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span>💰</span>
-                      <input type="number" value={newDeal.amount} onChange={(e)=>setNewDeal({...newDeal, amount:Number(e.target.value)})} placeholder="0.00" className="w-40 border-b border-gray-300 focus:outline-none py-1" />
-                      <input value={newDeal.currency} onChange={(e)=>setNewDeal({...newDeal, currency:e.target.value})} className="w-16 border-b border-gray-300 focus:outline-none py-1" />
-                      <div className="ml-auto flex items-center gap-1">
-                        {[1,2,3].map(n => (
-                          <button key={n} className={`text-xl ${newDeal.priority==='high' || (newDeal.priority==='medium' && n<=2) || (newDeal.priority==='low' && n===1) ? (n===3 && newDeal.priority!=='high' ? 'text-gray-300':'text-purple-600') : 'text-gray-300'}`} onClick={()=>setNewDeal({...newDeal, priority: n===1 ? 'low' : n===2 ? 'medium' : 'high'})}>★</button>
-                        ))}
+                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                      <div className="text-sm text-gray-500">Amount</div>
+                      <div className="w-full border-2 border-white rounded-md px-3 py-2 shadow flex items-center gap-2 overflow-hidden">
+                        <input type="number" value={newDeal.amount} onChange={(e)=>setNewDeal({...newDeal, amount:Number(e.target.value)})} className="w-28 border-2 border-white rounded-md px-3 py-2 shadow bg-white" />
+                        <input value={newDeal.currency} onChange={(e)=>setNewDeal({...newDeal, currency:e.target.value})} className="w-16 border-2 border-white rounded-md px-3 py-2 shadow bg-white" />
+                        <div className="ml-auto flex items-center gap-1">
+                          {[1,2,3].map(n => {
+                            const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
+                            const title = n===1 ? 'Priority: Low' : n===2 ? 'Priority: Medium' : 'Priority: High'
+                            const active = newDeal.priority==='high' || (newDeal.priority==='medium' && n<=2) || (newDeal.priority==='low' && n===1)
+                            const cls = `text-xl ${active ? (n===3 && newDeal.priority!=='high' ? 'text-gray-300' : 'text-purple-600') : 'text-gray-300'}`
+                            return (
+                              <button
+                                key={n}
+                                className={cls}
+                                title={title}
+                                onClick={()=>setNewDeal({...newDeal, priority: newDeal.priority===p ? 'none' : p})}
+                              >
+                                ★
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span>📊</span>
-                      <select value={newDeal.stageIndex} onChange={(e)=>setNewDeal({...newDeal, stageIndex:Number(e.target.value)})} className="flex-1 border-b border-gray-300 focus:outline-none py-1">
+                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                      <div className="text-sm text-gray-500">Stage</div>
+                      <select value={newDeal.stageIndex} onChange={(e)=>setNewDeal({...newDeal, stageIndex:Number(e.target.value)})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow">
                         {stages.map((s, i) => (
                           <option key={s.id} value={i}>{s.name}</option>
                         ))}
@@ -430,7 +445,7 @@ function CRMPage() {
                         </button>
                         <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setShowNewForm(false)}>Cancel</button>
                       </div>
-                      <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setNewDeal(defaultNewDeal)} title="Clear form">🗑️</button>
+                      
                     </div>
                   </div>
                 </div>
