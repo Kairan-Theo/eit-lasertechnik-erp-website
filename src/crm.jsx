@@ -6,16 +6,16 @@ import "./index.css"
 
 const initialPipeline = {
   New: [
-    { id: 1, title: "Big C Supercenter", customer: "Big C Supercenter PLC", amount: 0, currency: "฿", priority: "none" },
+    { id: 1, title: "Big C Supercenter", customer: "Big C Supercenter PLC", amount: 0, currency: "฿", priority: "none", contact: "", email: "", phone: "", notes: "" },
   ],
   Qualified: [
-    { id: 2, title: "SIANGHAI EITING TRADING COMPANY LIMITED's opportunity", customer: "SIANGHAI EITING TRADING COMPANY", amount: 50000, currency: "฿", priority: "high" },
+    { id: 2, title: "SIANGHAI EITING TRADING COMPANY LIMITED's opportunity", customer: "SIANGHAI EITING TRADING COMPANY", amount: 50000, currency: "฿", priority: "high", contact: "", email: "", phone: "", notes: "" },
   ],
   Proposition: [
-    { id: 3, title: "METRO MACHINERY COMPANY LIMITED's opportunity", customer: "METRO MACHINERY", amount: 100, currency: "฿", priority: "medium" },
+    { id: 3, title: "METRO MACHINERY COMPANY LIMITED's opportunity", customer: "METRO MACHINERY", amount: 100, currency: "฿", priority: "medium", contact: "", email: "", phone: "", notes: "" },
   ],
   Won: [
-    { id: 4, title: "Konvy", customer: "Konvy", amount: 80000, currency: "฿", priority: "low" },
+    { id: 4, title: "Konvy", customer: "Konvy", amount: 80000, currency: "฿", priority: "low", contact: "", email: "", phone: "", notes: "" },
   ],
   Lost: [],
 }
@@ -27,6 +27,11 @@ function CRMPage() {
   const [menuOpenIndex, setMenuOpenIndex] = React.useState(null)
   const [openCardMenu, setOpenCardMenu] = React.useState(null) // { stageIndex, cardIndex }
   const [showNewForm, setShowNewForm] = React.useState(false)
+  const [openDetail, setOpenDetail] = React.useState(null) // { stageIndex, cardIndex }
+  const [detailNotes, setDetailNotes] = React.useState("")
+  const [detailContact, setDetailContact] = React.useState("")
+  const [detailEmail, setDetailEmail] = React.useState("")
+  const [detailPhone, setDetailPhone] = React.useState("")
   const defaultNewDeal = {
     company: "",
     contact: "",
@@ -41,6 +46,26 @@ function CRMPage() {
   const [newDeal, setNewDeal] = React.useState(defaultNewDeal)
 
   const totalFor = (deals) => deals.reduce((acc, d) => acc + (d.amount || 0), 0)
+
+  const openDealDetail = (stageIndex, cardIndex) => {
+    const d = stages[stageIndex].deals[cardIndex]
+    setDetailNotes(d.notes || "")
+    setDetailContact(d.contact || "")
+    setDetailEmail(d.email || "")
+    setDetailPhone(d.phone || "")
+    setOpenDetail({ stageIndex, cardIndex })
+  }
+
+  const saveDetail = () => {
+    if (!openDetail) return
+    const { stageIndex, cardIndex } = openDetail
+    setStages((prev) => prev.map((s, i) => {
+      if (i !== stageIndex) return s
+      const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, notes: detailNotes, contact: detailContact, email: detailEmail, phone: detailPhone } : d))
+      return { ...s, deals }
+    }))
+    setOpenDetail(null)
+  }
 
   // Drag cards between stages
   const onCardDragStart = (stageIndex, cardIndex, e) => {
@@ -234,7 +259,7 @@ function CRMPage() {
                       onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
                     >
                       <div className="flex items-start justify-between">
-                        <p className="font-medium text-gray-900 pr-6">{d.title}</p>
+                        <p className="font-medium text-gray-900 pr-6 cursor-pointer hover:underline" onClick={() => openDealDetail(stageIndex, cardIndex)}>{d.customer}</p>
                         <div className="flex items-center gap-1">
                           {d.priority === "low" && <span title="Priority: Low" className="text-yellow-500">★</span>}
                           {d.priority === "medium" && (
@@ -243,7 +268,7 @@ function CRMPage() {
                           {d.priority === "high" && <span title="Priority: High" className="text-red-500">★★★</span>}
                         </div>
                       </div>
-                      <p className="text-sm text-gray-600">{d.customer}</p>
+                      <p className="text-sm text-gray-600">{d.title}</p>
                       {d.amount !== undefined && (
                         <p className="text-sm text-gray-700 mt-1">
                           {d.amount.toLocaleString()} {d.currency}
@@ -292,6 +317,46 @@ function CRMPage() {
               </div>
             ))}
           </div>
+          {openDetail && (
+            <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenDetail(null)}>
+              <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[520px]" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-xl shadow-lg border-2 border-white">
+                  <div className="px-4 py-3 border-b-2 border-white flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">Company Details</h3>
+                    <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenDetail(null)}>✕</button>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {(() => { const d = stages[openDetail.stageIndex].deals[openDetail.cardIndex]; return (
+                      <>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                          <div className="text-sm text-gray-500">Contact</div>
+                          <input value={detailContact} onChange={(e)=>setDetailContact(e.target.value)} className="text-sm text-gray-900 border-2 border-white rounded-md px-3 py-2 w-full shadow" />
+                        </div>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                          <div className="text-sm text-gray-500">Email</div>
+                          <input value={detailEmail} onChange={(e)=>setDetailEmail(e.target.value)} className="text-sm text-gray-900 border-2 border-white rounded-md px-3 py-2 w-full shadow" />
+                        </div>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+                          <div className="text-sm text-gray-500">Phone</div>
+                          <input value={detailPhone} onChange={(e)=>setDetailPhone(e.target.value)} className="text-sm text-gray-900 border-2 border-white rounded-md px-3 py-2 w-full shadow" />
+                        </div>
+                        <div className="mt-2">
+                          <div className="px-1 py-2 text-sm text-purple-700">Notes</div>
+                          <div>
+                            <textarea value={detailNotes} onChange={(e)=>setDetailNotes(e.target.value)} className="w-full min-h-[120px] rounded-md border-2 border-white px-3 py-2 shadow" placeholder="Add notes" />
+                          </div>
+                        </div>
+                      </>
+                    )})()}
+                  </div>
+                  <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+                    <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenDetail(null)}>Close</button>
+                    <button className="px-4 py-2 rounded-md bg-purple-700 text-white hover:bg-purple-800" onClick={saveDetail}>Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {showNewForm && (
             <div className="fixed inset-0 bg-black/30 z-30" onClick={() => setShowNewForm(false)}>
               <div className="absolute left-1/2 top-20 -translate-x-1/2 w-[420px]" onClick={(e) => e.stopPropagation()}>
@@ -351,6 +416,10 @@ function CRMPage() {
                               amount: Number(newDeal.amount) || 0,
                               currency: newDeal.currency || "฿",
                               priority: newDeal.priority,
+                              contact: newDeal.contact || "",
+                              email: newDeal.email || "",
+                              phone: newDeal.phone || "",
+                              notes: "",
                             }
                             setStages((prev)=>prev.map((s,i)=> i===newDeal.stageIndex ? { ...s, deals: [...s.deals, deal] } : s))
                             setShowNewForm(false)
