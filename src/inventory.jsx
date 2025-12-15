@@ -382,21 +382,28 @@ function InventoryTable({ inv }) {
           value={inv.query}
           onChange={(e) => inv.setQuery(e.target.value)}
           className="w-64 rounded-md border border-gray-300 px-3 py-2"
-          placeholder="Search products"
+          placeholder="Search by name or reference"
         />
         <button onClick={() => inv.setShowAdd(true)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Add Item</button>
       </div>
+      {inv.pageItems.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
+          <div className="text-lg font-semibold text-gray-900">No items found</div>
+          <div className="text-sm text-gray-600 mt-1">Try adjusting your search or add a new item</div>
+          <button onClick={() => inv.setShowAdd(true)} className="mt-4 px-3 py-2 rounded-md bg-[#2D4485] text-white">Add Item</button>
+        </div>
+      ) : (
       <div className="overflow-x-auto bg-white rounded-xl shadow-sm border">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-[#2D4485]">
               <th className="p-3 text-left">Item Photo</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>Reference</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Product</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock-Qty</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>SKU</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("warehouse")}>Warehouse</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Updated</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Last Updated</th>
               <th className="p-3 text-left">Actions</th>
             </tr>
           </thead>
@@ -414,7 +421,7 @@ function InventoryTable({ inv }) {
                 <td className="p-3">{p.updatedAt}</td>
                 <td className="p-3">
                   <div className="flex gap-2">
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Adjust</button>
+                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
                   </div>
                 </td>
               </tr>
@@ -422,6 +429,7 @@ function InventoryTable({ inv }) {
           </tbody>
         </table>
       </div>
+      )}
       <div className="flex items-center justify-between mt-4 text-sm text-gray-700">
         <button onClick={inv.prevPage} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Previous</button>
         <div className="flex items-center gap-2">
@@ -513,56 +521,82 @@ function AddItemForm({ onCancel, onSave }) {
     manufactureDate: "",
   }
   const [f, setF] = React.useState(initial)
+  const [adv, setAdv] = React.useState(false)
+  const canSave = Boolean(f.sku && f.name)
   const set = (k, v) => setF((prev) => ({ ...prev, [k]: v }))
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <input value={f.sku} onChange={(e) => set("sku", e.target.value)} placeholder="Internal Reference" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Product" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="number" value={f.stockQty} onChange={(e) => set("stockQty", Number(e.target.value))} placeholder="Stock Qty" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="number" value={f.reserved} onChange={(e) => set("reserved", Number(e.target.value))} placeholder="Reserved" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} placeholder="Price" className="rounded-md border border-gray-300 px-3 py-2" />
-        <select value={f.warehouse} onChange={(e) => set("warehouse", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          <option>Main</option>
-          <option>Secondary</option>
-        </select>
-        <input value={f.bin} onChange={(e) => set("bin", e.target.value)} placeholder="Bin" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.lot} onChange={(e) => set("lot", e.target.value)} placeholder="Lot" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="date" value={f.expiry} onChange={(e) => set("expiry", e.target.value)} placeholder="Expiry" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.barcode} onChange={(e) => set("barcode", e.target.value)} placeholder="Barcode" className="rounded-md border border-gray-300 px-3 py-2" />
-        <select value={f.category} onChange={(e) => set("category", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          <option>Raw Material</option>
-          <option>Finished Goods</option>
-          <option>Service</option>
-        </select>
-        <input value={f.uom} onChange={(e) => set("uom", e.target.value)} placeholder="UOM (pcs, kg, m)" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.brand} onChange={(e) => set("brand", e.target.value)} placeholder="Brand" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.model} onChange={(e) => set("model", e.target.value)} placeholder="Model" className="rounded-md border border-gray-300 px-3 py-2" />
-        <select value={f.status} onChange={(e) => set("status", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          <option>Active</option>
-          <option>Inactive</option>
-        </select>
-        <input type="number" value={f.minStock} onChange={(e) => set("minStock", Number(e.target.value))} placeholder="Minimum Stock Level" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="number" value={f.reorderQty} onChange={(e) => set("reorderQty", Number(e.target.value))} placeholder="Reorder Quantity" className="rounded-md border border-gray-300 px-3 py-2" />
-        <select value={f.valuationMethod} onChange={(e) => set("valuationMethod", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          <option>FIFO</option>
-          <option>LIFO</option>
-          <option>Weighted Average</option>
-          <option>Standard Cost</option>
-        </select>
-        <input type="date" value={f.manufactureDate} onChange={(e) => set("manufactureDate", e.target.value)} placeholder="Manufacture Date" className="rounded-md border border-gray-300 px-3 py-2" />
-        <textarea value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="Product Description" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2"></textarea>
-        <input value={f.serials} onChange={(e) => set("serials", e.target.value)} placeholder="Serial Numbers (comma-separated)" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2" />
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Reference (SKU)</label>
+          <input value={f.sku} onChange={(e) => set("sku", e.target.value)} required placeholder="e.g. ABC-001" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Product name</label>
+          <input value={f.name} onChange={(e) => set("name", e.target.value)} required placeholder="e.g. Laser Welding Machine" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Stock qty</label>
+          <input type="number" value={f.stockQty} onChange={(e) => set("stockQty", Number(e.target.value))} placeholder="e.g. 10" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Price</label>
+          <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} placeholder="e.g. 50000" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm text-gray-700 mb-1">Warehouse</label>
+          <select value={f.warehouse} onChange={(e) => set("warehouse", e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
+            <option>Main</option>
+            <option>Secondary</option>
+          </select>
+        </div>
       </div>
+      <div>
+        <button onClick={() => setAdv((v) => !v)} className="text-[#2D4485] text-sm">
+          {adv ? "Hide advanced" : "Show advanced"}
+        </button>
+      </div>
+      {adv && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input value={f.bin} onChange={(e) => set("bin", e.target.value)} placeholder="Bin" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input value={f.lot} onChange={(e) => set("lot", e.target.value)} placeholder="Lot" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input type="date" value={f.expiry} onChange={(e) => set("expiry", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2" />
+          <input value={f.barcode} onChange={(e) => set("barcode", e.target.value)} placeholder="Barcode" className="rounded-md border border-gray-300 px-3 py-2" />
+          <select value={f.category} onChange={(e) => set("category", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
+            <option>Raw Material</option>
+            <option>Finished Goods</option>
+            <option>Service</option>
+          </select>
+          <input value={f.uom} onChange={(e) => set("uom", e.target.value)} placeholder="UOM (pcs, kg, m)" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input value={f.brand} onChange={(e) => set("brand", e.target.value)} placeholder="Brand" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input value={f.model} onChange={(e) => set("model", e.target.value)} placeholder="Model" className="rounded-md border border-gray-300 px-3 py-2" />
+          <select value={f.status} onChange={(e) => set("status", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
+            <option>Active</option>
+            <option>Inactive</option>
+          </select>
+          <input type="number" value={f.minStock} onChange={(e) => set("minStock", Number(e.target.value))} placeholder="Minimum stock" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input type="number" value={f.reorderQty} onChange={(e) => set("reorderQty", Number(e.target.value))} placeholder="Reorder qty" className="rounded-md border border-gray-300 px-3 py-2" />
+          <select value={f.valuationMethod} onChange={(e) => set("valuationMethod", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
+            <option>FIFO</option>
+            <option>LIFO</option>
+            <option>Weighted Average</option>
+            <option>Standard Cost</option>
+          </select>
+          <input type="date" value={f.manufactureDate} onChange={(e) => set("manufactureDate", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2" />
+          <textarea value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="Description" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2"></textarea>
+          <input value={f.serials} onChange={(e) => set("serials", e.target.value)} placeholder="Serials (comma-separated)" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2" />
+        </div>
+      )}
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button onClick={() => onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Save</button>
+        <button disabled={!canSave} onClick={() => onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Save</button>
         <button
           onClick={() => {
             onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] }, true)
             setF(initial)
           }}
-          className="px-3 py-2 rounded-md border border-[#2D4485] text-[#2D4485] bg-white"
+          disabled={!canSave}
+          className="px-3 py-2 rounded-md border border-[#2D4485] text-[#2D4485] bg-white disabled:opacity-50"
         >
           Save & Add Another
         </button>
