@@ -42,9 +42,9 @@ export default function Navigation() {
             <a href="/login" className="hidden sm:block rounded-full px-4 py-2 bg-white/10 hover:bg-white/20 transition">
               Log in
             </a>
-            <button className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-5 py-2 font-semibold shadow-sm transition">
-              Try it for free
-            </button>
+            <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-5 py-2 font-semibold shadow-sm transition">
+              Sign up
+            </a>
           </div>
         </div>
       </div>

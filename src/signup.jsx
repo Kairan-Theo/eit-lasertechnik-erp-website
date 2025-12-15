@@ -2,55 +2,53 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import "./index.css"
-// Inline SVG icons to avoid external dependency issues
-const EyeIcon = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={props.className}
-  >
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-)
 
-const EyeOffIcon = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={props.className}
-  >
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
-    <circle cx="12" cy="12" r="3" />
-    <path d="M3 3l18 18" />
-  </svg>
-)
+function SignupPage() {
+  const [showPassword, setShowPassword] = React.useState(false)
+  const [form, setForm] = React.useState({
+    name: "",
+    email: "",
+    password: "",
+    confirm: "",
+  })
 
-function LoginPage() {
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    window.location.href = "/apps.html"
+  const onChange = (e) => {
+    const { id, value } = e.target
+    setForm((f) => ({ ...f, [id]: value }))
   }
 
-  const [showPassword, setShowPassword] = React.useState(false)
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!form.name || !form.email || !form.password || !form.confirm) return
+    if (form.password !== form.confirm) return
+    try {
+      const payload = { name: form.name, email: form.email }
+      localStorage.setItem("registeredUser", JSON.stringify(payload))
+    } catch {}
+    window.location.href = "/apps.html"
+  }
 
   return (
     <main className="min-h-screen bg-white">
       <Navigation />
       <section className="w-full py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
         <div className="max-w-md mx-auto bg-white rounded-2xl shadow-sm p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">Log in to EIT Lasertechnik</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">Create your account</h1>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                Full name
+              </label>
+              <input
+                id="name"
+                type="text"
+                required
+                placeholder="Your name"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#3D56A6]"
+                value={form.name}
+                onChange={onChange}
+              />
+            </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email
@@ -61,6 +59,8 @@ function LoginPage() {
                 required
                 placeholder="you@example.com"
                 className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#3D56A6]"
+                value={form.email}
+                onChange={onChange}
               />
             </div>
             <div>
@@ -74,6 +74,8 @@ function LoginPage() {
                   required
                   placeholder="••••••••"
                   className="w-full rounded-md border border-gray-300 px-3 py-2 pr-12 focus:outline-none focus:ring-2 focus:ring-[#3D56A6]"
+                  value={form.password}
+                  onChange={onChange}
                 />
                 <button
                   type="button"
@@ -86,19 +88,33 @@ function LoginPage() {
                   onTouchStart={() => setShowPassword(true)}
                   onTouchEnd={() => setShowPassword(false)}
                 >
-                  {showPassword ? <EyeIcon className="w-5 h-5" /> : <EyeOffIcon className="w-5 h-5" />}
+                  {showPassword ? "Hide" : "Show"}
                 </button>
               </div>
+            </div>
+            <div>
+              <label htmlFor="confirm" className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm password
+              </label>
+              <input
+                id="confirm"
+                type="password"
+                required
+                placeholder="••••••••"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#3D56A6]"
+                value={form.confirm}
+                onChange={onChange}
+              />
             </div>
             <button
               type="submit"
               className="w-full bg-[#3D56A6] text-white rounded-md px-4 py-2 font-semibold hover:bg-[#334b93] transition"
             >
-              Log in
+              Sign up
             </button>
           </form>
           <p className="text-center text-sm text-gray-500 mt-4">
-            Don’t have an account? <a href="/apps.html" className="text-[#3D56A6] hover:underline">Sign up</a>
+            Already have an account? <a href="/login.html" className="text-[#3D56A6] hover:underline">Log in</a>
           </p>
         </div>
       </section>
@@ -108,6 +124,6 @@ function LoginPage() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <LoginPage />
-  </React.StrictMode>
+    <SignupPage />
+  </React.StrictMode>,
 )

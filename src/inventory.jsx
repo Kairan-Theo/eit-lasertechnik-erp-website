@@ -100,7 +100,7 @@ function useInventory() {
   }
   const prevPage = () => setPage((p) => Math.max(1, p - 1))
   const nextPage = () => setPage((p) => Math.min(totalPages, p + 1))
-  const addItem = (payload) => {
+  const addItem = (payload, keepOpen = false) => {
     const next = [
       {
         ...payload,
@@ -118,7 +118,7 @@ function useInventory() {
       ...items,
     ]
     saveItems(next)
-    setShowAdd(false)
+    if (!keepOpen) setShowAdd(false)
   }
   const logMove = (entry) => {
     try {
@@ -377,6 +377,15 @@ function InventoryTable({ inv }) {
   }
   return (
     <div className="p-6">
+      <div className="flex items-center justify-between mb-3">
+        <input
+          value={inv.query}
+          onChange={(e) => inv.setQuery(e.target.value)}
+          className="w-64 rounded-md border border-gray-300 px-3 py-2"
+          placeholder="Search products"
+        />
+        <button onClick={() => inv.setShowAdd(true)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Add Item</button>
+      </div>
       <div className="overflow-x-auto bg-white rounded-xl shadow-sm border">
         <table className="min-w-full text-sm">
           <thead>
@@ -384,20 +393,10 @@ function InventoryTable({ inv }) {
               <th className="p-3 text-left">Item Photo</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>Reference</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Product</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("category")}>Category</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("uom")}>UOM</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock-Qty</th>
-              <th className="p-3 text-left">Reserved</th>
-              <th className="p-3 text-left">Available</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("incomingQty")}>Incoming</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("outgoingQty")}>Outgoing</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Updated Date</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("warehouse")}>Warehouse</th>
-              <th className="p-3 text-left">Bin</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("expiry")}>Expiry</th>
-              <th className="p-3 text-left">Instock</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("status")}>Status</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Updated</th>
               <th className="p-3 text-left">Actions</th>
             </tr>
           </thead>
@@ -409,50 +408,13 @@ function InventoryTable({ inv }) {
                 </td>
                 <td className="p-3 text-gray-900">{p.sku}</td>
                 <td className="p-3 text-gray-700">{p.name}</td>
-                <td className="p-3">{p.category || "-"}</td>
-                <td className="p-3">{p.uom || "-"}</td>
                 <td className="p-3">{Number(p.stockQty).toLocaleString("en-US")}</td>
-                <td className="p-3">{Number(p.reserved || 0).toLocaleString("en-US")}</td>
-                <td className="p-3">{(Number(p.stockQty || 0) - Number(p.reserved || 0)).toLocaleString("en-US")}</td>
-                <td className="p-3">{Number(p.incomingQty || 0).toLocaleString("en-US")}</td>
-                <td className="p-3">{Number(p.outgoingQty || 0).toLocaleString("en-US")}</td>
+                <td className="p-3">{p.warehouse || "Main"}</td>
                 <td className="p-3 text-[#2D4485] font-medium">{fmtTHB(p.price)}</td>
                 <td className="p-3">{p.updatedAt}</td>
-                <td className="p-3">{p.warehouse || "Main"}</td>
-                <td className="p-3">{p.bin || "-"}</td>
-                <td className="p-3">
-                  {p.expiry ? (
-                    <>
-                      <span>{p.expiry}</span>
-                      {daysToExpiry(p.expiry) != null && (
-                        <span className={"ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs " + (daysToExpiry(p.expiry) <= 30 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700")}>
-                          {daysToExpiry(p.expiry) <= 30 ? "Near expiry" : daysToExpiry(p.expiry) + "d"}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    "-"
-                  )}
-                </td>
-                <td className="p-3">
-                  {p.instock > 0 ? (
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-green-50 text-green-600">↑</span>
-                  ) : (
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-red-50 text-red-600">↓</span>
-                  )}
-                </td>
-                <td className="p-3">
-                  <span className={"px-2 py-0.5 rounded text-xs " + (p.status === "Active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600")}>{p.status || "-"}</span>
-                  {Number(p.minStock || 0) > 0 && Number(p.stockQty || 0) < Number(p.minStock || 0) && (
-                    <span className="ml-2 px-2 py-0.5 rounded text-xs bg-yellow-50 text-yellow-700">Low stock</span>
-                  )}
-                </td>
                 <td className="p-3">
                   <div className="flex gap-2">
                     <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Adjust</button>
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowTransfer({ sku: p.sku, from: p.warehouse || "Main" })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Transfer</button>
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff" || inv.role === "Purchase Officer")} onClick={() => inv.setShowReceive({ sku: p.sku })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Receive</button>
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Sales Staff")} onClick={() => inv.setShowDeliver({ sku: p.sku })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Deliver</button>
                   </div>
                 </td>
               </tr>
@@ -525,7 +487,7 @@ function InventoryTable({ inv }) {
 }
 
 function AddItemForm({ onCancel, onSave }) {
-  const [f, setF] = React.useState({
+  const initial = {
     sku: "",
     name: "",
     stockQty: 0,
@@ -549,7 +511,8 @@ function AddItemForm({ onCancel, onSave }) {
     valuationMethod: "FIFO",
     serials: "",
     manufactureDate: "",
-  })
+  }
+  const [f, setF] = React.useState(initial)
   const set = (k, v) => setF((prev) => ({ ...prev, [k]: v }))
   return (
     <div className="space-y-3">
@@ -594,6 +557,15 @@ function AddItemForm({ onCancel, onSave }) {
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
         <button onClick={() => onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Save</button>
+        <button
+          onClick={() => {
+            onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] }, true)
+            setF(initial)
+          }}
+          className="px-3 py-2 rounded-md border border-[#2D4485] text-[#2D4485] bg-white"
+        >
+          Save & Add Another
+        </button>
       </div>
     </div>
   )
