@@ -39,6 +39,14 @@ const EyeOffIcon = (props) => (
 function LoginPage() {
   const handleSubmit = (e) => {
     e.preventDefault()
+    const formEl = e.target
+    const email = formEl.querySelector("#email")?.value || ""
+    const role = /admin/i.test(email) ? "Admin" : "User"
+    try {
+      localStorage.setItem("isAuthenticated", "true")
+      localStorage.setItem("userRole", role)
+      localStorage.setItem("currentUser", JSON.stringify({ email, role }))
+    } catch {}
     window.location.href = "/apps.html"
   }
 

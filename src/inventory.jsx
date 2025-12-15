@@ -19,6 +19,7 @@ function useInventory() {
   const [role, setRole] = React.useState("Inventory Admin")
   const [refQuery, setRefQuery] = React.useState("")
   const [categoryFilter, setCategoryFilter] = React.useState("All")
+  const [showHistory, setShowHistory] = React.useState(null)
   const saveItems = (next) => {
     setItems(next)
     try {
@@ -127,10 +128,25 @@ function useInventory() {
       localStorage.setItem("inventoryMovements", JSON.stringify(logs))
     } catch {}
   }
-  const adjustQty = (sku, delta, reason, ref) => {
-    const next = items.map((it) => (it.sku === sku ? { ...it, stockQty: Number(it.stockQty || 0) + Number(delta || 0), updatedAt: new Date().toISOString().slice(0, 10) } : it))
+  const setQty = (sku, warehouse, bin, lot, newQty, reason, ref) => {
+    const next = items.map((it) => {
+      if (!(it.sku === sku && (it.warehouse || "Main") === (warehouse || "Main") && (it.bin || "A-01-01") === (bin || "A-01-01") && (it.lot || "") === (lot || ""))) {
+        return it
+      }
+      const prev = Number(it.stockQty || 0)
+      const nextQty = Math.max(0, Number(newQty || 0))
+      return {
+        ...it,
+        stockQty: nextQty,
+        status: nextQty > 0 ? "Active" : "Inactive",
+        updatedAt: new Date().toISOString().slice(0, 10),
+      }
+    })
     saveItems(next)
-    logMove({ type: "adjustment", sku, delta: Number(delta), reason, ref })
+    const item = items.find((it) => it.sku === sku && (it.warehouse || "Main") === (warehouse || "Main") && (it.bin || "A-01-01") === (bin || "A-01-01") && (it.lot || "") === (lot || ""))
+    const prevQty = item ? Number(item.stockQty || 0) : 0
+    const finalQty = Math.max(0, Number(newQty || 0))
+    logMove({ type: "adjustment", sku, warehouse: warehouse || "Main", bin: bin || "A-01-01", lot: lot || "", delta: finalQty - prevQty, newQty: finalQty, reason, ref })
     setShowAdjust(null)
   }
   const receiveQty = (sku, qty, ref) => {
@@ -239,7 +255,7 @@ function useInventory() {
     showImport,
     setShowImport,
     addItem,
-    adjustQty,
+    setQty,
     transferQty,
     exportCsv,
     importCsv,
@@ -260,6 +276,8 @@ function useInventory() {
     receiveQty,
     deliverQty,
     items,
+    showHistory,
+    setShowHistory,
   }
 }
 
@@ -329,38 +347,19 @@ function Header({ inv }) {
   )
 }
 
-function TopNav() {
-  const items = [
-    { label: "Dashboard", href: "/" },
-    { label: "Orders", href: "/crm.html" },
-    { label: "Inventory", href: "/inventory.html", active: true },
-    { label: "Roaster" },
-    { label: "Blockchain" },
-    { label: "History" },
-  ]
+function TopNav({ inv }) {
   return (
-    <header className="sticky top-0 z-40 w-full bg-white border-b">
+    <header className="sticky top-0 z-40 w-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="font-semibold text-lg text-[#2D4485]">EIT Lasertechnik</span>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-lg">EIT Lasertechnik</span>
+          <span className="text-white/70">/</span>
+          <span className="text-sm text-white">Inventory</span>
         </div>
-        <nav className="flex items-center gap-4 text-sm">
-          {items.map((it) => (
-            <a
-              key={it.label}
-              href={it.href || "#"}
-              onClick={(e) => {
-                if (!it.href) e.preventDefault()
-              }}
-              className={
-                "px-3 py-2 rounded-md " +
-                (it.active ? "bg-[#2D4485]/10 text-[#2D4485] border border-[#2D4485]/20" : "text-gray-700 hover:bg-gray-50")
-              }
-            >
-              {it.label}
-            </a>
-          ))}
-        </nav>
+        <div className="flex items-center gap-2">
+          <button onClick={() => inv.setShowHistory({})} className="btn-outline text-sm">History</button>
+          <a href="/apps.html" className="btn-outline text-sm">Apps</a>
+        </div>
       </div>
     </header>
   )
@@ -409,7 +408,7 @@ function InventoryTable({ inv }) {
           </thead>
           <tbody>
             {inv.pageItems.map((p, i) => (
-              <tr key={i} className="border-t">
+              <tr key={i} className="border-t odd:bg-gray-50 hover:bg-gray-100 transition">
                 <td className="p-3">
                   <img src={p.photo || "/eit-icon.png"} alt="" className="w-10 h-10 rounded object-cover" />
                 </td>
@@ -421,7 +420,8 @@ function InventoryTable({ inv }) {
                 <td className="p-3">{p.updatedAt}</td>
                 <td className="p-3">
                   <div className="flex gap-2">
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
+                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
+                    <button onClick={() => inv.setShowHistory({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "" })} className="px-2 py-1 rounded-md border border-gray-300 bg-white">History</button>
                   </div>
                 </td>
               </tr>
@@ -453,8 +453,8 @@ function InventoryTable({ inv }) {
       {inv.showAdjust && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowAdjust(null)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="text-lg font-semibold mb-4 text-gray-900">Adjust Stock</div>
-            <AdjustForm sku={inv.showAdjust.sku} onCancel={() => inv.setShowAdjust(null)} onConfirm={(delta, reason, ref) => inv.adjustQty(inv.showAdjust.sku, delta, reason, ref)} />
+            <div className="text-lg font-semibold mb-4 text-gray-900">Update Stock</div>
+            <AdjustForm sku={inv.showAdjust.sku} current={inv.showAdjust.current} onCancel={() => inv.setShowAdjust(null)} onConfirm={(newQty, reason) => inv.setQty(inv.showAdjust.sku, inv.showAdjust.warehouse, inv.showAdjust.bin, inv.showAdjust.lot, newQty, reason, "")} />
           </div>
         </div>
       )}
@@ -479,6 +479,14 @@ function InventoryTable({ inv }) {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-4 text-gray-900">Deliver Products</div>
             <DeliverForm sku={inv.showDeliver.sku} onCancel={() => inv.setShowDeliver(null)} onConfirm={(qty, ref) => inv.deliverQty(inv.showDeliver.sku, qty, ref)} />
+          </div>
+        </div>
+      )}
+      {inv.showHistory && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowHistory(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="text-lg font-semibold mb-4 text-gray-900">Movement History</div>
+            <MovementLog sku={inv.showHistory.sku} warehouse={inv.showHistory.warehouse} bin={inv.showHistory.bin} lot={inv.showHistory.lot} onCancel={() => inv.setShowHistory(null)} />
           </div>
         </div>
       )}
@@ -605,27 +613,30 @@ function AddItemForm({ onCancel, onSave }) {
   )
 }
 
-function AdjustForm({ sku, onCancel, onConfirm }) {
-  const [delta, setDelta] = React.useState(0)
-  const [reason, setReason] = React.useState("")
-  const [ref, setRef] = React.useState("")
-  const [type, setType] = React.useState("Adjustment")
+function AdjustForm({ sku, current = 0, onCancel, onConfirm }) {
+  const [newQty, setNewQty] = React.useState(current)
+  const [note, setNote] = React.useState("")
+  const canConfirm = Number.isFinite(newQty)
   return (
     <div className="space-y-3">
       <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
-      <select value={type} onChange={(e) => setType(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
-        <option>Adjustment</option>
-        <option>Goods Receipt</option>
-        <option>Goods Issue</option>
-        <option>Return In</option>
-        <option>Return Out</option>
-      </select>
-      <input type="number" value={delta} onChange={(e) => setDelta(Number(e.target.value))} placeholder="Change qty (+/-)" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-      <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-      <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Reference (e.g. Source Document)" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Current stock</label>
+          <input value={current} readOnly className="w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">New stock</label>
+          <input type="number" value={newQty} onChange={(e) => setNewQty(Number(e.target.value))} className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm text-gray-700 mb-1">Note (optional)</label>
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason for change" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      </div>
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button onClick={() => onConfirm(delta, type + (reason ? ` • ${reason}` : ""), ref)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Confirm</button>
+        <button disabled={!canConfirm} onClick={() => onConfirm(Number(newQty), note || "Stock update")} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Confirm</button>
       </div>
     </div>
   )
@@ -671,6 +682,72 @@ function ImportForm({ onCancel, onFile }) {
   )
 }
 
+function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
+  const [rows, setRows] = React.useState([])
+  React.useEffect(() => {
+    try {
+      const logs = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
+      const filtered = logs
+        .filter((e) => (sku ? (e.sku || "") === sku : true))
+        .filter((e) => (warehouse ? (e.warehouse || "Main") === warehouse : true))
+        .filter((e) => (bin ? (e.bin || "A-01-01") === bin : true))
+        .filter((e) => (lot ? (e.lot || "") === lot : true))
+        .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
+        .slice(0, 50)
+      setRows(filtered)
+    } catch {
+      setRows([])
+    }
+  }, [sku, warehouse, bin, lot])
+  const fmtChange = (e) => {
+    if (e.delta != null) return e.delta
+    if (e.qty != null) return e.qty
+    return ""
+  }
+  const loc = `${warehouse || "Main"} / ${bin || "A-01-01"}${lot ? " / " + lot : ""}`
+  return (
+    <div className="space-y-3">
+      <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
+      <div className="text-xs text-gray-600">Location: {loc}</div>
+      <div className="overflow-x-auto border rounded-xl">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-[#2D4485]">
+              <th className="p-2 text-left">Date</th>
+              <th className="p-2 text-left">Type</th>
+              <th className="p-2 text-left">Change</th>
+              <th className="p-2 text-left">New Qty</th>
+              <th className="p-2 text-left">Reason</th>
+              <th className="p-2 text-left">Ref</th>
+              <th className="p-2 text-left">User</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td className="p-3 text-gray-600" colSpan={7}>No movements found</td></tr>
+            ) : (
+              rows.map((e, i) => (
+                <tr key={i} className="border-t">
+                  <td className="p-2">{String(e.ts).slice(0, 19).replace("T", " ")}</td>
+                  <td className="p-2">{e.type}</td>
+                  <td className="p-2">{fmtChange(e)}</td>
+                  <td className="p-2">{e.newQty != null ? e.newQty : ""}</td>
+                  <td className="p-2">{e.reason || ""}</td>
+                  <td className="p-2">{e.ref || e.from || e.to || ""}</td>
+                  <td className="p-2">{e.user || ""}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Close</button>
+      </div>
+    </div>
+  )
+}
+
 function ReceiveForm({ sku, onCancel, onConfirm }) {
   const [qty, setQty] = React.useState(0)
   const [ref, setRef] = React.useState("")
@@ -707,7 +784,7 @@ function InventoryLayout() {
   const inv = useInventory()
   return (
     <main className="min-h-screen bg-gray-50">
-      <TopNav />
+      <TopNav inv={inv} />
       <div className="px-0">
         <InventoryTable inv={inv} />
       </div>

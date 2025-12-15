@@ -124,6 +124,37 @@
   }
 }
 
+@layer components {
+  .btn-primary {
+    @apply px-3 py-2 rounded-md bg-[#2D4485] text-white transition shadow-sm hover:bg-[#3D56A6] hover:shadow hover:-translate-y-px;
+  }
+  .btn-outline {
+    @apply px-3 py-2 rounded-md border border-gray-300 bg-white hover:bg-gray-50 transition;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-sm border hover:shadow-md transition;
+  }
+  .glass-nav {
+    @apply bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b;
+  }
+  .nav-link {
+    position: relative;
+  }
+  .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    height: 2px;
+    width: 0;
+    background: var(--ring);
+    transition: width 0.2s ease;
+  }
+  .nav-link:hover::after {
+    width: 100%;
+  }
+}
+
 @media print {
   html, body {
     -webkit-print-color-adjust: exact;
