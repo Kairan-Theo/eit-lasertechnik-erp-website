@@ -4,10 +4,10 @@ import Navigation from "./components/navigation.jsx"
 import "./index.css"
 
 function useQuotationState() {
-  const [customer, setCustomer] = React.useState({ name: "", company: "", email: "", phone: "" })
+  const [customer, setCustomer] = React.useState({ name: "", company: "", email: "", companyEmail: "", phone: "", companyPhone: "" })
   const [details, setDetails] = React.useState({ number: "", date: new Date().toISOString().slice(0, 10), expires: "", currency: "THB", salesperson: "" })
   const [crm, setCrm] = React.useState({ stage: "Draft", probability: 20, nextActivity: "", note: "" })
-  const [items, setItems] = React.useState([{ product: "", description: "", qty: 1, price: 0, tax: 0 }])
+  const [items, setItems] = React.useState([{ product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
 
   React.useEffect(() => {
     try {
@@ -26,7 +26,7 @@ function useQuotationState() {
     }
   }, [])
 
-  const addItem = () => setItems((prev) => [...prev, { product: "", description: "", qty: 1, price: 0, tax: 0 }])
+  const addItem = () => setItems((prev) => [...prev, { product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
   const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, value) => setItems((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: field === "qty" || field === "price" || field === "tax" ? Number(value) : value } : row)))
 
@@ -116,7 +116,9 @@ function QuotationDocument({ q }) {
           <div className="text-[#3D56A6] font-semibold text-lg">{q.customer.name || q.customer.company || "-"}</div>
           <div className="text-gray-600 text-sm">{q.customer.company || ""}</div>
           <div className="text-gray-600 text-sm">{q.customer.email || ""}</div>
+          <div className="text-gray-600 text-sm">{q.customer.companyEmail || ""}</div>
           <div className="text-gray-600 text-sm">{q.customer.phone || ""}</div>
+          <div className="text-gray-600 text-sm">{q.customer.companyPhone || ""}</div>
         </div>
         <div className="md:text-right">
           <div className="text-sm text-gray-600">Currency:</div>
@@ -139,7 +141,10 @@ function QuotationDocument({ q }) {
               return (
                 <tr key={i} className="border-t">
                   <td className="p-2">{it.qty}</td>
-                  <td className="p-2">{it.description || it.product}</td>
+                  <td className="p-2">
+                    <div>{it.description || it.product}</div>
+                    {it.note ? <div className="text-xs text-gray-500 mt-1">Note: {it.note}</div> : null}
+                  </td>
                   <td className="p-2">{sym} {Number(it.price).toFixed(2)}</td>
                   <td className="p-2">{sym} {amount.toFixed(2)}</td>
                 </tr>
@@ -211,7 +216,9 @@ function QuotationPage() {
                   <input value={q.customer.name} onChange={(e) => q.setCustomer({ ...q.customer, name: e.target.value })} placeholder="Customer name" className="w-full rounded-md border border-gray-300 px-3 py-2" />
                   <input value={q.customer.company} onChange={(e) => q.setCustomer({ ...q.customer, company: e.target.value })} placeholder="Company" className="w-full rounded-md border border-gray-300 px-3 py-2" />
                   <input value={q.customer.email} onChange={(e) => q.setCustomer({ ...q.customer, email: e.target.value })} placeholder="Email" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+                  <input value={q.customer.companyEmail} onChange={(e) => q.setCustomer({ ...q.customer, companyEmail: e.target.value })} placeholder="Company email" className="w-full rounded-md border border-gray-300 px-3 py-2" />
                   <input value={q.customer.phone} onChange={(e) => q.setCustomer({ ...q.customer, phone: e.target.value })} placeholder="Phone" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+                  <input value={q.customer.companyPhone} onChange={(e) => q.setCustomer({ ...q.customer, companyPhone: e.target.value })} placeholder="Company phone" className="w-full rounded-md border border-gray-300 px-3 py-2" />
                 </div>
               </div>
 
@@ -224,10 +231,11 @@ function QuotationPage() {
                         <th className="p-2">Product</th>
                         <th className="p-2">Description</th>
                         <th className="p-2">Qty</th>
-                        <th className="p-2">Unit Price</th>
-                        <th className="p-2">Tax %</th>
-                        <th className="p-2">Line Total</th>
-                        <th className="p-2"></th>
+              <th className="p-2">Unit Price</th>
+              <th className="p-2">Tax %</th>
+              <th className="p-2">Line Total</th>
+              <th className="p-2">Note</th>
+              <th className="p-2"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -239,6 +247,7 @@ function QuotationPage() {
                           <td className="p-2"><input type="number" min="0" step="0.01" value={it.price} onChange={(e) => q.updateItem(i, "price", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
                           <td className="p-2"><input type="number" min="0" step="0.1" value={it.tax} onChange={(e) => q.updateItem(i, "tax", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
                           <td className="p-2 text-right">{(it.qty * it.price * (1 + it.tax / 100)).toFixed(2)}</td>
+                          <td className="p-2"><input value={it.note || ""} onChange={(e) => q.updateItem(i, "note", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
                           <td className="p-2 text-right"><button onClick={() => q.removeItem(i)} className="px-3 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100">Remove</button></td>
                         </tr>
                       ))}

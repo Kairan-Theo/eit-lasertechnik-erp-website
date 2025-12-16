@@ -25,7 +25,7 @@ export default function AppGrid() {
               onClick={() => {
                 if (app.href) window.location.href = app.href
               }}
-              className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group text-left"
+              className="card p-6 hover:-translate-y-1 transition-all duration-300 cursor-pointer group text-left"
             >
               <div className="flex flex-col items-center gap-4">
                 <div

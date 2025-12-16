@@ -100,13 +100,13 @@ function LoginPage() {
             </div>
             <button
               type="submit"
-              className="w-full bg-[#3D56A6] text-white rounded-md px-4 py-2 font-semibold hover:bg-[#334b93] transition"
+              className="w-full btn-primary font-semibold"
             >
               Log in
             </button>
           </form>
           <p className="text-center text-sm text-gray-500 mt-4">
-            Don’t have an account? <a href="/apps.html" className="text-[#3D56A6] hover:underline">Sign up</a>
+            Don’t have an account? <a href="/signup.html" className="text-[#2D4485] hover:underline">Sign up</a>
           </p>
         </div>
       </section>
