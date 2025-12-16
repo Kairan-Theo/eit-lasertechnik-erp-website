@@ -5,6 +5,21 @@ import AdminPage from "./components/admin-page.jsx"
 import "./index.css"
 
 function AdminRoot() {
+  const [allowed, setAllowed] = React.useState(false)
+  React.useEffect(() => {
+    try {
+      const role = localStorage.getItem("userRole")
+      const auth = localStorage.getItem("isAuthenticated")
+      if (auth === "true" && role === "Admin") {
+        setAllowed(true)
+      } else {
+        window.location.href = "/login.html"
+      }
+    } catch {
+      window.location.href = "/login.html"
+    }
+  }, [])
+  if (!allowed) return null
   return (
     <main className="min-h-screen bg-white">
       <Navigation />

@@ -19,6 +19,9 @@ function useInventory() {
   const [role, setRole] = React.useState("Inventory Admin")
   const [refQuery, setRefQuery] = React.useState("")
   const [categoryFilter, setCategoryFilter] = React.useState("All")
+  const [showHistory, setShowHistory] = React.useState(null)
+  const [view, setView] = React.useState("inventory")
+  const [historyFilter, setHistoryFilter] = React.useState(null)
   const saveItems = (next) => {
     setItems(next)
     try {
@@ -100,7 +103,7 @@ function useInventory() {
   }
   const prevPage = () => setPage((p) => Math.max(1, p - 1))
   const nextPage = () => setPage((p) => Math.min(totalPages, p + 1))
-  const addItem = (payload) => {
+  const addItem = (payload, keepOpen = false) => {
     const next = [
       {
         ...payload,
@@ -118,7 +121,7 @@ function useInventory() {
       ...items,
     ]
     saveItems(next)
-    setShowAdd(false)
+    if (!keepOpen) setShowAdd(false)
   }
   const logMove = (entry) => {
     try {
@@ -127,10 +130,25 @@ function useInventory() {
       localStorage.setItem("inventoryMovements", JSON.stringify(logs))
     } catch {}
   }
-  const adjustQty = (sku, delta, reason, ref) => {
-    const next = items.map((it) => (it.sku === sku ? { ...it, stockQty: Number(it.stockQty || 0) + Number(delta || 0), updatedAt: new Date().toISOString().slice(0, 10) } : it))
+  const setQty = (sku, warehouse, bin, lot, newQty, reason, ref) => {
+    const next = items.map((it) => {
+      if (!(it.sku === sku && (it.warehouse || "Main") === (warehouse || "Main") && (it.bin || "A-01-01") === (bin || "A-01-01") && (it.lot || "") === (lot || ""))) {
+        return it
+      }
+      const prev = Number(it.stockQty || 0)
+      const nextQty = Math.max(0, Number(newQty || 0))
+      return {
+        ...it,
+        stockQty: nextQty,
+        status: nextQty > 0 ? "Active" : "Inactive",
+        updatedAt: new Date().toISOString().slice(0, 10),
+      }
+    })
     saveItems(next)
-    logMove({ type: "adjustment", sku, delta: Number(delta), reason, ref })
+    const item = items.find((it) => it.sku === sku && (it.warehouse || "Main") === (warehouse || "Main") && (it.bin || "A-01-01") === (bin || "A-01-01") && (it.lot || "") === (lot || ""))
+    const prevQty = item ? Number(item.stockQty || 0) : 0
+    const finalQty = Math.max(0, Number(newQty || 0))
+    logMove({ type: "adjustment", sku, warehouse: warehouse || "Main", bin: bin || "A-01-01", lot: lot || "", delta: finalQty - prevQty, newQty: finalQty, reason, ref })
     setShowAdjust(null)
   }
   const receiveQty = (sku, qty, ref) => {
@@ -239,7 +257,7 @@ function useInventory() {
     showImport,
     setShowImport,
     addItem,
-    adjustQty,
+    setQty,
     transferQty,
     exportCsv,
     importCsv,
@@ -260,6 +278,12 @@ function useInventory() {
     receiveQty,
     deliverQty,
     items,
+    showHistory,
+    setShowHistory,
+    view,
+    setView,
+    historyFilter,
+    setHistoryFilter,
   }
 }
 
@@ -329,38 +353,33 @@ function Header({ inv }) {
   )
 }
 
-function TopNav() {
-  const items = [
-    { label: "Dashboard", href: "/" },
-    { label: "Orders", href: "/crm.html" },
-    { label: "Inventory", href: "/inventory.html", active: true },
-    { label: "Roaster" },
-    { label: "Blockchain" },
-    { label: "History" },
-  ]
+function TopNav({ inv }) {
   return (
-    <header className="sticky top-0 z-40 w-full bg-white border-b">
+    <header className="sticky top-0 z-40 w-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="font-semibold text-lg text-[#2D4485]">EIT Lasertechnik</span>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-lg">EIT Lasertechnik</span>
+          <span className="text-white/70">/</span>
+          <span className="text-sm text-white">Inventory</span>
         </div>
-        <nav className="flex items-center gap-4 text-sm">
-          {items.map((it) => (
-            <a
-              key={it.label}
-              href={it.href || "#"}
-              onClick={(e) => {
-                if (!it.href) e.preventDefault()
-              }}
-              className={
-                "px-3 py-2 rounded-md " +
-                (it.active ? "bg-[#2D4485]/10 text-[#2D4485] border border-[#2D4485]/20" : "text-gray-700 hover:bg-gray-50")
-              }
-            >
-              {it.label}
-            </a>
-          ))}
-        </nav>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => inv.setView("inventory")}
+            className={(inv.view === "inventory" ? "bg-white text-[#2D4485]" : "bg-white/20 text-white hover:bg-white/30") + " rounded-full px-3 py-1.5 text-sm font-medium transition"}
+          >
+            Inventory
+          </button>
+          <button
+            onClick={() => {
+              inv.setHistoryFilter(null)
+              inv.setView("history")
+            }}
+            className={(inv.view === "history" ? "bg-white text-[#2D4485]" : "bg.white/20 text-white hover:bg-white/30").replace("bg.white/20","bg-white/20") + " rounded-full px-3 py-1.5 text-sm font-medium transition"}
+          >
+            History
+          </button>
+          <a href="/apps.html" className="rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition">Apps</a>
+        </div>
       </div>
     </header>
   )
@@ -377,82 +396,51 @@ function InventoryTable({ inv }) {
   }
   return (
     <div className="p-6">
+      <div className="flex items-center justify-between mb-3">
+        <input
+          value={inv.query}
+          onChange={(e) => inv.setQuery(e.target.value)}
+          className="w-64 rounded-md border border-gray-300 px-3 py-2"
+          placeholder="Search by name or reference"
+        />
+        <button onClick={() => inv.setShowAdd(true)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Add Item</button>
+      </div>
+      {inv.pageItems.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
+          <div className="text-lg font-semibold text-gray-900">No items found</div>
+          <div className="text-sm text-gray-600 mt-1">Try adjusting your search or add a new item</div>
+          <button onClick={() => inv.setShowAdd(true)} className="mt-4 px-3 py-2 rounded-md bg-[#2D4485] text-white">Add Item</button>
+        </div>
+      ) : (
       <div className="overflow-x-auto bg-white rounded-xl shadow-sm border">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-[#2D4485]">
               <th className="p-3 text-left">Item Photo</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>Reference</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Product</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("category")}>Category</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("uom")}>UOM</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock-Qty</th>
-              <th className="p-3 text-left">Reserved</th>
-              <th className="p-3 text-left">Available</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("incomingQty")}>Incoming</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("outgoingQty")}>Outgoing</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Updated Date</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>SKU</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("warehouse")}>Warehouse</th>
-              <th className="p-3 text-left">Bin</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("expiry")}>Expiry</th>
-              <th className="p-3 text-left">Instock</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("status")}>Status</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
+              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Last Updated</th>
               <th className="p-3 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
             {inv.pageItems.map((p, i) => (
-              <tr key={i} className="border-t">
+              <tr key={i} className="border-t odd:bg-gray-50 hover:bg-gray-100 transition">
                 <td className="p-3">
                   <img src={p.photo || "/eit-icon.png"} alt="" className="w-10 h-10 rounded object-cover" />
                 </td>
                 <td className="p-3 text-gray-900">{p.sku}</td>
                 <td className="p-3 text-gray-700">{p.name}</td>
-                <td className="p-3">{p.category || "-"}</td>
-                <td className="p-3">{p.uom || "-"}</td>
                 <td className="p-3">{Number(p.stockQty).toLocaleString("en-US")}</td>
-                <td className="p-3">{Number(p.reserved || 0).toLocaleString("en-US")}</td>
-                <td className="p-3">{(Number(p.stockQty || 0) - Number(p.reserved || 0)).toLocaleString("en-US")}</td>
-                <td className="p-3">{Number(p.incomingQty || 0).toLocaleString("en-US")}</td>
-                <td className="p-3">{Number(p.outgoingQty || 0).toLocaleString("en-US")}</td>
+                <td className="p-3">{p.warehouse || "Main"}</td>
                 <td className="p-3 text-[#2D4485] font-medium">{fmtTHB(p.price)}</td>
                 <td className="p-3">{p.updatedAt}</td>
-                <td className="p-3">{p.warehouse || "Main"}</td>
-                <td className="p-3">{p.bin || "-"}</td>
-                <td className="p-3">
-                  {p.expiry ? (
-                    <>
-                      <span>{p.expiry}</span>
-                      {daysToExpiry(p.expiry) != null && (
-                        <span className={"ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs " + (daysToExpiry(p.expiry) <= 30 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700")}>
-                          {daysToExpiry(p.expiry) <= 30 ? "Near expiry" : daysToExpiry(p.expiry) + "d"}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    "-"
-                  )}
-                </td>
-                <td className="p-3">
-                  {p.instock > 0 ? (
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-green-50 text-green-600">↑</span>
-                  ) : (
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-red-50 text-red-600">↓</span>
-                  )}
-                </td>
-                <td className="p-3">
-                  <span className={"px-2 py-0.5 rounded text-xs " + (p.status === "Active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600")}>{p.status || "-"}</span>
-                  {Number(p.minStock || 0) > 0 && Number(p.stockQty || 0) < Number(p.minStock || 0) && (
-                    <span className="ml-2 px-2 py-0.5 rounded text-xs bg-yellow-50 text-yellow-700">Low stock</span>
-                  )}
-                </td>
                 <td className="p-3">
                   <div className="flex gap-2">
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Adjust</button>
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowTransfer({ sku: p.sku, from: p.warehouse || "Main" })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Transfer</button>
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff" || inv.role === "Purchase Officer")} onClick={() => inv.setShowReceive({ sku: p.sku })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Receive</button>
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Sales Staff")} onClick={() => inv.setShowDeliver({ sku: p.sku })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Deliver</button>
+                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
                   </div>
                 </td>
               </tr>
@@ -460,6 +448,7 @@ function InventoryTable({ inv }) {
           </tbody>
         </table>
       </div>
+      )}
       <div className="flex items-center justify-between mt-4 text-sm text-gray-700">
         <button onClick={inv.prevPage} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Previous</button>
         <div className="flex items-center gap-2">
@@ -483,8 +472,8 @@ function InventoryTable({ inv }) {
       {inv.showAdjust && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowAdjust(null)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="text-lg font-semibold mb-4 text-gray-900">Adjust Stock</div>
-            <AdjustForm sku={inv.showAdjust.sku} onCancel={() => inv.setShowAdjust(null)} onConfirm={(delta, reason, ref) => inv.adjustQty(inv.showAdjust.sku, delta, reason, ref)} />
+            <div className="text-lg font-semibold mb-4 text-gray-900">Update Stock</div>
+            <AdjustForm sku={inv.showAdjust.sku} current={inv.showAdjust.current} onCancel={() => inv.setShowAdjust(null)} onConfirm={(newQty, reason) => inv.setQty(inv.showAdjust.sku, inv.showAdjust.warehouse, inv.showAdjust.bin, inv.showAdjust.lot, newQty, reason, "")} />
           </div>
         </div>
       )}
@@ -524,8 +513,25 @@ function InventoryTable({ inv }) {
   )
 }
 
+function HistoryView({ inv }) {
+  return (
+    <div className="p-6">
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="text-lg font-semibold mb-4 text-gray-900">Movement History</div>
+        <MovementLog
+          sku={inv.historyFilter?.sku}
+          warehouse={inv.historyFilter?.warehouse}
+          bin={inv.historyFilter?.bin}
+          lot={inv.historyFilter?.lot}
+          onCancel={() => inv.setView("inventory")}
+        />
+      </div>
+    </div>
+  )
+}
+
 function AddItemForm({ onCancel, onSave }) {
-  const [f, setF] = React.useState({
+  const initial = {
     sku: "",
     name: "",
     stockQty: 0,
@@ -549,77 +555,116 @@ function AddItemForm({ onCancel, onSave }) {
     valuationMethod: "FIFO",
     serials: "",
     manufactureDate: "",
-  })
+  }
+  const [f, setF] = React.useState(initial)
+  const [adv, setAdv] = React.useState(false)
+  const canSave = Boolean(f.sku && f.name)
   const set = (k, v) => setF((prev) => ({ ...prev, [k]: v }))
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <input value={f.sku} onChange={(e) => set("sku", e.target.value)} placeholder="Internal Reference" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Product" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="number" value={f.stockQty} onChange={(e) => set("stockQty", Number(e.target.value))} placeholder="Stock Qty" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="number" value={f.reserved} onChange={(e) => set("reserved", Number(e.target.value))} placeholder="Reserved" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} placeholder="Price" className="rounded-md border border-gray-300 px-3 py-2" />
-        <select value={f.warehouse} onChange={(e) => set("warehouse", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          <option>Main</option>
-          <option>Secondary</option>
-        </select>
-        <input value={f.bin} onChange={(e) => set("bin", e.target.value)} placeholder="Bin" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.lot} onChange={(e) => set("lot", e.target.value)} placeholder="Lot" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="date" value={f.expiry} onChange={(e) => set("expiry", e.target.value)} placeholder="Expiry" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.barcode} onChange={(e) => set("barcode", e.target.value)} placeholder="Barcode" className="rounded-md border border-gray-300 px-3 py-2" />
-        <select value={f.category} onChange={(e) => set("category", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          <option>Raw Material</option>
-          <option>Finished Goods</option>
-          <option>Service</option>
-        </select>
-        <input value={f.uom} onChange={(e) => set("uom", e.target.value)} placeholder="UOM (pcs, kg, m)" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.brand} onChange={(e) => set("brand", e.target.value)} placeholder="Brand" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input value={f.model} onChange={(e) => set("model", e.target.value)} placeholder="Model" className="rounded-md border border-gray-300 px-3 py-2" />
-        <select value={f.status} onChange={(e) => set("status", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          <option>Active</option>
-          <option>Inactive</option>
-        </select>
-        <input type="number" value={f.minStock} onChange={(e) => set("minStock", Number(e.target.value))} placeholder="Minimum Stock Level" className="rounded-md border border-gray-300 px-3 py-2" />
-        <input type="number" value={f.reorderQty} onChange={(e) => set("reorderQty", Number(e.target.value))} placeholder="Reorder Quantity" className="rounded-md border border-gray-300 px-3 py-2" />
-        <select value={f.valuationMethod} onChange={(e) => set("valuationMethod", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          <option>FIFO</option>
-          <option>LIFO</option>
-          <option>Weighted Average</option>
-          <option>Standard Cost</option>
-        </select>
-        <input type="date" value={f.manufactureDate} onChange={(e) => set("manufactureDate", e.target.value)} placeholder="Manufacture Date" className="rounded-md border border-gray-300 px-3 py-2" />
-        <textarea value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="Product Description" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2"></textarea>
-        <input value={f.serials} onChange={(e) => set("serials", e.target.value)} placeholder="Serial Numbers (comma-separated)" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2" />
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Reference (SKU)</label>
+          <input value={f.sku} onChange={(e) => set("sku", e.target.value)} required placeholder="e.g. ABC-001" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Product name</label>
+          <input value={f.name} onChange={(e) => set("name", e.target.value)} required placeholder="e.g. Laser Welding Machine" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Stock qty</label>
+          <input type="number" value={f.stockQty} onChange={(e) => set("stockQty", Number(e.target.value))} placeholder="e.g. 10" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Price</label>
+          <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} placeholder="e.g. 50000" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm text-gray-700 mb-1">Warehouse</label>
+          <select value={f.warehouse} onChange={(e) => set("warehouse", e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
+            <option>Main</option>
+            <option>Secondary</option>
+          </select>
+        </div>
       </div>
+      <div>
+        <button onClick={() => setAdv((v) => !v)} className="text-[#2D4485] text-sm">
+          {adv ? "Hide advanced" : "Show advanced"}
+        </button>
+      </div>
+      {adv && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input value={f.bin} onChange={(e) => set("bin", e.target.value)} placeholder="Bin" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input value={f.lot} onChange={(e) => set("lot", e.target.value)} placeholder="Lot" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input type="date" value={f.expiry} onChange={(e) => set("expiry", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2" />
+          <input value={f.barcode} onChange={(e) => set("barcode", e.target.value)} placeholder="Barcode" className="rounded-md border border-gray-300 px-3 py-2" />
+          <select value={f.category} onChange={(e) => set("category", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
+            <option>Raw Material</option>
+            <option>Finished Goods</option>
+            <option>Service</option>
+          </select>
+          <input value={f.uom} onChange={(e) => set("uom", e.target.value)} placeholder="UOM (pcs, kg, m)" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input value={f.brand} onChange={(e) => set("brand", e.target.value)} placeholder="Brand" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input value={f.model} onChange={(e) => set("model", e.target.value)} placeholder="Model" className="rounded-md border border-gray-300 px-3 py-2" />
+          <select value={f.status} onChange={(e) => set("status", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
+            <option>Active</option>
+            <option>Inactive</option>
+          </select>
+          <input type="number" value={f.minStock} onChange={(e) => set("minStock", Number(e.target.value))} placeholder="Minimum stock" className="rounded-md border border-gray-300 px-3 py-2" />
+          <input type="number" value={f.reorderQty} onChange={(e) => set("reorderQty", Number(e.target.value))} placeholder="Reorder qty" className="rounded-md border border-gray-300 px-3 py-2" />
+          <select value={f.valuationMethod} onChange={(e) => set("valuationMethod", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
+            <option>FIFO</option>
+            <option>LIFO</option>
+            <option>Weighted Average</option>
+            <option>Standard Cost</option>
+          </select>
+          <input type="date" value={f.manufactureDate} onChange={(e) => set("manufactureDate", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2" />
+          <textarea value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="Description" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2"></textarea>
+          <input value={f.serials} onChange={(e) => set("serials", e.target.value)} placeholder="Serials (comma-separated)" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2" />
+        </div>
+      )}
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button onClick={() => onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Save</button>
+        <button disabled={!canSave} onClick={() => onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Save</button>
+        <button
+          onClick={() => {
+            onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] }, true)
+            setF(initial)
+          }}
+          disabled={!canSave}
+          className="px-3 py-2 rounded-md border border-[#2D4485] text-[#2D4485] bg-white disabled:opacity-50"
+        >
+          Save & Add Another
+        </button>
       </div>
     </div>
   )
 }
 
-function AdjustForm({ sku, onCancel, onConfirm }) {
-  const [delta, setDelta] = React.useState(0)
-  const [reason, setReason] = React.useState("")
-  const [ref, setRef] = React.useState("")
-  const [type, setType] = React.useState("Adjustment")
+function AdjustForm({ sku, current = 0, onCancel, onConfirm }) {
+  const [newQty, setNewQty] = React.useState(current)
+  const [note, setNote] = React.useState("")
+  const canConfirm = Number.isFinite(newQty)
   return (
     <div className="space-y-3">
       <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
-      <select value={type} onChange={(e) => setType(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
-        <option>Adjustment</option>
-        <option>Goods Receipt</option>
-        <option>Goods Issue</option>
-        <option>Return In</option>
-        <option>Return Out</option>
-      </select>
-      <input type="number" value={delta} onChange={(e) => setDelta(Number(e.target.value))} placeholder="Change qty (+/-)" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-      <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-      <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Reference (e.g. Source Document)" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Current stock</label>
+          <input value={current} readOnly className="w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">New stock</label>
+          <input type="number" value={newQty} onChange={(e) => setNewQty(Number(e.target.value))} className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm text-gray-700 mb-1">Note (optional)</label>
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason for change" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      </div>
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button onClick={() => onConfirm(delta, type + (reason ? ` • ${reason}` : ""), ref)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Confirm</button>
+        <button disabled={!canConfirm} onClick={() => onConfirm(Number(newQty), note || "Stock update")} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Confirm</button>
       </div>
     </div>
   )
@@ -665,6 +710,72 @@ function ImportForm({ onCancel, onFile }) {
   )
 }
 
+function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
+  const [rows, setRows] = React.useState([])
+  React.useEffect(() => {
+    try {
+      const logs = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
+      const filtered = logs
+        .filter((e) => (sku ? (e.sku || "") === sku : true))
+        .filter((e) => (warehouse ? (e.warehouse || "Main") === warehouse : true))
+        .filter((e) => (bin ? (e.bin || "A-01-01") === bin : true))
+        .filter((e) => (lot ? (e.lot || "") === lot : true))
+        .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
+        .slice(0, 50)
+      setRows(filtered)
+    } catch {
+      setRows([])
+    }
+  }, [sku, warehouse, bin, lot])
+  const fmtChange = (e) => {
+    if (e.delta != null) return e.delta
+    if (e.qty != null) return e.qty
+    return ""
+  }
+  const loc = `${warehouse || "Main"} / ${bin || "A-01-01"}${lot ? " / " + lot : ""}`
+  return (
+    <div className="space-y-3">
+      <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
+      <div className="text-xs text-gray-600">Location: {loc}</div>
+      <div className="overflow-x-auto border rounded-xl">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-[#2D4485]">
+              <th className="p-2 text-left">Date</th>
+              <th className="p-2 text-left">Type</th>
+              <th className="p-2 text-left">Change</th>
+              <th className="p-2 text-left">New Qty</th>
+              <th className="p-2 text-left">Reason</th>
+              <th className="p-2 text-left">Ref</th>
+              <th className="p-2 text-left">User</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td className="p-3 text-gray-600" colSpan={7}>No movements found</td></tr>
+            ) : (
+              rows.map((e, i) => (
+                <tr key={i} className="border-t">
+                  <td className="p-2">{String(e.ts).slice(0, 19).replace("T", " ")}</td>
+                  <td className="p-2">{e.type}</td>
+                  <td className="p-2">{fmtChange(e)}</td>
+                  <td className="p-2">{e.newQty != null ? e.newQty : ""}</td>
+                  <td className="p-2">{e.reason || ""}</td>
+                  <td className="p-2">{e.ref || e.from || e.to || ""}</td>
+                  <td className="p-2">{e.user || ""}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Close</button>
+      </div>
+    </div>
+  )
+}
+
 function ReceiveForm({ sku, onCancel, onConfirm }) {
   const [qty, setQty] = React.useState(0)
   const [ref, setRef] = React.useState("")
@@ -701,9 +812,9 @@ function InventoryLayout() {
   const inv = useInventory()
   return (
     <main className="min-h-screen bg-gray-50">
-      <TopNav />
+      <TopNav inv={inv} />
       <div className="px-0">
-        <InventoryTable inv={inv} />
+        {inv.view === "history" ? <HistoryView inv={inv} /> : <InventoryTable inv={inv} />}
       </div>
     </main>
   )

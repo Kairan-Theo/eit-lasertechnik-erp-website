@@ -30,10 +30,10 @@ export default function HeroSection() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
-              <button className="px-6 py-3 bg-[#3D56A6] text-white hover:bg-[#2D4485] rounded-lg font-semibold transition">
+              <button className="btn-primary">
                 Get started now — it's free!
               </button>
-              <button className="px-6 py-3 border-2 border-[#3D56A6] text-[#3D56A6] hover:bg-[#3D56A6] hover:text-white bg-transparent rounded-lg font-semibold transition">
+              <button className="btn-outline">
                 Book a demo
               </button>
             </div>
