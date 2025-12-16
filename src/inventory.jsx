@@ -20,6 +20,8 @@ function useInventory() {
   const [refQuery, setRefQuery] = React.useState("")
   const [categoryFilter, setCategoryFilter] = React.useState("All")
   const [showHistory, setShowHistory] = React.useState(null)
+  const [view, setView] = React.useState("inventory")
+  const [historyFilter, setHistoryFilter] = React.useState(null)
   const saveItems = (next) => {
     setItems(next)
     try {
@@ -278,6 +280,10 @@ function useInventory() {
     items,
     showHistory,
     setShowHistory,
+    view,
+    setView,
+    historyFilter,
+    setHistoryFilter,
   }
 }
 
@@ -357,8 +363,22 @@ function TopNav({ inv }) {
           <span className="text-sm text-white">Inventory</span>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => inv.setShowHistory({})} className="btn-outline text-sm">History</button>
-          <a href="/apps.html" className="btn-outline text-sm">Apps</a>
+          <button
+            onClick={() => inv.setView("inventory")}
+            className={(inv.view === "inventory" ? "bg-white text-[#2D4485]" : "bg-white/20 text-white hover:bg-white/30") + " rounded-full px-3 py-1.5 text-sm font-medium transition"}
+          >
+            Inventory
+          </button>
+          <button
+            onClick={() => {
+              inv.setHistoryFilter(null)
+              inv.setView("history")
+            }}
+            className={(inv.view === "history" ? "bg-white text-[#2D4485]" : "bg.white/20 text-white hover:bg-white/30").replace("bg.white/20","bg-white/20") + " rounded-full px-3 py-1.5 text-sm font-medium transition"}
+          >
+            History
+          </button>
+          <a href="/apps.html" className="rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition">Apps</a>
         </div>
       </div>
     </header>
@@ -421,7 +441,6 @@ function InventoryTable({ inv }) {
                 <td className="p-3">
                   <div className="flex gap-2">
                     <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
-                    <button onClick={() => inv.setShowHistory({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "" })} className="px-2 py-1 rounded-md border border-gray-300 bg-white">History</button>
                   </div>
                 </td>
               </tr>
@@ -482,14 +501,6 @@ function InventoryTable({ inv }) {
           </div>
         </div>
       )}
-      {inv.showHistory && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowHistory(null)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="text-lg font-semibold mb-4 text-gray-900">Movement History</div>
-            <MovementLog sku={inv.showHistory.sku} warehouse={inv.showHistory.warehouse} bin={inv.showHistory.bin} lot={inv.showHistory.lot} onCancel={() => inv.setShowHistory(null)} />
-          </div>
-        </div>
-      )}
       {inv.showImport && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowImport(false)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
@@ -498,6 +509,23 @@ function InventoryTable({ inv }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function HistoryView({ inv }) {
+  return (
+    <div className="p-6">
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="text-lg font-semibold mb-4 text-gray-900">Movement History</div>
+        <MovementLog
+          sku={inv.historyFilter?.sku}
+          warehouse={inv.historyFilter?.warehouse}
+          bin={inv.historyFilter?.bin}
+          lot={inv.historyFilter?.lot}
+          onCancel={() => inv.setView("inventory")}
+        />
+      </div>
     </div>
   )
 }
@@ -786,7 +814,7 @@ function InventoryLayout() {
     <main className="min-h-screen bg-gray-50">
       <TopNav inv={inv} />
       <div className="px-0">
-        <InventoryTable inv={inv} />
+        {inv.view === "history" ? <HistoryView inv={inv} /> : <InventoryTable inv={inv} />}
       </div>
     </main>
   )
