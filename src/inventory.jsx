@@ -178,7 +178,7 @@ function useInventory() {
     }
     const next = items.map((it) => {
       if (it.sku === sku && (it.warehouse || "Main") === fromWarehouse) {
-        return { ...it, stockQty: Number(it.stockQty || 0) - Number(qty || 0), updatedAt: new Date().toISOString().slice(0, 10) }
+        return { ...it, stockQty: Math.max(0, Number(it.stockQty || 0) - Number(qty || 0)), updatedAt: new Date().toISOString().slice(0, 10) }
       }
       return it
     })
@@ -441,6 +441,26 @@ function InventoryTable({ inv }) {
                 <td className="p-3">
                   <div className="flex gap-2">
                     <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
+                    <button
+                      onClick={() => {
+                        localStorage.setItem("mfgPreFill", JSON.stringify({ product: p.name, sku: p.sku, quantity: 1 }))
+                        window.location.href = "/manufacturing.html"
+                      }}
+                      className="px-2 py-1 rounded-md border border-purple-700 bg-purple-50 text-purple-700"
+                    >
+                      Manufacture
+                    </button>
+                    {Number(p.stockQty) === 0 && (
+                      <button
+                        onClick={() => {
+                          localStorage.setItem("mfgPreFill", JSON.stringify({ product: p.name, sku: p.sku, quantity: 1 }))
+                          window.location.href = "/manufacturing.html"
+                        }}
+                        className="px-2 py-1 rounded-md border border-purple-700 bg-purple-50 text-purple-700"
+                      >
+                        Manufacturing Order
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -573,7 +593,7 @@ function AddItemForm({ onCancel, onSave }) {
         </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Stock qty</label>
-          <input type="number" value={f.stockQty} onChange={(e) => set("stockQty", Number(e.target.value))} placeholder="e.g. 10" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+          <input type="number" min={0} value={f.stockQty} onChange={(e) => set("stockQty", Math.max(0, Number(e.target.value))) } placeholder="e.g. 10" className="w-full rounded-md border border-gray-300 px-3 py-2" />
         </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Price</label>
@@ -798,7 +818,7 @@ function DeliverForm({ sku, onCancel, onConfirm }) {
   return (
     <div className="space-y-3">
       <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
-      <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} placeholder="Qty delivered" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      <input type="number" min={0} value={qty} onChange={(e) => setQty(Math.max(0, Number(e.target.value)))} placeholder="Qty delivered" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="SO/DO Reference" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
@@ -807,6 +827,7 @@ function DeliverForm({ sku, onCancel, onConfirm }) {
     </div>
   )
 }
+
 
 function InventoryLayout() {
   const inv = useInventory()

@@ -22,6 +22,16 @@ function ManufacturingOrderPage() {
       localStorage.setItem("mfgOrders", JSON.stringify(seed))
     }
   }, [])
+  React.useEffect(() => {
+    try {
+      const pf = JSON.parse(localStorage.getItem("mfgPreFill") || "null")
+      if (pf && pf.product) {
+        setNewOrder((prev) => ({ ...prev, product: pf.product || pf.sku || prev.product, quantity: Number(pf.quantity) || 1 }))
+        setShowNew(true)
+        localStorage.removeItem("mfgPreFill")
+      }
+    } catch {}
+  }, [])
   const setAndPersist = (next) => { setOrders(next); localStorage.setItem("mfgOrders", JSON.stringify(next)) }
   const toggleFavorite = (id) => setAndPersist(orders.map(o => o.id===id ? { ...o, favorite: !o.favorite } : o))
   const toggleSelected = (id) => setAndPersist(orders.map(o => o.id===id ? { ...o, selected: !o.selected } : o))
