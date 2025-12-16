@@ -3,7 +3,7 @@ const apps = [
   { name: "Inventory", color: "bg-green-500", icon: "📦", href: "/inventory.html" },
   { name: "CRM", color: "bg-red-500", icon: "👥", href: "/crm.html" },
   { name: "Admin", color: "bg-pink-500", icon: "👔", href: "/admin.html" },
-  { name: "Project Management", color: "bg-lime-500", icon: "🎯" },
+  { name: "Project Management", color: "bg-lime-500", icon: "🎯", href: "/project.html" },
 ]
 
 export default function AppGrid() {
@@ -25,7 +25,7 @@ export default function AppGrid() {
               onClick={() => {
                 if (app.href) window.location.href = app.href
               }}
-              className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group text-left"
+              className="card p-6 hover:-translate-y-1 transition-all duration-300 cursor-pointer group text-left"
             >
               <div className="flex flex-col items-center gap-4">
                 <div
