@@ -45,6 +45,11 @@ function useQuotationState() {
       localStorage.setItem(key, JSON.stringify({ ...existing, customer, quotations }))
     } catch {}
   }
+  const confirm = () => {
+    save()
+    const key = encodeURIComponent(customer.email || customer.phone || customer.name || details.number)
+    window.location.href = `/admin.html?view=customerHistory&filter=${key}`
+  }
   const print = () => window.print()
   const exportPdf = async () => {
     const el = document.getElementById("quotation-document")
@@ -86,7 +91,7 @@ function useQuotationState() {
     }
   }
 
-  return { customer, setCustomer, details, setDetails, crm, setCrm, items, addItem, removeItem, updateItem, subtotal, taxTotal, total, save, print, exportPdf }
+  return { customer, setCustomer, details, setDetails, crm, setCrm, items, addItem, removeItem, updateItem, subtotal, taxTotal, total, save, confirm, print, exportPdf }
 }
 
 function QuotationDocument({ q }) {
@@ -201,7 +206,7 @@ function QuotationPage() {
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Quotation</h1>
               <div className="flex gap-2">
-                <button type="button" onClick={q.save} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Save</button>
+                <button type="button" onClick={q.confirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
                 <button type="button" onClick={q.exportPdf} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Download</button>
                 <button type="button" onClick={q.print} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
               </div>

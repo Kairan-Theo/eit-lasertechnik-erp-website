@@ -212,6 +212,23 @@ function CustomerHistory() {
   const [filter, setFilter] = React.useState("")
   const [customers, setCustomers] = React.useState([])
   const [expandedIndex, setExpandedIndex] = React.useState(-1)
+  const [bigDoc, setBigDoc] = React.useState(null)
+  const [docType, setDocType] = React.useState("all")
+  const [docView, setDocView] = React.useState("table")
+  const [sortKey, setSortKey] = React.useState("date")
+  const [sortDir, setSortDir] = React.useState("desc")
+  const [page, setPage] = React.useState(1)
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const f = params.get("filter") || ""
+      if (f) {
+        setQuery(f)
+        setFilter(f)
+        setExpandedIndex(0)
+      }
+    } catch {}
+  }, [])
   const buildCustomers = React.useCallback(() => {
     try {
       const keys = Object.keys(localStorage).filter((k) => k.startsWith("history:"))
@@ -240,57 +257,17 @@ function CustomerHistory() {
             name: v.customer?.name || "",
             company: v.customer?.company || "",
             email: v.customer?.email || "",
+            phone: v.customer?.phone || "",
+            companyEmail: v.customer?.companyEmail || "",
+            companyPhone: v.customer?.companyPhone || "",
             products: Array.from(map.values()).sort((a, b) => b.qty - a.qty),
             last,
             raw: v,
           })
         } catch {}
       })
-      const names = ["Taylor Swift", "Jennie Kim", "Lana Del Rey", "Jeon Jongkook", "Kairan"]
-      const now = new Date()
-      const dueDate = new Date()
-      dueDate.setDate(dueDate.getDate() + 7)
-      const nextActivity = new Date()
-      nextActivity.setDate(nextActivity.getDate() + 3)
-      const makeEntry = (name, idx) => {
-        const email = `${name.toLowerCase().replace(/\s+/g, ".")}@example.com`
-        const quotation = {
-          details: { number: `Q-D${String(idx + 1).padStart(3, "0")}`, currency: "THB" },
-          totals: { total: 1000 },
-          items: [{ product: "Laser Service", description: "Basic Laser Service", qty: 1, price: 1000, tax: 7 }],
-          crm: { nextActivity: nextActivity.toISOString() },
-          savedAt: now.toISOString(),
-        }
-        const invoice = {
-          details: { number: `INV-D${String(idx + 1).padStart(3, "0")}`, currency: "THB", dueDate: dueDate.toISOString().slice(0, 10) },
-          totals: { subtotal: 1000, taxTotal: 70, total: 1070 },
-          items: [{ product: "Laser Service", description: "Basic Laser Service", qty: 1, price: 1000, tax: 7 }],
-          savedAt: now.toISOString(),
-        }
-        const raw = { customer: { name, company: "", email, phone: "" }, quotations: [quotation], invoices: [invoice] }
-        const map = new Map()
-        raw.invoices.forEach((inv) => {
-          ;(inv.items || []).forEach((it) => {
-            const n = (it.description || it.product || "").trim()
-            if (!n) return
-            const prev = map.get(n) || { name: n, qty: 0 }
-            prev.qty += Number(it.qty || 0)
-            map.set(n, prev)
-          })
-        })
-        return {
-          key: email,
-          name,
-          company: "",
-          email,
-          products: Array.from(map.values()).sort((a, b) => b.qty - a.qty),
-          last: Date.now(),
-          raw,
-        }
-      }
-      const seeded = names.map((n, i) => makeEntry(n, i))
-      const merged = [...seeded, ...list].sort((a, b) => b.last - a.last)
-      const cleaned = merged.filter((c) => ((c.name || "").trim().length > 0))
+      const merged = list.sort((a, b) => b.last - a.last)
+      const cleaned = merged.filter((c) => ((c.name || c.company || c.email || c.phone || "").trim().length > 0))
       setCustomers(cleaned)
     } catch {
       setCustomers([])
@@ -303,14 +280,118 @@ function CustomerHistory() {
     const q = filter.trim().toLowerCase()
     const base = customers
     if (!q) return base
-    return base.filter((c) => (c.name || "").toLowerCase().includes(q))
+    return base.filter(
+      (c) =>
+        (c.name || "").toLowerCase().includes(q) ||
+        (c.company || "").toLowerCase().includes(q) ||
+        (c.email || "").toLowerCase().includes(q) ||
+        (c.companyEmail || "").toLowerCase().includes(q) ||
+        (c.phone || "").toLowerCase().includes(q) ||
+        (c.companyPhone || "").toLowerCase().includes(q),
+    )
   }, [customers, filter])
+  const allDocs = React.useMemo(() => {
+    const docs = []
+    customers.forEach((c) => {
+      ;(c.raw?.quotations || []).forEach((q) => {
+        docs.push({
+          type: "quotation",
+          number: q.details?.number || "",
+          currency: q.details?.currency || "",
+          total: q.totals?.total,
+          savedAt: q.savedAt,
+          customerName: c.name || c.company || c.email || c.phone || "",
+          items: Array.isArray(q.items) ? q.items : [],
+        })
+      })
+      ;(c.raw?.invoices || []).forEach((inv) => {
+        docs.push({
+          type: "invoice",
+          number: inv.details?.number || "",
+          currency: inv.details?.currency || "",
+          total: inv.totals?.total,
+          savedAt: inv.savedAt,
+          dueDate: inv.details?.dueDate,
+          customerName: c.name || c.company || c.email || c.phone || "",
+          items: Array.isArray(inv.items) ? inv.items : [],
+        })
+      })
+    })
+    return docs.sort((a, b) => new Date(b.savedAt || 0).getTime() - new Date(a.savedAt || 0).getTime())
+  }, [customers])
+  const pageSize = docView === "cards" ? 12 : 20
+  const historyResults = React.useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    let base = allDocs
+    if (docType !== "all") {
+      base = base.filter((d) => d.type === docType)
+    }
+    if (q) {
+      base = base.filter((d) => {
+        if ((d.number || "").toLowerCase().includes(q)) return true
+        if ((d.customerName || "").toLowerCase().includes(q)) return true
+        return (d.items || []).some((it) => ((it.description || it.product || "").toLowerCase().includes(q)))
+      })
+    }
+    base = base.slice().sort((a, b) => {
+      if (sortKey === "amount") {
+        const va = Number(a.total || 0)
+        const vb = Number(b.total || 0)
+        return sortDir === "asc" ? va - vb : vb - va
+      } else {
+        const ta = new Date(a.savedAt || 0).getTime()
+        const tb = new Date(b.savedAt || 0).getTime()
+        return sortDir === "asc" ? ta - tb : tb - ta
+      }
+    })
+    const start = (page - 1) * pageSize
+    return base.slice(start, start + pageSize)
+  }, [allDocs, filter, docType, sortKey, sortDir, page, pageSize])
+  const totalCount = React.useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    let base = allDocs
+    if (docType !== "all") base = base.filter((d) => d.type === docType)
+    if (q) {
+      base = base.filter((d) => {
+        if ((d.number || "").toLowerCase().includes(q)) return true
+        if ((d.customerName || "").toLowerCase().includes(q)) return true
+        return (d.items || []).some((it) => ((it.description || it.product || "").toLowerCase().includes(q)))
+      })
+    }
+    return base.length
+  }, [allDocs, filter, docType])
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const goPrev = () => setPage((p) => Math.max(1, p - 1))
+  const goNext = () => setPage((p) => Math.min(totalPages, p + 1))
+  const currencySymbol = (cur) => (cur === "THB" ? "฿" : cur === "USD" ? "$" : cur === "EUR" ? "€" : cur === "GBP" ? "£" : cur || "")
   return (
     <div className="card p-6">
       <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Customer History</h2>
       <div className="flex items-center gap-2 mb-3">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search customer name" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        <button onClick={() => setFilter(query)} className="btn-primary">Search</button>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name, company, email, phone" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        <button onClick={() => { setFilter(query); setPage(1) }} className="btn-primary">Search</button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <div className="text-sm text-gray-700">View:</div>
+        <div className="flex rounded-md border border-gray-300 overflow-hidden">
+          <button className={`px-3 py-1 text-sm ${docView === "table" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocView("table"); setPage(1) }}>Table</button>
+          <button className={`px-3 py-1 text-sm ${docView === "cards" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocView("cards"); setPage(1) }}>Cards</button>
+        </div>
+        <div className="text-sm text-gray-700 ml-2">Type:</div>
+        <div className="flex rounded-md border border-gray-300 overflow-hidden">
+          <button className={`px-3 py-1 text-sm ${docType === "all" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocType("all"); setPage(1) }}>All</button>
+          <button className={`px-3 py-1 text-sm ${docType === "quotation" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocType("quotation"); setPage(1) }}>Quotations</button>
+          <button className={`px-3 py-1 text-sm ${docType === "invoice" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocType("invoice"); setPage(1) }}>Invoices</button>
+        </div>
+        <div className="text-sm text-gray-700 ml-2">Sort:</div>
+        <select value={sortKey} onChange={(e) => { setSortKey(e.target.value); setPage(1) }} className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+          <option value="date">Date</option>
+          <option value="amount">Amount</option>
+        </select>
+        <select value={sortDir} onChange={(e) => { setSortDir(e.target.value); setPage(1) }} className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+          <option value="desc">Desc</option>
+          <option value="asc">Asc</option>
+        </select>
       </div>
       <div className="card p-4">
         <div className="font-semibold text-gray-900 mb-2">Customers</div>
@@ -323,53 +404,170 @@ function CustomerHistory() {
                   className="w-full text-left"
                   onClick={() => setExpandedIndex(open ? -1 : i)}
                 >
-                  <div className="font-semibold text-gray-900">{c.name}</div>
+                  <div className="font-semibold text-gray-900">{c.name || c.company || c.email || c.phone}</div>
+                  <div className="text-gray-600 text-xs">{c.company}</div>
+                  <div className="text-gray-600 text-xs">{[c.email, c.companyEmail].filter(Boolean).join(" • ")}</div>
+                  <div className="text-gray-600 text-xs">{[c.phone, c.companyPhone].filter(Boolean).join(" • ")}</div>
+                  <div className="text-gray-700 text-xs">
+                    Top products: {c.products.slice(0, 3).map((p) => `${p.name} (${p.qty})`).join(", ") || "-"}
+                  </div>
+                  <div className="text-gray-700 text-xs">
+                    Quotations: {(c.raw?.quotations || []).length} • Invoices: {(c.raw?.invoices || []).length}
+                  </div>
                 </button>
                 {open && (
                   <div className="mt-3 ml-2 space-y-3">
-                    <div>
-                      <div className="font-semibold">Quotations</div>
-                      <ul className="list-disc ml-5">
-                        {(c.raw?.quotations || []).map((q, qi) => {
-                          const meetLabel = q.crm?.nextActivity ? ` • Meeting ${new Date(q.crm.nextActivity).toLocaleString()}` : ""
-                          const total = q.totals?.total?.toFixed?.(2)
-                          return (
-                            <li key={qi}>
-                              {q.details?.number} • {total} {q.details?.currency}{meetLabel}
-                              <div className="mt-1 ml-5">
-                                <div className="text-gray-700">Items</div>
-                                <ul className="list-disc ml-5">
-                                  {(q.items || []).map((it, jj) => (
-                                    <li key={jj}>{it.qty} × {it.description || it.product} @ {Number(it.price || 0).toFixed(2)}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </li>
-                          )
-                        })}
-                      </ul>
+                    <div className="bg-white rounded-xl border p-3 text-[12px]">
+                      <div className="font-semibold mb-2">Customer Info</div>
+                      <div className="grid grid-cols-1 gap-1 text-gray-800">
+                        <div><span className="text-gray-600">Name:</span> {c.name || "-"}</div>
+                        <div><span className="text-gray-600">Company:</span> {c.company || "-"}</div>
+                        <div><span className="text-gray-600">Email:</span> {[c.email, c.companyEmail].filter(Boolean).join(" • ") || "-"}</div>
+                        <div><span className="text-gray-600">Phone:</span> {[c.phone, c.companyPhone].filter(Boolean).join(" • ") || "-"}</div>
+                        <div className="flex flex-wrap gap-1 items-center"><span className="text-gray-600">Products:</span> {c.products.slice(0, 6).map((p, idx) => (
+                          <button key={idx} className="px-2 py-0.5 rounded-full border border-gray-300 text-xs hover:bg-gray-100" onClick={() => { setFilter(p.name); setQuery(p.name); setPage(1) }}>{p.name}</button>
+                        ))}</div>
+                      </div>
                     </div>
                     <div>
-                      <div className="font-semibold">Invoices</div>
-                      <ul className="list-disc ml-5">
-                        {(c.raw?.invoices || []).map((inv, ii) => {
-                          const total = inv.totals?.total?.toFixed?.(2)
-                          const dueLabel = inv.details?.dueDate ? ` • Due ${new Date(inv.details.dueDate).toLocaleDateString()}` : ""
+                      <div className="font-semibold mb-2">Quotations</div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(c.raw?.quotations || []).map((q, qi) => {
+                          const sym = currencySymbol(q.details?.currency)
+                          const subtotal = Array.isArray(q.items) ? q.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0), 0) : 0
+                          const taxTotal = Array.isArray(q.items) ? q.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0) * (Number(it.tax || 0) / 100), 0) : 0
+                          const total = Number(q.totals?.total ?? subtotal + taxTotal)
                           return (
-                            <li key={ii}>
-                              {inv.details?.number} • {total} {inv.details?.currency}{dueLabel}
-                              <div className="mt-1 ml-5">
-                                <div className="text-gray-700">Items</div>
-                                <ul className="list-disc ml-5">
-                                  {(inv.items || []).map((it, kk) => (
-                                    <li key={kk}>{it.qty} × {it.description || it.product} @ {Number(it.price || 0).toFixed(2)}</li>
-                                  ))}
-                                </ul>
+                            <div
+                              key={qi}
+                              className="bg-white rounded-xl shadow-sm border p-2 text-[10px] aspect-square max-w-[220px] mx-auto cursor-pointer hover:shadow-md transition"
+                              onClick={() => setBigDoc({ type: "quotation", doc: q, customer: c })}
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <div className="text-[#2D4485] font-bold text-[12px]">EIT Lasertechnik</div>
+                                  <div className="text-gray-500 text-[10px]">Quotation</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs font-semibold text-[#2D4485]">{q.details?.number || "-"}</div>
+                                  <div className="text-[9px] text-gray-700">{q.details?.date || "-"}</div>
+                                </div>
                               </div>
-                            </li>
+                              <div className="text-[10px] text-gray-700 mb-2">
+                                <div className="font-semibold text-gray-900">Customer</div>
+                                <div>{c.name || "-"}</div>
+                                <div className="text-gray-600">{c.company || ""}</div>
+                                <div className="text-gray-600">{[c.email, c.companyEmail].filter(Boolean).join(" • ")}</div>
+                                <div className="text-gray-600">{[c.phone, c.companyPhone].filter(Boolean).join(" • ")}</div>
+                              </div>
+                              <div className="overflow-x-auto mb-2 h-[90px]">
+                                <table className="min-w-full text-[10px]">
+                                  <thead>
+                                    <tr className="bg-gray-100 text-gray-700">
+                                      <th className="p-1 text-left">QTY</th>
+                                      <th className="p-1 text-left">DESCRIPTION</th>
+                                      <th className="p-1 text-left">PRICE</th>
+                                      <th className="p-1 text-left">AMOUNT</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(q.items || []).map((it, i) => {
+                                      const amount = Number(it.qty || 0) * Number(it.price || 0)
+                                      return (
+                                        <tr key={i} className="border-t">
+                                          <td className="p-1">{it.qty}</td>
+                                          <td className="p-1">
+                                            <div>{it.description || it.product}</div>
+                                            {it.note ? <div className="text-[8px] text-gray-500 mt-1">Note: {it.note}</div> : null}
+                                          </td>
+                                          <td className="p-1">{sym} {Number(it.price || 0).toFixed(2)}</td>
+                                          <td className="p-1">{sym} {amount.toFixed(2)}</td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <div className="flex justify-end">
+                                <div className="w-28 text-[10px] space-y-1">
+                                  <div className="flex justify-between"><span className="text-gray-700">SUBTOTAL</span><span className="font-semibold">{sym} {subtotal.toFixed(2)}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-700">TAX</span><span className="font-semibold">{sym} {taxTotal.toFixed(2)}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-900 font-semibold">TOTAL</span><span className="font-semibold">{sym} {total.toFixed(2)}</span></div>
+                                </div>
+                              </div>
+                            </div>
                           )
                         })}
-                      </ul>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-semibold mb-2">Invoices</div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(c.raw?.invoices || []).map((inv, ii) => {
+                          const sym = currencySymbol(inv.details?.currency)
+                          const subtotal = Array.isArray(inv.items) ? inv.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0), 0) : 0
+                          const taxTotal = Array.isArray(inv.items) ? inv.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0) * (Number(it.tax || 0) / 100), 0) : 0
+                          const total = Number(inv.totals?.total ?? subtotal + taxTotal)
+                          return (
+                            <div
+                              key={ii}
+                              className="bg-white rounded-xl shadow-sm border p-2 text-[10px] aspect-square max-w-[220px] mx-auto cursor-pointer hover:shadow-md transition"
+                              onClick={() => setBigDoc({ type: "invoice", doc: inv, customer: c })}
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <div className="text-[#2D4485] font-bold text-[12px]">EIT Lasertechnik</div>
+                                  <div className="text-gray-500 text-[10px]">Invoice</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs font-semibold text-[#2D4485]">{inv.details?.number || "-"}</div>
+                                  <div className="text-[9px] text-gray-700">{inv.details?.date || "-"}</div>
+                                  <div className="text-[9px] text-gray-700">{inv.details?.dueDate ? `Due ${new Date(inv.details.dueDate).toLocaleDateString()}` : ""}</div>
+                                </div>
+                              </div>
+                              <div className="text-[10px] text-gray-700 mb-2">
+                                <div className="font-semibold text-gray-900">Customer</div>
+                                <div>{c.name || "-"}</div>
+                                <div className="text-gray-600">{c.company || ""}</div>
+                                <div className="text-gray-600">{[c.email, c.companyEmail].filter(Boolean).join(" • ")}</div>
+                                <div className="text-gray-600">{[c.phone, c.companyPhone].filter(Boolean).join(" • ")}</div>
+                              </div>
+                              <div className="overflow-x-auto mb-2 h-[90px]">
+                                <table className="min-w-full text-[10px]">
+                                  <thead>
+                                    <tr className="bg-gray-100 text-gray-700">
+                                      <th className="p-1 text-left">QTY</th>
+                                      <th className="p-1 text-left">DESCRIPTION</th>
+                                      <th className="p-1 text-left">PRICE</th>
+                                      <th className="p-1 text-left">AMOUNT</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(inv.items || []).map((it, i) => {
+                                      const amount = Number(it.qty || 0) * Number(it.price || 0)
+                                      return (
+                                        <tr key={i} className="border-t">
+                                          <td className="p-1">{it.qty}</td>
+                                          <td className="p-1">{it.description || it.product}</td>
+                                          <td className="p-1">{sym} {Number(it.price || 0).toFixed(2)}</td>
+                                          <td className="p-1">{sym} {amount.toFixed(2)}</td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <div className="flex justify-end">
+                                <div className="w-28 text-[10px] space-y-1">
+                                  <div className="flex justify-between"><span className="text-gray-700">SUBTOTAL</span><span className="font-semibold">{sym} {subtotal.toFixed(2)}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-700">TAX</span><span className="font-semibold">{sym} {taxTotal.toFixed(2)}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-900 font-semibold">TOTAL</span><span className="font-semibold">{sym} {total.toFixed(2)}</span></div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -379,6 +577,183 @@ function CustomerHistory() {
           {filtered.length === 0 && <li className="py-2 text-sm text-gray-600">No matching customers</li>}
         </ul>
       </div>
+      {filter && (
+      <div className="card p-4 mt-4">
+        <div className="font-semibold text-gray-900 mb-2">Matching History</div>
+        {docView === "table" ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-600">
+                  <th className="p-2">Type</th>
+                  <th className="p-2">Number</th>
+                  <th className="p-2">Date</th>
+                  <th className="p-2">Amount</th>
+                  <th className="p-2">Customer</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyResults.map((h, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="p-2">{h.type === "quotation" ? "Quotation" : "Invoice"}</td>
+                    <td className="p-2">{h.number}</td>
+                    <td className="p-2">{new Date(h.savedAt).toLocaleString()}</td>
+                    <td className="p-2">{h.total?.toFixed?.(2)} {h.currency}</td>
+                    <td className="p-2">{h.customerName}</td>
+                  </tr>
+                ))}
+                {historyResults.length === 0 && (
+                  <tr>
+                    <td className="p-2 text-gray-600" colSpan={5}>No history found</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {historyResults.map((h, i) => {
+              const sym = currencySymbol(h.currency)
+              return (
+                <div
+                  key={i}
+                  className="bg-white rounded-xl shadow-sm border p-2 text-[10px] aspect-square max-w-[220px] mx-auto cursor-pointer hover:shadow-md transition"
+                  onClick={() => setBigDoc({ type: h.type, doc: { details: { number: h.number, date: new Date(h.savedAt).toISOString().slice(0, 10), currency: h.currency }, items: h.items, totals: { total: h.total } }, customer: { name: h.customerName } })}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <div className="text-[#2D4485] font-bold text-[12px]">EIT Lasertechnik</div>
+                      <div className="text-gray-500 text-[10px]">{h.type === "quotation" ? "Quotation" : "Invoice"}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-semibold text-[#2D4485]">{h.number || "-"}</div>
+                      <div className="text-[9px] text-gray-700">{new Date(h.savedAt).toLocaleDateString()}</div>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-gray-700 mb-2">
+                    <div className="font-semibold text-gray-900">Customer</div>
+                    <div>{h.customerName || "-"}</div>
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="w-28 text-[10px] space-y-1">
+                      <div className="flex justify-between"><span className="text-gray-700">TOTAL</span><span className="font-semibold">{sym} {Number(h.total || 0).toFixed(2)}</span></div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {historyResults.length === 0 && <div className="text-sm text-gray-600">No history found</div>}
+          </div>
+        )}
+        <div className="flex items-center justify-between mt-3">
+          <div className="text-sm text-gray-700">Page {page} / {totalPages}</div>
+          <div className="flex gap-2">
+            <button className="btn-outline" onClick={goPrev} disabled={page <= 1}>Prev</button>
+            <button className="btn-outline" onClick={goNext} disabled={page >= totalPages}>Next</button>
+          </div>
+        </div>
+      </div>
+      )}
+      {bigDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setBigDoc(null)}></div>
+          <div className="relative bg-white rounded-xl shadow-xl border w-full max-w-4xl mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-xl font-bold text-[#2D4485]">{bigDoc.type === "quotation" ? "Quotation" : "Invoice"} Preview</div>
+              <button className="btn-outline" onClick={() => setBigDoc(null)}>Close</button>
+            </div>
+            <div className="bg-white rounded-xl border shadow-sm p-6">
+              {(() => {
+                const d = bigDoc.doc
+                const c = bigDoc.customer
+                const sym = currencySymbol(d.details?.currency)
+                const subtotal = Array.isArray(d.items) ? d.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0), 0) : 0
+                const taxTotal = Array.isArray(d.items) ? d.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0) * (Number(it.tax || 0) / 100), 0) : 0
+                const total = Number(d.totals?.total ?? subtotal + taxTotal)
+                return (
+                  <div>
+                    <div className="flex items-start justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-[#3D56A6] rounded flex items-center justify-center">
+                          <img src="/eit-icon.png" alt="EIT" className="w-8 h-8" />
+                        </div>
+                        <div className="leading-tight">
+                          <div className="text-[#3D56A6] font-bold text-lg">EIT Lasertechnik</div>
+                          <div className="text-gray-500 text-sm">{bigDoc.type === "quotation" ? "Quotation" : "Invoice"}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-[#3D56A6] tracking-wide">{bigDoc.type === "quotation" ? "QUOTATION" : "INVOICE"}</div>
+                        <div className="mt-2 text-sm text-gray-700">{bigDoc.type === "quotation" ? "Quotation Number" : "Invoice Number"} : <span className="font-semibold">{d.details?.number}</span></div>
+                        <div className="text-sm text-gray-700">{bigDoc.type === "quotation" ? "Quote Date" : "Invoice Date"} : <span className="font-semibold">{d.details?.date}</span></div>
+                        {bigDoc.type === "invoice" && d.details?.dueDate && <div className="text-sm text-gray-700">Due Date : <span className="font-semibold">{d.details?.dueDate}</span></div>}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                      <div>
+                        <div className="text-sm text-gray-600">{bigDoc.type === "quotation" ? "Quote to:" : "Bill to:"}</div>
+                        <div className="text-[#3D56A6] font-semibold text-lg">{c.name || c.company || "-"}</div>
+                        <div className="text-gray-600 text-sm">{c.company || ""}</div>
+                        <div className="text-gray-600 text-sm">{[c.email, c.companyEmail].filter(Boolean).join(" • ")}</div>
+                        <div className="text-gray-600 text-sm">{[c.phone, c.companyPhone].filter(Boolean).join(" • ")}</div>
+                      </div>
+                      <div className="md:text-right">
+                        <div className="text-sm text-gray-600">Currency:</div>
+                        <div className="text-gray-900 font-semibold">{d.details?.currency}</div>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto mb-6">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 text-gray-700">
+                            <th className="p-2 text-left">QTY</th>
+                            <th className="p-2 text-left">DESCRIPTION</th>
+                            <th className="p-2 text-left">PRICE</th>
+                            <th className="p-2 text-left">AMOUNT</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(d.items || []).map((it, i) => {
+                            const amount = Number(it.qty || 0) * Number(it.price || 0)
+                            return (
+                              <tr key={i} className="border-t">
+                                <td className="p-2">{it.qty}</td>
+                                <td className="p-2">
+                                  <div>{it.description || it.product}</div>
+                                  {it.note ? <div className="text-xs text-gray-500 mt-1">Note: {it.note}</div> : null}
+                                </td>
+                                <td className="p-2">{sym} {Number(it.price || 0).toFixed(2)}</td>
+                                <td className="p-2">{sym} {amount.toFixed(2)}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900 mb-2">Payment Method :</div>
+                        <div className="text-sm text-gray-700">Account Name : EIT Lasertechnik</div>
+                        <div className="text-sm text-gray-700">Bank/Credit Card</div>
+                        <div className="text-sm text-gray-700">Paypal : hello@eitlasertechnik.com</div>
+                      </div>
+                      <div className="md:text-right">
+                        <div className="flex justify-end">
+                          <div className="w-56">
+                            <div className="flex justify-between text-sm"><span className="text-gray-700">SUBTOTAL :</span><span className="font-semibold">{sym} {subtotal.toFixed(2)}</span></div>
+                            <div className="flex justify-between text-sm"><span className="text-gray-700">TAX :</span><span className="font-semibold">{sym} {taxTotal.toFixed(2)}</span></div>
+                            <div className="flex justify-between text-base mt-1"><span className="text-gray-900 font-semibold">TOTAL :</span><span className="font-bold text-[#3D56A6]">{sym} {total.toFixed(2)}</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -387,8 +762,27 @@ function PoToQuotation() {
   const [poNumber, setPoNumber] = React.useState("")
   const [customer, setCustomer] = React.useState({ name: "", company: "", email: "", companyEmail: "", phone: "", companyPhone: "" })
   const [items, setItems] = React.useState([{ product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
+  const [showForm, setShowForm] = React.useState(false)
+  const [poList, setPoList] = React.useState([])
+  const [errors, setErrors] = React.useState({ email: "", companyEmail: "", phone: "", companyPhone: "" })
   const prefilledRef = React.useRef(false)
   const saveTimer = React.useRef(null)
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const normalizePhone = (s) => {
+    const input = (s || "").trim()
+    const digits = input.replace(/\D+/g, "")
+    return input.startsWith("+") ? `+${digits}` : digits
+  }
+  const digitCount = (s) => (s || "").replace(/\D/g, "").length
+  const validateCustomer = React.useCallback((c) => {
+    return {
+      email: c.email && !emailRe.test(c.email) ? "Invalid email" : "",
+      companyEmail: c.companyEmail && !emailRe.test(c.companyEmail) ? "Invalid email" : "",
+      phone: c.phone && digitCount(c.phone) < 7 ? "Invalid phone" : "",
+      companyPhone: c.companyPhone && digitCount(c.companyPhone) < 7 ? "Invalid phone" : "",
+    }
+  }, [])
+  const isValid = React.useMemo(() => Object.values(errors).every((e) => !e), [errors])
   const generatePoNumber = React.useCallback(() => {
     try {
       const d = new Date()
@@ -406,10 +800,17 @@ function PoToQuotation() {
     }
   }, [])
   React.useEffect(() => {
+    try {
+      const data = JSON.parse(localStorage.getItem("poList") || "[]")
+      if (Array.isArray(data)) setPoList(data)
+    } catch {}
+  }, [])
+  React.useEffect(() => {
+    if (!showForm) return
     if (!poNumber) {
       setPoNumber(generatePoNumber())
     }
-  }, [poNumber, generatePoNumber])
+  }, [showForm, poNumber, generatePoNumber])
   const addItem = () => setItems((prev) => [...prev, { product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
   const updateItem = (i, field, value) => setItems((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: field === "qty" || field === "price" || field === "tax" ? Number(value) : value } : row)))
   const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
@@ -425,6 +826,7 @@ function PoToQuotation() {
     return ""
   }, [customer])
   React.useEffect(() => {
+    if (!showForm) return
     const k = keyForCustomer()
     if (!k) return
     if (!prefilledRef.current) {
@@ -463,15 +865,60 @@ function PoToQuotation() {
         saveTimer.current = null
       }
     }
-  }, [customer.name, customer.company, customer.email, customer.phone, keyForCustomer])
+  }, [showForm, customer.name, customer.company, customer.email, customer.phone, keyForCustomer])
+  const persistPoList = React.useCallback((next) => {
+    setPoList(next)
+    try {
+      localStorage.setItem("poList", JSON.stringify(next))
+    } catch {}
+  }, [])
+  const startNew = () => {
+    setPoNumber("")
+    setCustomer({ name: "", company: "", email: "", companyEmail: "", phone: "", companyPhone: "" })
+    setItems([{ product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
+    prefilledRef.current = false
+    setShowForm(true)
+  }
+  const editPo = (idx) => {
+    const p = poList[idx]
+    if (!p) return
+    setPoNumber(p.poNumber || "")
+    setCustomer(p.customer || { name: "", company: "", email: "", companyEmail: "", phone: "", companyPhone: "" })
+    setItems(Array.isArray(p.items) && p.items.length ? p.items : [{ product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
+    setShowForm(true)
+  }
+  const deletePo = (idx) => {
+    const next = poList.filter((_, i) => i !== idx)
+    persistPoList(next)
+  }
+  const generateFromList = (idx) => {
+    const p = poList[idx]
+    if (!p) return
+    localStorage.setItem("poInbound", JSON.stringify(p))
+    window.location.href = "/quotation.html"
+  }
   const generate = () => {
+    const errs = validateCustomer(customer)
+    setErrors(errs)
+    if (Object.values(errs).some((e) => !!e)) return
     const payload = { poNumber, customer, items }
     localStorage.setItem("poInbound", JSON.stringify(payload))
     window.location.href = "/quotation.html"
   }
   const saveDraft = () => {
-    const payload = { poNumber, customer, items }
-    localStorage.setItem("poInbound", JSON.stringify(payload))
+    const errs = validateCustomer(customer)
+    setErrors(errs)
+    if (Object.values(errs).some((e) => !!e)) return
+    const payload = { poNumber, customer, items, updatedAt: new Date().toISOString() }
+    const idx = poList.findIndex((p) => p.poNumber === poNumber)
+    if (idx >= 0) {
+      const next = poList.slice()
+      next[idx] = payload
+      persistPoList(next)
+    } else {
+      persistPoList([payload, ...poList])
+    }
+    setShowForm(false)
   }
   const confirmAndInvoice = () => {
     const payload = {
@@ -485,47 +932,178 @@ function PoToQuotation() {
   return (
     <div className="card p-6">
       <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Product Order</h2>
-      <input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Customer PO number" className="w-full rounded-md border border-gray-300 px-3 py-2 mb-3" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-        <input value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} placeholder="Customer name" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        <input value={customer.company} onChange={(e) => setCustomer({ ...customer, company: e.target.value })} placeholder="Company" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        <input value={customer.email} onChange={(e) => setCustomer({ ...customer, email: e.target.value })} placeholder="Email" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        <input value={customer.companyEmail} onChange={(e) => setCustomer({ ...customer, companyEmail: e.target.value })} placeholder="Company email" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        <input value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} placeholder="Phone" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        <input value={customer.companyPhone} onChange={(e) => setCustomer({ ...customer, companyPhone: e.target.value })} placeholder="Company phone" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-      </div>
-      <div className="overflow-x-auto mb-3">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-600">
-              <th className="p-2">Product</th>
-              <th className="p-2">Description</th>
-              <th className="p-2">Qty</th>
-              <th className="p-2">Price</th>
-              <th className="p-2">Tax %</th>
-              <th className="p-2">Note</th>
-              <th className="p-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it, i) => (
-              <tr key={i} className="border-t">
-                <td className="p-2"><input value={it.product} onChange={(e) => updateItem(i, "product", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                <td className="p-2"><input value={it.description} onChange={(e) => updateItem(i, "description", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                <td className="p-2"><input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, "qty", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                <td className="p-2"><input type="number" min="0" step="0.01" value={it.price} onChange={(e) => updateItem(i, "price", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                <td className="p-2"><input type="number" min="0" step="0.1" value={it.tax} onChange={(e) => updateItem(i, "tax", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                <td className="p-2"><input value={it.note} onChange={(e) => updateItem(i, "note", e.target.value)} placeholder="Add note" className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                <td className="p-2 text-right"><button onClick={() => removeItem(i)} className="btn-outline text-red-600 hover:bg-red-100">Remove</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex gap-3">
-        <button onClick={saveDraft} className="btn-outline">Save</button>
-        <button onClick={generate} className="btn-primary">Generate Quotation</button>
-      </div>
+      {!showForm && (
+        <>
+          <div className="mb-4">
+            <button onClick={startNew} className="btn-primary">Add Product Order</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-600">
+                  <th className="p-2">PO Number</th>
+                  <th className="p-2">Customer</th>
+                  <th className="p-2">Items</th>
+                  <th className="p-2">Updated</th>
+                  <th className="p-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {poList.map((p, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="p-2">{p.poNumber}</td>
+                    <td className="p-2">{p.customer?.name || p.customer?.company || p.customer?.email || p.customer?.phone || "-"}</td>
+                    <td className="p-2">{Array.isArray(p.items) ? p.items.length : 0}</td>
+                    <td className="p-2">{p.updatedAt ? new Date(p.updatedAt).toLocaleString() : "-"}</td>
+                    <td className="p-2">
+                      <div className="flex gap-2">
+                        <button onClick={() => editPo(i)} className="btn-outline">Edit</button>
+                        <button onClick={() => generateFromList(i)} className="btn-primary">Generate Quotation</button>
+                        <button onClick={() => deletePo(i)} className="btn-outline text-red-600">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {poList.length === 0 && (
+                  <tr>
+                    <td className="p-2 text-gray-600" colSpan={5}>No product orders yet</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {showForm && (
+        <>
+          <input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Customer PO number" className="w-full rounded-md border border-gray-300 px-3 py-2 mb-3" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <input
+              value={customer.name}
+              onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+              onBlur={(e) => setCustomer({ ...customer, name: e.target.value.trim() })}
+              placeholder="Customer name"
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+            />
+            <input
+              value={customer.company}
+              onChange={(e) => setCustomer({ ...customer, company: e.target.value })}
+              onBlur={(e) => setCustomer({ ...customer, company: e.target.value.trim() })}
+              placeholder="Company"
+              className="w-full rounded-md border border-gray-300 px-3 py-2"
+            />
+            <div>
+              <input
+                type="email"
+                value={customer.email}
+                onChange={(e) => {
+                  const next = { ...customer, email: e.target.value }
+                  setCustomer(next)
+                  setErrors(validateCustomer(next))
+                }}
+                onBlur={(e) => {
+                  const next = { ...customer, email: e.target.value.trim().toLowerCase() }
+                  setCustomer(next)
+                  setErrors(validateCustomer(next))
+                }}
+                placeholder="Email"
+                className={`w-full rounded-md border px-3 py-2 ${errors.email ? "border-red-500" : "border-gray-300"}`}
+              />
+              {errors.email && <div className="text-xs text-red-600 mt-1">{errors.email}</div>}
+            </div>
+            <div>
+              <input
+                type="email"
+                value={customer.companyEmail}
+                onChange={(e) => {
+                  const next = { ...customer, companyEmail: e.target.value }
+                  setCustomer(next)
+                  setErrors(validateCustomer(next))
+                }}
+                onBlur={(e) => {
+                  const next = { ...customer, companyEmail: e.target.value.trim().toLowerCase() }
+                  setCustomer(next)
+                  setErrors(validateCustomer(next))
+                }}
+                placeholder="Company email"
+                className={`w-full rounded-md border px-3 py-2 ${errors.companyEmail ? "border-red-500" : "border-gray-300"}`}
+              />
+              {errors.companyEmail && <div className="text-xs text-red-600 mt-1">{errors.companyEmail}</div>}
+            </div>
+            <div>
+              <input
+                type="tel"
+                value={customer.phone}
+                onChange={(e) => {
+                  const next = { ...customer, phone: e.target.value }
+                  setCustomer(next)
+                  setErrors(validateCustomer(next))
+                }}
+                onBlur={(e) => {
+                  const next = { ...customer, phone: normalizePhone(e.target.value) }
+                  setCustomer(next)
+                  setErrors(validateCustomer(next))
+                }}
+                placeholder="Phone"
+                className={`w-full rounded-md border px-3 py-2 ${errors.phone ? "border-red-500" : "border-gray-300"}`}
+              />
+              {errors.phone && <div className="text-xs text-red-600 mt-1">{errors.phone}</div>}
+            </div>
+            <div>
+              <input
+                type="tel"
+                value={customer.companyPhone}
+                onChange={(e) => {
+                  const next = { ...customer, companyPhone: e.target.value }
+                  setCustomer(next)
+                  setErrors(validateCustomer(next))
+                }}
+                onBlur={(e) => {
+                  const next = { ...customer, companyPhone: normalizePhone(e.target.value) }
+                  setCustomer(next)
+                  setErrors(validateCustomer(next))
+                }}
+                placeholder="Company phone"
+                className={`w-full rounded-md border px-3 py-2 ${errors.companyPhone ? "border-red-500" : "border-gray-300"}`}
+              />
+              {errors.companyPhone && <div className="text-xs text-red-600 mt-1">{errors.companyPhone}</div>}
+            </div>
+          </div>
+          <div className="overflow-x-auto mb-3">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-600">
+                  <th className="p-2">Product</th>
+                  <th className="p-2">Description</th>
+                  <th className="p-2">Qty</th>
+                  <th className="p-2">Price</th>
+                  <th className="p-2">Tax %</th>
+                  <th className="p-2">Note</th>
+                  <th className="p-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="p-2"><input value={it.product} onChange={(e) => updateItem(i, "product", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
+                    <td className="p-2"><input value={it.description} onChange={(e) => updateItem(i, "description", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
+                    <td className="p-2"><input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, "qty", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
+                    <td className="p-2"><input type="number" min="0" step="0.01" value={it.price} onChange={(e) => updateItem(i, "price", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
+                    <td className="p-2"><input type="number" min="0" step="0.1" value={it.tax} onChange={(e) => updateItem(i, "tax", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
+                    <td className="p-2"><input value={it.note} onChange={(e) => updateItem(i, "note", e.target.value)} placeholder="Add note" className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
+                    <td className="p-2 text-right"><button onClick={() => removeItem(i)} className="btn-outline text-red-600 hover:bg-red-100">Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={saveDraft} disabled={!isValid} className="btn-outline disabled:opacity-50">Save</button>
+            <button onClick={generate} disabled={!isValid} className="btn-primary disabled:opacity-50">Generate Quotation</button>
+            <button onClick={() => setShowForm(false)} className="btn-outline">Cancel</button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
