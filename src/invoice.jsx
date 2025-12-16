@@ -99,7 +99,7 @@ function useInvoiceState() {
       ),
     )
 
-  const save = () => {
+  const confirm = () => {
     const payload = { customer, details, items, totals: { subtotal, taxTotal, total } }
     localStorage.setItem("invoiceDraft", JSON.stringify(payload))
     try {
@@ -187,7 +187,7 @@ function useInvoiceState() {
     subtotal,
     taxTotal,
     total,
-    save,
+    confirm,
     print,
     exportPdf,
     emailTo,
@@ -331,10 +331,10 @@ function InvoicePage() {
       <section className="w-full py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="print:hidden relative z-10">
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Invoice</h1>
-              <div className="flex gap-2">
-                <button type="button" onClick={inv.save} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Save</button>
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Invoice</h1>
+                <div className="flex gap-2">
+                <button type="button" onClick={inv.confirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
                 <button type="button" onClick={inv.exportPdf} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Download PDF</button>
                 <button type="button" onClick={inv.print} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Print</button>
                 <button type="button" onClick={() => openConfirm("1")} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 1</button>
@@ -452,12 +452,12 @@ function InvoicePage() {
                     <textarea
                       value={inv.customer.billingAddress1}
                       onChange={(e) => inv.setCustomer({ ...inv.customer, billingAddress1: e.target.value })}
-                      onBlur={inv.save}
+                      onBlur={inv.confirm}
                       placeholder="Street, City, Zip, Country"
                       className="w-full rounded-md border border-gray-300 px-3 py-2"
                     />
                     <div className="flex justify-end mt-2">
-                      <button type="button" onClick={inv.save} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Save</button>
+                      <button type="button" onClick={inv.confirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
                     </div>
                   </div>
 
@@ -466,12 +466,12 @@ function InvoicePage() {
                     <textarea
                       value={inv.customer.billingAddress2}
                       onChange={(e) => inv.setCustomer({ ...inv.customer, billingAddress2: e.target.value })}
-                      onBlur={inv.save}
+                      onBlur={inv.confirm}
                       placeholder="Street, City, Zip, Country"
                       className="w-full rounded-md border border-gray-300 px-3 py-2"
                     />
                     <div className="flex justify-end mt-2">
-                      <button type="button" onClick={inv.save} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Save</button>
+                      <button type="button" onClick={inv.confirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
                     </div>
                   </div>
                 </div>
@@ -480,7 +480,7 @@ function InvoicePage() {
               <div className="space-y-6"></div>
 
             <div className="mt-6 print:hidden flex justify-start">
-              <button type="button" onClick={inv.save} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Save</button>
+              <button type="button" onClick={inv.confirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
             </div>
             </div>
 
