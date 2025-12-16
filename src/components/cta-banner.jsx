@@ -7,9 +7,9 @@ export default function CTABanner() {
             Start managing your manufacturing smarter — Try EIT ERP today.
           </h2>
         </div>
-        <button className="px-6 py-3 bg-[#3D56A6] text-white hover:bg-[#2D4485] whitespace-nowrap rounded-lg font-semibold transition">
-          Begin Free Trial
-        </button>
+        <a href="/signup.html" className="btn-primary whitespace-nowrap">
+          Sign up
+        </a>
       </div>
     </section>
   )
