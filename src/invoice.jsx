@@ -18,6 +18,7 @@ function useInvoiceState() {
     notes: "",
     addressChoice: "1",
     paymentTermsDays: 7,
+    sourceQuotationNumber: "",
   })
 
   const [items, setItems] = React.useState([{ product: "", description: "", qty: 1, price: 0, tax: 0 }])
@@ -53,6 +54,7 @@ function useInvoiceState() {
             paymentTermsDays,
             number,
             dueDate: due.toISOString().slice(0, 10),
+            sourceQuotationNumber: q.details?.sourceQuotationNumber || prev.sourceQuotationNumber || "",
           }
         })
         localStorage.removeItem("confirmedQuotation")
@@ -217,6 +219,7 @@ function InvoiceDocument({ inv }) {
             <div className="mt-2 text-sm text-gray-700">Invoice Number : <span className="font-semibold">{inv.details.number}</span></div>
             <div className="text-sm text-gray-700">Due Date : <span className="font-semibold">{inv.details.dueDate || "-"}</span></div>
             <div className="text-sm text-gray-700">Invoice Date : <span className="font-semibold">{inv.details.date}</span></div>
+            <div className="text-sm text-gray-700">From Quotation : <a href="/quotation.html" className="font-semibold text-[#2D4485] hover:underline">{inv.details.sourceQuotationNumber || "-"}</a></div>
           </div>
         </div>
 

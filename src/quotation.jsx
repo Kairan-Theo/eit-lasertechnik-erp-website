@@ -210,14 +210,36 @@ function QuotationPage() {
       <section className="w-full py-10 px-4 sm:px-6 lg:px-8">
        <div className="max-w-7xl mx-auto">
           <div className="print:hidden relative z-10">
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Quotation</h1>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setPreviewOpen(true)} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
-                <button type="button" onClick={q.exportPdf} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Download</button>
-                <button type="button" onClick={q.print} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Quotation</h1>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setPreviewOpen(true)} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
+                  <button type="button" onClick={q.exportPdf} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Download</button>
+                  <button type="button" onClick={q.print} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const payload = {
+                          customer: q.customer,
+                          items: q.items,
+                          details: {
+                            currency: q.details.currency,
+                            date: q.details.date,
+                            paymentTermsDays: 7,
+                            sourceQuotationNumber: q.details.number,
+                          },
+                        }
+                        localStorage.setItem("confirmedQuotation", JSON.stringify(payload))
+                        window.location.href = "/invoice.html"
+                      } catch {}
+                    }}
+                    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white"
+                  >
+                    Create Invoice
+                  </button>
+                </div>
               </div>
-            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:hidden">
