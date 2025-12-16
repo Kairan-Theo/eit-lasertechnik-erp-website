@@ -49,7 +49,7 @@ function ProductSearch() {
   }, [query])
   return (
     <div className="border rounded-lg p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-[#3D56A6] mb-2">Search Products</h2>
+      <h2 className="text-lg font-semibold text-[#3D56A6] mb-2">Search Component</h2>
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or SKU" className="w-full rounded-md border border-gray-300 px-3 py-2 mb-3" />
       <ul className="divide-y">
         {results.map((p, i) => (
@@ -57,7 +57,7 @@ function ProductSearch() {
             <span className="font-semibold">{p.name}</span> <span className="text-gray-500">({p.sku})</span>
           </li>
         ))}
-        {!results.length && <li className="py-2 text-sm text-gray-500">No products found</li>}
+        {!results.length && <li className="py-2 text-sm text-gray-500">No components found</li>}
       </ul>
     </div>
   )

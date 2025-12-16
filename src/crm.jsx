@@ -5,7 +5,7 @@ import Footer from "./components/footer.jsx"
 import "./index.css"
 
 const initialPipeline = {
-  New: [
+    New: [
     { id: 1, title: "Disscuing Goods Price", customer: "Big C Supercenter PLC", amount: 0, currency: "฿", priority: "none", contact: "", email: "", phone: "", notes: "" },
   ],
   Qualified: [
@@ -44,8 +44,92 @@ function CRMPage() {
     stageIndex: 0,
   }
   const [newDeal, setNewDeal] = React.useState(defaultNewDeal)
+  const [openActivity, setOpenActivity] = React.useState(null)
+  const [scheduleDueInput, setScheduleDueInput] = React.useState("")
+  const [scheduleText, setScheduleText] = React.useState("")
+  const [selectedScheduleKey, setSelectedScheduleKey] = React.useState(null)
+  const [draggingScheduleKey, setDraggingScheduleKey] = React.useState(null)
+  const [dragOverIdx, setDragOverIdx] = React.useState(null)
+  const activityModalRef = React.useRef(null)
+  const [openScheduleFor, setOpenScheduleFor] = React.useState(false)
+  const [openScheduleMenuKey, setOpenScheduleMenuKey] = React.useState(null) // { stageIndex, cardIndex, idx }
+  const [editingScheduleKey, setEditingScheduleKey] = React.useState(null) // { stageIndex, cardIndex, idx }
 
   const totalFor = (deals) => deals.reduce((acc, d) => acc + (d.amount || 0), 0)
+  const nextDueMs = (d) => {
+    const arr = (d.activitySchedules||[]).map((it)=>new Date(it.dueAt ?? it.startAt).getTime()).filter((n)=>Number.isFinite(n))
+    if (!arr.length) return null
+    const now = Date.now()
+    const upcoming = arr.filter((t)=>t>=now)
+    const pool = upcoming.length ? upcoming : arr
+    return Math.min(...pool)
+  }
+  const nextSchedule = (d) => {
+    const arr = (d.activitySchedules||[]).map((s)=>({ s, t: new Date(s.dueAt ?? s.startAt).getTime() })).filter((x)=>Number.isFinite(x.t))
+    if (!arr.length) return null
+    const now = Date.now()
+    const upcoming = arr.filter((x)=>x.t>=now)
+    const pool = upcoming.length ? upcoming : arr
+    const targetT = Math.min(...pool.map((x)=>x.t))
+    const found = pool.find((x)=>x.t===targetT) || arr.find((x)=>x.t===targetT)
+    return found ? found.s : null
+  }
+  const isThisWeek = (ms) => {
+    if (!ms) return false
+    const d = new Date(ms)
+    const today = new Date()
+    const start = new Date(today)
+    start.setHours(0,0,0,0)
+    const dow = start.getDay()
+    const mondayOffset = (dow+6)%7
+    const monday = new Date(start)
+    monday.setDate(start.getDate()-mondayOffset)
+    const sunday = new Date(monday)
+    sunday.setDate(monday.getDate()+6)
+    return d>=monday && d<=sunday
+  }
+  const formatActivityPreviewText = (s) => {
+    if (!s) return ""
+    const t = String(s).trim()
+    return t ? t.charAt(0).toUpperCase() + t.slice(1) : ""
+  }
+  const updateDeal = (stageIndex, cardIndex, updater) => {
+    setStages(prev => prev.map((s, i) => {
+      if (i !== stageIndex) return s
+      const deals = s.deals.map((d, j) => j===cardIndex ? updater(d) : d)
+      return { ...s, deals }
+    }))
+  }
+ 
+  const reorderSchedule = (stageIndex, cardIndex, fromIdx, toIdx) => {
+    if (fromIdx===toIdx || fromIdx==null || toIdx==null) return
+    updateDeal(stageIndex, cardIndex, (prev) => {
+      const arr = [...(prev.activitySchedules||[])]
+      const [item] = arr.splice(fromIdx, 1)
+      arr.splice(toIdx, 0, item)
+      return { ...prev, activitySchedules: arr }
+    })
+  }
+  const moveScheduleUp = (stageIndex, cardIndex, idx) => {
+    updateDeal(stageIndex, cardIndex, (prev) => {
+      const arr = [...(prev.activitySchedules||[])]
+      if (idx<=0) return prev
+      const tmp = arr[idx-1]
+      arr[idx-1] = arr[idx]
+      arr[idx] = tmp
+      return { ...prev, activitySchedules: arr }
+    })
+  }
+  const moveScheduleDown = (stageIndex, cardIndex, idx) => {
+    updateDeal(stageIndex, cardIndex, (prev) => {
+      const arr = [...(prev.activitySchedules||[])]
+      if (idx>=arr.length-1) return prev
+      const tmp = arr[idx+1]
+      arr[idx+1] = arr[idx]
+      arr[idx] = tmp
+      return { ...prev, activitySchedules: arr }
+    })
+  }
 
   const openDealDetail = (stageIndex, cardIndex) => {
     const d = stages[stageIndex].deals[cardIndex]
@@ -184,7 +268,14 @@ function CRMPage() {
                 className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
                 title="New customer"
               >
-                New
+                New Customer
+              </button>
+              <button
+                onClick={addStage}
+                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                title="Add stage"
+              >
+                + Add stage
               </button>
               {/*<button
                 onClick={() => alert("Lead generation not implemented yet")}
@@ -201,13 +292,6 @@ function CRMPage() {
                 Pipeline ⚙️
               </button>*/}
             </div>
-            <button
-              onClick={addStage}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-              title="Add stage"
-            >
-              + Add stage
-            </button>
           </div>
           <div className="flex flex-row flex-wrap gap-4 overflow-y-auto overflow-x-hidden pb-4">
             {stages.map((stage, stageIndex) => (
@@ -260,20 +344,69 @@ function CRMPage() {
                     >
                       <div className="flex items-start justify-between">
                         <p className="font-medium text-gray-900 pr-6 cursor-pointer hover:underline" onClick={() => openDealDetail(stageIndex, cardIndex)}>{d.customer}</p>
-                        <div className="flex items-center gap-1">
-                          {d.priority === "low" && <span title="Priority: Low" className="text-yellow-500">★</span>}
-                          {d.priority === "medium" && (
-                            <span title="Priority: Medium" className="text-orange-500">★★</span>
-                          )}
-                          {d.priority === "high" && <span title="Priority: High" className="text-red-500">★★★</span>}
-                        </div>
+                        <span className="text-gray-400"></span>
                       </div>
                       <p className="text-sm text-gray-600">{d.title}</p>
                       {d.amount !== undefined && (
-                        <p className="text-sm text-gray-700 mt-1">
-                          {d.amount.toLocaleString()} {d.currency}
-                        </p>
+                        <div className="text-sm text-gray-700 mt-1 flex items-center justify-between">
+                          <span>{d.amount.toLocaleString()} {d.currency}</span>
+                          <button
+                            className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-100"
+                            title={d.priority && d.priority!=='none' ? `Priority: ${d.priority[0].toUpperCase()+d.priority.slice(1)}` : "Priority: None"}
+                          >
+                            {d.priority === "high" && (
+                              <>
+                                <span title="Priority: High" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                                <span title="Priority: High" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                                <span title="Priority: High" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                              </>
+                            )}
+                            {d.priority === "medium" && (
+                              <>
+                                <span title="Priority: Medium" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                                <span title="Priority: Medium" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                              </>
+                            )}
+                            {d.priority === "low" && (
+                              <span title="Priority: Low" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                            )}
+                          </button>
+                        </div>
                       )}
+                      <div className="mt-1 flex items-start gap-2">
+                        <button
+                          className="inline-flex items-center justify-center w-7 h-7 shrink-0 rounded-full border border-gray-300 hover:bg-gray-100"
+                          onClick={() => setOpenActivity(
+                            openActivity && openActivity.stageIndex===stageIndex && openActivity.cardIndex===cardIndex ? null : { stageIndex, cardIndex }
+                          )}
+                          title="Next Activity"
+                        >
+                          📅
+                        </button>
+                        {(() => {
+                          const ms = nextDueMs(d)
+                          const inWeek = isThisWeek(ms)
+                          const item = nextSchedule(d)
+                          return item ? (
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start gap-2">
+                                <div className="flex flex-col items-start shrink-0">
+                                  {inWeek && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">This week</span>}
+                                  <span className="mt-1 text-[11px] leading-3 text-gray-500">
+                                    {(d.activitySchedules||[]).length ? `${(d.activitySchedules||[]).length} scheduled` : "No schedules"}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-gray-700 break-words">
+                                  {formatActivityPreviewText(item.text || "Scheduled activity")}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-500">No schedules</span>
+                          )
+                        })()}
+                      </div>
+                      
                       <div className="absolute top-2 right-2">
                         <button
                           className="text-sm text-gray-500 hover:text-gray-900 px-2 py-1"
@@ -290,13 +423,13 @@ function CRMPage() {
                           <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-md z-20">
                             <div className="px-3 py-2 text-xs text-gray-500">Priority</div>
                             <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "low")}>
-                              ★ Low
+                              • Low
                             </button>
                             <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "medium")}>
-                              ★★ Medium
+                              •• Medium
                             </button>
                             <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "high")}>
-                              ★★★ High
+                              ••• High
                             </button>
                             <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "none")}>
                               ✕ None
@@ -317,6 +450,216 @@ function CRMPage() {
               </div>
             ))}
           </div>
+          {openActivity && (
+            <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenActivity(null)}>
+              <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[560px]" onClick={(e) => e.stopPropagation()}>
+                <div
+                  className="bg-white rounded-xl shadow-lg border-2 border-white"
+                  tabIndex={0}
+                  ref={(el)=>{ if (el) { activityModalRef.current = el } }}
+                  onKeyDown={(e)=>{
+                    const tag = e.target && e.target.tagName
+                    if (tag==='INPUT' || tag==='TEXTAREA') return
+                    const sel = (selectedScheduleKey && openActivity && selectedScheduleKey.stageIndex===openActivity.stageIndex && selectedScheduleKey.cardIndex===openActivity.cardIndex) ? selectedScheduleKey.idx : null
+                    if (sel==null) return
+                    if (e.key==='ArrowUp') {
+                      e.preventDefault()
+                      if (sel>0) {
+                        moveScheduleUp(openActivity.stageIndex, openActivity.cardIndex, sel)
+                        setSelectedScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: sel-1 })
+                      }
+                    } else if (e.key==='ArrowDown') {
+                      e.preventDefault()
+                      const len = (stages[openActivity.stageIndex].deals[openActivity.cardIndex].activitySchedules||[]).length
+                      if (sel < len-1) {
+                        moveScheduleDown(openActivity.stageIndex, openActivity.cardIndex, sel)
+                        setSelectedScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: sel+1 })
+                      }
+                    }
+                  }}
+                >
+                  <div className="px-4 py-3 border-b-2 border-white flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900">Next Activity</h3>
+                      {(() => { 
+                        const d = stages[openActivity.stageIndex].deals[openActivity.cardIndex]
+                        const ms = nextDueMs(d)
+                        const inWeek = isThisWeek(ms)
+                        return inWeek ? <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">This week</span> : null
+                      })()}
+                      <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-xs">
+                        {(() => { const d = stages[openActivity.stageIndex].deals[openActivity.cardIndex]; return (d.activitySchedules||[]).length ? `${(d.activitySchedules||[]).length} scheduled` : "No schedules" })()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="inline-flex items-center justify-center px-3 h-8 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                        onClick={()=>{ setOpenScheduleFor(true); setScheduleDueInput(""); setScheduleText(""); }}
+                        title="Add schedule"
+                      >
+                        +
+                      </button>
+                      <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenActivity(null)}>✕</button>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {(() => { const d = stages[openActivity.stageIndex].deals[openActivity.cardIndex]; return (
+                      <>
+                        
+                        <div className="space-y-2">
+                          {(d.activitySchedules||[]).map((it, i) => (
+                            <div
+                              key={i}
+                              className={`flex flex-wrap items-center gap-2 bg-gray-50 rounded-lg p-2 ${selectedScheduleKey && openActivity && selectedScheduleKey.stageIndex===openActivity.stageIndex && selectedScheduleKey.cardIndex===openActivity.cardIndex && selectedScheduleKey.idx===i ? 'ring-1 ring-purple-300' : ''} ${dragOverIdx===i ? 'ring-1 ring-blue-300' : ''} ${(editingScheduleKey && editingScheduleKey.stageIndex===openActivity.stageIndex && editingScheduleKey.cardIndex===openActivity.cardIndex && editingScheduleKey.idx===i) ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
+                              onClick={(e)=>{
+                                const tag = e.target && e.target.tagName
+                                if (tag==='INPUT' || tag==='TEXTAREA' || tag==='BUTTON') return
+                                setSelectedScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i })
+                                activityModalRef.current && activityModalRef.current.focus()
+                              }}
+                              draggable
+                              onDragStart={(e)=>{
+                                const el = e.target
+                                const tag = el && el.tagName
+                                const isField = tag==='INPUT' || tag==='TEXTAREA' || tag==='BUTTON'
+                                const isEditing = !!(editingScheduleKey && editingScheduleKey.stageIndex===openActivity.stageIndex && editingScheduleKey.cardIndex===openActivity.cardIndex && editingScheduleKey.idx===i)
+                                if (isField || isEditing) { e.preventDefault(); return }
+                                setDraggingScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i })
+                                setDragOverIdx(i)
+                                e.dataTransfer.effectAllowed = 'move'
+                              }}
+                              onDragOver={(e)=>{ e.preventDefault(); if (draggingScheduleKey && draggingScheduleKey.stageIndex===openActivity.stageIndex && draggingScheduleKey.cardIndex===openActivity.cardIndex) setDragOverIdx(i) }}
+                              onDrop={(e)=>{ e.preventDefault(); if (draggingScheduleKey && draggingScheduleKey.stageIndex===openActivity.stageIndex && draggingScheduleKey.cardIndex===openActivity.cardIndex) { reorderSchedule(openActivity.stageIndex, openActivity.cardIndex, draggingScheduleKey.idx, i); setSelectedScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i }); } setDraggingScheduleKey(null); setDragOverIdx(null) }}
+                              onDragEnd={()=>{ setDraggingScheduleKey(null); setDragOverIdx(null) }}
+                            >
+                              <span className="text-xs text-gray-600">Due</span>
+                              {(() => { 
+                                const isEditing = !!(editingScheduleKey && editingScheduleKey.stageIndex===openActivity.stageIndex && editingScheduleKey.cardIndex===openActivity.cardIndex && editingScheduleKey.idx===i)
+                                return (
+                                  <>
+                                    <input
+                                      type="datetime-local"
+                                      value={it.dueAt || ""}
+                                      onChange={(e)=>{
+                                        const { stageIndex, cardIndex } = openActivity
+                                        updateDeal(stageIndex, cardIndex, (prev)=>({
+                                          ...prev,
+                                          activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, dueAt: e.target.value } : s)
+                                        }))
+                                      }}
+                                      disabled={!isEditing}
+                                      className="rounded-md border border-gray-300 bg-white px-2 py-1 w-[200px] text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={it.text || ""}
+                                      onChange={(e)=>{
+                                        const { stageIndex, cardIndex } = openActivity
+                                        updateDeal(stageIndex, cardIndex, (prev)=>({
+                                          ...prev,
+                                          activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, text: e.target.value } : s)
+                                        }))
+                                      }}
+                                      placeholder="Details"
+                                      className="flex-1 min-w-[160px] rounded-md border border-gray-300 bg-white px-3 py-1 text-sm"
+                                    />
+                                    <div className="relative">
+                                      <button
+                                        className="px-2 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                                        onClick={()=>{
+                                          const open = openScheduleMenuKey && openScheduleMenuKey.stageIndex===openActivity.stageIndex && openScheduleMenuKey.cardIndex===openActivity.cardIndex && openScheduleMenuKey.idx===i
+                                          setOpenScheduleMenuKey(open ? null : { stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i })
+                                        }}
+                                        title="Options"
+                                      >
+                                        ⋮
+                                      </button>
+                                      {openScheduleMenuKey && openScheduleMenuKey.stageIndex===openActivity.stageIndex && openScheduleMenuKey.cardIndex===openActivity.cardIndex && openScheduleMenuKey.idx===i && (
+                                        <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-md z-10">
+                                          <button
+                                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                                            onClick={()=>{ setEditingScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i }); setOpenScheduleMenuKey(null) }}
+                                          >
+                                            Edit
+                                          </button>
+                                          <button
+                                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
+                                            onClick={()=>{
+                                              const { stageIndex, cardIndex } = openActivity
+                                              updateDeal(stageIndex, cardIndex, (prev)=>({
+                                                ...prev,
+                                                activitySchedules: (prev.activitySchedules||[]).filter((_, idx)=> idx!==i)
+                                              }))
+                                              setOpenScheduleMenuKey(null)
+                                              if (editingScheduleKey && editingScheduleKey.stageIndex===stageIndex && editingScheduleKey.cardIndex===cardIndex && editingScheduleKey.idx===i) {
+                                                setEditingScheduleKey(null)
+                                              }
+                                            }}
+                                          >
+                                            Delete
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </>
+                                )
+                              })()}
+                            </div>
+                          ))}
+                          {openScheduleFor && (
+                            <div className="mt-2">
+                              <div className="flex flex-wrap items-center gap-2 bg-gray-50 rounded-lg p-3">
+                                <span className="text-xs text-gray-600">Due</span>
+                                <input
+                                  type="datetime-local"
+                                  value={scheduleDueInput}
+                                  onChange={(e)=>setScheduleDueInput(e.target.value)}
+                                  className="rounded-md border border-gray-300 bg-white px-2 py-1 w-[200px] text-sm"
+                                />
+                                <input
+                                  type="text"
+                                  value={scheduleText}
+                                  onChange={(e)=>setScheduleText(e.target.value)}
+                                  placeholder="Scheduled activity details"
+                                  autoFocus
+                                  className="flex-1 min-w-[160px] rounded-md border border-gray-300 bg-white px-3 py-1 text-sm"
+                                />
+                              </div>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  className="px-2 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                                  onClick={()=>{ setOpenScheduleFor(false); setScheduleDueInput(""); setScheduleText(""); }}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  className="px-2 py-1 rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                                  onClick={()=>{
+                                    const dueAt = scheduleDueInput
+                                    if (!dueAt) return
+                                    const { stageIndex, cardIndex } = openActivity
+                                    updateDeal(stageIndex, cardIndex, (prev)=>({
+                                      ...prev,
+                                      activitySchedules: [...(prev.activitySchedules||[]), { startAt: null, dueAt, text: scheduleText || "" }]
+                                    }))
+                                    setOpenScheduleFor(false)
+                                    setScheduleDueInput("")
+                                    setScheduleText("")
+                                  }}
+                                >
+                                  Add
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )})()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {openDetail && (
             <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenDetail(null)}>
               <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[520px]" onClick={(e) => e.stopPropagation()}>
@@ -391,20 +734,21 @@ function CRMPage() {
                       <div className="w-full border-2 border-white rounded-md px-3 py-2 shadow flex items-center gap-2 overflow-hidden">
                         <input type="number" value={newDeal.amount} onChange={(e)=>setNewDeal({...newDeal, amount:Number(e.target.value)})} className="w-28 border-2 border-white rounded-md px-3 py-2 shadow bg-white" />
                         <input value={newDeal.currency} onChange={(e)=>setNewDeal({...newDeal, currency:e.target.value})} className="w-16 border-2 border-white rounded-md px-3 py-2 shadow bg-white" />
-                        <div className="ml-auto flex items-center gap-1">
+                        <div className="ml-auto flex items-center gap-2">
                           {[1,2,3].map(n => {
                             const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
                             const title = n===1 ? 'Priority: Low' : n===2 ? 'Priority: Medium' : 'Priority: High'
-                            const active = newDeal.priority==='high' || (newDeal.priority==='medium' && n<=2) || (newDeal.priority==='low' && n===1)
-                            const cls = `text-xl ${active ? (n===3 && newDeal.priority!=='high' ? 'text-gray-300' : 'text-purple-600') : 'text-gray-300'}`
+                            const active = newDeal.priority===p
                             return (
                               <button
                                 key={n}
-                                className={cls}
+                                className="flex items-center gap-1"
                                 title={title}
-                                onClick={()=>setNewDeal({...newDeal, priority: newDeal.priority===p ? 'none' : p})}
+                                onClick={()=>setNewDeal({...newDeal, priority: active ? 'none' : p})}
                               >
-                                ★
+                                {Array.from({ length: n }).map((_, i) => (
+                                  <span key={i} className={`inline-block w-2.5 h-2.5 rounded-full ${active ? 'bg-blue-600' : 'bg-gray-300'}`}></span>
+                                ))}
                               </button>
                             )
                           })}
