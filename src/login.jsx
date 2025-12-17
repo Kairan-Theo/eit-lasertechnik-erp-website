@@ -1,6 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 // Inline SVG icons to avoid external dependency issues
 const EyeIcon = (props) => (
@@ -116,6 +117,8 @@ function LoginPage() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <LoginPage />
+    <LanguageProvider>
+      <LoginPage />
+    </LanguageProvider>
   </React.StrictMode>
 )

@@ -2,6 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import AppGrid from "./components/app-grid.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 function AppsPage() {
@@ -21,6 +22,8 @@ function AppsPage() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AppsPage />
+    <LanguageProvider>
+      <AppsPage />
+    </LanguageProvider>
   </React.StrictMode>,
 )

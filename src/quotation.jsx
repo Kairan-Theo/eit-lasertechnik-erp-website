@@ -1,6 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 function useQuotationState() {
@@ -54,38 +55,32 @@ function useQuotationState() {
   const exportPdf = async () => {
     const el = document.getElementById("quotation-document")
     if (!el) return
-    const tryLoad = (src) =>
-      new Promise((resolve, reject) => {
-        if (window.html2pdf) return resolve()
-        const s = document.createElement("script")
-        s.src = src
-        s.onload = () => resolve()
-        s.onerror = () => reject()
-        document.head.appendChild(s)
-      })
-    try {
-      await tryLoad("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js")
-    } catch {
-      try {
-        await tryLoad("https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js")
-      } catch {
-        try {
-          await tryLoad("https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js")
-        } catch {
-          window.print()
-          return
-        }
-      }
-    }
-    const opt = { margin: 10, filename: `Quotation_${details.number}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }
+    const opt = { margin: 10, filename: `Quotation_${details.number}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }
     const clone = el.cloneNode(true)
     clone.style.position = "fixed"
     clone.style.left = "-10000px"
     clone.style.top = "0"
     clone.style.display = "block"
+    clone.style.background = "#ffffff"
+    clone.classList.remove("hidden")
+    clone.removeAttribute("aria-hidden")
     document.body.appendChild(clone)
     try {
-      await window.html2pdf().set(opt).from(clone).save()
+      const loadLib = () =>
+        new Promise((resolve) => {
+          if (window.html2pdf) return resolve(window.html2pdf)
+          const s = document.createElement("script")
+          s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"
+          s.onload = () => resolve(window.html2pdf)
+          s.onerror = () => resolve(null)
+          document.head.appendChild(s)
+        })
+      const lib = await loadLib()
+      if (typeof lib === "function") {
+        await lib().set(opt).from(clone).save()
+      } else {
+        window.print()
+      }
     } finally {
       document.body.removeChild(clone)
     }
@@ -305,7 +300,6 @@ function QuotationPage() {
                 <div className="grid grid-cols-1 gap-4">
                   <input value={q.details.number} onChange={(e) => q.setDetails({ ...q.details, number: e.target.value })} placeholder="Quotation number" className="w-full rounded-md border border-gray-300 px-3 py-2" />
                   <input type="date" value={q.details.date} onChange={(e) => q.setDetails({ ...q.details, date: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-                  <input type="date" value={q.details.expires} onChange={(e) => q.setDetails({ ...q.details, expires: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2" />
                   <select value={q.details.currency} onChange={(e) => q.setDetails({ ...q.details, currency: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
                     <option value="THB">THB</option>
                     <option value="USD">USD</option>
@@ -355,7 +349,7 @@ function QuotationPage() {
                     </svg>
                   </button>
                   <div className="flex items-center justify-end gap-2">
-                    <button onClick={q.exportPdf} className="px-3 py-1.5 rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Download</button>
+                    <button onClick={q.exportPdf} className="px-3 py-1.5 rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Export PDF</button>
                     <button onClick={q.print} className="px-3 py-1.5 rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Print</button>
                     <button onClick={sendAndSave} className="px-3 py-1.5 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]">Send</button>
                   </div>
@@ -371,7 +365,9 @@ function QuotationPage() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <QuotationPage />
+    <LanguageProvider>
+      <QuotationPage />
+    </LanguageProvider>
   </React.StrictMode>,
 )
 
