@@ -1,22 +1,19 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
-import { LanguageProvider } from "./components/language-context"
+import Footer from "./components/footer.jsx"
 import "./index.css"
 
 function useInventory() {
   const [query, setQuery] = React.useState("")
-  const [page, setPage] = React.useState(1)
   const [sortKey, setSortKey] = React.useState("updatedAt")
   const [sortDir, setSortDir] = React.useState("desc")
-  const pageSize = 10
   const [items, setItems] = React.useState([])
   const [showAdd, setShowAdd] = React.useState(false)
   const [showEdit, setShowEdit] = React.useState(null)
   const [showAdjust, setShowAdjust] = React.useState(null)
   const [showTransfer, setShowTransfer] = React.useState(null)
   const [showImport, setShowImport] = React.useState(false)
-  const [warehouseFilter, setWarehouseFilter] = React.useState("All")
   const [showReceive, setShowReceive] = React.useState(null)
   const [showDeliver, setShowDeliver] = React.useState(null)
   const [role, setRole] = React.useState("Inventory Admin")
@@ -25,6 +22,8 @@ function useInventory() {
   const [showHistory, setShowHistory] = React.useState(null)
   const [view, setView] = React.useState("inventory")
   const [historyFilter, setHistoryFilter] = React.useState(null)
+  const [page, setPage] = React.useState(1)
+  const pageSize = 20
   const saveItems = (next) => {
     setItems(next)
     try {
@@ -87,7 +86,6 @@ function useInventory() {
   const filtered = items
     .filter((p) => (p.name || "").toLowerCase().includes(query.toLowerCase()))
     .filter((p) => (refQuery ? (p.sku || "").toLowerCase().includes(refQuery.toLowerCase()) : true))
-    .filter((p) => (warehouseFilter === "All" ? true : (p.warehouse || "Main") === warehouseFilter))
     .filter((p) => (categoryFilter === "All" ? true : (p.category || "Finished Goods") === categoryFilter))
   const sorted = [...filtered].sort((a, b) => {
     const va = a[sortKey]
@@ -222,55 +220,68 @@ function useInventory() {
   }
   const exportCsv = () => {
     const headers = ["sku", "name", "stockQty", "reserved", "price", "updatedAt", "warehouse", "bin", "lot", "expiry"]
-    const rows = items.map((it) => headers.map((h) => (it[h] != null ? String(it[h]).replaceAll(",", " ") : "")).join(","))
-    const csv = [headers.join(","), ...rows].join("\n")
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const csv = [
+      headers.join(","),
+      ...items.map((i) => headers.map((k) => i[k]).join(",")),
+    ].join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
     a.download = "inventory.csv"
-    document.body.appendChild(a)
     a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
   }
-  const importCsv = async (file) => {
+  const importCsv = (file) => {
     if (!file) return
-    const text = await file.text()
-    const lines = text.split(/\r?\n/).filter((l) => l.trim().length)
-    const headers = lines[0].split(",").map((h) => h.trim())
-    const out = []
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(",")
-      const obj = {}
-      headers.forEach((h, idx) => (obj[h] = cols[idx] ? cols[idx].trim() : ""))
-      out.push({
-        sku: obj.sku || "",
-        name: obj.name || "",
-        stockQty: Number(obj.stockQty || 0),
-        reserved: Number(obj.reserved || 0),
-        price: Number(obj.price || 0),
-        updatedAt: obj.updatedAt || new Date().toISOString().slice(0, 10),
-        warehouse: obj.warehouse || "Main",
-        bin: obj.bin || "A-01-01",
-        lot: obj.lot || "",
-        expiry: obj.expiry || "",
-        photo: "/eit-icon.png",
-        instock: 1,
-      })
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target.result
+      const lines = text.split("\n")
+      const headers = lines[0].split(",").map((h) => h.trim())
+      const newItems = []
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].split(",")
+        if (line.length !== headers.length) continue
+        const item = {}
+        headers.forEach((h, j) => {
+          item[h] = line[j].trim()
+        })
+        newItems.push({
+          ...item,
+          stockQty: Number(item.stockQty || 0),
+          price: Number(item.price || 0),
+          reserved: Number(item.reserved || 0),
+          incomingQty: 0,
+          outgoingQty: 0,
+          minStock: Number(item.minStock || 0),
+          reorderQty: Number(item.reorderQty || 0),
+          updatedAt: item.updatedAt || new Date().toISOString().slice(0, 10),
+          instock: 1,
+          photo: "/eit-icon.png",
+        })
+      }
+      const next = [...newItems, ...items]
+      saveItems(next)
+      setShowImport(false)
     }
-    saveItems([...out, ...items])
-    setShowImport(false)
+    reader.readAsText(file)
   }
+
+  const updateItem = (original, updates) => {
+    const next = items.map((it) => {
+      if (it.sku === original.sku && (it.warehouse || "Main") === (original.warehouse || "Main") && (it.bin || "A-01-01") === (original.bin || "A-01-01") && (it.lot || "") === (original.lot || "")) {
+        return { ...it, ...updates, updatedAt: new Date().toISOString().slice(0, 10) }
+      }
+      return it
+    })
+    saveItems(next)
+  }
+
   return {
     query,
     setQuery,
-    page,
-    totalPages,
     pageItems,
     toggleSort,
-    prevPage,
-    nextPage,
     sortKey,
     sortDir,
     showAdd,
@@ -290,8 +301,6 @@ function useInventory() {
     exportCsv,
     importCsv,
     warehouses,
-    warehouseFilter,
-    setWarehouseFilter,
     role,
     setRole,
     refQuery,
@@ -315,124 +324,33 @@ function useInventory() {
   }
 }
 
-function Sidebar() {
-  const items = [
-    { label: "Dashboard", icon: "📊", href: "/" },
-    { label: "Orders", icon: "🧾", href: "/crm.html" },
-    { label: "Inventory", icon: "📦", href: "/inventory.html", active: true },
-    { label: "Roaster", icon: "🔥" },
-    { label: "Blockchain", icon: "🔗" },
-    { label: "History", icon: "🕘" },
-  ]
-  return (
-    <aside className="w-56 bg-white border-r">
-      <nav className="px-2 space-y-1">
-        {items.map((it) => (
-          <a
-            key={it.label}
-            href={it.href || "#"}
-            onClick={(e) => {
-              if (!it.href) e.preventDefault()
-            }}
-            className={
-              "flex items-center gap-3 px-3 py-2 rounded-md " +
-              (it.active ? "bg-teal-50 text-teal-700 border-l-4 border-teal-600" : "text-gray-700 hover:bg-gray-50")
-            }
-          >
-            <span className="text-lg">{it.icon}</span>
-            <span className="text-sm">{it.label}</span>
-          </a>
-        ))}
-      </nav>
-    </aside>
-  )
-}
-
-function Header({ inv }) {
-  return (
-    <div className="flex items-center justify-between px-6 py-4 border-b bg-white">
-      <div className="flex items-center gap-3">
-        <span className="text-lg sm:text-xl font-semibold text-[#2D4485]">EIT Lasertechnik</span>
-        <h1 className="text-lg sm:text-xl font-semibold text-[#2D4485]">Inventory Control Tower</h1>
-      </div>
-      <div className="flex items-center gap-3">
-        <select value={inv.warehouseFilter} onChange={(e) => inv.setWarehouseFilter(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          {inv.warehouses.map((w) => (
-            <option key={w} value={w}>{w}</option>
-          ))}
-        </select>
-        <input
-          value={inv.query}
-          onChange={(e) => inv.setQuery(e.target.value)}
-          className="w-56 rounded-md border border-gray-300 px-3 py-2"
-          placeholder="Search"
-        />
-        <button onClick={inv.exportCsv} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Export</button>
-        <button onClick={() => inv.setShowImport(true)} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Import</button>
-        <div className="flex items-center gap-2 pl-3 ml-2 border-l">
-          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 font-semibold">M</div>
-          <div className="text-sm">
-            <div className="text-gray-900 leading-tight">Manager</div>
-            <div className="text-gray-500 leading-tight">Profile</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TopNav({ inv }) {
-  return (
-    <header className="sticky top-0 z-40 w-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-lg">EIT Lasertechnik</span>
-          <span className="text-white/70">/</span>
-          <span className="text-sm text-white">Inventory</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => inv.setView("inventory")}
-            className={(inv.view === "inventory" ? "bg-white text-[#2D4485]" : "bg-white/20 text-white hover:bg-white/30") + " rounded-full px-3 py-1.5 text-sm font-medium transition"}
-          >
-            Inventory
-          </button>
-          <button
-            onClick={() => {
-              inv.setHistoryFilter(null)
-              inv.setView("history")
-            }}
-            className={(inv.view === "history" ? "bg-white text-[#2D4485]" : "bg.white/20 text-white hover:bg-white/30").replace("bg.white/20","bg-white/20") + " rounded-full px-3 py-1.5 text-sm font-medium transition"}
-          >
-            History
-          </button>
-          <a href="/apps.html" className="rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition">Apps</a>
-        </div>
-      </div>
-    </header>
-  )
-}
-
 function InventoryTable({ inv }) {
   const fmtTHB = (n) => `฿ ${Number(n).toLocaleString("th-TH")}`
-  const daysToExpiry = (d) => {
-    if (!d) return null
-    const dt = new Date(d)
-    if (isNaN(dt.getTime())) return null
-    const diff = Math.round((dt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    return diff
+  const [editingId, setEditingId] = React.useState(null)
+  const [editingField, setEditingField] = React.useState(null)
+  const [editingValue, setEditingValue] = React.useState("")
+
+  const getRowId = (p) => `${p.sku}-${p.warehouse || "Main"}-${p.bin || "A-01-01"}-${p.lot || ""}`
+
+  const handleKeyDown = (e, p) => {
+    if (e.key === "Enter") {
+      inv.updateItem(p, { [editingField]: editingField === "price" ? Number(editingValue) : editingValue })
+      setEditingId(null)
+      setEditingField(null)
+    } else if (e.key === "Escape") {
+      setEditingId(null)
+      setEditingField(null)
+    }
   }
+
+  const handleBlur = (p) => {
+    inv.updateItem(p, { [editingField]: editingField === "price" ? Number(editingValue) : editingValue })
+    setEditingId(null)
+    setEditingField(null)
+  }
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-3">
-        <input
-          value={inv.query}
-          onChange={(e) => inv.setQuery(e.target.value)}
-          className="w-64 rounded-md border border-gray-300 px-3 py-2"
-          placeholder="Search by name or reference"
-        />
-        <button onClick={() => inv.setShowAdd(true)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Add Item</button>
-      </div>
+    <div className="">
       {inv.pageItems.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
           <div className="text-lg font-semibold text-gray-900">No items found</div>
@@ -440,74 +358,113 @@ function InventoryTable({ inv }) {
           <button onClick={() => inv.setShowAdd(true)} className="mt-4 px-3 py-2 rounded-md bg-[#2D4485] text-white">Add Item</button>
         </div>
       ) : (
-      <div className="overflow-x-auto bg-white rounded-xl shadow-sm border">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-[#2D4485]">
-              <th className="p-3 text-left">Item Photo</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>SKU</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Last Updated</th>
-              <th className="p-3 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inv.pageItems.map((p, i) => (
-              <tr key={i} className="border-t odd:bg-gray-50 hover:bg-gray-100 transition">
-                <td className="p-3">
-                  <img src={p.photo || "/eit-icon.png"} alt="" className="w-10 h-10 rounded object-cover" />
-                </td>
-                <td className="p-3 text-gray-900">{p.sku}</td>
-                <td className="p-3 text-gray-700">{p.name}</td>
-                <td className="p-3">{Number(p.stockQty).toLocaleString("en-US")}</td>
-                <td className="p-3 text-[#2D4485] font-medium">{fmtTHB(p.price)}</td>
-                <td className="p-3">{p.updatedAt}</td>
-                <td className="p-3">
-                  <div className="flex gap-2">
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowEdit(p)} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Edit</button>
-                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
-                    <button
-                      onClick={() => {
-                        localStorage.setItem("mfgPreFill", JSON.stringify({ product: p.name, sku: p.sku, quantity: 1 }))
-                        window.location.href = "/manufacturing.html"
-                      }}
-                      className="px-2 py-1 rounded-md border border-purple-700 bg-purple-50 text-purple-700"
-                    >
-                      Manufacture
-                    </button>
-                    {Number(p.stockQty) === 0 && (
-                      <button
-                        onClick={() => {
-                          localStorage.setItem("mfgPreFill", JSON.stringify({ product: p.name, sku: p.sku, quantity: 1 }))
-                          window.location.href = "/manufacturing.html"
-                        }}
-                        className="px-2 py-1 rounded-md border border-purple-700 bg-purple-50 text-purple-700"
-                      >
-                        Manufacturing Order
-                      </button>
-                    )}
-                  </div>
-                </td>
+        <div className="overflow-x-auto bg-white rounded-xl shadow-sm border">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-[#2D4485] bg-gray-50">
+                <th className="p-3 text-left">Item Photo</th>
+                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>SKU</th>
+                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
+                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
+                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
+                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Last Updated</th>
+                <th className="p-3 text-left">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      )}
-      <div className="flex items-center justify-between mt-4 text-sm text-gray-700">
-        <button onClick={inv.prevPage} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Previous</button>
-        <div className="flex items-center gap-2">
-          <span>{String(inv.page).padStart(2, "0")}</span>
-          <span>Of</span>
-          <span>{String(inv.totalPages).padStart(2, "0")}</span>
+            </thead>
+            <tbody>
+              {inv.pageItems.map((p, i) => {
+                const rowId = getRowId(p)
+                const isEditing = (field) => editingId === rowId && editingField === field
+                return (
+                  <tr key={i} className="border-t odd:bg-gray-50 hover:bg-gray-100 transition">
+                    <td className="p-3">
+                      {isEditing("photo") ? (
+                        <input
+                          autoFocus
+                          className="w-full rounded-md border border-gray-300 px-2 py-1"
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => handleBlur(p)}
+                          onKeyDown={(e) => handleKeyDown(e, p)}
+                        />
+                      ) : (
+                        <img
+                          src={p.photo || "/eit-icon.png"}
+                          alt=""
+                          className="w-10 h-10 rounded object-cover cursor-pointer hover:opacity-80"
+                          title="Click to edit photo URL"
+                          onClick={() => {
+                            setEditingId(rowId)
+                            setEditingField("photo")
+                            setEditingValue(p.photo || "")
+                          }}
+                        />
+                      )}
+                    </td>
+                    <td className="p-3 text-gray-900">{p.sku}</td>
+                    <td className="p-3 text-gray-700">
+                      {isEditing("name") ? (
+                        <input
+                          autoFocus
+                          className="w-full rounded-md border border-gray-300 px-2 py-1"
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => handleBlur(p)}
+                          onKeyDown={(e) => handleKeyDown(e, p)}
+                        />
+                      ) : (
+                        <span
+                          className="cursor-pointer hover:text-[#2D4485] hover:underline"
+                          onClick={() => {
+                            setEditingId(rowId)
+                            setEditingField("name")
+                            setEditingValue(p.name)
+                          }}
+                        >
+                          {p.name}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3">{Number(p.stockQty).toLocaleString("en-US")}</td>
+                    <td className="p-3 text-[#2D4485] font-medium">
+                      {isEditing("price") ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          className="w-24 rounded-md border border-gray-300 px-2 py-1"
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => handleBlur(p)}
+                          onKeyDown={(e) => handleKeyDown(e, p)}
+                        />
+                      ) : (
+                        <span
+                          className="cursor-pointer hover:text-[#2D4485] hover:underline"
+                          onClick={() => {
+                            setEditingId(rowId)
+                            setEditingField("price")
+                            setEditingValue(p.price)
+                          }}
+                        >
+                          {fmtTHB(p.price)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3">{p.updatedAt}</td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
-        <button onClick={inv.nextPage} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Next</button>
-      </div>
-      <div className="fixed right-6 bottom-6">
-        <button onClick={() => inv.setShowAdd(true)} className="w-12 h-12 rounded-full bg-[#2D4485] text-white text-2xl shadow">+</button>
-      </div>
+      )}
+
+      
       {inv.showAdd && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowAdd(false)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
@@ -864,23 +821,67 @@ function DeliverForm({ sku, onCancel, onConfirm }) {
   )
 }
 
-
-function InventoryLayout() {
+function InventoryPage() {
   const inv = useInventory()
   return (
-    <main className="min-h-screen bg-gray-50">
-      <TopNav inv={inv} />
-      <div className="px-0">
-        {inv.view === "history" ? <HistoryView inv={inv} /> : <InventoryTable inv={inv} />}
-      </div>
+    <main className="min-h-screen bg-white">
+      <Navigation />
+      <section className="w-full py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Inventory Control Tower</h1>
+              <button
+                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                title="Add Item"
+                onClick={() => inv.setShowAdd(true)}
+              >
+                Add Item
+              </button>
+              <button
+                onClick={inv.exportCsv}
+                className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              >
+                Export
+              </button>
+              <button
+                onClick={() => inv.setShowImport(true)}
+                className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              >
+                Import
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+                 <input
+                  value={inv.query}
+                  onChange={(e) => inv.setQuery(e.target.value)}
+                  className="w-64 rounded-md border border-gray-300 px-3 py-2"
+                  placeholder="Search by name or reference"
+                />
+                 <button
+                    onClick={() => {
+                      inv.setHistoryFilter(null)
+                      inv.setView(inv.view === "history" ? "inventory" : "history")
+                    }}
+                    className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                  >
+                    {inv.view === "history" ? "Inventory" : "History"}
+                  </button>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+             {inv.view === "history" ? <HistoryView inv={inv} /> : <InventoryTable inv={inv} />}
+          </div>
+        </div>
+      </section>
+      <Footer />
     </main>
   )
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <LanguageProvider>
-      <InventoryLayout />
-    </LanguageProvider>
+    <InventoryPage />
   </React.StrictMode>,
 )
