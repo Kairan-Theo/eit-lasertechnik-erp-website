@@ -186,7 +186,7 @@ function ManufacturingOrderPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Manufacturing Order</h1>
               <button
-                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                className="inline-flex items-center justify-center min-w-[150px] btn-pill"
                 title="New MO"
                 onClick={() => setShowNew(true)}
               >
@@ -194,7 +194,7 @@ function ManufacturingOrderPage() {
               </button>
               <div className="relative">
                 <button
-                  className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+                  className="btn-pill shadow-sm"
                   title="Sort and group"
                   onClick={()=>setOpenSortMenu((v)=>!v)}
                 >
@@ -218,14 +218,14 @@ function ManufacturingOrderPage() {
                 )}
               </div>
               <button
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="btn-pill"
                 title="Component"
                 onClick={() => window.location.href = "/products.html"}
               >
                 Component
               </button>
               <button
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="btn-pill"
                 title="Bill of Materials"
                 onClick={() => window.location.href = "/bom.html"}
               >
@@ -523,11 +523,18 @@ function ManufacturingOrderPage() {
                     <td className="p-3 text-center">
                       <div className="relative inline-block">
                         <button
-                          className="px-2 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                          aria-label="Delete order"
+                          className="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-900 hover:bg-gray-900 hover:text-white shadow-sm"
                           onClick={()=>setOpenDeleteId(openDeleteId===o.id?null:o.id)}
                           title="Delete order"
                         >
-                          🗑️
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                            <path d="M10 11v6"></path>
+                            <path d="M14 11v6"></path>
+                            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+                          </svg>
                         </button>
                       </div>
                     </td>
@@ -584,7 +591,7 @@ function ManufacturingOrderPage() {
                     <div className="text-sm text-gray-700">Product</div>
                     <div className="flex items-center gap-2">
                       <input value={newOrder.product} onChange={(e)=>setNewOrder({...newOrder, product:e.target.value})} placeholder="Product to build..." className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
-                      <button className="px-2 py-1 rounded border border-gray-300">▾</button>
+                      <button className="btn-pill px-3">▾</button>
                     </div>
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
@@ -613,12 +620,25 @@ function ManufacturingOrderPage() {
                 </div>
               </div>
                   <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
-                    <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setShowNew(false)}>Cancel</button>
+                    <button className="btn-pill" onClick={() => setShowNew(false)}>Cancel</button>
                     <button
-                      className="px-4 py-2 rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                      className="btn-pill"
                       onClick={() => {
                         const ref = `WH/MO/${String((orders[0]?.id||0)+1).padStart(5,'0')}`
-                        const o = { id: Date.now(), ref, start: newOrder.scheduledDate || new Date().toISOString(), product: newOrder.product || "Untitled", nextActivity: "", customer: newOrder.customer || "", componentStatus: "", quantity: Number(newOrder.quantity)||1, state: "", favorite: false, selected: false, priority: newOrder.priority || "None" }
+                        const o = {
+                          id: Date.now(),
+                          ref,
+                          start: newOrder.scheduledDate || new Date().toISOString(),
+                          product: newOrder.product || "Untitled",
+                          nextActivity: "",
+                          customer: newOrder.customer || "",
+                          componentStatus: "",
+                          quantity: Number(newOrder.quantity) || 1,
+                          state: "",
+                          priority: newOrder.priority || "None",
+                          favorite: false,
+                          selected: false,
+                        }
                         const next = [o, ...orders]
                         setOrders(next)
                         localStorage.setItem("mfgOrders", JSON.stringify(next))
