@@ -2,6 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import Footer from "./components/footer.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 function ManufacturingOrderPage() {
@@ -46,30 +47,15 @@ function ManufacturingOrderPage() {
       localStorage.setItem("mfgOrders", JSON.stringify(seed))
     }
   }, [])
-  const didResetRef = React.useRef(false)
   React.useEffect(() => {
-    if (didResetRef.current) return
     try {
-      const saved = JSON.parse(localStorage.getItem("mfgOrders") || "[]")
-      if (saved && saved.length) {
-        const next = saved.map((o) => ({
-          ...o,
-          customer: o.customer ?? o.source ?? "",
-          componentStatus: "",
-          activityNote: o.activityNote ?? "",
-          activitySchedules: (o.activitySchedules ?? []).map((s)=>({
-            startAt: s.startAt ?? s.at ?? null,
-            dueAt: s.dueAt ?? s.at ?? null,
-            text: s.text ?? "",
-          })),
-          priority: o.priority ?? (o.favorite ? "High" : "None"),
-          state: o.state==='Draft' || o.state==='Confirmed' ? '' : o.state
-        }))
-        setOrders(next)
-        localStorage.setItem("mfgOrders", JSON.stringify(next))
+      const pf = JSON.parse(localStorage.getItem("mfgPreFill") || "null")
+      if (pf && pf.product) {
+        setNewOrder((prev) => ({ ...prev, product: pf.product || pf.sku || prev.product, quantity: Number(pf.quantity) || 1 }))
+        setShowNew(true)
+        localStorage.removeItem("mfgPreFill")
       }
     } catch {}
-    didResetRef.current = true
   }, [])
   const setAndPersist = (next) => { setOrders(next); localStorage.setItem("mfgOrders", JSON.stringify(next)) }
   const toggleFavorite = (id) => setAndPersist(orders.map(o => o.id===id ? { ...o, favorite: !o.favorite } : o))
@@ -653,6 +639,8 @@ function ManufacturingOrderPage() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ManufacturingOrderPage />
+    <LanguageProvider>
+      <ManufacturingOrderPage />
+    </LanguageProvider>
   </React.StrictMode>,
 )

@@ -10,6 +10,7 @@ function useInventory() {
   const [sortDir, setSortDir] = React.useState("desc")
   const [items, setItems] = React.useState([])
   const [showAdd, setShowAdd] = React.useState(false)
+  const [showEdit, setShowEdit] = React.useState(null)
   const [showAdjust, setShowAdjust] = React.useState(null)
   const [showTransfer, setShowTransfer] = React.useState(null)
   const [showImport, setShowImport] = React.useState(false)
@@ -123,6 +124,28 @@ function useInventory() {
     saveItems(next)
     if (!keepOpen) setShowAdd(false)
   }
+  const updateItem = (oldItem, payload) => {
+    const next = items.map((it) => {
+      // Match by reference or composite key
+      if (it === oldItem || (it.sku === oldItem.sku && (it.warehouse || "Main") === (oldItem.warehouse || "Main") && (it.bin || "A-01-01") === (oldItem.bin || "A-01-01") && (it.lot || "") === (oldItem.lot || ""))) {
+        return {
+          ...it,
+          ...payload,
+          stockQty: Number(payload.stockQty || 0),
+          price: Number(payload.price || 0),
+          reserved: Number(payload.reserved || 0),
+          incomingQty: Number(payload.incomingQty || 0),
+          outgoingQty: Number(payload.outgoingQty || 0),
+          minStock: Number(payload.minStock || 0),
+          reorderQty: Number(payload.reorderQty || 0),
+          updatedAt: new Date().toISOString().slice(0, 10),
+        }
+      }
+      return it
+    })
+    saveItems(next)
+    setShowEdit(null)
+  }
   const logMove = (entry) => {
     try {
       const logs = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
@@ -178,7 +201,7 @@ function useInventory() {
     }
     const next = items.map((it) => {
       if (it.sku === sku && (it.warehouse || "Main") === fromWarehouse) {
-        return { ...it, stockQty: Number(it.stockQty || 0) - Number(qty || 0), updatedAt: new Date().toISOString().slice(0, 10) }
+        return { ...it, stockQty: Math.max(0, Number(it.stockQty || 0) - Number(qty || 0)), updatedAt: new Date().toISOString().slice(0, 10) }
       }
       return it
     })
@@ -263,6 +286,8 @@ function useInventory() {
     sortDir,
     showAdd,
     setShowAdd,
+    showEdit,
+    setShowEdit,
     showAdjust,
     setShowAdjust,
     showTransfer,
@@ -448,6 +473,18 @@ function InventoryTable({ inv }) {
           </div>
         </div>
       )}
+      {inv.showEdit && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowEdit(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="text-lg font-semibold mb-4 text-gray-900">Edit Item</div>
+            <AddItemForm
+              initialData={inv.showEdit}
+              onCancel={() => inv.setShowEdit(null)}
+              onSave={(data) => inv.updateItem(inv.showEdit, data)}
+            />
+          </div>
+        </div>
+      )}
       {inv.showAdjust && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowAdjust(null)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
@@ -509,10 +546,11 @@ function HistoryView({ inv }) {
   )
 }
 
-function AddItemForm({ onCancel, onSave }) {
-  const initial = {
+function AddItemForm({ onCancel, onSave, initialData }) {
+  const defaultInitial = {
     sku: "",
     name: "",
+    photo: "",
     stockQty: 0,
     reserved: 0,
     price: 0,
@@ -535,16 +573,29 @@ function AddItemForm({ onCancel, onSave }) {
     serials: "",
     manufactureDate: "",
   }
-  const [f, setF] = React.useState(initial)
-  const [adv, setAdv] = React.useState(false)
-  const canSave = Boolean(f.sku && f.name)
+  const [f, setF] = React.useState(initialData ? { ...defaultInitial, ...initialData } : defaultInitial)
+  const [adv, setAdv] = React.useState(Boolean(initialData))
+  const canSave = Boolean(f.name)
   const set = (k, v) => setF((prev) => ({ ...prev, [k]: v }))
+
+  const handleSave = () => {
+    const payload = {
+      ...f,
+      sku: f.sku || `SKU-${Date.now()}`,
+      serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : []
+    }
+    onSave(payload)
+  }
+
   return (
     <div className="space-y-3">
+      {initialData && (
+        <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{f.sku}</span></div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm text-gray-700 mb-1">Reference (SKU)</label>
-          <input value={f.sku} onChange={(e) => set("sku", e.target.value)} required placeholder="e.g. ABC-001" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+          <label className="block text-sm text-gray-700 mb-1">Photo URL</label>
+          <input value={f.photo || ""} onChange={(e) => set("photo", e.target.value)} placeholder="/eit-icon.png" className="w-full rounded-md border border-gray-300 px-3 py-2" />
         </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Product name</label>
@@ -552,18 +603,11 @@ function AddItemForm({ onCancel, onSave }) {
         </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Stock qty</label>
-          <input type="number" value={f.stockQty} onChange={(e) => set("stockQty", Number(e.target.value))} placeholder="e.g. 10" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+          <input type="number" min={0} value={f.stockQty} onChange={(e) => set("stockQty", Math.max(0, Number(e.target.value))) } placeholder="e.g. 10" className="w-full rounded-md border border-gray-300 px-3 py-2" />
         </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Price</label>
           <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} placeholder="e.g. 50000" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        </div>
-        <div className="md:col-span-2">
-          <label className="block text-sm text-gray-700 mb-1">Warehouse</label>
-          <select value={f.warehouse} onChange={(e) => set("warehouse", e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
-            <option>Main</option>
-            <option>Secondary</option>
-          </select>
         </div>
       </div>
       <div>
@@ -604,17 +648,7 @@ function AddItemForm({ onCancel, onSave }) {
       )}
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button disabled={!canSave} onClick={() => onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Save</button>
-        <button
-          onClick={() => {
-            onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] }, true)
-            setF(initial)
-          }}
-          disabled={!canSave}
-          className="px-3 py-2 rounded-md border border-[#2D4485] text-[#2D4485] bg-white disabled:opacity-50"
-        >
-          Save & Add Another
-        </button>
+        <button disabled={!canSave} onClick={handleSave} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">{initialData ? "Update" : "Save"}</button>
       </div>
     </div>
   )
@@ -777,7 +811,7 @@ function DeliverForm({ sku, onCancel, onConfirm }) {
   return (
     <div className="space-y-3">
       <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
-      <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} placeholder="Qty delivered" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      <input type="number" min={0} value={qty} onChange={(e) => setQty(Math.max(0, Number(e.target.value)))} placeholder="Qty delivered" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="SO/DO Reference" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
