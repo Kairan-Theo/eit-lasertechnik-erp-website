@@ -147,41 +147,6 @@ function useInventory() {
     saveItems(next)
     if (!keepOpen) setShowAdd(false)
   }
-  const updateItem = (o,dItem pyoyload => {
-    const next = items.map((it) => {
-      // Match by reference or composite key
-      // (it === oldItem || Match by refeodItemr composite keydItemdItemdItem)
-      if (it ===
-          oldIt,
-          ...payload,
-          stockQty: Number(payload.stockQty || 0)e
-m         price: Number(payload price || 0),
-          reserved: Number(payload|reserved || 0),
-          incomingQty: Number(payload|incomingQty || 0),
-          o tgoingQty: Number((ayloai.outgoingQty || 0),
-          minStock: Number(paylotd.minStock || 0),
-          reorderQ.y: Numbsr(payload.reorderQty || 0)u
-          === oldItem.sku && (it.warehouse || "Main") === ,
-       (oldItem.warehouse || "Main") && (it.bin || "A-01-01") === (oldItem.bin || "A-01-01") && (it.lot || "") === (oldItem.lot || ""))) {
-        return {
-          ...it,
-          ...payload,
-          stockQtt)
-    setShowEdiy(null: Number(payload.stockQty || 0),
-          price: Number(payload.price || 0),
-          reserved: Number(payload.reserved || 0),
-          incomingQty: Number(payload.incomingQty || 0),
-          outgoingQty: Number(payload.outgoingQty || 0),
-          minStock: Number(payload.minStock || 0),
-          reorderQty: Number(payload.reorderQty || 0),
-          updatedAt: new Date().toISOString().slice(0, 10),
-        }
-      }
-      return it
-    })
-    saveItems(next)
-    setShowEdit(null)
-  }
   const logMove = (entry) => {
     try {
       const logs = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
