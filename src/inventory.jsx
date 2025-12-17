@@ -10,6 +10,7 @@ function useInventory() {
   const pageSize = 10
   const [items, setItems] = React.useState([])
   const [showAdd, setShowAdd] = React.useState(false)
+  const [showEdit, setShowEdit] = React.useState(null)
   const [showAdjust, setShowAdjust] = React.useState(null)
   const [showTransfer, setShowTransfer] = React.useState(null)
   const [showImport, setShowImport] = React.useState(false)
@@ -122,6 +123,28 @@ function useInventory() {
     ]
     saveItems(next)
     if (!keepOpen) setShowAdd(false)
+  }
+  const updateItem = (oldItem, payload) => {
+    const next = items.map((it) => {
+      // Match by reference or composite key
+      if (it === oldItem || (it.sku === oldItem.sku && (it.warehouse || "Main") === (oldItem.warehouse || "Main") && (it.bin || "A-01-01") === (oldItem.bin || "A-01-01") && (it.lot || "") === (oldItem.lot || ""))) {
+        return {
+          ...it,
+          ...payload,
+          stockQty: Number(payload.stockQty || 0),
+          price: Number(payload.price || 0),
+          reserved: Number(payload.reserved || 0),
+          incomingQty: Number(payload.incomingQty || 0),
+          outgoingQty: Number(payload.outgoingQty || 0),
+          minStock: Number(payload.minStock || 0),
+          reorderQty: Number(payload.reorderQty || 0),
+          updatedAt: new Date().toISOString().slice(0, 10),
+        }
+      }
+      return it
+    })
+    saveItems(next)
+    setShowEdit(null)
   }
   const logMove = (entry) => {
     try {
@@ -250,6 +273,8 @@ function useInventory() {
     sortDir,
     showAdd,
     setShowAdd,
+    showEdit,
+    setShowEdit,
     showAdjust,
     setShowAdjust,
     showTransfer,
@@ -257,6 +282,7 @@ function useInventory() {
     showImport,
     setShowImport,
     addItem,
+    updateItem,
     setQty,
     transferQty,
     exportCsv,
@@ -420,7 +446,6 @@ function InventoryTable({ inv }) {
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>SKU</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("warehouse")}>Warehouse</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Last Updated</th>
               <th className="p-3 text-left">Actions</th>
@@ -435,11 +460,11 @@ function InventoryTable({ inv }) {
                 <td className="p-3 text-gray-900">{p.sku}</td>
                 <td className="p-3 text-gray-700">{p.name}</td>
                 <td className="p-3">{Number(p.stockQty).toLocaleString("en-US")}</td>
-                <td className="p-3">{p.warehouse || "Main"}</td>
                 <td className="p-3 text-[#2D4485] font-medium">{fmtTHB(p.price)}</td>
                 <td className="p-3">{p.updatedAt}</td>
                 <td className="p-3">
                   <div className="flex gap-2">
+                    <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowEdit(p)} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Edit</button>
                     <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
                     <button
                       onClick={() => {
@@ -486,6 +511,18 @@ function InventoryTable({ inv }) {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-4 text-gray-900">Add Inventory Item</div>
             <AddItemForm onCancel={() => inv.setShowAdd(false)} onSave={inv.addItem} />
+          </div>
+        </div>
+      )}
+      {inv.showEdit && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowEdit(null)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="text-lg font-semibold mb-4 text-gray-900">Edit Item</div>
+            <AddItemForm
+              initialData={inv.showEdit}
+              onCancel={() => inv.setShowEdit(null)}
+              onSave={(data) => inv.updateItem(inv.showEdit, data)}
+            />
           </div>
         </div>
       )}
@@ -550,10 +587,11 @@ function HistoryView({ inv }) {
   )
 }
 
-function AddItemForm({ onCancel, onSave }) {
-  const initial = {
+function AddItemForm({ onCancel, onSave, initialData }) {
+  const defaultInitial = {
     sku: "",
     name: "",
+    photo: "",
     stockQty: 0,
     reserved: 0,
     price: 0,
@@ -576,16 +614,29 @@ function AddItemForm({ onCancel, onSave }) {
     serials: "",
     manufactureDate: "",
   }
-  const [f, setF] = React.useState(initial)
-  const [adv, setAdv] = React.useState(false)
-  const canSave = Boolean(f.sku && f.name)
+  const [f, setF] = React.useState(initialData ? { ...defaultInitial, ...initialData } : defaultInitial)
+  const [adv, setAdv] = React.useState(Boolean(initialData))
+  const canSave = Boolean(f.name)
   const set = (k, v) => setF((prev) => ({ ...prev, [k]: v }))
+
+  const handleSave = () => {
+    const payload = {
+      ...f,
+      sku: f.sku || `SKU-${Date.now()}`,
+      serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : []
+    }
+    onSave(payload)
+  }
+
   return (
     <div className="space-y-3">
+      {initialData && (
+        <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{f.sku}</span></div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm text-gray-700 mb-1">Reference (SKU)</label>
-          <input value={f.sku} onChange={(e) => set("sku", e.target.value)} required placeholder="e.g. ABC-001" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+          <label className="block text-sm text-gray-700 mb-1">Photo URL</label>
+          <input value={f.photo || ""} onChange={(e) => set("photo", e.target.value)} placeholder="/eit-icon.png" className="w-full rounded-md border border-gray-300 px-3 py-2" />
         </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Product name</label>
@@ -598,13 +649,6 @@ function AddItemForm({ onCancel, onSave }) {
         <div>
           <label className="block text-sm text-gray-700 mb-1">Price</label>
           <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} placeholder="e.g. 50000" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        </div>
-        <div className="md:col-span-2">
-          <label className="block text-sm text-gray-700 mb-1">Warehouse</label>
-          <select value={f.warehouse} onChange={(e) => set("warehouse", e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
-            <option>Main</option>
-            <option>Secondary</option>
-          </select>
         </div>
       </div>
       <div>
@@ -645,17 +689,7 @@ function AddItemForm({ onCancel, onSave }) {
       )}
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button disabled={!canSave} onClick={() => onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Save</button>
-        <button
-          onClick={() => {
-            onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] }, true)
-            setF(initial)
-          }}
-          disabled={!canSave}
-          className="px-3 py-2 rounded-md border border-[#2D4485] text-[#2D4485] bg-white disabled:opacity-50"
-        >
-          Save & Add Another
-        </button>
+        <button disabled={!canSave} onClick={handleSave} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">{initialData ? "Update" : "Save"}</button>
       </div>
     </div>
   )
