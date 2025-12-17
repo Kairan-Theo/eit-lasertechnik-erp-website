@@ -66,8 +66,16 @@ function useQuotationState() {
     clone.removeAttribute("aria-hidden")
     document.body.appendChild(clone)
     try {
-      const mod = await import("html2pdf.js")
-      const lib = mod && (mod.default || mod)
+      const loadLib = () =>
+        new Promise((resolve) => {
+          if (window.html2pdf) return resolve(window.html2pdf)
+          const s = document.createElement("script")
+          s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"
+          s.onload = () => resolve(window.html2pdf)
+          s.onerror = () => resolve(null)
+          document.head.appendChild(s)
+        })
+      const lib = await loadLib()
       if (typeof lib === "function") {
         await lib().set(opt).from(clone).save()
       } else {
