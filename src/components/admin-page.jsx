@@ -201,7 +201,7 @@ function ProductSearch() {
             <span className="font-semibold">{p.name}</span> <span className="text-gray-500">({p.sku})</span>
           </li>
         ))}
-        {!results.length && <li className="py-2 text-sm text-gray-500">No products found</li>}
+        {!results.length && <li className="py-2 text-sm text-gray-500">No components found</li>}
       </ul>
     </div>
   )
