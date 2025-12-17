@@ -118,38 +118,24 @@ function useInvoiceState() {
   const exportPdf = async () => {
     const el = document.getElementById("invoice-document")
     if (!el) return
-    const tryLoad = (src) =>
-      new Promise((resolve, reject) => {
-        if (window.html2pdf) return resolve()
-        const s = document.createElement("script")
-        s.src = src
-        s.onload = () => resolve()
-        s.onerror = () => reject()
-        document.head.appendChild(s)
-      })
-    try {
-      await tryLoad("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js")
-    } catch {
-      try {
-        await tryLoad("https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js")
-      } catch {
-        try {
-          await tryLoad("https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js")
-        } catch {
-          window.print()
-          return
-        }
-      }
-    }
-    const opt = { margin: 10, filename: `Invoice_${details.number}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }
+    const opt = { margin: 10, filename: `Invoice_${details.number}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }
     const clone = el.cloneNode(true)
     clone.style.position = "fixed"
     clone.style.left = "-10000px"
     clone.style.top = "0"
     clone.style.display = "block"
+    clone.style.background = "#ffffff"
+    clone.classList.remove("hidden")
+    clone.removeAttribute("aria-hidden")
     document.body.appendChild(clone)
     try {
-      await window.html2pdf().set(opt).from(clone).save()
+      const mod = await import("html2pdf.js")
+      const lib = mod && (mod.default || mod)
+      if (typeof lib === "function") {
+        await lib().set(opt).from(clone).save()
+      } else {
+        window.print()
+      }
     } finally {
       document.body.removeChild(clone)
     }

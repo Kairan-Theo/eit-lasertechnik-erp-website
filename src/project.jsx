@@ -1,6 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 function usePM() {
@@ -183,6 +184,8 @@ function PMPage() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <PMPage />
+    <LanguageProvider>
+      <PMPage />
+    </LanguageProvider>
   </React.StrictMode>,
 )

@@ -2,6 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import Footer from "./components/footer.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 function ProductsPage() {
@@ -91,7 +92,9 @@ function ProductsPage() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ProductsPage />
+    <LanguageProvider>
+      <ProductsPage />
+    </LanguageProvider>
   </React.StrictMode>,
 )
 

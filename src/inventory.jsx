@@ -1,5 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
+import Navigation from "./components/navigation.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 function useInventory() {
@@ -843,6 +845,8 @@ function InventoryLayout() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <InventoryLayout />
+    <LanguageProvider>
+      <InventoryLayout />
+    </LanguageProvider>
   </React.StrictMode>,
 )

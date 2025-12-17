@@ -1,6 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 function SignupPage() {
