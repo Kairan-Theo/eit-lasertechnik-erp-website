@@ -129,8 +129,16 @@ function useInvoiceState() {
     clone.removeAttribute("aria-hidden")
     document.body.appendChild(clone)
     try {
-      const mod = await import("html2pdf.js")
-      const lib = mod && (mod.default || mod)
+      const loadLib = () =>
+        new Promise((resolve) => {
+          if (window.html2pdf) return resolve(window.html2pdf)
+          const s = document.createElement("script")
+          s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"
+          s.onload = () => resolve(window.html2pdf)
+          s.onerror = () => resolve(null)
+          document.head.appendChild(s)
+        })
+      const lib = await loadLib()
       if (typeof lib === "function") {
         await lib().set(opt).from(clone).save()
       } else {
@@ -323,11 +331,11 @@ function InvoicePage() {
               <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Invoice</h1>
                 <div className="flex gap-2">
-                <button type="button" onClick={inv.confirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
-                <button type="button" onClick={inv.exportPdf} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
-                <button type="button" onClick={inv.print} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Print</button>
-                <button type="button" onClick={() => openConfirm("1")} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 1</button>
-                <button type="button" onClick={() => openConfirm("2")} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 2</button>
+                <button type="button" onClick={inv.confirm} className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
+                <button type="button" onClick={inv.exportPdf} className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
+                <button type="button" onClick={inv.print} className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Print</button>
+                <button type="button" onClick={() => openConfirm("1")} className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 1</button>
+                <button type="button" onClick={() => openConfirm("2")} className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 2</button>
               </div>
             </div>
           </div>
@@ -353,8 +361,8 @@ function InvoicePage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:hidden">
-            <div className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 gap-6 print:hidden">
+            <div className="space-y-6">
               <div className="bg-white rounded-xl shadow-sm border p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Customer</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -468,12 +476,12 @@ function InvoicePage() {
 
               <div className="space-y-6"></div>
 
-            <div className="mt-6 print:hidden flex justify-start">
-              <button type="button" onClick={inv.confirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
+            <div className="mt-2 print:hidden flex justify-end">
+              <button type="button" onClick={inv.confirm} className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
             </div>
             </div>
 
-            <div className="lg:col-span-1 space-y-6">
+            <div className="space-y-6">
               <div className="bg-white rounded-xl shadow-sm border p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Invoice Details</h2>
                 <div className="grid grid-cols-1 gap-4">
