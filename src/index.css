@@ -131,6 +131,9 @@
   .btn-outline {
     @apply px-3 py-2 rounded-md border border-gray-300 bg-white hover:bg-gray-50 transition;
   }
+  .btn-pill {
+    @apply px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white;
+  }
   .card {
     @apply bg-white rounded-xl shadow-sm border hover:shadow-md transition;
   }
