@@ -225,7 +225,6 @@ function QuotationPage() {
               <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Quotation</h1>
                 <div className="flex gap-2">
-                  <button type="button" onClick={q.exportPdf} className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Download</button>
                   <button type="button" onClick={q.print} className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
                   <button
                     type="button"
