@@ -1,23 +1,54 @@
+import React from "react"
+import { Factory, Package, Users, Settings, Briefcase, ArrowRight } from "lucide-react"
+
 const apps = [
-  { name: "Manufacturing", color: "bg-orange-500", icon: "🏭", href: "/manufacturing.html" },
-  { name: "Inventory", color: "bg-green-500", icon: "📦", href: "/inventory.html" },
-  { name: "CRM", color: "bg-red-500", icon: "👥", href: "/crm.html" },
-  { name: "Admin", color: "bg-pink-500", icon: "👔", href: "/admin.html" },
-  { name: "Project Management", color: "bg-lime-500", icon: "🎯", href: "/project.html" },
+  {
+    name: "Manufacturing",
+    description: "Production planning, work orders, and shop floor control.",
+    icon: Factory,
+    color: "text-orange-600",
+    bgColor: "bg-orange-50",
+    href: "/manufacturing.html"
+  },
+  {
+    name: "Inventory",
+    description: "Real-time stock tracking, warehousing, and logistics.",
+    icon: Package,
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-50",
+    href: "/inventory.html"
+  },
+  {
+    name: "CRM",
+    description: "Customer relationship management and sales pipeline.",
+    icon: Users,
+    color: "text-blue-600",
+    bgColor: "bg-blue-50",
+    href: "/crm.html"
+  },
+  {
+    name: "Project Management",
+    description: "Task tracking, timelines, and resource allocation.",
+    icon: Briefcase,
+    color: "text-purple-600",
+    bgColor: "bg-purple-50",
+    href: "/project.html"
+  },
+  {
+    name: "Admin",
+    description: "System configuration, user roles, and security settings.",
+    icon: Settings,
+    color: "text-slate-600",
+    bgColor: "bg-slate-50",
+    href: "/admin.html"
+  },
 ]
 
 export default function AppGrid() {
   return (
-    <section className="w-full bg-gradient-to-b from-gray-50 to-white py-20 px-4 sm:px-6 lg:px-8">
+    <section className="w-full bg-gray-50/50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">All Your Business Needs in One Platform</h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Integrated ERP apps designed specifically for manufacturing operations
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {apps.map((app) => (
             <button
               key={app.name}
@@ -25,16 +56,22 @@ export default function AppGrid() {
               onClick={() => {
                 if (app.href) window.location.href = app.href
               }}
-              className="card p-6 hover:-translate-y-1 transition-all duration-300 cursor-pointer group text-left"
+              className="group flex flex-col p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-300 text-left h-full"
             >
-              <div className="flex flex-col items-center gap-4">
-                <div
-                  className={`${app.color} w-16 h-16 rounded-lg flex items-center justify-center text-3xl group-hover:scale-110 transition-transform`}
-                >
-                  {app.icon}
+              <div className="flex items-start justify-between w-full mb-4">
+                <div className={`p-3 rounded-lg ${app.bgColor} ${app.color} transition-colors group-hover:bg-white group-hover:ring-1 group-hover:ring-gray-200`}>
+                  <app.icon className="w-6 h-6" strokeWidth={1.5} />
                 </div>
-                <p className="text-center font-semibold text-gray-900 text-sm">{app.name}</p>
+                <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors -mr-1" />
               </div>
+              
+              <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                {app.name}
+              </h3>
+              
+              <p className="text-sm text-gray-500 leading-relaxed">
+                {app.description}
+              </p>
             </button>
           ))}
         </div>
