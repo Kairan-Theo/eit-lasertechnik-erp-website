@@ -2,6 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import Footer from "./components/footer.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 const initialPipeline = {
@@ -805,6 +806,8 @@ function CRMPage() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <CRMPage />
+    <LanguageProvider>
+      <CRMPage />
+    </LanguageProvider>
   </React.StrictMode>,
 )

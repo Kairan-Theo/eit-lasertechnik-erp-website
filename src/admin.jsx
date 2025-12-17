@@ -2,6 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import AdminPage from "./components/admin-page.jsx"
+import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 function AdminRoot() {
@@ -30,6 +31,8 @@ function AdminRoot() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AdminRoot />
+    <LanguageProvider>
+      <AdminRoot />
+    </LanguageProvider>
   </React.StrictMode>,
 )
