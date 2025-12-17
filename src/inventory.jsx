@@ -558,15 +558,21 @@ function AddItemForm({ onCancel, onSave }) {
   }
   const [f, setF] = React.useState(initial)
   const [adv, setAdv] = React.useState(false)
-  const canSave = Boolean(f.sku && f.name)
+  const canSave = Boolean(f.name)
   const set = (k, v) => setF((prev) => ({ ...prev, [k]: v }))
+
+  const handleSave = () => {
+    const payload = {
+      ...f,
+      sku: f.sku || `SKU-${Date.now()}`,
+      serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : []
+    }
+    onSave(payload)
+  }
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm text-gray-700 mb-1">Reference (SKU)</label>
-          <input value={f.sku} onChange={(e) => set("sku", e.target.value)} required placeholder="e.g. ABC-001" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Product name</label>
           <input value={f.name} onChange={(e) => set("name", e.target.value)} required placeholder="e.g. Laser Welding Machine" className="w-full rounded-md border border-gray-300 px-3 py-2" />
@@ -578,13 +584,6 @@ function AddItemForm({ onCancel, onSave }) {
         <div>
           <label className="block text-sm text-gray-700 mb-1">Price</label>
           <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} placeholder="e.g. 50000" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        </div>
-        <div className="md:col-span-2">
-          <label className="block text-sm text-gray-700 mb-1">Warehouse</label>
-          <select value={f.warehouse} onChange={(e) => set("warehouse", e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
-            <option>Main</option>
-            <option>Secondary</option>
-          </select>
         </div>
       </div>
       <div>
@@ -625,17 +624,7 @@ function AddItemForm({ onCancel, onSave }) {
       )}
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button disabled={!canSave} onClick={() => onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Save</button>
-        <button
-          onClick={() => {
-            onSave({ ...f, serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : [] }, true)
-            setF(initial)
-          }}
-          disabled={!canSave}
-          className="px-3 py-2 rounded-md border border-[#2D4485] text-[#2D4485] bg-white disabled:opacity-50"
-        >
-          Save & Add Another
-        </button>
+        <button disabled={!canSave} onClick={handleSave} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Save</button>
       </div>
     </div>
   )
