@@ -324,7 +324,7 @@ function InvoicePage() {
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Invoice</h1>
                 <div className="flex gap-2">
                 <button type="button" onClick={inv.confirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
-                <button type="button" onClick={inv.exportPdf} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Download PDF</button>
+                <button type="button" onClick={inv.exportPdf} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
                 <button type="button" onClick={inv.print} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Print</button>
                 <button type="button" onClick={() => openConfirm("1")} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 1</button>
                 <button type="button" onClick={() => openConfirm("2")} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Send Addr 2</button>

@@ -300,7 +300,6 @@ function QuotationPage() {
                 <div className="grid grid-cols-1 gap-4">
                   <input value={q.details.number} onChange={(e) => q.setDetails({ ...q.details, number: e.target.value })} placeholder="Quotation number" className="w-full rounded-md border border-gray-300 px-3 py-2" />
                   <input type="date" value={q.details.date} onChange={(e) => q.setDetails({ ...q.details, date: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-                  <input type="date" value={q.details.expires} onChange={(e) => q.setDetails({ ...q.details, expires: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2" />
                   <select value={q.details.currency} onChange={(e) => q.setDetails({ ...q.details, currency: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
                     <option value="THB">THB</option>
                     <option value="USD">USD</option>
@@ -350,7 +349,7 @@ function QuotationPage() {
                     </svg>
                   </button>
                   <div className="flex items-center justify-end gap-2">
-                    <button onClick={q.exportPdf} className="px-3 py-1.5 rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Download</button>
+                    <button onClick={q.exportPdf} className="px-3 py-1.5 rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Export PDF</button>
                     <button onClick={q.print} className="px-3 py-1.5 rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Print</button>
                     <button onClick={sendAndSave} className="px-3 py-1.5 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]">Send</button>
                   </div>

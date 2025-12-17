@@ -1,5 +1,6 @@
 "use client"
 import React from "react"
+import { User, LogOut, ChevronDown, Lock, Edit } from "lucide-react"
 
 export default function Navigation() {
   const handleLogoClick = () => {
@@ -8,6 +9,41 @@ export default function Navigation() {
 
   const handleNavClick = (e) => {
     e.preventDefault()
+  }
+
+  const [user, setUser] = React.useState(null)
+  const [isDropdownOpen, setIsDropdownOpen] = React.useState(false)
+  const dropdownRef = React.useRef(null)
+
+  React.useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem("currentUser")
+      if (storedUser) {
+        setUser(JSON.parse(storedUser))
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem("isAuthenticated")
+      localStorage.removeItem("userRole")
+      localStorage.removeItem("currentUser")
+    } catch {}
+    window.location.href = "/"
   }
 
   const [dueCount, setDueCount] = React.useState(0)
@@ -83,12 +119,70 @@ export default function Navigation() {
                 </span>
               )}
             </button>
-            <a href="/login.html" className="hidden sm:block rounded-full px-4 py-2 bg-white/10 hover:bg-white/20 transition">
-              Log in
-            </a>
-            <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-5 py-2 font-semibold shadow-sm transition hover:-translate-y-0.5">
-              Sign up
-            </a>
+            
+            {user ? (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="flex items-center gap-2 hover:bg-white/10 rounded-full pl-1 pr-3 py-1 transition"
+                >
+                  <img
+                    src="/jn.jpg"
+                    alt="Profile"
+                    className="w-8 h-8 rounded-full object-cover bg-white shadow-sm"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  <div className="w-8 h-8 rounded-full bg-white text-[#2D4485] flex items-center justify-center font-bold text-sm shadow-sm hidden">
+                    {user.email ? user.email.charAt(0).toUpperCase() : "U"}
+                  </div>
+                  <div className="hidden sm:block text-left">
+                    <p className="text-sm font-medium leading-none max-w-[100px] truncate">{user.email ? user.email.split('@')[0] : "User"}</p>
+                    <p className="text-[10px] text-gray-200 leading-none max-w-[100px] truncate">{user.email}</p>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {isDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg py-2 border border-gray-100 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                    <div className="px-4 py-3 border-b border-gray-100 mb-1">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{user.email ? user.email.split('@')[0] : "User"}</p>
+                      <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                    </div>
+                    
+                    <a href="#" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                      <Edit className="w-4 h-4" />
+                      Edit Profile
+                    </a>
+                    <a href="#" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                      <Lock className="w-4 h-4" />
+                      Change Password
+                    </a>
+                    
+                    <div className="h-px bg-gray-100 my-1" />
+                    
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Log out
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <a href="/login.html" className="hidden sm:block rounded-full px-4 py-2 bg-white/10 hover:bg-white/20 transition">
+                  Log in
+                </a>
+                <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-5 py-2 font-semibold shadow-sm transition hover:-translate-y-0.5">
+                  Sign up
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>
