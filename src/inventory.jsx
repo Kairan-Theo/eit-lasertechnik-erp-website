@@ -30,12 +30,24 @@ function useInventory() {
       localStorage.setItem("inventoryProducts", JSON.stringify(next))
     } catch {}
   }
+  const parseWhIvNum = (s) => {
+    const m = /^WH\/IV\/(\d+)$/.exec(String(s || ""))
+    return m ? parseInt(m[1], 10) : null
+  }
+  const nextWhIvNumber = (arr = items) => {
+    let max = 0
+    for (const it of arr) {
+      const n = parseWhIvNum(it.sku)
+      if (Number.isFinite(n) && n > max) max = n
+    }
+    return max + 1
+  }
   React.useEffect(() => {
     try {
       const data = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
       if (Array.isArray(data) && data.length) {
         const norm = data.map((p) => ({
-          sku: p.sku,
+          sku: String(p.sku || ""),
           name: p.name,
           stockQty: Number(p.stockQty || 0),
           price: Number(p.price || 0),
@@ -62,13 +74,20 @@ function useInventory() {
           serials: Array.isArray(p.serials) ? p.serials : [],
           manufactureDate: p.manufactureDate || "",
         }))
-        setItems(norm)
+        let max = nextWhIvNumber(norm)
+        const fixed = norm.map((it) => {
+          const valid = /^WH\/IV\/\d+$/.test(String(it.sku || ""))
+          const next = valid ? it : { ...it, sku: `WH/IV/${max++}` }
+          return next
+        })
+        setItems(fixed)
+        try { localStorage.setItem("inventoryProducts", JSON.stringify(fixed)) } catch {}
       } else {
         setItems([
-          { sku: "SE9023", name: "Simatic S7-1500", stockQty: 15000, price: 120000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: 1, warehouse: "Main", bin: "A-01-01", lot: "L210201", expiry: "2023-12-31", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
-          { sku: "SE9023", name: "Simatic S7-1500", stockQty: 15000, price: 940000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: 1, warehouse: "Main", bin: "A-01-02", lot: "L210202", expiry: "2024-03-31", reserved: 500, incomingQty: 100, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
-          { sku: "SE9023", name: "Simatic S7-1500", stockQty: 15000, price: 290000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: -1, warehouse: "Secondary", bin: "B-02-01", lot: "L210203", expiry: "", reserved: 0, incomingQty: 0, outgoingQty: 50, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
-          { sku: "SE9023", name: "Simatic S7-1500", stockQty: 15000, price: 420000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: 1, warehouse: "Main", bin: "A-02-01", lot: "L210204", expiry: "2025-01-15", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
+          { sku: "WH/IV/1", name: "Simatic S7-1500", stockQty: 15000, price: 120000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: 1, warehouse: "Main", bin: "A-01-01", lot: "L210201", expiry: "2023-12-31", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
+          { sku: "WH/IV/2", name: "Simatic S7-1500", stockQty: 15000, price: 940000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: 1, warehouse: "Main", bin: "A-01-02", lot: "L210202", expiry: "2024-03-31", reserved: 500, incomingQty: 100, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
+          { sku: "WH/IV/3", name: "Simatic S7-1500", stockQty: 15000, price: 290000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: -1, warehouse: "Secondary", bin: "B-02-01", lot: "L210203", expiry: "", reserved: 0, incomingQty: 0, outgoingQty: 50, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
+          { sku: "WH/IV/4", name: "Simatic S7-1500", stockQty: 15000, price: 420000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: 1, warehouse: "Main", bin: "A-02-01", lot: "L210204", expiry: "2025-01-15", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
         ])
       }
     } catch {
@@ -105,9 +124,13 @@ function useInventory() {
   const prevPage = () => setPage((p) => Math.max(1, p - 1))
   const nextPage = () => setPage((p) => Math.min(totalPages, p + 1))
   const addItem = (payload, keepOpen = false) => {
+    const s = String(payload.sku || "")
+    const valid = /^WH\/IV\/\d+$/.test(s)
+    const assignedSku = valid ? s : `WH/IV/${nextWhIvNumber()}`
     const next = [
       {
         ...payload,
+        sku: assignedSku,
         stockQty: Number(payload.stockQty || 0),
         price: Number(payload.price || 0),
         reserved: Number(payload.reserved || 0),
@@ -123,28 +146,6 @@ function useInventory() {
     ]
     saveItems(next)
     if (!keepOpen) setShowAdd(false)
-  }
-  const updateItem = (oldItem, payload) => {
-    const next = items.map((it) => {
-      // Match by reference or composite key
-      if (it === oldItem || (it.sku === oldItem.sku && (it.warehouse || "Main") === (oldItem.warehouse || "Main") && (it.bin || "A-01-01") === (oldItem.bin || "A-01-01") && (it.lot || "") === (oldItem.lot || ""))) {
-        return {
-          ...it,
-          ...payload,
-          stockQty: Number(payload.stockQty || 0),
-          price: Number(payload.price || 0),
-          reserved: Number(payload.reserved || 0),
-          incomingQty: Number(payload.incomingQty || 0),
-          outgoingQty: Number(payload.outgoingQty || 0),
-          minStock: Number(payload.minStock || 0),
-          reorderQty: Number(payload.reorderQty || 0),
-          updatedAt: new Date().toISOString().slice(0, 10),
-        }
-      }
-      return it
-    })
-    saveItems(next)
-    setShowEdit(null)
   }
   const logMove = (entry) => {
     try {
@@ -239,6 +240,7 @@ function useInventory() {
       const lines = text.split("\n")
       const headers = lines[0].split(",").map((h) => h.trim())
       const newItems = []
+      let max = nextWhIvNumber(items)
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].split(",")
         if (line.length !== headers.length) continue
@@ -246,8 +248,12 @@ function useInventory() {
         headers.forEach((h, j) => {
           item[h] = line[j].trim()
         })
+        const s = String(item.sku || "")
+        const valid = /^WH\/IV\/\d+$/.test(s)
+        const finalSku = valid ? s : `WH/IV/${max++}`
         newItems.push({
           ...item,
+          sku: finalSku,
           stockQty: Number(item.stockQty || 0),
           price: Number(item.price || 0),
           reserved: Number(item.reserved || 0),
@@ -363,7 +369,7 @@ function InventoryTable({ inv }) {
             <thead>
               <tr className="text-[#2D4485] bg-gray-50">
                 <th className="p-3 text-left">Item Photo</th>
-                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>SKU</th>
+                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>Reference</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
@@ -467,7 +473,10 @@ function InventoryTable({ inv }) {
       
       {inv.showAdd && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowAdd(false)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-wh {
+           i    te rounded-xl shadow-lg w-full max
+                inv.setShowEdit(null)
+              }-w-lg p-6" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-4 text-gray-900">Add Inventory Item</div>
             <AddItemForm onCancel={() => inv.setShowAdd(false)} onSave={inv.addItem} />
           </div>
@@ -547,8 +556,8 @@ function HistoryView({ inv }) {
 }
 
 function AddItemForm({ onCancel, onSave, initialData }) {
-  const defaultInitial = {
-    sku: "",
+  const initial = {
+    sku: "WH/IV",
     name: "",
     photo: "",
     stockQty: 0,
@@ -573,8 +582,7 @@ function AddItemForm({ onCancel, onSave, initialData }) {
     serials: "",
     manufactureDate: "",
   }
-  const [f, setF] = React.useState(initialData ? { ...defaultInitial, ...initialData } : defaultInitial)
-  const [adv, setAdv] = React.useState(Boolean(initialData))
+  const [f, setF] = React.useState(initialData || initial)
   const canSave = Boolean(f.name)
   const set = (k, v) => setF((prev) => ({ ...prev, [k]: v }))
 
@@ -582,7 +590,7 @@ function AddItemForm({ onCancel, onSave, initialData }) {
     const payload = {
       ...f,
       sku: f.sku || `SKU-${Date.now()}`,
-      serials: f.serials ? f.serials.split(",").map((s) => s.trim()).filter(Boolean) : []
+      serials: Array.isArray(f.serials) ? f.serials : []
     }
     onSave(payload)
   }
@@ -593,10 +601,6 @@ function AddItemForm({ onCancel, onSave, initialData }) {
         <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{f.sku}</span></div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm text-gray-700 mb-1">Photo URL</label>
-          <input value={f.photo || ""} onChange={(e) => set("photo", e.target.value)} placeholder="/eit-icon.png" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Product name</label>
           <input value={f.name} onChange={(e) => set("name", e.target.value)} required placeholder="e.g. Laser Welding Machine" className="w-full rounded-md border border-gray-300 px-3 py-2" />
@@ -610,45 +614,9 @@ function AddItemForm({ onCancel, onSave, initialData }) {
           <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} placeholder="e.g. 50000" className="w-full rounded-md border border-gray-300 px-3 py-2" />
         </div>
       </div>
-      <div>
-        <button onClick={() => setAdv((v) => !v)} className="text-[#2D4485] text-sm">
-          {adv ? "Hide advanced" : "Show advanced"}
-        </button>
-      </div>
-      {adv && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input value={f.bin} onChange={(e) => set("bin", e.target.value)} placeholder="Bin" className="rounded-md border border-gray-300 px-3 py-2" />
-          <input value={f.lot} onChange={(e) => set("lot", e.target.value)} placeholder="Lot" className="rounded-md border border-gray-300 px-3 py-2" />
-          <input type="date" value={f.expiry} onChange={(e) => set("expiry", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2" />
-          <input value={f.barcode} onChange={(e) => set("barcode", e.target.value)} placeholder="Barcode" className="rounded-md border border-gray-300 px-3 py-2" />
-          <select value={f.category} onChange={(e) => set("category", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-            <option>Raw Material</option>
-            <option>Finished Goods</option>
-            <option>Service</option>
-          </select>
-          <input value={f.uom} onChange={(e) => set("uom", e.target.value)} placeholder="UOM (pcs, kg, m)" className="rounded-md border border-gray-300 px-3 py-2" />
-          <input value={f.brand} onChange={(e) => set("brand", e.target.value)} placeholder="Brand" className="rounded-md border border-gray-300 px-3 py-2" />
-          <input value={f.model} onChange={(e) => set("model", e.target.value)} placeholder="Model" className="rounded-md border border-gray-300 px-3 py-2" />
-          <select value={f.status} onChange={(e) => set("status", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-            <option>Active</option>
-            <option>Inactive</option>
-          </select>
-          <input type="number" value={f.minStock} onChange={(e) => set("minStock", Number(e.target.value))} placeholder="Minimum stock" className="rounded-md border border-gray-300 px-3 py-2" />
-          <input type="number" value={f.reorderQty} onChange={(e) => set("reorderQty", Number(e.target.value))} placeholder="Reorder qty" className="rounded-md border border-gray-300 px-3 py-2" />
-          <select value={f.valuationMethod} onChange={(e) => set("valuationMethod", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-            <option>FIFO</option>
-            <option>LIFO</option>
-            <option>Weighted Average</option>
-            <option>Standard Cost</option>
-          </select>
-          <input type="date" value={f.manufactureDate} onChange={(e) => set("manufactureDate", e.target.value)} className="rounded-md border border-gray-300 px-3 py-2" />
-          <textarea value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="Description" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2"></textarea>
-          <input value={f.serials} onChange={(e) => set("serials", e.target.value)} placeholder="Serials (comma-separated)" className="rounded-md border border-gray-300 px-3 py-2 md:col-span-2" />
-        </div>
-      )}
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button disabled={!canSave} onClick={handleSave} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">{initialData ? "Update" : "Save"}</button>
+        <button disabled={!canSave} onClick={() => onSave({ ...f, serials: [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Save</button>
       </div>
     </div>
   )
@@ -839,16 +807,16 @@ function InventoryPage() {
                 Add Item
               </button>
               <button
-                onClick={inv.exportCsv}
-                className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-              >
-                Export
-              </button>
-              <button
                 onClick={() => inv.setShowImport(true)}
                 className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
               >
                 Import
+              </button>
+              <button
+                onClick={inv.exportCsv}
+                className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              >
+                Export
               </button>
             </div>
             <div className="flex items-center gap-3">
