@@ -370,7 +370,7 @@ function QuotationPage() {
                 </div>
               </div>
               <div className="flex justify-end mt-2 print:hidden">
-                <button type="button" onClick={() => setPreviewOpen(true)} className="px-4 py-2 text-sm rounded-full bg-[#2D4485] text-white hover:bg-[#3D56A6]">Confirm</button>
+                <button type="button" onClick={() => setPreviewOpen(true)} className="btn-pill">Confirm</button>
               </div>
             </div>
 
