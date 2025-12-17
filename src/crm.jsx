@@ -33,6 +33,9 @@ function CRMPage() {
   const [detailContact, setDetailContact] = React.useState("")
   const [detailEmail, setDetailEmail] = React.useState("")
   const [detailPhone, setDetailPhone] = React.useState("")
+  const [openPriority, setOpenPriority] = React.useState(null) // { stageIndex, cardIndex }
+  const priorityClass = (p) => (p==='high' ? 'bg-red-100 text-red-700' : p==='medium' ? 'bg-orange-100 text-orange-700' : p==='low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
+  const priorityLabel = (p) => (p && p!=='none' ? p.charAt(0).toUpperCase()+p.slice(1) : 'Set Priority')
   const defaultNewDeal = {
     company: "",
     contact: "",
@@ -220,6 +223,7 @@ function CRMPage() {
       return { ...s, deals }
     }))
     setOpenCardMenu(null)
+    setOpenPriority(null)
   }
   const editCard = (stageIndex, cardIndex) => {
     const s = stages[stageIndex]
@@ -351,27 +355,26 @@ function CRMPage() {
                       {d.amount !== undefined && (
                         <div className="text-sm text-gray-700 mt-1 flex items-center justify-between">
                           <span>{d.amount.toLocaleString()} {d.currency}</span>
-                          <button
-                            className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-100"
-                            title={d.priority && d.priority!=='none' ? `Priority: ${d.priority[0].toUpperCase()+d.priority.slice(1)}` : "Priority: None"}
-                          >
-                            {d.priority === "high" && (
-                              <>
-                                <span title="Priority: High" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
-                                <span title="Priority: High" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
-                                <span title="Priority: High" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
-                              </>
+                          <div className="relative inline-block">
+                            <button
+                              className={`${priorityClass(d.priority)} px-2 py-1 rounded-full text-xs`}
+                              onClick={() => {
+                                const open = openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex
+                                setOpenPriority(open ? null : { stageIndex, cardIndex })
+                              }}
+                              title="Change priority"
+                            >
+                              {priorityLabel(d.priority)}
+                            </button>
+                            {openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex && (
+                              <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-md z-20">
+                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "low")}>Low</button>
+                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "medium")}>Medium</button>
+                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "high")}>High</button>
+                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "none")}>None</button>
+                              </div>
                             )}
-                            {d.priority === "medium" && (
-                              <>
-                                <span title="Priority: Medium" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
-                                <span title="Priority: Medium" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
-                              </>
-                            )}
-                            {d.priority === "low" && (
-                              <span title="Priority: Low" className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600"></span>
-                            )}
-                          </button>
+                          </div>
                         </div>
                       )}
                       <div className="mt-1 flex items-start gap-2">
@@ -422,20 +425,6 @@ function CRMPage() {
                         </button>
                         {openCardMenu && openCardMenu.stageIndex === stageIndex && openCardMenu.cardIndex === cardIndex && (
                           <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-md z-20">
-                            <div className="px-3 py-2 text-xs text-gray-500">Priority</div>
-                            <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "low")}>
-                              • Low
-                            </button>
-                            <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "medium")}>
-                              •• Medium
-                            </button>
-                            <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "high")}>
-                              ••• High
-                            </button>
-                            <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "none")}>
-                              ✕ None
-                            </button>
-                            <div className="border-t border-gray-200 my-1" />
                             <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => editCard(stageIndex, cardIndex)}>
                               Edit
                             </button>
