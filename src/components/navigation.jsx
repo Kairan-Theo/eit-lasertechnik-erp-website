@@ -1,6 +1,17 @@
 "use client"
 import React from "react"
-import { User, LogOut, ChevronDown, Lock, Edit } from "lucide-react"
+import { User, LogOut, ChevronDown, Lock, Edit, Bell } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog"
+import { Input } from "../../components/ui/input"
+import { Label } from "../../components/ui/label"
+import { Button } from "../../components/ui/button"
 
 export default function Navigation() {
   const handleLogoClick = () => {
@@ -14,6 +25,54 @@ export default function Navigation() {
   const [user, setUser] = React.useState(null)
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false)
   const dropdownRef = React.useRef(null)
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false)
+
+  const [isEditProfileOpen, setIsEditProfileOpen] = React.useState(false)
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = React.useState(false)
+  
+  // Profile Form State
+  const [profileName, setProfileName] = React.useState("")
+  const [profileCompany, setProfileCompany] = React.useState("")
+  const [profileEmail, setProfileEmail] = React.useState("")
+
+  // Password Form State
+  const [currentPassword, setCurrentPassword] = React.useState("")
+  const [newPassword, setNewPassword] = React.useState("")
+  const [confirmPassword, setConfirmPassword] = React.useState("")
+
+  React.useEffect(() => {
+    if (user) {
+      setProfileName(user.name || "")
+      setProfileCompany(user.company || "")
+      setProfileEmail(user.email || "")
+    }
+  }, [user])
+
+  const handleEditProfileSubmit = (e) => {
+    e.preventDefault()
+    const updatedUser = { ...user, name: profileName, company: profileCompany, email: profileEmail }
+    setUser(updatedUser)
+    localStorage.setItem("currentUser", JSON.stringify(updatedUser))
+    setIsEditProfileOpen(false)
+  }
+
+  const handleChangePasswordSubmit = (e) => {
+    e.preventDefault()
+    if (!currentPassword) {
+      alert("Please enter your current password")
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      alert("Passwords do not match")
+      return
+    }
+    // Simulate password change
+    setIsChangePasswordOpen(false)
+    setCurrentPassword("")
+    setNewPassword("")
+    setConfirmPassword("")
+    alert("Password changed successfully")
+  }
 
   React.useEffect(() => {
     try {
@@ -21,6 +80,8 @@ export default function Navigation() {
       if (storedUser) {
         setUser(JSON.parse(storedUser))
       }
+      const auth = localStorage.getItem("isAuthenticated")
+      setIsAuthenticated(auth === "true")
     } catch (e) {
       // ignore
     }
@@ -47,7 +108,13 @@ export default function Navigation() {
   }
 
   const [dueCount, setDueCount] = React.useState(0)
+  const [notificationsCount, setNotificationsCount] = React.useState(0)
   React.useEffect(() => {
+    if (!isAuthenticated) {
+      setDueCount(0)
+      setNotificationsCount(0)
+      return
+    }
     const compute = () => {
       try {
         const keys = Object.keys(localStorage).filter((k) => k.startsWith("history:"))
@@ -67,14 +134,29 @@ export default function Navigation() {
           })
         })
         setDueCount(count)
+        let unread = 0
+        try {
+          const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+          if (Array.isArray(list)) {
+            unread = list.reduce((acc, n) => acc + (n && n.unread !== false ? 1 : 0), 0)
+          }
+        } catch {}
+        let total = count + unread
+        if (total === 0 && !localStorage.getItem("hasShownNotifDot")) {
+          total = 1
+          localStorage.setItem("hasShownNotifDot", "true")
+        }
+        setNotificationsCount(total)
       } catch {
         setDueCount(0)
+        setNotificationsCount(localStorage.getItem("hasShownNotifDot") ? 0 : 1)
+        localStorage.setItem("hasShownNotifDot", "true")
       }
     }
     compute()
     const id = setInterval(compute, 60 * 60 * 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [isAuthenticated])
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white shadow-md">
@@ -89,36 +171,32 @@ export default function Navigation() {
 
           <div className="hidden md:flex items-center gap-8">
             <a href="/apps.html" className="nav-link text-white hover:text-gray-200 transition">
-              App
+              Apps
             </a>
-            <a href="#" onClick={handleNavClick} className="nav-link text-white hover:text-gray-200 transition">
-              Industry
+            <a href="/admin.html" className="nav-link text-white hover:text-gray-200 transition">
+              Admin
             </a>
-            <a href="#" onClick={handleNavClick} className="nav-link text-white hover:text-gray-200 transition">
-              Community
-            </a>
-            <a href="#" onClick={handleNavClick} className="nav-link text-white hover:text-gray-200 transition">
-              Pricing
-            </a>
-            <a href="#" onClick={handleNavClick} className="nav-link text-white hover:text-gray-200 transition">
-              Help
+            <a href="mailto:it-support@eit.local" className="nav-link text-white hover:text-gray-200 transition">
+              Support
             </a>
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => (window.location.href = "/admin.html?view=notifications")}
-              className="relative inline-flex items-center justify-center w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 transition"
-              aria-label="Due notifications"
-              title={dueCount > 0 ? `${dueCount} upcoming payment due` : "No upcoming payments"}
-            >
-              <span className="text-lg">🔔</span>
-              {dueCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
-                  {dueCount}
-                </span>
-              )}
-            </button>
+            {isAuthenticated && (
+              <button
+                onClick={() => (window.location.href = "/admin.html?view=notifications")}
+                className="relative inline-flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition"
+                aria-label="Due notifications"
+                title={notificationsCount > 0 ? `${notificationsCount} notifications` : "No notifications"}
+              >
+                <Bell className="w-6 h-6" />
+                {notificationsCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] text-white font-bold ring-2 ring-[#2D4485]">
+                    {notificationsCount}
+                  </span>
+                )}
+              </button>
+            )}
             
             {user ? (
               <div className="relative" ref={dropdownRef}>
@@ -136,10 +214,12 @@ export default function Navigation() {
                     }}
                   />
                   <div className="w-8 h-8 rounded-full bg-white text-[#2D4485] flex items-center justify-center font-bold text-sm shadow-sm hidden">
-                    {user.email ? user.email.charAt(0).toUpperCase() : "U"}
+                    {user.name ? user.name.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : "U")}
                   </div>
                   <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium leading-none max-w-[100px] truncate">{user.email ? user.email.split('@')[0] : "User"}</p>
+                    <p className="text-sm font-medium leading-none max-w-[100px] truncate">
+                      {user.name || (user.email ? user.email.split('@')[0] : "User")}
+                    </p>
                     <p className="text-[10px] text-gray-200 leading-none max-w-[100px] truncate">{user.email}</p>
                   </div>
                   <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
@@ -148,18 +228,21 @@ export default function Navigation() {
                 {isDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg py-2 border border-gray-100 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
                     <div className="px-4 py-3 border-b border-gray-100 mb-1">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{user.email ? user.email.split('@')[0] : "User"}</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {user.name || (user.email ? user.email.split('@')[0] : "User")}
+                      </p>
                       <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                      {user.company && <p className="text-xs text-gray-400 truncate mt-0.5">{user.company}</p>}
                     </div>
                     
-                    <a href="#" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                    <button onClick={() => { setIsEditProfileOpen(true); setIsDropdownOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
                       <Edit className="w-4 h-4" />
                       Edit Profile
-                    </a>
-                    <a href="#" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                    </button>
+                    <button onClick={() => { setIsChangePasswordOpen(true); setIsDropdownOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
                       <Lock className="w-4 h-4" />
                       Change Password
-                    </a>
+                    </button>
                     
                     <div className="h-px bg-gray-100 my-1" />
                     
@@ -186,6 +269,112 @@ export default function Navigation() {
           </div>
         </div>
       </div>
+
+      <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Profile</DialogTitle>
+            <DialogDescription>
+              Make changes to your profile here. Click save when you're done.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditProfileSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="name"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="company" className="text-right">
+                  Company
+                </Label>
+                <Input
+                  id="company"
+                  value={profileCompany}
+                  onChange={(e) => setProfileCompany(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="email" className="text-right">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={profileEmail}
+                  onChange={(e) => setProfileEmail(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit">Save changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isChangePasswordOpen} onOpenChange={setIsChangePasswordOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+            <DialogDescription>
+              Enter your new password below.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleChangePasswordSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="current-password" className="text-right">
+                  Current
+                </Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="new-password" className="text-right">
+                  New Password
+                </Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="confirm-password" className="text-right">
+                  Confirm
+                </Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit">Change Password</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </nav>
   )
 }
