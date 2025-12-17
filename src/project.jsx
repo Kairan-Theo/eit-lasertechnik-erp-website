@@ -81,7 +81,20 @@ function PMPage() {
                 <div className="space-y-2">
                   {pm.projects.map((p) => (
                     <button key={p.id} onClick={() => pm.setSelectedId(p.id)} className={`w-full text-left px-3 py-2 rounded-md border ${pm.selectedId===p.id ? "border-[#2D4485] bg-[#2D4485]/5" : "border-gray-200 bg-white hover:bg-gray-50"}`}>
-                      <div className="font-semibold text-gray-900">{p.name}</div>
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold text-gray-900">{p.name}</div>
+                        <button
+                          className="text-xs px-2 py-0.5 rounded-md border border-gray-300 text-[#2D4485] bg-white hover:bg-gray-50"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const name = window.prompt("Edit project name", p.name)
+                            if (!name || !name.trim()) return
+                            pm.updateProject(p.id, { name: name.trim() })
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </div>
                       <div className="text-xs text-gray-600">{p.customer || "-"} • {p.status}</div>
                       <div className="text-xs text-gray-500">Due: {p.dueDate || "-"}</div>
                     </button>
