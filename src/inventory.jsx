@@ -420,7 +420,6 @@ function InventoryTable({ inv }) {
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>SKU</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
-              <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("warehouse")}>Warehouse</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
               <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Last Updated</th>
               <th className="p-3 text-left">Actions</th>
@@ -435,7 +434,6 @@ function InventoryTable({ inv }) {
                 <td className="p-3 text-gray-900">{p.sku}</td>
                 <td className="p-3 text-gray-700">{p.name}</td>
                 <td className="p-3">{Number(p.stockQty).toLocaleString("en-US")}</td>
-                <td className="p-3">{p.warehouse || "Main"}</td>
                 <td className="p-3 text-[#2D4485] font-medium">{fmtTHB(p.price)}</td>
                 <td className="p-3">{p.updatedAt}</td>
                 <td className="p-3">
