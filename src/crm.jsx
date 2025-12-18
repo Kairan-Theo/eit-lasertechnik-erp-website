@@ -289,10 +289,11 @@ function CRMPage() {
     // Get card details for notification before state update
     const card = stages[fromStageIndex].deals[cardIndex]
     if (card) {
+      const fromStageName = stages[fromStageIndex].name
       const stageName = stages[toStageIndex].name
       const sname = String(stageName || "").toLowerCase()
       const isClosedWon = sname.includes("close") && sname.includes("won")
-      const baseMsg = `CRM: Moved "${card.title}" to ${stageName}`
+      const baseMsg = `CRM: Moved "${card.title}" from ${fromStageName} --> ${stageName}`
       const msg = isClosedWon ? `${baseMsg} — Create PO or Receive PO` : baseMsg
       showNotification(msg)
       notifyTeam(msg, isClosedWon ? "success" : "info", card.customer || "", "CRM")
