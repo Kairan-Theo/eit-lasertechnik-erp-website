@@ -94,86 +94,67 @@ export default function AdminPage() {
 }
 
 function Notifications() {
-  const [dueAlerts, setDueAlerts] = React.useState([])
-  const [inventoryAlerts, setInventoryAlerts] = React.useState({ low: [], expiring: [] })
+  const [teamAlerts, setTeamAlerts] = React.useState([])
+
+  const loadNotifications = () => {
+    try {
+      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      setTeamAlerts(list)
+    } catch {
+      setTeamAlerts([])
+    }
+  }
+
   React.useEffect(() => {
+    loadNotifications()
+    // Mark all as read when viewing
     try {
-      const keys = Object.keys(localStorage).filter((k) => k.startsWith("history:"))
-      const upcoming = []
-      keys.forEach((k) => {
-        const h = JSON.parse(localStorage.getItem(k) || "{}")
-        ;(h.invoices || []).forEach((inv) => {
-          const due = inv.details?.dueDate
-          if (due) {
-            const d = new Date(due).getTime()
-            const now = Date.now()
-            const diffDays = Math.ceil((d - now) / (1000 * 60 * 60 * 24))
-            if (diffDays <= 7 && diffDays >= 0) {
-              upcoming.push({ key: k, number: inv.details?.number, dueDate: due, days: diffDays })
-            }
-          }
-        })
-      })
-      setDueAlerts(upcoming.sort((a, b) => a.days - b.days))
-    } catch {
-      setDueAlerts([])
-    }
-    try {
-      const inventory = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
-      const low = inventory.filter((it) => Number(it.minStock || 0) > 0 && Number(it.stockQty || 0) < Number(it.minStock || 0))
-      const expiring = inventory.filter((it) => {
-        if (!it.expiry) return false
-        const d = new Date(it.expiry).getTime()
-        if (isNaN(d)) return false
-        const diffDays = Math.ceil((d - Date.now()) / (1000 * 60 * 60 * 24))
-        return diffDays <= 14 && diffDays >= 0
-      })
-      setInventoryAlerts({ low, expiring })
-    } catch {
-      setInventoryAlerts({ low: [], expiring: [] })
-    }
+      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      if (list.some(n => n.unread !== false)) {
+        const next = list.map(n => ({ ...n, unread: false }))
+        localStorage.setItem("notifications", JSON.stringify(next))
+        window.dispatchEvent(new Event("storage"))
+        setTeamAlerts(next)
+      }
+    } catch {}
+
+    const handleStorage = () => loadNotifications()
+    window.addEventListener("storage", handleStorage)
+    return () => window.removeEventListener("storage", handleStorage)
   }, [])
+  
+  const clearNotifications = () => {
+    localStorage.removeItem("notifications")
+    setTeamAlerts([])
+    window.dispatchEvent(new Event("storage"))
+  }
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <div className="card p-6">
-        <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Upcoming Payment Due</h2>
-        {dueAlerts.length === 0 ? (
-          <div className="text-sm text-gray-600">No upcoming payments in 7 days.</div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-[#2D4485]">Team Activity</h2>
+          {teamAlerts.length > 0 && (
+            <button 
+               className="text-sm text-blue-600 hover:underline"
+               onClick={clearNotifications}
+            >
+               Clear All
+            </button>
+          )}
+        </div>
+        {teamAlerts.length === 0 ? (
+          <div className="text-sm text-gray-600">No recent activity.</div>
         ) : (
-          <ul className="list-disc ml-5 text-sm text-gray-900">
-            {dueAlerts.map((a, i) => (
-              <li key={i}>
-                {a.number} due on {new Date(a.dueDate).toLocaleDateString()} ({a.days} day{a.days !== 1 ? "s" : ""} left)
-              </li>
+          <div className="max-h-[600px] overflow-y-auto pr-2 space-y-2">
+            {teamAlerts.map((n, i) => (
+              <div key={i} className={`p-3 rounded-md border ${n.unread ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-200'} flex justify-between items-start`}>
+                 <span className="text-sm text-gray-800">{n.message}</span>
+                 <span className="text-xs text-gray-500 whitespace-nowrap ml-4">{new Date(n.timestamp).toLocaleString()}</span>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
-      </div>
-      <div className="space-y-6">
-        <div className="card p-6">
-          <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Inventory — Low Stock</h2>
-          {inventoryAlerts.low.length === 0 ? (
-            <div className="text-sm text-gray-600">No low stock alerts.</div>
-          ) : (
-            <ul className="list-disc ml-5 text-sm text-gray-900">
-              {inventoryAlerts.low.map((it, i) => (
-                <li key={i}>{it.sku} • {it.name} • {Number(it.stockQty || 0)} / min {Number(it.minStock || 0)} • {it.warehouse || "Main"}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="card p-6">
-          <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Inventory — Expiring Soon</h2>
-          {inventoryAlerts.expiring.length === 0 ? (
-            <div className="text-sm text-gray-600">No items expiring within 14 days.</div>
-          ) : (
-            <ul className="list-disc ml-5 text-sm text-gray-900">
-              {inventoryAlerts.expiring.map((it, i) => (
-                <li key={i}>{it.sku} • {it.name} • expires {new Date(it.expiry).toLocaleDateString()} • {it.warehouse || "Main"} • lot {it.lot || "-"}</li>
-              ))}
-            </ul>
-          )}
-        </div>
       </div>
     </div>
   )
@@ -1091,7 +1072,7 @@ function PoToQuotation() {
                     <td className="p-2"><input type="number" min="0" step="0.01" value={it.price} onChange={(e) => updateItem(i, "price", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
                     <td className="p-2"><input type="number" min="0" step="0.1" value={it.tax} onChange={(e) => updateItem(i, "tax", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
                     <td className="p-2"><input value={it.note} onChange={(e) => updateItem(i, "note", e.target.value)} placeholder="Add note" className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                    <td className="p-2 text-right"><button onClick={() => removeItem(i)} className="btn-outline text-red-600 hover:bg-red-100">Remove</button></td>
+                    <td className="p-2 text-right"><button onClick={() => removeItem(i)} className="btn-outline">Remove</button></td>
                   </tr>
                 ))}
               </tbody>

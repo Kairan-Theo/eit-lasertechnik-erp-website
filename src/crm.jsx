@@ -1,7 +1,7 @@
+// CRM Page Component
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
-import Footer from "./components/footer.jsx"
 import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
@@ -58,6 +58,30 @@ function CRMPage() {
   const [openScheduleFor, setOpenScheduleFor] = React.useState(false)
   const [openScheduleMenuKey, setOpenScheduleMenuKey] = React.useState(null) // { stageIndex, cardIndex, idx }
   const [editingScheduleKey, setEditingScheduleKey] = React.useState(null) // { stageIndex, cardIndex, idx }
+  const [notification, setNotification] = React.useState({ show: false, message: "" })
+
+  const showNotification = (msg) => {
+    setNotification({ show: true, message: msg })
+    setTimeout(() => setNotification({ show: false, message: "" }), 3000)
+  }
+
+  const notifyTeam = (msg) => {
+    try {
+      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      list.unshift({
+        id: Date.now(),
+        message: msg,
+        timestamp: new Date().toISOString(),
+        unread: true,
+        type: "info"
+      })
+      // Keep only last 50
+      if (list.length > 50) list.length = 50
+      localStorage.setItem("notifications", JSON.stringify(list))
+      // Dispatch storage event for current window to update immediately if listening
+      window.dispatchEvent(new Event("storage"))
+    } catch {}
+  }
 
   const totalFor = (deals) => deals.reduce((acc, d) => acc + (d.amount || 0), 0)
   const nextDueMs = (d) => {
@@ -164,6 +188,14 @@ function CRMPage() {
     if (!payload) return
     const { stageIndex: fromStageIndex, cardIndex } = JSON.parse(payload)
     if (fromStageIndex === toStageIndex) return
+    // Get card details for notification before state update
+    const card = stages[fromStageIndex].deals[cardIndex]
+    if (card) {
+      const msg = `Moved "${card.title}" to ${stages[toStageIndex].name}`
+      showNotification(msg)
+      notifyTeam(msg)
+    }
+
     setStages((prev) => {
       const next = prev.map((s) => ({ ...s, deals: [...s.deals] }))
       const [card] = next[fromStageIndex].deals.splice(cardIndex, 1)
@@ -257,52 +289,86 @@ function CRMPage() {
     setOpenCardMenu(null)
   }
 
+  const getProbability = (stageName) => {
+    switch(stageName) {
+      case "New": return 10;
+      case "Qualified": return 20;
+      case "Proposition": return 50;
+      case "Won": return 100;
+      case "Lost": return 0;
+      default: return 10;
+    }
+  }
+
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-white font-sans text-gray-900">
       <Navigation />
-      <section className="w-full py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
-        <div className="max-w-[92rem] mx-auto">
-          <div className="mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">CRM — Sales Pipeline</h1>
-              <button
-                onClick={() => {
-                  setNewDeal(defaultNewDeal)
-                  setShowNewForm(true)
-                }}
-                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
-                title="New customer"
-              >
-                New Customer
-              </button>
-              <button
-                onClick={addStage}
-                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
-                title="Add stage"
-              >
-                + Add stage
-              </button>
-              {/*<button
-                onClick={() => alert("Lead generation not implemented yet")}
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-                title="Generate leads"
-              >
-                Generate Leads
-              </button>
-              <button
-                onClick={() => alert("Pipeline settings not implemented yet")}
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-                title="Pipeline settings"
-              >
-                Pipeline ⚙️
-              </button>*/}
-            </div>
+      
+      {/* Top Header */}
+      <div className="border-b border-slate-200 bg-white px-6 py-4">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-6">
+            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 cursor-pointer">
+              Deals
+            </h1>
+            <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+            <select className="bg-transparent border-none text-sm font-medium text-slate-600 hover:text-slate-900 focus:ring-0 cursor-pointer">
+              <option>Talent Acquisition</option>
+              <option>Sales Pipeline</option>
+            </select>
+            <select className="bg-transparent border-none text-sm font-medium text-slate-600 hover:text-slate-900 focus:ring-0 cursor-pointer">
+              <option>All deals</option>
+              <option>My deals</option>
+            </select>
           </div>
-          <div className="flex flex-row flex-wrap gap-4 overflow-y-auto overflow-x-hidden pb-4">
-            {stages.map((stage, stageIndex) => (
+          <div className="flex items-center gap-3">
+            <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">Import</button>
+            <button 
+              onClick={() => { setNewDeal(defaultNewDeal); setShowNewForm(true); }}
+              className="px-5 py-2 text-sm font-medium text-white bg-[#2D4485] rounded-lg hover:bg-[#3D56A6] shadow-md transition-all hover:shadow-lg transform hover:-translate-y-0.5"
+            >
+              + Create deal
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="border-b border-slate-200 bg-white px-6 py-3 flex items-center justify-between flex-wrap gap-4 shadow-sm z-10 relative">
+        <div className="flex items-center gap-4 flex-1 flex-wrap">
+          <div className="relative group">
+            <input 
+              type="text" 
+              placeholder="Search deals..." 
+              className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all bg-slate-50 focus:bg-white" 
+            />
+            <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 group-focus-within:text-[#2D4485] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-600 overflow-x-auto">
+            {['Deal owner', 'Create date', 'Last activity', 'Close date'].map((label) => (
+               <button key={label} className="px-3 py-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-900 whitespace-nowrap transition-colors flex items-center gap-1">
+                 {label} <span className="text-[10px] opacity-50">▼</span>
+               </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Board Content */}
+      <section className="w-full overflow-x-auto h-[calc(100vh-140px)] bg-slate-50">
+        <div className="flex h-full p-6 gap-6">
+
+          {stages.map((stage, stageIndex) => {
+             const total = totalFor(stage.deals);
+             const prob = getProbability(stage.name);
+             const weighted = total * (prob / 100);
+             
+             return (
               <div
                 key={stage.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 w-80 shrink-0 cursor-grab active:cursor-grabbing"
+                className="w-80 min-w-[20rem] flex flex-col h-full bg-slate-100/50 rounded-2xl border border-slate-200/60 group"
                 draggable
                 onDragStart={(e) => onStageDragStart(stageIndex, e)}
                 onDragOver={(e) => e.preventDefault()}
@@ -311,140 +377,165 @@ function CRMPage() {
                   else if (e.dataTransfer.getData("stage") !== "") onStageDrop(stageIndex, e)
                 }}
               >
-                <div
-                  className="px-4 py-3 border-b border-gray-200 flex items-center justify-between"
+                {/* Column Header */}
+                <div 
+                  className="p-4 text-center border-b border-slate-200/60 cursor-grab active:cursor-grabbing bg-transparent group/header relative"
+                  draggable
+                  onDragStart={(e) => onStageDragStart(stageIndex, e)}
                 >
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-semibold text-gray-900">{stage.name}</h3>
-                    <span className="text-sm text-gray-600">{totalFor(stage.deals).toLocaleString()} ฿</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-slate-700 uppercase text-xs tracking-wider">{stage.name}</span>
+                    <div className="flex items-center gap-1">
+                       <span className="text-slate-500 text-xs font-medium bg-slate-200/60 px-2 py-0.5 rounded-full">{stage.deals.length}</span>
+                       <button 
+                         className="text-slate-400 hover:text-slate-600 opacity-0 group-hover/header:opacity-100 transition-opacity"
+                         onClick={(e) => { e.stopPropagation(); setMenuOpenIndex(menuOpenIndex === stageIndex ? null : stageIndex); }}
+                       >
+                         ⋯
+                       </button>
+                    </div>
                   </div>
-                  <div className="relative">
-                    <button
-                      className="text-sm text-gray-600 hover:text-gray-900 px-2 py-1"
-                      onClick={() => setMenuOpenIndex(menuOpenIndex === stageIndex ? null : stageIndex)}
-                      title="Stage settings"
-                    >
-                      •••
-                    </button>
-                    {menuOpenIndex === stageIndex && (
-                      <div className="absolute right-0 mt-2 w-32 bg-white border border-gray-200 rounded-md shadow-md z-10">
-                        <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => editStage(stageIndex)}>
-                          Edit
-                        </button>
-                        <button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50" onClick={() => deleteStage(stageIndex)}>
-                          Delete
-                        </button>
-                      </div>
-                    )}
+                  {menuOpenIndex === stageIndex && (
+                    <div className="absolute right-2 top-8 bg-white border border-slate-200 rounded-lg shadow-xl z-30 w-32 text-left py-1">
+                      <button className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50" onClick={() => editStage(stageIndex)}>Edit Stage</button>
+                      <button className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 text-red-600" onClick={() => deleteStage(stageIndex)}>Delete Stage</button>
+                    </div>
+                  )}
+                  <div className="h-1 w-full bg-slate-200 rounded-full overflow-hidden mt-3">
+                    <div className="h-full bg-[#2D4485]/60" style={{ width: `${prob}%` }}></div>
                   </div>
                 </div>
-                <div className="p-3 space-y-3 min-h-[160px]">
-                  {stage.deals.length === 0 && <p className="text-sm text-gray-500">No deals</p>}
+
+                {/* Cards Container */}
+                <div className="flex-1 overflow-y-auto p-3">
                   {stage.deals.map((d, cardIndex) => (
                     <div
                       key={d.id}
-                      className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-sm relative"
+                      className="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card"
                       draggable
                       onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
                     >
-                      <div className="flex items-start justify-between">
-                        <p className="font-medium text-gray-900 pr-6 cursor-pointer hover:underline" onClick={() => openDealDetail(stageIndex, cardIndex)}>{d.customer}</p>
-                        <span className="text-gray-400"></span>
-                      </div>
-                      <p className="text-sm text-gray-600">{d.title}</p>
-                      {d.amount !== undefined && (
-                        <div className="text-sm text-gray-700 mt-1 flex items-center justify-between">
-                          <span>{d.amount.toLocaleString()} {d.currency}</span>
-                          <div className="relative inline-block">
-                            <button
-                              className={`${priorityClass(d.priority)} px-2 py-1 rounded-full text-xs`}
-                              onClick={() => {
-                                const open = openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex
-                                setOpenPriority(open ? null : { stageIndex, cardIndex })
-                              }}
-                              title="Change priority"
-                            >
-                              {priorityLabel(d.priority)}
-                            </button>
-                            {openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex && (
-                              <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-md z-20">
-                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "low")}>Low</button>
-                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "medium")}>Medium</button>
-                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "high")}>High</button>
-                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setCardPriority(stageIndex, cardIndex, "none")}>None</button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      <div className="mt-1 flex items-start gap-2">
-                        <button
-                          className="inline-flex items-center justify-center w-7 h-7 shrink-0 rounded-full border border-gray-300 hover:bg-gray-100"
-                          onClick={() => setOpenActivity(
-                            openActivity && openActivity.stageIndex===stageIndex && openActivity.cardIndex===cardIndex ? null : { stageIndex, cardIndex }
-                          )}
-                          title="Next Activity"
-                        >
-                          📅
-                        </button>
-                        {(() => {
-                          const ms = nextDueMs(d)
-                          const inWeek = isThisWeek(ms)
-                          const item = nextSchedule(d)
-                          return item ? (
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start gap-2">
-                                <div className="flex flex-col items-start shrink-0">
-                                  {inWeek && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">This week</span>}
-                                  <span className="mt-1 text-[11px] leading-3 text-gray-500">
-                                    {(d.activitySchedules||[]).length ? `${(d.activitySchedules||[]).length} scheduled` : "No schedules"}
-                                  </span>
-                                </div>
-                                <span className="text-xs text-gray-700 break-words">
-                                  {formatActivityPreviewText(item.text || "Scheduled activity")}
-                                </span>
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-500">No schedules</span>
-                          )
-                        })()}
+                      <div className="flex justify-between items-start gap-2 mb-3">
+                         <h4 
+                           className="font-semibold text-slate-800 text-sm leading-snug hover:text-[#2D4485] cursor-pointer transition-colors"
+                           onClick={() => openDealDetail(stageIndex, cardIndex)}
+                         >
+                           {d.title}
+                         </h4>
+                         <button 
+                            className="text-slate-300 hover:text-slate-500 opacity-0 group-hover/card:opacity-100 transition-opacity p-1 hover:bg-slate-50 rounded"
+                            onClick={(e) => { e.stopPropagation(); setOpenCardMenu({ stageIndex, cardIndex }); }}
+                         >
+                           ⋯
+                         </button>
                       </div>
                       
-                      <div className="absolute top-2 right-2">
-                        <button
-                          className="text-sm text-gray-500 hover:text-gray-900 px-2 py-1"
-                          onClick={() => setOpenCardMenu(
-                            openCardMenu && openCardMenu.stageIndex === stageIndex && openCardMenu.cardIndex === cardIndex
-                              ? null
-                              : { stageIndex, cardIndex }
-                          )}
-                          title="Opportunity settings"
-                        >
-                          ⋯
-                        </button>
-                        {openCardMenu && openCardMenu.stageIndex === stageIndex && openCardMenu.cardIndex === cardIndex && (
-                          <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-md z-20">
-                            <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => editCard(stageIndex, cardIndex)}>
-                              Edit
-                            </button>
-                            <button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50" onClick={() => deleteCard(stageIndex, cardIndex)}>
-                              Delete
-                            </button>
-                          </div>
-                        )}
+                      <div className="space-y-2 mb-3">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                          <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                          <span className="truncate">{d.customer}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-slate-900 font-bold text-sm">
+                          <span className="text-xs font-normal text-slate-400">{d.currency}</span>
+                          {d.amount.toLocaleString()}
+                        </div>
                       </div>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
+                        <div className="flex items-center gap-2 relative">
+                           <div 
+                             className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-bold shadow-sm ${d.priority === 'high' ? 'bg-red-500 ring-2 ring-red-100' : d.priority === 'medium' ? 'bg-orange-400 ring-2 ring-orange-100' : 'bg-[#2D4485] ring-2 ring-blue-100'} cursor-pointer hover:scale-110 transition-transform`}
+                             onClick={(e) => {
+                                e.stopPropagation();
+                                const open = openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex
+                                setOpenPriority(open ? null : { stageIndex, cardIndex })
+                             }}
+                             title={`Priority: ${d.priority}`}
+                           >
+                              {d.customer.charAt(0)}
+                           </div>
+                           {openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex && (
+                              <div className="absolute left-0 bottom-8 bg-white border border-slate-200 rounded-lg shadow-xl z-20 w-32 py-1">
+                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "low"); setOpenPriority(null); }}>Low</button>
+                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "medium"); setOpenPriority(null); }}>Medium</button>
+                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "high"); setOpenPriority(null); }}>High</button>
+                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "none"); setOpenPriority(null); }}>None</button>
+                              </div>
+                           )}
+
+                           <div 
+                             className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-1.5 py-0.5 transition-colors"
+                             onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActivity(
+                                  openActivity && openActivity.stageIndex===stageIndex && openActivity.cardIndex===cardIndex ? null : { stageIndex, cardIndex }
+                                )
+                             }}
+                           >
+                             {(() => {
+                                const item = nextSchedule(d)
+                                return item ? (
+                                   <>
+                                     <div className={`w-2 h-2 rounded-full ${isThisWeek(item.dueAt) ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+                                     <span className="text-[10px] text-slate-500 font-medium truncate max-w-[80px]">{formatActivityPreviewText(item.text || "Activity")}</span>
+                                   </>
+                                ) : (
+                                   <>
+                                     <svg className="w-3.5 h-3.5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                   </>
+                                )
+                             })()}
+                           </div>
+                        </div>
+                      </div>
+
+                      {/* Card Menu Dropdown */}
+                      {openCardMenu && openCardMenu.stageIndex === stageIndex && openCardMenu.cardIndex === cardIndex && (
+                         <div className="absolute right-2 top-8 z-10 w-32 bg-white rounded-lg shadow-xl border border-slate-200 py-1">
+                            <button className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => editCard(stageIndex, cardIndex)}>Edit</button>
+                            <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-slate-50" onClick={() => deleteCard(stageIndex, cardIndex)}>Delete</button>
+                            <button className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setOpenCardMenu(null)}>Close</button>
+                         </div>
+                      )}
                     </div>
                   ))}
+                  
+                  <button 
+                    onClick={() => {
+                        setNewDeal({...defaultNewDeal, stageIndex: stageIndex});
+                        setShowNewForm(true);
+                    }}
+                    className="w-full py-2.5 mt-2 text-sm font-medium text-slate-500 hover:text-[#2D4485] hover:bg-slate-200/50 rounded-lg border border-transparent hover:border-slate-200 transition-all flex items-center justify-center gap-2"
+                  >
+                    <span className="text-lg leading-none">+</span> New deal
+                  </button>
+                </div>
+
+                {/* Column Footer */}
+                <div className="p-3 border-t border-slate-200/60 bg-slate-50/50 rounded-b-2xl">
+                  <div className="flex flex-col items-center justify-center text-center">
+                    <div className="text-sm text-slate-700 font-semibold">Total: {total.toLocaleString()} ฿</div>
+                    <div className="text-xs text-slate-400 mt-0.5 font-medium">Weighted: {weighted.toLocaleString()} ฿</div>
+                  </div>
                 </div>
               </div>
-            ))}
+            )
+          })}
+          
+          <div className="w-80 shrink-0 p-4">
+             <button 
+               onClick={addStage}
+               className="w-full py-4 border-2 border-dashed border-slate-300 rounded-2xl text-slate-500 font-medium hover:border-[#2D4485] hover:text-[#2D4485] hover:bg-[#2D4485]/5 transition-all"
+             >
+               + Add Stage
+             </button>
+          </div>
           </div>
           {openActivity && (
             <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenActivity(null)}>
               <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[560px]" onClick={(e) => e.stopPropagation()}>
                 <div
-                  className="bg-white rounded-xl shadow-lg border-2 border-white"
+                  className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl mx-4"
                   tabIndex={0}
                   ref={(el)=>{ if (el) { activityModalRef.current = el } }}
                   onKeyDown={(e)=>{
@@ -468,39 +559,39 @@ function CRMPage() {
                     }
                   }}
                 >
-                  <div className="px-4 py-3 border-b-2 border-white flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-gray-900">Next Activity</h3>
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-bold text-slate-800 text-lg">Next Activity</h3>
                       {(() => { 
                         const d = stages[openActivity.stageIndex].deals[openActivity.cardIndex]
                         const ms = nextDueMs(d)
                         const inWeek = isThisWeek(ms)
-                        return inWeek ? <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">This week</span> : null
+                        return inWeek ? <span className="px-2.5 py-1 rounded-full bg-blue-50 text-[#2D4485] text-xs font-medium border border-blue-100">This week</span> : null
                       })()}
-                      <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-xs">
+                      <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200">
                         {(() => { const d = stages[openActivity.stageIndex].deals[openActivity.cardIndex]; return (d.activitySchedules||[]).length ? `${(d.activitySchedules||[]).length} scheduled` : "No schedules" })()}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        className="inline-flex items-center justify-center px-3 h-8 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
                         onClick={()=>{ setOpenScheduleFor(true); setScheduleDueInput(""); setScheduleText(""); }}
                         title="Add schedule"
                       >
                         +
                       </button>
-                      <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenActivity(null)}>✕</button>
+                      <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setOpenActivity(null)}>✕</button>
                     </div>
                   </div>
-                  <div className="p-4 space-y-3">
+                  <div className="p-6 space-y-4">
                     {(() => { const d = stages[openActivity.stageIndex].deals[openActivity.cardIndex]; return (
                       <>
                         
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {(d.activitySchedules||[]).map((it, i) => (
                             <div
                               key={i}
-                              className={`flex flex-wrap items-center gap-2 bg-gray-50 rounded-lg p-2 ${selectedScheduleKey && openActivity && selectedScheduleKey.stageIndex===openActivity.stageIndex && selectedScheduleKey.cardIndex===openActivity.cardIndex && selectedScheduleKey.idx===i ? 'ring-1 ring-purple-300' : ''} ${dragOverIdx===i ? 'ring-1 ring-blue-300' : ''} ${(editingScheduleKey && editingScheduleKey.stageIndex===openActivity.stageIndex && editingScheduleKey.cardIndex===openActivity.cardIndex && editingScheduleKey.idx===i) ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
+                              className={`flex flex-wrap items-center gap-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm ${selectedScheduleKey && openActivity && selectedScheduleKey.stageIndex===openActivity.stageIndex && selectedScheduleKey.cardIndex===openActivity.cardIndex && selectedScheduleKey.idx===i ? 'ring-2 ring-[#2D4485]/20 border-[#2D4485]' : ''} ${dragOverIdx===i ? 'ring-2 ring-blue-300' : ''} ${(editingScheduleKey && editingScheduleKey.stageIndex===openActivity.stageIndex && editingScheduleKey.cardIndex===openActivity.cardIndex && editingScheduleKey.idx===i) ? 'cursor-default' : 'cursor-grab active:cursor-grabbing hover:border-slate-300'}`}
                               onClick={(e)=>{
                                 const tag = e.target && e.target.tagName
                                 if (tag==='INPUT' || tag==='TEXTAREA' || tag==='BUTTON') return
@@ -522,7 +613,7 @@ function CRMPage() {
                               onDrop={(e)=>{ e.preventDefault(); if (draggingScheduleKey && draggingScheduleKey.stageIndex===openActivity.stageIndex && draggingScheduleKey.cardIndex===openActivity.cardIndex) { reorderSchedule(openActivity.stageIndex, openActivity.cardIndex, draggingScheduleKey.idx, i); setSelectedScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i }); } setDraggingScheduleKey(null); setDragOverIdx(null) }}
                               onDragEnd={()=>{ setDraggingScheduleKey(null); setDragOverIdx(null) }}
                             >
-                              <span className="text-xs text-gray-600">Due</span>
+                              <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Due</span>
                               {(() => { 
                                 const isEditing = !!(editingScheduleKey && editingScheduleKey.stageIndex===openActivity.stageIndex && editingScheduleKey.cardIndex===openActivity.cardIndex && editingScheduleKey.idx===i)
                                 return (
@@ -538,7 +629,7 @@ function CRMPage() {
                                         }))
                                       }}
                                       disabled={!isEditing}
-                                      className="rounded-md border border-gray-300 bg-white px-2 py-1 w-[200px] text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <input
                                       type="text"
@@ -551,11 +642,11 @@ function CRMPage() {
                                         }))
                                       }}
                                       placeholder="Details"
-                                      className="flex-1 min-w-[160px] rounded-md border border-gray-300 bg-white px-3 py-1 text-sm"
+                                      className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <div className="relative">
                                       <button
-                                        className="px-2 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                                         onClick={()=>{
                                           const open = openScheduleMenuKey && openScheduleMenuKey.stageIndex===openActivity.stageIndex && openScheduleMenuKey.cardIndex===openActivity.cardIndex && openScheduleMenuKey.idx===i
                                           setOpenScheduleMenuKey(open ? null : { stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i })
@@ -565,15 +656,15 @@ function CRMPage() {
                                         ⋮
                                       </button>
                                       {openScheduleMenuKey && openScheduleMenuKey.stageIndex===openActivity.stageIndex && openScheduleMenuKey.cardIndex===openActivity.cardIndex && openScheduleMenuKey.idx===i && (
-                                        <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-md z-10">
+                                        <div className="absolute right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-10 overflow-hidden w-32">
                                           <button
-                                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                                            className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                                             onClick={()=>{ setEditingScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i }); setOpenScheduleMenuKey(null) }}
                                           >
                                             Edit
                                           </button>
                                           <button
-                                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
+                                            className="block w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600 transition-colors"
                                             onClick={()=>{
                                               const { stageIndex, cardIndex } = openActivity
                                               updateDeal(stageIndex, cardIndex, (prev)=>({
@@ -597,14 +688,14 @@ function CRMPage() {
                             </div>
                           ))}
                           {openScheduleFor && (
-                            <div className="mt-2">
-                              <div className="flex flex-wrap items-center gap-2 bg-gray-50 rounded-lg p-3">
-                                <span className="text-xs text-gray-600">Due</span>
+                            <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                              <div className="flex flex-wrap items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-inner">
+                                <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Due</span>
                                 <input
                                   type="datetime-local"
                                   value={scheduleDueInput}
                                   onChange={(e)=>setScheduleDueInput(e.target.value)}
-                                  className="rounded-md border border-gray-300 bg-white px-2 py-1 w-[200px] text-sm"
+                                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                                 />
                                 <input
                                   type="text"
@@ -612,18 +703,18 @@ function CRMPage() {
                                   onChange={(e)=>setScheduleText(e.target.value)}
                                   placeholder="Scheduled activity details"
                                   autoFocus
-                                  className="flex-1 min-w-[160px] rounded-md border border-gray-300 bg-white px-3 py-1 text-sm"
+                                  className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                                 />
                               </div>
-                              <div className="flex items-center justify-end gap-2">
+                              <div className="flex items-center justify-end gap-3 mt-3">
                                 <button
-                                  className="px-2 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                                  className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm"
                                   onClick={()=>{ setOpenScheduleFor(false); setScheduleDueInput(""); setScheduleText(""); }}
                                 >
                                   Cancel
                                 </button>
                                 <button
-                                  className="px-2 py-1 rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                                  className="px-4 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
                                   onClick={()=>{
                                     const dueAt = scheduleDueInput
                                     if (!dueAt) return
@@ -637,7 +728,7 @@ function CRMPage() {
                                     setScheduleText("")
                                   }}
                                 >
-                                  Add
+                                  Add Schedule
                                 </button>
                               </div>
                             </div>
@@ -651,144 +742,219 @@ function CRMPage() {
             </div>
           )}
           {openDetail && (
-            <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenDetail(null)}>
-              <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[520px]" onClick={(e) => e.stopPropagation()}>
-                <div className="bg-white rounded-xl shadow-lg border-2 border-white">
-                  <div className="px-4 py-3 border-b-2 border-white flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900">Company Details</h3>
-                    <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenDetail(null)}>✕</button>
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setOpenDetail(null)}>
+              <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[520px] transition-all" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 text-lg">Company Details</h3>
+                    <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setOpenDetail(null)}>✕</button>
                   </div>
-                  <div className="p-4 space-y-3">
+                  <div className="p-6">
                     {(() => { const d = stages[openDetail.stageIndex].deals[openDetail.cardIndex]; return (
-                      <>
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                          <div className="text-sm text-gray-500">Contact</div>
-                          <input value={detailContact} onChange={(e)=>setDetailContact(e.target.value)} className="text-sm text-gray-900 border-2 border-white rounded-md px-3 py-2 w-full shadow" />
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Contact</label>
+                          <input 
+                            value={detailContact} 
+                            onChange={(e)=>setDetailContact(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Contact person"
+                          />
                         </div>
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                          <div className="text-sm text-gray-500">Email</div>
-                          <input value={detailEmail} onChange={(e)=>setDetailEmail(e.target.value)} className="text-sm text-gray-900 border-2 border-white rounded-md px-3 py-2 w-full shadow" />
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Email</label>
+                          <input 
+                            value={detailEmail} 
+                            onChange={(e)=>setDetailEmail(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Email address"
+                          />
                         </div>
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                          <div className="text-sm text-gray-500">Phone</div>
-                          <input value={detailPhone} onChange={(e)=>setDetailPhone(e.target.value)} className="text-sm text-gray-900 border-2 border-white rounded-md px-3 py-2 w-full shadow" />
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Phone</label>
+                          <input 
+                            value={detailPhone} 
+                            onChange={(e)=>setDetailPhone(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Phone number"
+                          />
                         </div>
-                        <div className="mt-2">
-                          <div className="px-1 py-2 text-sm text-purple-700">Notes</div>
-                          <div>
-                            <textarea value={detailNotes} onChange={(e)=>setDetailNotes(e.target.value)} className="w-full min-h-[120px] rounded-md border-2 border-white px-3 py-2 shadow" placeholder="Add notes" />
-                          </div>
+                        <div className="pt-2">
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
+                          <textarea 
+                            value={detailNotes} 
+                            onChange={(e)=>setDetailNotes(e.target.value)} 
+                            className="w-full min-h-[120px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all resize-y" 
+                            placeholder="Add notes about this deal..." 
+                          />
                         </div>
-                      </>
+                      </div>
                     )})()}
                   </div>
-                  <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
-                    <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenDetail(null)}>Close</button>
-                    <button className="px-4 py-2 rounded-md bg-purple-700 text-white hover:bg-purple-800" onClick={saveDetail}>Save</button>
+                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+                    <button 
+                      className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm" 
+                      onClick={() => setOpenDetail(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium" 
+                      onClick={saveDetail}
+                    >
+                      Save Changes
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           )}
           {showNewForm && (
-            <div className="fixed inset-0 bg-black/30 z-30" onClick={() => setShowNewForm(false)}>
-              <div className="absolute left-1/2 top-20 -translate-x-1/2 w-[420px]" onClick={(e) => e.stopPropagation()}>
-                <div className="bg-white rounded-xl shadow-lg border-2 border-white">
-                  <div className="px-4 py-3 border-b-2 border-white flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900">New Customer</h3>
-                    <button className="text-gray-500 hover:text-gray-900" onClick={() => setShowNewForm(false)}>✕</button>
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 transition-opacity" onClick={() => setShowNewForm(false)}>
+              <div className="absolute left-1/2 top-20 -translate-x-1/2 w-[520px] transition-all" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 text-lg">New Customer</h3>
+                    <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowNewForm(false)}>✕</button>
                   </div>
-                  <div className="p-4 space-y-3">
-                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                      <div className="text-sm text-gray-500">Company</div>
-                      <input value={newDeal.company} onChange={(e)=>setNewDeal({...newDeal, company:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
-                    </div>
-                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                      <div className="text-sm text-gray-500">Contact</div>
-                      <input value={newDeal.contact} onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
-                    </div>
-                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                      <div className="text-sm text-gray-500">Opportunity</div>
-                      <input value={newDeal.opportunity} onChange={(e)=>setNewDeal({...newDeal, opportunity:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
-                    </div>
-                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                      <div className="text-sm text-gray-500">Email</div>
-                      <input value={newDeal.email} onChange={(e)=>setNewDeal({...newDeal, email:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
-                    </div>
-                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                      <div className="text-sm text-gray-500">Phone</div>
-                      <input value={newDeal.phone} onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow" />
-                    </div>
-                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                      <div className="text-sm text-gray-500">Amount</div>
-                      <div className="w-full border-2 border-white rounded-md px-3 py-2 shadow flex items-center gap-2 overflow-hidden">
-                        <input type="number" value={newDeal.amount} onChange={(e)=>setNewDeal({...newDeal, amount:Number(e.target.value)})} className="w-28 border-2 border-white rounded-md px-3 py-2 shadow bg-white" />
-                        <input value={newDeal.currency} onChange={(e)=>setNewDeal({...newDeal, currency:e.target.value})} className="w-16 border-2 border-white rounded-md px-3 py-2 shadow bg-white" />
-                        <div className="ml-auto flex items-center gap-2">
+                  <div className="p-6">
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Company</label>
+                        <input 
+                          value={newDeal.company} 
+                          onChange={(e)=>setNewDeal({...newDeal, company:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Company name"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Contact</label>
+                        <input 
+                          value={newDeal.contact} 
+                          onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Contact person"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Opportunity</label>
+                        <input 
+                          value={newDeal.opportunity} 
+                          onChange={(e)=>setNewDeal({...newDeal, opportunity:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Deal opportunity name"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Email</label>
+                        <input 
+                          value={newDeal.email} 
+                          onChange={(e)=>setNewDeal({...newDeal, email:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Email address"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Phone</label>
+                        <input 
+                          value={newDeal.phone} 
+                          onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Phone number"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Amount</label>
+                        <div className="flex items-center gap-3 w-full">
+                          <div className="relative flex-1">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{newDeal.currency}</span>
+                            <input 
+                              type="number" 
+                              value={newDeal.amount} 
+                              onChange={(e)=>setNewDeal({...newDeal, amount:Number(e.target.value)})} 
+                              className="w-full pl-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            />
+                          </div>
+                          <input 
+                            value={newDeal.currency} 
+                            onChange={(e)=>setNewDeal({...newDeal, currency:e.target.value})} 
+                            className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all text-center uppercase" 
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Priority</label>
+                        <div className="flex items-center gap-3">
                           {[1,2,3].map(n => {
                             const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
-                            const title = n===1 ? 'Priority: Low' : n===2 ? 'Priority: Medium' : 'Priority: High'
+                            const title = n===1 ? 'Low' : n===2 ? 'Medium' : 'High'
                             const active = newDeal.priority===p
+                            const colorClass = n===1 ? 'bg-[#2D4485]' : n===2 ? 'bg-orange-400' : 'bg-red-500'
                             return (
                               <button
                                 key={n}
-                                className="flex items-center gap-1"
-                                title={title}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${active ? `${colorClass} text-white border-transparent shadow-md transform scale-105` : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                                 onClick={()=>setNewDeal({...newDeal, priority: active ? 'none' : p})}
                               >
-                                {Array.from({ length: n }).map((_, i) => (
-                                  <span key={i} className={`inline-block w-2.5 h-2.5 rounded-full ${active ? 'bg-blue-600' : 'bg-gray-300'}`}></span>
-                                ))}
+                                {title} Priority
                               </button>
                             )
                           })}
                         </div>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
-                      <div className="text-sm text-gray-500">Stage</div>
-                      <select value={newDeal.stageIndex} onChange={(e)=>setNewDeal({...newDeal, stageIndex:Number(e.target.value)})} className="w-full border-2 border-white rounded-md px-3 py-2 shadow">
-                        {stages.map((s, i) => (
-                          <option key={s.id} value={i}>{s.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="px-4 py-2 rounded-md bg-purple-700 text-white hover:bg-purple-800"
-                          onClick={() => {
-                            const deal = {
-                              id: Date.now(),
-                              title: newDeal.opportunity || newDeal.company || "Untitled",
-                              customer: newDeal.company || newDeal.contact || "",
-                              amount: Number(newDeal.amount) || 0,
-                              currency: newDeal.currency || "฿",
-                              priority: newDeal.priority,
-                              contact: newDeal.contact || "",
-                              email: newDeal.email || "",
-                              phone: newDeal.phone || "",
-                              notes: "",
-                            }
-                            setStages((prev)=>prev.map((s,i)=> i===newDeal.stageIndex ? { ...s, deals: [...s.deals, deal] } : s))
-                            setShowNewForm(false)
-                            setNewDeal(defaultNewDeal)
-                          }}
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Stage</label>
+                        <select 
+                          value={newDeal.stageIndex} 
+                          onChange={(e)=>setNewDeal({...newDeal, stageIndex:Number(e.target.value)})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                         >
-                          Add
-                        </button>
-                        <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setShowNewForm(false)}>Cancel</button>
+                          {stages.map((s, i) => (
+                            <option key={s.id} value={i}>{s.name}</option>
+                          ))}
+                        </select>
                       </div>
-                      
                     </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+                    <button
+                      className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm"
+                      onClick={() => setShowNewForm(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
+                      onClick={() => {
+                        const deal = {
+                          id: Date.now(),
+                          title: newDeal.opportunity || newDeal.company || "Untitled",
+                          customer: newDeal.company || newDeal.contact || "",
+                          amount: Number(newDeal.amount) || 0,
+                          currency: newDeal.currency || "฿",
+                          priority: newDeal.priority,
+                          contact: newDeal.contact || "",
+                          email: newDeal.email || "",
+                          phone: newDeal.phone || "",
+                          notes: "",
+                          activitySchedules: [],
+                          probability: 10,
+                          expectedClose: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
+                        }
+                        setStages((prev)=>prev.map((s,i)=> i===newDeal.stageIndex ? { ...s, deals: [...s.deals, deal] } : s))
+                        setShowNewForm(false)
+                        setNewDeal(defaultNewDeal)
+                      }}
+                    >
+                      Create Deal
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           )}
-        </div>
       </section>
-      <Footer />
     </main>
   )
 }

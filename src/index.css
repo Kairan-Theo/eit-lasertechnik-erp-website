@@ -129,10 +129,10 @@
     @apply px-3 py-2 rounded-md bg-[#2D4485] text-white transition shadow-sm hover:bg-[#3D56A6] hover:shadow hover:-translate-y-px;
   }
   .btn-outline {
-    @apply px-3 py-2 rounded-md border border-gray-300 bg-white hover:bg-gray-50 transition;
+    @apply px-3 py-2 rounded-md border border-[#2D4485] bg-white text-[#2D4485] hover:bg-[#2D4485] hover:text-white transition;
   }
   .btn-pill {
-    @apply px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white;
+    @apply px-4 py-2 text-sm rounded-full border border-[#2D4485] bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm;
   }
   .card {
     @apply bg-white rounded-xl shadow-sm border hover:shadow-md transition;
