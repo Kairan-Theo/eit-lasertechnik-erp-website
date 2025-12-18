@@ -122,11 +122,15 @@ function CRMPage() {
   const [notification, setNotification] = React.useState({ show: false, message: "" })
   const [sortBy, setSortBy] = React.useState('createdAt')
   const [sortAsc, setSortAsc] = React.useState(false)
+  const [query, setQuery] = React.useState("")
   const [showCompanySuggestions, setShowCompanySuggestions] = React.useState(false)
   const [openEmail, setOpenEmail] = React.useState(null) // { stageIndex, cardIndex, to }
   const [emailSubject, setEmailSubject] = React.useState("")
   const [emailBody, setEmailBody] = React.useState("")
   const [isSending, setIsSending] = React.useState(false)
+  const [showImport, setShowImport] = React.useState(false)
+  const [importing, setImporting] = React.useState(false)
+  const [importInfo, setImportInfo] = React.useState({ name: "", count: 0, error: "" })
   const [emailConfig, setEmailConfig] = React.useState(() => {
     try {
       return JSON.parse(localStorage.getItem("email_config")) || { serviceId: "", templateId: "", publicKey: "" }
@@ -141,6 +145,50 @@ function CRMPage() {
     localStorage.setItem("email_config", JSON.stringify(cfg))
     setShowEmailSettings(false)
     showNotification("Email settings saved")
+  }
+  const parseCsvText = (text) => {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length)
+    if (!lines.length) return []
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase())
+    return lines.slice(1).map((line) => {
+      const cols = line.split(",").map((c) => c.trim())
+      const item = {}
+      headers.forEach((h, i) => { item[h] = cols[i] })
+      return item
+    })
+  }
+  const normalizePriority = (p) => {
+    const t = String(p || "").toLowerCase()
+    if (t.includes("high")) return "high"
+    if (t.includes("medium")) return "medium"
+    if (t.includes("low")) return "low"
+    return "none"
+  }
+  const importDeals = (rows) => {
+    setStages((prev) => {
+      const next = prev.map((s) => ({ ...s, deals: [...s.deals] }))
+      rows.forEach((r) => {
+        const stageName = String(r.stage || r.pipeline || prev[0]?.name || "").toLowerCase()
+        let idx = next.findIndex((s) => s.name.toLowerCase() === stageName)
+        if (idx < 0) idx = 0
+        const deal = {
+          id: Date.now() + Math.floor(Math.random() * 100000),
+          title: r.title || r.opportunity || "Untitled",
+          customer: r.customer || r.company || "",
+          amount: Number(r.amount || 0),
+          currency: r.currency || "฿",
+          priority: normalizePriority(r.priority),
+          contact: r.contact || "",
+          email: r.email || "",
+          phone: r.phone || "",
+          notes: r.notes || "",
+          createdAt: r.createdat || r.createdAt || new Date().toISOString(),
+          expectedClose: r.expectedclose || r.expectedClose || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        }
+        next[idx].deals.push(deal)
+      })
+      return next
+    })
   }
 
   const showNotification = (msg) => {
@@ -228,6 +276,22 @@ function CRMPage() {
     const sunday = new Date(monday)
     sunday.setDate(monday.getDate()+6)
     return d>=monday && d<=sunday
+  }
+  const isNextWeek = (ms) => {
+    if (!ms) return false
+    const d = new Date(ms)
+    const today = new Date()
+    const start = new Date(today)
+    start.setHours(0,0,0,0)
+    const dow = start.getDay()
+    const mondayOffset = (dow+6)%7
+    const monday = new Date(start)
+    monday.setDate(start.getDate()-mondayOffset)
+    const nextMonday = new Date(monday)
+    nextMonday.setDate(monday.getDate()+7)
+    const nextSunday = new Date(nextMonday)
+    nextSunday.setDate(nextMonday.getDate()+6)
+    return d>=nextMonday && d<=nextSunday
   }
   const formatDate = (v) => {
     if (!v) return "-"
@@ -473,7 +537,10 @@ function CRMPage() {
             </select>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">Import</button>
+            <button 
+              onClick={() => setShowImport(true)}
+              className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
+            >Import</button>
             <button 
               onClick={() => { setNewDeal(defaultNewDeal); setShowNewForm(true); }}
               className="px-5 py-2 text-sm font-medium text-white bg-[#2D4485] rounded-lg hover:bg-[#3D56A6] shadow-md transition-all hover:shadow-lg transform hover:-translate-y-0.5"
@@ -492,6 +559,8 @@ function CRMPage() {
               type="text" 
               placeholder="Search deals..." 
               className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all bg-slate-50 focus:bg-white" 
+              value={query}
+              onChange={(e)=>setQuery(e.target.value)}
             />
             <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 group-focus-within:text-[#2D4485] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -529,11 +598,16 @@ function CRMPage() {
       <section className="w-full overflow-x-auto h-[calc(100vh-140px)] bg-slate-50">
         <div className="flex h-full p-6 gap-6">
 
-          {stages.map((stage, stageIndex) => {
+            {stages.map((stage, stageIndex) => {
              const total = totalFor(stage.deals);
              const prob = getProbability(stage.name);
              const weighted = total * (prob / 100);
              const sortedDeals = sortDeals(stage.deals, sortBy, sortAsc);
+             const q = query.trim().toLowerCase()
+             const filteredDeals = q ? sortedDeals.filter((d)=>{
+               const pool = [d.title, d.customer, d.contact, d.email, d.phone, d.notes]
+               return pool.some((x)=>String(x||"").toLowerCase().includes(q))
+             }) : sortedDeals
              
              return (
               <div
@@ -578,7 +652,7 @@ function CRMPage() {
 
                 {/* Cards Container */}
                 <div className="flex-1 overflow-y-auto p-3">
-                  {sortedDeals.map((d, cardIndex) => (
+                  {filteredDeals.map((d, cardIndex) => (
                     <div
                       key={d.id}
                       className="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card"
@@ -667,15 +741,26 @@ function CRMPage() {
                            >
                              {(() => {
                                 const item = nextSchedule(d)
-                                return item ? (
-                                   <>
-                                     <div className={`w-2 h-2 rounded-full ${isThisWeek(item.dueAt) ? 'bg-green-500' : 'bg-slate-300'}`}></div>
-                                     <span className="text-[10px] text-slate-500 font-medium truncate max-w-[80px]">{formatActivityPreviewText(item.text || "Activity")}</span>
-                                   </>
-                                ) : (
-                                   <>
-                                     <svg className="w-3.5 h-3.5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                   </>
+                                const ms = nextDueMs(d)
+                                const count = (d.activitySchedules||[]).length
+                                if (item) {
+                                  const label = isThisWeek(ms) ? "This week" : isNextWeek(ms) ? "Next week" : formatDate(ms)
+                                  const style = isThisWeek(ms)
+                                    ? "bg-blue-50 text-[#2D4485] border-blue-100"
+                                    : isNextWeek(ms)
+                                      ? "bg-violet-50 text-violet-700 border-violet-200"
+                                      : "bg-slate-100 text-slate-700 border-slate-200"
+                                  return (
+                                    <>
+                                      <span className={`text-[11px] px-2 py-0.5 rounded-full border ${style}`}>{label}</span>
+                                      <span className="text-[11px] px-2 py-0.5 rounded-full border bg-slate-100 text-slate-700 border-slate-200">{count} activities</span>
+                                    </>
+                                  )
+                                }
+                                return (
+                                  <>
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full border bg-slate-100 text-slate-500 border-slate-200">No activities</span>
+                                  </>
                                 )
                              })()}
                            </div>
@@ -811,19 +896,35 @@ function CRMPage() {
                                 const isEditing = !!(editingScheduleKey && editingScheduleKey.stageIndex===openActivity.stageIndex && editingScheduleKey.cardIndex===openActivity.cardIndex && editingScheduleKey.idx===i)
                                 return (
                                   <>
-                                    <input
-                                      type="datetime-local"
-                                      value={it.dueAt || ""}
-                                      onChange={(e)=>{
-                                        const { stageIndex, cardIndex } = openActivity
-                                        updateDeal(stageIndex, cardIndex, (prev)=>({
-                                          ...prev,
-                                          activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, dueAt: e.target.value } : s)
-                                        }))
-                                      }}
-                                      disabled={!isEditing}
-                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
-                                    />
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="datetime-local"
+                                        value={it.dueAt || ""}
+                                        onChange={(e)=>{
+                                          const { stageIndex, cardIndex } = openActivity
+                                          updateDeal(stageIndex, cardIndex, (prev)=>({
+                                            ...prev,
+                                            activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, dueAt: e.target.value } : s)
+                                          }))
+                                        }}
+                                        disabled={!isEditing}
+                                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      />
+                                      {isEditing && (
+                                        <button
+                                          className="px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs"
+                                          onClick={()=>{
+                                            try { 
+                                              const el = document.getElementById(`scheduleText-${openActivity.stageIndex}-${openActivity.cardIndex}-${i}`)
+                                              if (el) el.focus()
+                                            } catch {}
+                                          }}
+                                          title="OK"
+                                        >
+                                          OK
+                                        </button>
+                                      )}
+                                    </div>
                                     <input
                                       type="text"
                                       value={it.text || ""}
@@ -835,6 +936,7 @@ function CRMPage() {
                                         }))
                                       }}
                                       placeholder="Details"
+                                      id={`scheduleText-${openActivity.stageIndex}-${openActivity.cardIndex}-${i}`}
                                       className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <div className="relative">
@@ -884,18 +986,30 @@ function CRMPage() {
                             <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
                               <div className="flex flex-wrap items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-inner">
                                 <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Due</span>
-                                <input
-                                  type="datetime-local"
-                                  value={scheduleDueInput}
-                                  onChange={(e)=>setScheduleDueInput(e.target.value)}
-                                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
-                                />
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="datetime-local"
+                                    value={scheduleDueInput}
+                                    onChange={(e)=>setScheduleDueInput(e.target.value)}
+                                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                                  />
+                                  <button
+                                    className="px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs"
+                                    onClick={()=>{
+                                      try { const el = document.getElementById('newScheduleText'); if (el) el.focus() } catch {}
+                                    }}
+                                    title="OK"
+                                  >
+                                    OK
+                                  </button>
+                                </div>
                                 <input
                                   type="text"
                                   value={scheduleText}
                                   onChange={(e)=>setScheduleText(e.target.value)}
                                   placeholder="Scheduled activity details"
                                   autoFocus
+                                  id="newScheduleText"
                                   className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                                 />
                               </div>
@@ -929,6 +1043,14 @@ function CRMPage() {
                         </div>
                       </>
                     )})()}
+                  </div>
+                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end bg-slate-50/50">
+                    <button
+                      className="px-4 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm transition-all text-sm font-medium"
+                      onClick={() => setOpenActivity(null)}
+                    >
+                      OK
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1063,6 +1185,80 @@ function CRMPage() {
                         <button className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium" onClick={() => { saveDetail(); setIsEditingDetail(false) }}>Save Changes</button>
                       </>
                     )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {showImport && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40" onClick={() => setShowImport(false)}>
+              <div className="absolute left-1/2 top-28 -translate-x-1/2 w-[520px]" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 text-lg">Import Deals</h3>
+                    <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowImport(false)}>✕</button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div className="text-sm text-slate-700">
+                      Upload `.csv` or `.json` with fields like: `title, customer, amount, currency, priority, stage, createdAt, expectedClose`.
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        accept=".csv,.json"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (!f) return
+                          setImportInfo({ name: f.name, count: 0, error: "" })
+                          const reader = new FileReader()
+                          reader.onload = () => {
+                            try {
+                              let rows = []
+                              const text = String(reader.result || "")
+                              if (f.name.toLowerCase().endsWith(".json")) {
+                                const data = JSON.parse(text)
+                                rows = Array.isArray(data) ? data : []
+                              } else {
+                                rows = parseCsvText(text)
+                              }
+                              setImportInfo({ name: f.name, count: rows.length, error: "" })
+                              e.target.dataset.rows = JSON.stringify(rows)
+                            } catch (err) {
+                              setImportInfo({ name: f.name, count: 0, error: "Invalid file format" })
+                            }
+                          }
+                          reader.readAsText(f)
+                        }}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      {importInfo.name && (
+                        <span>File: {importInfo.name} • Rows: {importInfo.count} {importInfo.error && `• ${importInfo.error}`}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+                    <button className="btn-outline" onClick={() => setShowImport(false)}>Cancel</button>
+                    <button
+                      className="btn-primary"
+                      disabled={importing}
+                      onClick={() => {
+                        const input = document.querySelector('input[type="file"][accept=".csv,.json"]')
+                        const data = input?.dataset?.rows ? JSON.parse(input.dataset.rows) : []
+                        if (!data.length) {
+                          setImportInfo((i) => ({ ...i, error: "No data to import" }))
+                          return
+                        }
+                        setImporting(true)
+                        importDeals(data)
+                        setImporting(false)
+                        setShowImport(false)
+                        showNotification(`Imported ${data.length} deals`)
+                      }}
+                    >
+                      {importing ? "Importing..." : "Import"}
+                    </button>
                   </div>
                 </div>
               </div>
