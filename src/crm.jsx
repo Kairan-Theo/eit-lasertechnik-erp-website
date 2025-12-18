@@ -6,20 +6,45 @@ import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 const initialPipeline = {
-    New: [
-    { id: 1, title: "Disscuing Goods Price", customer: "Big C Supercenter PLC", amount: 0, currency: "฿", priority: "none", contact: "", email: "", phone: "", notes: "" },
+  "Appointment Schedule": [
+    { id: 1, title: "Discussing Goods Price", customer: "Big C Supercenter PLC", amount: 0, currency: "฿", priority: "none", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0] },
   ],
-  Qualified: [
-    { id: 2, title: "Selling New Machines", customer: "SIANGHAI EITING TRADING COMPANY", amount: 50000, currency: "฿", priority: "high", contact: "", email: "", phone: "", notes: "" },
+  "Presentation Schedule": [
+    { id: 2, title: "Selling New Machines", customer: "SIANGHAI EITING TRADING COMPANY", amount: 50000, currency: "฿", priority: "high", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 45*24*60*60*1000).toISOString().split('T')[0] },
   ],
-  Proposition: [
-    { id: 3, title: "Introduced New Plan about Manufacturing", customer: "METRO MACHINERY", amount: 100, currency: "฿", priority: "medium", contact: "", email: "", phone: "", notes: "" },
+  Quotation: [
+    { id: 3, title: "Introduced New Plan about Manufacturing", customer: "METRO MACHINERY", amount: 100, currency: "฿", priority: "medium", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 20*24*60*60*1000).toISOString().split('T')[0] },
   ],
-  Won: [
-    { id: 4, title: "Negotitated and made contract", customer: "Konvy", amount: 80000, currency: "฿", priority: "low", contact: "", email: "", phone: "", notes: "" },
+  Demo: [],
+  Decision: [],
+  Connection: [],
+  "Close Won": [
+    { id: 4, title: "Negotiated and made contract", customer: "Konvy", amount: 80000, currency: "฿", priority: "low", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 10*24*60*60*1000).toISOString().split('T')[0] },
   ],
-  Lost: [],
 }
+
+const thaiCompanies = [
+  "PTT Public Company Limited",
+  "SCG (Siam Cement Group)",
+  "CP All Public Company Limited",
+  "Advanced Info Service (AIS)",
+  "Kasikornbank",
+  "Siam Commercial Bank",
+  "Bangkok Bank",
+  "True Corporation",
+  "Thai Beverage",
+  "Central Retail Corporation",
+  "Charoen Pokphand Foods",
+  "PTT Exploration and Production",
+  "Airports of Thailand",
+  "Energy Absolute",
+  "Gulf Energy Development",
+  "Intouch Holdings",
+  "Minor International",
+  "Indorama Ventures",
+  "Bangkok Dusit Medical Services",
+  "Electricity Generating Public Company"
+]
 
 function CRMPage() {
   const [stages, setStages] = React.useState(
@@ -59,6 +84,11 @@ function CRMPage() {
   const [openScheduleMenuKey, setOpenScheduleMenuKey] = React.useState(null) // { stageIndex, cardIndex, idx }
   const [editingScheduleKey, setEditingScheduleKey] = React.useState(null) // { stageIndex, cardIndex, idx }
   const [notification, setNotification] = React.useState({ show: false, message: "" })
+  const [sortBy, setSortBy] = React.useState(null) // 'createdAt' | 'lastActivity' | 'expectedClose'
+  const [sortAsc, setSortAsc] = React.useState(false)
+  const [showAddStageModal, setShowAddStageModal] = React.useState(false)
+  const [stageSearch, setStageSearch] = React.useState("")
+  const [showStageSuggestions, setShowStageSuggestions] = React.useState(false)
 
   const showNotification = (msg) => {
     setNotification({ show: true, message: msg })
@@ -101,6 +131,36 @@ function CRMPage() {
     const targetT = Math.min(...pool.map((x)=>x.t))
     const found = pool.find((x)=>x.t===targetT) || arr.find((x)=>x.t===targetT)
     return found ? found.s : null
+  }
+  const lastActivityMs = (d) => {
+    const arr = (d.activitySchedules||[])
+      .map((s)=>new Date(s.dueAt ?? s.startAt).getTime())
+      .filter((n)=>Number.isFinite(n))
+    return arr.length ? Math.max(...arr) : null
+  }
+  const createdMs = (d) => {
+    const t = d.createdAt ? new Date(d.createdAt).getTime() : null
+    return Number.isFinite(t) ? t : null
+  }
+  const closeMs = (d) => {
+    const t = d.expectedClose ? new Date(d.expectedClose).getTime() : null
+    return Number.isFinite(t) ? t : null
+  }
+  const sortDeals = (deals, by, asc) => {
+    if (!by) return deals
+    const getKey = (d) => {
+      if (by==='createdAt') return createdMs(d)
+      if (by==='lastActivity') return lastActivityMs(d)
+      if (by==='expectedClose') return closeMs(d)
+      return null
+    }
+    const normalized = deals.map((d)=>({ d, k: getKey(d) }))
+    normalized.sort((a,b)=>{
+      const ka = a.k ?? (asc ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY)
+      const kb = b.k ?? (asc ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY)
+      return asc ? (ka - kb) : (kb - ka)
+    })
+    return normalized.map((x)=>x.d)
   }
   const isThisWeek = (ms) => {
     if (!ms) return false
@@ -242,9 +302,15 @@ function CRMPage() {
     setMenuOpenIndex(null)
   }
   const addStage = () => {
-    const name = window.prompt("New stage name")
+    setStageSearch("")
+    setShowStageSuggestions(false)
+    setShowAddStageModal(true)
+  }
+
+  const confirmAddStage = (name) => {
     if (!name) return
     setStages((prev) => [...prev, { id: Date.now(), name, deals: [] }])
+    setShowAddStageModal(false)
   }
 
   // Deal card actions
@@ -291,11 +357,13 @@ function CRMPage() {
 
   const getProbability = (stageName) => {
     switch(stageName) {
-      case "New": return 10;
-      case "Qualified": return 20;
-      case "Proposition": return 50;
-      case "Won": return 100;
-      case "Lost": return 0;
+      case "Appointment Schedule": return 10;
+      case "Presentation Schedule": return 25;
+      case "Quotation": return 40;
+      case "Demo": return 55;
+      case "Decision": return 75;
+      case "Connection": return 90;
+      case "Close Won": return 100;
       default: return 10;
     }
   }
@@ -347,11 +415,26 @@ function CRMPage() {
             </svg>
           </div>
           <div className="flex items-center gap-2 text-sm font-medium text-slate-600 overflow-x-auto">
-            {['Deal owner', 'Create date', 'Last activity', 'Close date'].map((label) => (
-               <button key={label} className="px-3 py-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-900 whitespace-nowrap transition-colors flex items-center gap-1">
-                 {label} <span className="text-[10px] opacity-50">▼</span>
-               </button>
-            ))}
+            {[
+              { label: 'Create date', key: 'createdAt' },
+              { label: 'Last activity', key: 'lastActivity' },
+              { label: 'Close date', key: 'expectedClose' },
+            ].map((item) => {
+              const active = sortBy === item.key
+              return (
+                <button
+                  key={item.key}
+                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1 ${active ? 'bg-slate-100 text-slate-900' : 'hover:bg-slate-100 hover:text-slate-900'}`}
+                  onClick={() => {
+                    if (sortBy === item.key) setSortAsc(!sortAsc)
+                    else { setSortBy(item.key); setSortAsc(false) }
+                  }}
+                  title={`Sort by ${item.label}${active ? (sortAsc ? ' (asc)' : ' (desc)') : ''}`}
+                >
+                  {item.label} <span className="text-[10px] opacity-50">{active ? (sortAsc ? '▲' : '▼') : '▼'}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -364,6 +447,7 @@ function CRMPage() {
              const total = totalFor(stage.deals);
              const prob = getProbability(stage.name);
              const weighted = total * (prob / 100);
+             const sortedDeals = sortDeals(stage.deals, sortBy, sortAsc);
              
              return (
               <div
@@ -408,13 +492,19 @@ function CRMPage() {
 
                 {/* Cards Container */}
                 <div className="flex-1 overflow-y-auto p-3">
-                  {stage.deals.map((d, cardIndex) => (
+                  {sortedDeals.map((d, cardIndex) => (
                     <div
                       key={d.id}
                       className="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card"
                       draggable
                       onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
-                    >
+                     >
+                      <div className="mb-2">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100">
+                          <svg className="w-4 h-4 text-[#2D4485]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                          <span className="truncate text-xs leading-tight max-w-[280px]" title={d.customer}>{d.customer}</span>
+                        </span>
+                      </div>
                       <div className="flex justify-between items-start gap-2 mb-3">
                          <h4 
                            className="font-semibold text-slate-800 text-sm leading-snug hover:text-[#2D4485] cursor-pointer transition-colors"
@@ -431,10 +521,6 @@ function CRMPage() {
                       </div>
                       
                       <div className="space-y-2 mb-3">
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                          <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="truncate">{d.customer}</span>
-                        </div>
                         <div className="flex items-center gap-1.5 text-slate-900 font-bold text-sm">
                           <span className="text-xs font-normal text-slate-400">{d.currency}</span>
                           {d.amount.toLocaleString()}
@@ -940,6 +1026,7 @@ function CRMPage() {
                           notes: "",
                           activitySchedules: [],
                           probability: 10,
+                          createdAt: new Date().toISOString(),
                           expectedClose: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                         }
                         setStages((prev)=>prev.map((s,i)=> i===newDeal.stageIndex ? { ...s, deals: [...s.deals, deal] } : s))
@@ -948,6 +1035,77 @@ function CRMPage() {
                       }}
                     >
                       Create Deal
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {showAddStageModal && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 transition-opacity" onClick={() => setShowAddStageModal(false)}>
+              <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[400px] transition-all" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 text-lg">Add New Stage</h3>
+                    <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowAddStageModal(false)}>✕</button>
+                  </div>
+                  <div className="p-6">
+                    <div className="space-y-4">
+                      <div className="relative">
+                        <label className="block text-sm font-medium text-slate-500 mb-2">Company Name</label>
+                        <input 
+                          value={stageSearch} 
+                          onChange={(e) => {
+                            setStageSearch(e.target.value)
+                            setShowStageSuggestions(true)
+                          }}
+                          onFocus={() => setShowStageSuggestions(true)}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Search or enter company name..."
+                          autoFocus
+                        />
+                        {showStageSuggestions && stageSearch && (
+                          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+                            {thaiCompanies.filter(c => c.toLowerCase().includes(stageSearch.toLowerCase())).map((c, i) => (
+                              <button
+                                key={i}
+                                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                                onClick={() => {
+                                  setStageSearch(c)
+                                  setShowStageSuggestions(false)
+                                }}
+                              >
+                                {c}
+                              </button>
+                            ))}
+                            {stageSearch && !thaiCompanies.some(c => c.toLowerCase() === stageSearch.toLowerCase()) && (
+                              <button
+                                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
+                                onClick={() => {
+                                  setShowStageSuggestions(false)
+                                }}
+                              >
+                                + Add "{stageSearch}"
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+                    <button 
+                      className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm" 
+                      onClick={() => setShowAddStageModal(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium" 
+                      onClick={() => confirmAddStage(stageSearch)}
+                      disabled={!stageSearch.trim()}
+                    >
+                      Add Stage
                     </button>
                   </div>
                 </div>
