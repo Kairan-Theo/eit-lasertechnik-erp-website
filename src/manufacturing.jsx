@@ -240,7 +240,7 @@ function ManufacturingOrderPage() {
                 <tr className="text-gray-700 bg-gray-50">
                   <th className="p-3 w-8"></th>
                   <th className="p-3 text-left font-medium">Priority</th>
-                  <th className="p-3 text-left font-medium">Reference</th>
+                  <th className="p-3 text-left font-medium">Purchase Order</th>
                 <th className="p-3 text-left font-medium">Start</th>
                 <th className="p-3 text-left font-medium">Product</th>
                 <th className="p-3 text-left font-medium">Customer</th>
