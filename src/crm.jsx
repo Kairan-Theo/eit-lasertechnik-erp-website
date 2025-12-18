@@ -18,27 +18,28 @@ const initialPipeline = {
   Demo: [],
   Decision: [],
   Connection: [],
+  "Contract Sent": [],
   "Close Won": [
     { id: 4, title: "Negotiated and made contract", customer: "Konvy", amount: 80000, currency: "฿", priority: "low", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 10*24*60*60*1000).toISOString().split('T')[0] },
   ],
 }
 
 const thaiCompanies = [
-  { name: "EIT LASERTECHNIK (Einstein Industrie Technik)", contact: "Sales Team", email: "sales@eitlaser.com", phone: "02-052-9544", address: "1/120 Ramkamhaeng Soi 184, Minburi, Minburi, Bangkok 10510" },
-  { name: "PTT Public Company Limited", contact: "Auttapol Rerkpiboon", email: "auttapol.r@pttplc.com", phone: "02-537-2000", address: "555 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
-  { name: "SCG (Siam Cement Group)", contact: "Roongrote Rangsiyopash", email: "roongrote.r@scg.com", phone: "02-586-3333", address: "1 Siam Cement Rd, Bang Sue, Bangkok 10800" },
-  { name: "CP All Public Company Limited", contact: "Korsak Chairasmisak", email: "korsak.c@cpall.co.th", phone: "02-071-9000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500" },
-  { name: "Advanced Info Service (AIS)", contact: "Somchai Lertsutiwong", email: "somchai.l@ais.co.th", phone: "02-029-5000", address: "414 Phaholyothin Rd, Phaya Thai, Bangkok 10400" },
-  { name: "Kasikornbank", contact: "Kattiya Indaravijaya", email: "kattiya.i@kasikornbank.com", phone: "02-888-8888", address: "400/22 Phahon Yothin Rd, Phaya Thai, Bangkok 10400" },
-  { name: "Siam Commercial Bank", contact: "Arthid Nanthawithaya", email: "arthid.n@scb.co.th", phone: "02-777-7777", address: "9 Ratchadapisek Rd, Chatuchak, Bangkok 10900" },
-  { name: "Bangkok Bank", contact: "Chartsiri Sophonpanich", email: "chartsiri.s@bangkokbank.com", phone: "1333", address: "333 Silom Rd, Bang Rak, Bangkok 10500" },
-  { name: "True Corporation", contact: "Manat Manavutiveth", email: "manat.m@truecorp.co.th", phone: "1242", address: "18 True Tower, Ratchadaphisek Rd, Huai Khwang, Bangkok 10310" },
-  { name: "Thai Beverage", contact: "Thapana Sirivadhanabhakdi", email: "thapana.s@thaibev.com", phone: "02-785-5555", address: "14 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
-  { name: "Central Retail Corporation", contact: "Yol Phokasub", email: "yol.p@central.co.th", phone: "02-650-3600", address: "22 Soi Somkid, Ploenchit Rd, Pathum Wan, Bangkok 10330" },
-  { name: "Charoen Pokphand Foods", contact: "Prasit Boondoungprasert", email: "prasit.b@cpf.co.th", phone: "02-766-8000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500" },
-  { name: "PTT Exploration and Production", contact: "Montri Rawanchaikul", email: "montri.r@pttep.com", phone: "02-537-4000", address: "555/1 Energy Complex, Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
-  { name: "Airports of Thailand", contact: "Nitinai Sirismatthakarn", email: "nitinai.s@aot.co.th", phone: "02-535-1111", address: "333 Cherdwutagard Rd, Don Mueang, Bangkok 10210" },
-  { name: "Energy Absolute", contact: "Somphote Ahunai", email: "somphote.a@energyabsolute.co.th", phone: "02-248-2455", address: "89 AIA Capital Center, Ratchadaphisek Rd, Din Daeng, Bangkok 10400" },
+  { name: "EIT LASERTECHNIK (Einstein Industrie Technik)", contact: "Sales Team", email: "sales@eitlaser.com", phone: "02-052-9544", address: "1/120 Ramkamhaeng Soi 184, Minburi, Minburi, Bangkok 10510", taxId: "" },
+  { name: "PTT Public Company Limited", contact: "Auttapol Rerkpiboon", email: "auttapol.r@pttplc.com", phone: "02-537-2000", address: "555 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900", taxId: "0107544000108" },
+  { name: "SCG (Siam Cement Group)", contact: "Roongrote Rangsiyopash", email: "roongrote.r@scg.com", phone: "02-586-3333", address: "1 Siam Cement Rd, Bang Sue, Bangkok 10800", taxId: "0107537000114" },
+  { name: "CP All Public Company Limited", contact: "Korsak Chairasmisak", email: "korsak.c@cpall.co.th", phone: "02-071-9000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500", taxId: "0107542000011" },
+  { name: "Advanced Info Service (AIS)", contact: "Somchai Lertsutiwong", email: "somchai.l@ais.co.th", phone: "02-029-5000", address: "414 Phaholyothin Rd, Phaya Thai, Bangkok 10400", taxId: "0107535000265" },
+  { name: "Kasikornbank", contact: "Kattiya Indaravijaya", email: "kattiya.i@kasikornbank.com", phone: "02-888-8888", address: "400/22 Phahon Yothin Rd, Phaya Thai, Bangkok 10400", taxId: "0107536000315" },
+  { name: "Siam Commercial Bank", contact: "Arthid Nanthawithaya", email: "arthid.n@scb.co.th", phone: "02-777-7777", address: "9 Ratchadapisek Rd, Chatuchak, Bangkok 10900", taxId: "0107536000102" },
+  { name: "Bangkok Bank", contact: "Chartsiri Sophonpanich", email: "chartsiri.s@bangkokbank.com", phone: "1333", address: "333 Silom Rd, Bang Rak, Bangkok 10500", taxId: "0107536000374" },
+  { name: "True Corporation", contact: "Manat Manavutiveth", email: "manat.m@truecorp.co.th", phone: "1242", address: "18 True Tower, Ratchadaphisek Rd, Huai Khwang, Bangkok 10310", taxId: "0107536000081" },
+  { name: "Thai Beverage", contact: "Thapana Sirivadhanabhakdi", email: "thapana.s@thaibev.com", phone: "02-785-5555", address: "14 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900", taxId: "0107546000342" },
+  { name: "Central Retail Corporation", contact: "Yol Phokasub", email: "yol.p@central.co.th", phone: "02-650-3600", address: "22 Soi Somkid, Ploenchit Rd, Pathum Wan, Bangkok 10330", taxId: "0107562000386" },
+  { name: "Charoen Pokphand Foods", contact: "Prasit Boondoungprasert", email: "prasit.b@cpf.co.th", phone: "02-766-8000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500", taxId: "0107537000246" },
+  { name: "PTT Exploration and Production", contact: "Montri Rawanchaikul", email: "montri.r@pttep.com", phone: "02-537-4000", address: "555/1 Energy Complex, Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900", taxId: "0107535000206" },
+  { name: "Airports of Thailand", contact: "Nitinai Sirismatthakarn", email: "nitinai.s@aot.co.th", phone: "02-535-1111", address: "333 Cherdwutagard Rd, Don Mueang, Bangkok 10210", taxId: "0107545000292" },
+  { name: "Energy Absolute", contact: "Somphote Ahunai", email: "somphote.a@energyabsolute.co.th", phone: "02-248-2455", address: "89 AIA Capital Center, Ratchadaphisek Rd, Din Daeng, Bangkok 10400", taxId: "0107551000061" },
   { name: "Gulf Energy Development", contact: "Sarath Ratanavadi", email: "sarath.r@gulf.co.th", phone: "02-080-4499", address: "87 M. Thai Tower, All Seasons Place, Wireless Rd, Pathum Wan, Bangkok 10330" },
   { name: "Intouch Holdings", contact: "Kim Siritaweechai", email: "kim.s@intouchcompany.com", phone: "02-118-6900", address: "87 M. Thai Tower, All Seasons Place, Wireless Rd, Pathum Wan, Bangkok 10330" },
   { name: "Minor International", contact: "William Heinecke", email: "william.h@minor.com", phone: "02-365-7500", address: "88 The Parq Building, Ratchadaphisek Rd, Khlong Toei, Bangkok 10110" },
@@ -90,6 +91,7 @@ function CRMPage() {
   const [detailEmail, setDetailEmail] = React.useState("")
   const [detailPhone, setDetailPhone] = React.useState("")
   const [detailAddress, setDetailAddress] = React.useState("")
+  const [detailTaxId, setDetailTaxId] = React.useState("")
   const [openPriority, setOpenPriority] = React.useState(null) // { stageIndex, cardIndex }
   const priorityClass = (p) => (p==='high' ? 'bg-red-100 text-red-700' : p==='medium' ? 'bg-orange-100 text-orange-700' : p==='low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
   const priorityLabel = (p) => (p && p!=='none' ? p.charAt(0).toUpperCase()+p.slice(1) : 'Set Priority')
@@ -100,6 +102,7 @@ function CRMPage() {
     email: "",
     phone: "",
     address: "",
+    taxId: "",
     amount: 0,
     currency: "฿",
     priority: "none",
@@ -126,7 +129,7 @@ function CRMPage() {
     setTimeout(() => setNotification({ show: false, message: "" }), 3000)
   }
 
-  const notifyTeam = (msg) => {
+  const notifyTeam = (msg, type = "info", company = "", source = "") => {
     try {
       const list = JSON.parse(localStorage.getItem("notifications") || "[]")
       list.unshift({
@@ -134,7 +137,9 @@ function CRMPage() {
         message: msg,
         timestamp: new Date().toISOString(),
         unread: true,
-        type: "info"
+        type,
+        company: company || "",
+        source: source || ""
       })
       // Keep only last 50
       if (list.length > 50) list.length = 50
@@ -257,6 +262,7 @@ function CRMPage() {
     setDetailEmail(d.email || "")
     setDetailPhone(d.phone || "")
     setDetailAddress(d.address || "")
+    setDetailTaxId(d.taxId || "")
     setOpenDetail({ stageIndex, cardIndex })
   }
 
@@ -265,7 +271,7 @@ function CRMPage() {
     const { stageIndex, cardIndex } = openDetail
     setStages((prev) => prev.map((s, i) => {
       if (i !== stageIndex) return s
-      const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, notes: detailNotes, contact: detailContact, email: detailEmail, phone: detailPhone, address: detailAddress } : d))
+      const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, notes: detailNotes, contact: detailContact, email: detailEmail, phone: detailPhone, address: detailAddress, taxId: detailTaxId } : d))
       return { ...s, deals }
     }))
     setOpenDetail(null)
@@ -283,9 +289,13 @@ function CRMPage() {
     // Get card details for notification before state update
     const card = stages[fromStageIndex].deals[cardIndex]
     if (card) {
-      const msg = `Moved "${card.title}" to ${stages[toStageIndex].name}`
+      const stageName = stages[toStageIndex].name
+      const sname = String(stageName || "").toLowerCase()
+      const isClosedWon = sname.includes("close") && sname.includes("won")
+      const baseMsg = `CRM: Moved "${card.title}" to ${stageName}`
+      const msg = isClosedWon ? `${baseMsg} — Create PO or Receive PO` : baseMsg
       showNotification(msg)
-      notifyTeam(msg)
+      notifyTeam(msg, isClosedWon ? "success" : "info", card.customer || "", "CRM")
     }
 
     setStages((prev) => {
@@ -900,6 +910,15 @@ function CRMPage() {
                             placeholder="Company address"
                           />
                         </div>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Tax ID</label>
+                          <input 
+                            value={detailTaxId} 
+                            onChange={(e)=>setDetailTaxId(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Tax ID"
+                          />
+                        </div>
                         <div className="pt-2">
                           <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
                           <textarea 
@@ -960,7 +979,7 @@ function CRMPage() {
                                   key={i}
                                   className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
                                   onClick={() => {
-                                    setNewDeal({...newDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || ""})
+                                    setNewDeal({...newDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || "", taxId: c.taxId || ""})
                                     setShowCompanySuggestions(false)
                                   }}
                                 >
@@ -1025,6 +1044,15 @@ function CRMPage() {
                           onChange={(e)=>setNewDeal({...newDeal, address:e.target.value})} 
                           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
                           placeholder="Company address"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Tax ID</label>
+                        <input 
+                          value={newDeal.taxId} 
+                          onChange={(e)=>setNewDeal({...newDeal, taxId:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Tax ID"
                         />
                       </div>
                       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
@@ -1101,6 +1129,7 @@ function CRMPage() {
                           email: newDeal.email || "",
                           phone: newDeal.phone || "",
                           address: newDeal.address || "",
+                          taxId: newDeal.taxId || "",
                           notes: "",
                           activitySchedules: [],
                           probability: 10,
@@ -1110,6 +1139,15 @@ function CRMPage() {
                         setStages((prev)=>prev.map((s,i)=> i===newDeal.stageIndex ? { ...s, deals: [...s.deals, deal] } : s))
                         setShowNewForm(false)
                         setNewDeal(defaultNewDeal)
+                        try {
+                          const stageName = stages[newDeal.stageIndex]?.name || ""
+                          const sname = String(stageName).toLowerCase()
+                          const isClosedWon = sname.includes("close") && sname.includes("won")
+                          const baseMsg = `CRM: Created "${deal.title}" in ${stageName}`
+                          const msg = isClosedWon ? `${baseMsg} — Create PO or Receive PO` : baseMsg
+                          showNotification(msg)
+                          notifyTeam(msg, isClosedWon ? "success" : "info", deal.customer || "", "CRM")
+                        } catch {}
                       }}
                     >
                       Create Deal
