@@ -3,6 +3,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
+import emailjs from '@emailjs/browser';
 import "./index.css"
 
 const initialPipeline = {
@@ -120,6 +121,25 @@ function CRMPage() {
   const [sortBy, setSortBy] = React.useState(null) // 'createdAt' | 'lastActivity' | 'expectedClose'
   const [sortAsc, setSortAsc] = React.useState(false)
   const [showCompanySuggestions, setShowCompanySuggestions] = React.useState(false)
+  const [openEmail, setOpenEmail] = React.useState(null) // { stageIndex, cardIndex, to }
+  const [emailSubject, setEmailSubject] = React.useState("")
+  const [emailBody, setEmailBody] = React.useState("")
+  const [isSending, setIsSending] = React.useState(false)
+  const [emailConfig, setEmailConfig] = React.useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("email_config")) || { serviceId: "", templateId: "", publicKey: "" }
+    } catch {
+      return { serviceId: "", templateId: "", publicKey: "" }
+    }
+  })
+  const [showEmailSettings, setShowEmailSettings] = React.useState(false)
+
+  const saveEmailConfig = (cfg) => {
+    setEmailConfig(cfg)
+    localStorage.setItem("email_config", JSON.stringify(cfg))
+    setShowEmailSettings(false)
+    showNotification("Email settings saved")
+  }
 
   const showNotification = (msg) => {
     setNotification({ show: true, message: msg })
@@ -269,6 +289,13 @@ function CRMPage() {
       return { ...s, deals }
     }))
     setOpenDetail(null)
+  }
+
+  const openEmailModal = (stageIndex, cardIndex) => {
+    const d = stages[stageIndex].deals[cardIndex]
+    setOpenEmail({ stageIndex, cardIndex, to: d.email || "" })
+    setEmailSubject(`Regarding: ${d.title}`)
+    setEmailBody(`Dear ${d.contact || "Partner"},\n\n`)
   }
 
   // Drag cards between stages
@@ -526,9 +553,13 @@ function CRMPage() {
                       onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
                      >
                       <div className="mb-2">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100">
+                        <span 
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); openEmailModal(stageIndex, cardIndex); }}
+                          title="Click to send email"
+                        >
                           <svg className="w-4 h-4 text-[#2D4485]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="truncate text-xs leading-tight max-w-[280px]" title={d.customer}>{d.customer}</span>
+                          <span className="truncate text-xs leading-tight max-w-[280px]">{d.customer}</span>
                         </span>
                       </div>
                       <div className="flex justify-between items-start gap-2 mb-3">
@@ -1116,6 +1147,182 @@ function CRMPage() {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+          {openEmail && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity" onClick={() => setOpenEmail(null)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200" onClick={e => e.stopPropagation()}>
+                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                   <h3 className="font-bold text-slate-800 text-lg">
+                     {showEmailSettings ? "Email Configuration" : "Send Email"}
+                   </h3>
+                   <div className="flex items-center gap-2">
+                     {!showEmailSettings && (
+                       <button 
+                         onClick={() => setShowEmailSettings(true)} 
+                         className="p-1.5 text-slate-400 hover:text-[#2D4485] hover:bg-blue-50 rounded-full transition-colors"
+                         title="Configure Email Service"
+                       >
+                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                       </button>
+                     )}
+                     <button onClick={() => setOpenEmail(null)} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+                   </div>
+                 </div>
+                 
+                 {showEmailSettings ? (
+                   <div className="p-6 space-y-4">
+                     <div className="text-sm text-slate-600 bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
+                       To send emails directly from this app (without opening Outlook/Mail), you need a free account from <a href="https://www.emailjs.com/" target="_blank" rel="noreferrer" className="text-blue-600 underline hover:text-blue-800">EmailJS.com</a>.
+                       <br/><br/>
+                       1. Sign up & Create a Service (e.g. Gmail)<br/>
+                       2. Create an Email Template<br/>
+                       3. Copy your keys here:
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-slate-700 mb-1.5">Service ID</label>
+                       <input 
+                         type="text" 
+                         value={emailConfig.serviceId} 
+                         onChange={e => setEmailConfig({...emailConfig, serviceId: e.target.value})}
+                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                         placeholder="service_..."
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-slate-700 mb-1.5">Template ID</label>
+                       <input 
+                         type="text" 
+                         value={emailConfig.templateId} 
+                         onChange={e => setEmailConfig({...emailConfig, templateId: e.target.value})}
+                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                         placeholder="template_..."
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-slate-700 mb-1.5">Public Key</label>
+                       <input 
+                         type="text" 
+                         value={emailConfig.publicKey} 
+                         onChange={e => setEmailConfig({...emailConfig, publicKey: e.target.value})}
+                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                         placeholder="User ID / Public Key"
+                       />
+                     </div>
+                     <div className="pt-4 flex justify-end gap-3">
+                        <button 
+                          onClick={() => setShowEmailSettings(false)}
+                          className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={() => saveEmailConfig(emailConfig)}
+                          className="px-4 py-2 text-sm font-medium text-white bg-[#2D4485] hover:bg-[#3D56A6] rounded-lg shadow-sm transition-all"
+                        >
+                          Save Configuration
+                        </button>
+                     </div>
+                   </div>
+                 ) : (
+                   <>
+                     <div className="p-6 space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1.5">To</label>
+                          <input 
+                            type="email" 
+                            value={openEmail.to} 
+                            onChange={e => setOpenEmail({...openEmail, to: e.target.value})}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1.5">Subject</label>
+                          <input 
+                            type="text" 
+                            value={emailSubject} 
+                            onChange={e => setEmailSubject(e.target.value)}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1.5">Message</label>
+                          <textarea 
+                            rows={6}
+                            value={emailBody} 
+                            onChange={e => setEmailBody(e.target.value)}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none resize-none transition-all"
+                          />
+                        </div>
+                     </div>
+                     <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-end gap-3 items-center">
+                       {!emailConfig.serviceId && (
+                         <span className="text-xs text-slate-500 mr-auto max-w-[200px] leading-tight">
+                           Tip: Click the gear icon <span className="inline-block align-middle"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span> to configure instant sending.
+                         </span>
+                       )}
+                       
+                       <button 
+                         onClick={() => {
+                           const subject = encodeURIComponent(emailSubject);
+                           const body = encodeURIComponent(emailBody.replace(/\n/g, "\r\n"));
+                           const mailtoLink = `mailto:${openEmail.to}?subject=${subject}&body=${body}`;
+                           const link = document.createElement('a');
+                           link.href = mailtoLink;
+                           link.target = '_blank';
+                           document.body.appendChild(link);
+                           link.click();
+                           document.body.removeChild(link);
+                           setOpenEmail(null);
+                         }}
+                         className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200/50 rounded-lg transition-colors border border-transparent hover:border-slate-200"
+                       >
+                         Open Mail App
+                       </button>
+
+                       {emailConfig.serviceId && (
+                         <button 
+                           onClick={async () => {
+                             if (!openEmail.to) {
+                               showNotification("Please enter an email address");
+                               return;
+                             }
+                             setIsSending(true);
+                             try {
+                               await emailjs.send(emailConfig.serviceId, emailConfig.templateId, {
+                                  to_email: openEmail.to,
+                                  subject: emailSubject,
+                                  message: emailBody,
+                               }, emailConfig.publicKey);
+                               showNotification(`Email sent successfully to ${openEmail.to}`);
+                               setOpenEmail(null);
+                             } catch (error) {
+                               console.error("Email failed:", error);
+                               showNotification("Failed to send. Check configuration.");
+                             } finally {
+                               setIsSending(false);
+                             }
+                           }}
+                           disabled={isSending}
+                           className="px-4 py-2 text-sm font-medium text-white bg-[#2D4485] hover:bg-[#3D56A6] rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+                         >
+                           {isSending ? (
+                             <>
+                               <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                               </svg>
+                               Sending...
+                             </>
+                           ) : (
+                             "Send Now"
+                           )}
+                         </button>
+                       )}
+                     </div>
+                   </>
+                 )}
               </div>
             </div>
           )}
