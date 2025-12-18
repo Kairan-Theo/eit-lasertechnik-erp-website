@@ -368,7 +368,7 @@ function InventoryTable({ inv }) {
             <thead>
               <tr className="text-[#2D4485] bg-gray-50">
                 <th className="p-3 text-left">Item Photo</th>
-                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>Reference</th>
+                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>Product Number</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
@@ -472,10 +472,7 @@ function InventoryTable({ inv }) {
       
       {inv.showAdd && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowAdd(false)}>
-          <div className="bg-wh {
-           i    te rounded-xl shadow-lg w-full max
-                inv.setShowEdit(null)
-              }-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-4 text-gray-900">Add Inventory Item</div>
             <AddItemForm onCancel={() => inv.setShowAdd(false)} onSave={inv.addItem} />
           </div>
@@ -597,7 +594,7 @@ function AddItemForm({ onCancel, onSave, initialData }) {
   return (
     <div className="space-y-3">
       {initialData && (
-        <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{f.sku}</span></div>
+        <div className="text-sm text-gray-700">Product Number: <span className="font-semibold">{f.sku}</span></div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
@@ -627,7 +624,7 @@ function AdjustForm({ sku, current = 0, onCancel, onConfirm }) {
   const canConfirm = Number.isFinite(newQty)
   return (
     <div className="space-y-3">
-      <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
+      <div className="text-sm text-gray-700">Product Number: <span className="font-semibold">{sku}</span></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className="block text-sm text-gray-700 mb-1">Current stock</label>
@@ -656,7 +653,7 @@ function TransferForm({ sku, from, warehouses, onCancel, onConfirm }) {
   const [ref, setRef] = React.useState("")
   return (
     <div className="space-y-3">
-      <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
+      <div className="text-sm text-gray-700">Product Number: <span className="font-semibold">{sku}</span></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} placeholder="Qty" className="rounded-md border border-gray-300 px-3 py-2" />
         <div className="rounded-md border border-gray-300 px-3 py-2">
@@ -715,7 +712,7 @@ function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
   const loc = `${warehouse || "Main"} / ${bin || "A-01-01"}${lot ? " / " + lot : ""}`
   return (
     <div className="space-y-3">
-      <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
+      <div className="text-sm text-gray-700">Product Number: <span className="font-semibold">{sku}</span></div>
       <div className="text-xs text-gray-600">Location: {loc}</div>
       <div className="overflow-x-auto border rounded-xl">
         <table className="min-w-full text-sm">
@@ -761,7 +758,7 @@ function ReceiveForm({ sku, onCancel, onConfirm }) {
   const [ref, setRef] = React.useState("")
   return (
     <div className="space-y-3">
-      <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
+      <div className="text-sm text-gray-700">Product Number: <span className="font-semibold">{sku}</span></div>
       <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} placeholder="Qty received" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="PO/GRN Reference" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <div className="flex justify-end gap-2">
@@ -823,7 +820,7 @@ function InventoryPage() {
                   value={inv.query}
                   onChange={(e) => inv.setQuery(e.target.value)}
                   className="w-64 rounded-md border border-gray-300 px-3 py-2"
-                  placeholder="Search by name or reference"
+                  placeholder="Search by name or product number"
                 />
                  <button
                     onClick={() => {

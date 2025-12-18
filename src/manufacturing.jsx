@@ -14,7 +14,7 @@ function ManufacturingOrderPage() {
   const [scheduleDueInput, setScheduleDueInput] = React.useState("")
   const [scheduleText, setScheduleText] = React.useState("")
   const [showNew, setShowNew] = React.useState(false)
-  const [newOrder, setNewOrder] = React.useState({ product: "", quantity: 1, scheduledDate: "", priority: "None", customer: "" })
+  const [newOrder, setNewOrder] = React.useState({ product: "", productNo: "", unit: "Unit", quantity: 1, scheduledDate: "", completedDate: "", productionTime: "", responsible: "", priority: "None", customer: "" })
   const [editingCustomerId, setEditingCustomerId] = React.useState(null)
   const [editingCustomerValue, setEditingCustomerValue] = React.useState("")
   const [editingProductId, setEditingProductId] = React.useState(null)
@@ -34,6 +34,18 @@ function ManufacturingOrderPage() {
   const popoverRef = React.useRef(null)
   const [draggingScheduleKey, setDraggingScheduleKey] = React.useState(null)
   const [dragOverIdx, setDragOverIdx] = React.useState(null)
+  const [inventoryItems, setInventoryItems] = React.useState([])
+  const [showProductDropdown, setShowProductDropdown] = React.useState(false)
+
+  React.useEffect(() => {
+    try {
+      const data = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
+      if (Array.isArray(data)) {
+        setInventoryItems(data)
+      }
+    } catch {}
+  }, [])
+
   React.useEffect(() => {
     if (!orders.length) {
       const seed = [
@@ -239,15 +251,20 @@ function ManufacturingOrderPage() {
                 <tr className="text-gray-700 bg-gray-50">
                   <th className="p-3 w-8"></th>
                   <th className="p-3 text-left font-medium">Priority</th>
-                  <th className="p-3 text-left font-medium">Reference</th>
-                <th className="p-3 text-left font-medium">Start</th>
-                <th className="p-3 text-left font-medium">Product</th>
-                <th className="p-3 text-left font-medium">Customer</th>
-                <th className="p-3 text-left font-medium">Component Status</th>
-                <th className="p-3 text-right font-medium">Quantity</th>
-                <th className="p-3 text-left font-medium">State</th>
-                <th className="p-3 w-8"></th>
-              </tr>
+                  <th className="p-3 text-left font-medium">Purchase Order</th>
+                  <th className="p-3 text-left font-medium">Product No.</th>
+                  <th className="p-3 text-left font-medium">Product</th>
+                  <th className="p-3 text-left font-medium">Unit</th>
+                  <th className="p-3 text-right font-medium">Quantity</th>
+                  <th className="p-3 text-left font-medium">Start</th>
+                  <th className="p-3 text-left font-medium">Completed Date</th>
+                  <th className="p-3 text-left font-medium">Production Time</th>
+                  <th className="p-3 text-left font-medium">Responsible</th>
+                  <th className="p-3 text-left font-medium">Customer</th>
+                  <th className="p-3 text-left font-medium">Component Status</th>
+                  <th className="p-3 text-left font-medium">State</th>
+                  <th className="p-3 w-8"></th>
+                </tr>
               </thead>
               <tbody>
                 {[...orders].sort((a,b)=>{
@@ -283,6 +300,89 @@ function ManufacturingOrderPage() {
                     </td>
                     <td className="p-3">
                       <a className="text-[#3D56A6] hover:underline font-medium" href="#">{o.ref}</a>
+                    </td>
+                    <td className="p-3 text-gray-700">{o.productNo || '-'}</td>
+                    <td className="p-3">
+                      {editingProductId===o.id ? (
+                        <input
+                          autoFocus
+                          value={editingProductValue}
+                          onChange={(e)=>setEditingProductValue(e.target.value)}
+                          onBlur={()=>{
+                            const v = editingProductValue.trim()
+                            const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
+                            setAndPersist(next)
+                            setEditingProductId(null)
+                            setEditingProductValue("")
+                          }}
+                          onKeyDown={(e)=>{
+                            if (e.key==='Enter') {
+                              e.preventDefault()
+                              const v = editingProductValue.trim()
+                              const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
+                              setAndPersist(next)
+                              setEditingProductId(null)
+                              setEditingProductValue("")
+                            } else if (e.key==='Escape') {
+                              setEditingProductId(null)
+                              setEditingProductValue("")
+                            }
+                          }}
+                          className="w-72 rounded-md border border-gray-300 px-2 py-1"
+                          placeholder="Add product"
+                        />
+                      ) : (
+                        <button
+                          className="text-[#3D56A6] hover:underline"
+                          onClick={()=>{ setEditingProductId(o.id); setEditingProductValue(o.product || "") }}
+                          title="Edit product"
+                        >
+                          {o.product || 'Add product'}
+                        </button>
+                      )}
+                    </td>
+                    <td className="p-3 text-gray-700">{o.unit || '-'}</td>
+                    <td className="p-3 text-right">
+                      {editingQtyId===o.id ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={editingQtyValue}
+                          onChange={(e)=>setEditingQtyValue(e.target.value)}
+                          onBlur={()=>{
+                            const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
+                            const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
+                            setAndPersist(next)
+                            setEditingQtyId(null)
+                            setEditingQtyValue("")
+                          }}
+                          onKeyDown={(e)=>{
+                            if (e.key==='Enter') {
+                              e.preventDefault()
+                              const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
+                              const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
+                              setAndPersist(next)
+                              setEditingQtyId(null)
+                              setEditingQtyValue("")
+                            } else if (e.key==='Escape') {
+                              setEditingQtyId(null)
+                              setEditingQtyValue("")
+                            }
+                          }}
+                          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-right bg-white"
+                          placeholder="0"
+                        />
+                      ) : (
+                        <button
+                          className="text-[#3D56A6] font-medium hover:underline"
+                          onClick={()=>{ setEditingQtyId(o.id); setEditingQtyValue(String(parseInt(o.quantity,10)||0)) }}
+                          title="Edit quantity"
+                        >
+                          {String(parseInt(o.quantity,10)||0)}
+                        </button>
+                      )}
                     </td>
                     <td className="p-3">
                       {editingStartId===o.id ? (
@@ -327,45 +427,9 @@ function ManufacturingOrderPage() {
                         </button>
                       )}
                     </td>
-                    <td className="p-3">
-                      {editingProductId===o.id ? (
-                        <input
-                          autoFocus
-                          value={editingProductValue}
-                          onChange={(e)=>setEditingProductValue(e.target.value)}
-                          onBlur={()=>{
-                            const v = editingProductValue.trim()
-                            const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
-                            setAndPersist(next)
-                            setEditingProductId(null)
-                            setEditingProductValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const v = editingProductValue.trim()
-                              const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
-                              setAndPersist(next)
-                              setEditingProductId(null)
-                              setEditingProductValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingProductId(null)
-                              setEditingProductValue("")
-                            }
-                          }}
-                          className="w-72 rounded-md border border-gray-300 px-2 py-1"
-                          placeholder="Add product"
-                        />
-                      ) : (
-                        <button
-                          className="text-[#3D56A6] hover:underline"
-                          onClick={()=>{ setEditingProductId(o.id); setEditingProductValue(o.product || "") }}
-                          title="Edit product"
-                        >
-                          {o.product || 'Add product'}
-                        </button>
-                      )}
-                    </td>
+                    <td className="p-3 text-gray-700">{o.completedDate ? fmtFullDate(new Date(o.completedDate).getTime()) : '-'}</td>
+                    <td className="p-3 text-gray-700">{o.productionTime || '-'}</td>
+                    <td className="p-3 text-gray-700">{o.responsible || '-'}</td>
                     <td className="p-3">
                       {editingCustomerId===o.id ? (
                         <input
@@ -438,48 +502,6 @@ function ManufacturingOrderPage() {
                         )}
                       </div>
                     </td>
-                    <td className="p-3 text-right">
-                      {editingQtyId===o.id ? (
-                        <input
-                          autoFocus
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={editingQtyValue}
-                          onChange={(e)=>setEditingQtyValue(e.target.value)}
-                          onBlur={()=>{
-                            const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
-                            const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
-                            setAndPersist(next)
-                            setEditingQtyId(null)
-                            setEditingQtyValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
-                              const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
-                              setAndPersist(next)
-                              setEditingQtyId(null)
-                              setEditingQtyValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingQtyId(null)
-                              setEditingQtyValue("")
-                            }
-                          }}
-                          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-right bg-white"
-                          placeholder="0"
-                        />
-                      ) : (
-                        <button
-                          className="text-[#3D56A6] font-medium hover:underline"
-                          onClick={()=>{ setEditingQtyId(o.id); setEditingQtyValue(String(parseInt(o.quantity,10)||0)) }}
-                          title="Edit quantity"
-                        >
-                          {String(parseInt(o.quantity,10)||0)}
-                        </button>
-                      )}
-                    </td>
                     <td className="p-3">
                       <div className="relative inline-block">
                         <button
@@ -542,9 +564,9 @@ function ManufacturingOrderPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t">
-                  <td className="p-3" colSpan={7}></td>
+                  <td className="p-3" colSpan={6}></td>
                   <td className="p-3 text-right font-bold text-gray-900">{String(parseInt(totalQty,10)||0)}</td>
-                  <td className="p-3" colSpan={2}></td>
+                  <td className="p-3" colSpan={8}></td>
                 </tr>
               </tfoot>
             </table>
@@ -587,6 +609,10 @@ function ManufacturingOrderPage() {
               <div className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-3">
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Product No.</div>
+                    <input value={newOrder.productNo} onChange={(e)=>setNewOrder({...newOrder, productNo:e.target.value})} placeholder="e.g. LCM-001" className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
                     <div className="text-sm text-gray-700">Product</div>
                     <div className="flex items-center gap-2">
                       <input value={newOrder.product} onChange={(e)=>setNewOrder({...newOrder, product:e.target.value})} placeholder="Product to build..." className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
@@ -594,14 +620,30 @@ function ManufacturingOrderPage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
-                    <div className="text-sm text-gray-700">Start Date</div>
-                    <input type="datetime-local" value={newOrder.scheduledDate} onChange={(e)=>setNewOrder({...newOrder, scheduledDate:e.target.value})} className="w-64 rounded-md border border-gray-300 px-2 py-1" />
+                    <div className="text-sm text-gray-700">Unit</div>
+                    <input value={newOrder.unit} onChange={(e)=>setNewOrder({...newOrder, unit:e.target.value})} className="w-28 rounded-md border border-gray-300 px-2 py-1" />
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
                     <div className="text-sm text-gray-700">Quantity</div>
                     <div className="flex items-center gap-3">
                       <input type="number" value={newOrder.quantity} onChange={(e)=>setNewOrder({...newOrder, quantity:Number(e.target.value)})} className="w-28 rounded-md border border-gray-300 px-2 py-1" />
                     </div>
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Start Date</div>
+                    <input type="datetime-local" value={newOrder.scheduledDate} onChange={(e)=>setNewOrder({...newOrder, scheduledDate:e.target.value})} className="w-64 rounded-md border border-gray-300 px-2 py-1" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Completed Date</div>
+                    <input type="datetime-local" value={newOrder.completedDate} onChange={(e)=>setNewOrder({...newOrder, completedDate:e.target.value})} className="w-64 rounded-md border border-gray-300 px-2 py-1" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Production Time</div>
+                    <input value={newOrder.productionTime} onChange={(e)=>setNewOrder({...newOrder, productionTime:e.target.value})} placeholder="e.g. 2 Days" className="w-64 rounded-md border border-gray-300 px-2 py-1" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Responsible</div>
+                    <input value={newOrder.responsible} onChange={(e)=>setNewOrder({...newOrder, responsible:e.target.value})} placeholder="Person responsible" className="w-64 rounded-md border border-gray-300 px-2 py-1" />
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
                     <div className="text-sm text-gray-700">Customer Company</div>
@@ -628,7 +670,12 @@ function ManufacturingOrderPage() {
                           id: Date.now(),
                           ref,
                           start: newOrder.scheduledDate || new Date().toISOString(),
+                          productNo: newOrder.productNo || "",
                           product: newOrder.product || "Untitled",
+                          unit: newOrder.unit || "Unit",
+                          completedDate: newOrder.completedDate || "",
+                          productionTime: newOrder.productionTime || "",
+                          responsible: newOrder.responsible || "",
                           nextActivity: "",
                           customer: newOrder.customer || "",
                           componentStatus: "",
