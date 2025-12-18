@@ -192,7 +192,7 @@ export default function Navigation() {
               >
                 <Bell className="w-6 h-6" />
                 {notificationsCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] text-[#2D4485] font-bold ring-2 ring-[#2D4485]">
+                  <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white font-bold ring-2 ring-red-300">
                     {notificationsCount}
                   </span>
                 )}
