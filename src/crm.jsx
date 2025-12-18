@@ -24,6 +24,7 @@ const initialPipeline = {
 }
 
 const thaiCompanies = [
+  { name: "EIT LASERTECHNIK (Einstein Industrie Technik)", contact: "Sales Team", email: "sales@eitlaser.com", phone: "02-052-9544", address: "1/120 Ramkamhaeng Soi 184, Minburi, Minburi, Bangkok 10510" },
   { name: "PTT Public Company Limited", contact: "Auttapol Rerkpiboon", email: "auttapol.r@pttplc.com", phone: "02-537-2000", address: "555 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
   { name: "SCG (Siam Cement Group)", contact: "Roongrote Rangsiyopash", email: "roongrote.r@scg.com", phone: "02-586-3333", address: "1 Siam Cement Rd, Bang Sue, Bangkok 10800" },
   { name: "CP All Public Company Limited", contact: "Korsak Chairasmisak", email: "korsak.c@cpall.co.th", phone: "02-071-9000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500" },
