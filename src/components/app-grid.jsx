@@ -65,7 +65,7 @@ export default function AppGrid() {
                 <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors -mr-1" />
               </div>
               
-              <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-[#2D4485] transition-colors">
                 {app.name}
               </h3>
               

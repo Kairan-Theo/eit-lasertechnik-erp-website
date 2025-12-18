@@ -141,21 +141,22 @@ export default function Navigation() {
             unread = list.reduce((acc, n) => acc + (n && n.unread !== false ? 1 : 0), 0)
           }
         } catch {}
-        let total = count + unread
-        if (total === 0 && !localStorage.getItem("hasShownNotifDot")) {
-          total = 1
-          localStorage.setItem("hasShownNotifDot", "true")
-        }
-        setNotificationsCount(total)
+        
+        // User requested to ONLY show notifications for CRM moves (which are in the 'notifications' list)
+        // and NOT for due invoices or initial welcome.
+        setNotificationsCount(unread)
       } catch {
         setDueCount(0)
-        setNotificationsCount(localStorage.getItem("hasShownNotifDot") ? 0 : 1)
-        localStorage.setItem("hasShownNotifDot", "true")
+        setNotificationsCount(0)
       }
     }
     compute()
-    const id = setInterval(compute, 60 * 60 * 1000)
-    return () => clearInterval(id)
+    const id = setInterval(compute, 2000)
+    window.addEventListener("storage", compute)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener("storage", compute)
+    }
   }, [isAuthenticated])
 
   return (
@@ -191,7 +192,7 @@ export default function Navigation() {
               >
                 <Bell className="w-6 h-6" />
                 {notificationsCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] text-white font-bold ring-2 ring-[#2D4485]">
+                  <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] text-[#2D4485] font-bold ring-2 ring-[#2D4485]">
                     {notificationsCount}
                   </span>
                 )}
@@ -248,7 +249,7 @@ export default function Navigation() {
                     
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-[#2D4485] hover:bg-blue-50 transition-colors text-left"
                     >
                       <LogOut className="w-4 h-4" />
                       Log out

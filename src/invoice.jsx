@@ -400,7 +400,7 @@ function InvoicePage() {
                           </td>
                           <td className="p-2 text-right">{((Number(it.qty) || 0) * (Number(it.price) || 0) * (1 + (Number(it.tax) || 0) / 100)).toFixed(2)}</td>
                           <td className="p-2 text-right">
-                            <button onClick={() => inv.removeItem(i)} className="px-3 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100">Remove</button>
+                            <button onClick={() => inv.removeItem(i)} className="px-3 py-1 rounded-md bg-blue-50 text-[#2D4485] hover:bg-blue-100">Remove</button>
                           </td>
                         </tr>
                       ))}

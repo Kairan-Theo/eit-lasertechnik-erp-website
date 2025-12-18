@@ -1,7 +1,6 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
-import Footer from "./components/footer.jsx"
 import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
@@ -81,7 +80,7 @@ function ManufacturingOrderPage() {
     }
     return { text: `In ${diffDays} days`, cls: "text-blue-600" }
   }
-  const stateClass = (s) => (s==='Processing' ? 'bg-blue-100 text-blue-700' : s==='Finished' ? 'bg-green-100 text-green-700' : s==='Cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-700')
+  const stateClass = (s) => (s==='Processing' ? 'bg-blue-50 text-[#2D4485]' : s==='Finished' ? 'bg-green-100 text-green-700' : s==='Cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-700')
   const componentStatusClass = (s) => (s==='Not Available' ? 'bg-red-100 text-red-700' : s==='Available' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700')
   const priorityClass = (p) => (p==='High' ? 'bg-red-100 text-red-700' : p==='Medium' ? 'bg-orange-100 text-orange-700' : p==='Low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
   const priorityRank = (p) => (p==='High'?3:p==='Medium'?2:p==='Low'?1:0)
@@ -565,7 +564,7 @@ function ManufacturingOrderPage() {
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenDeleteId(null)}>Cancel</button>
                 <button
-                  className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
+                  className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                   onClick={() => { setAndPersist(orders.filter((x)=>x.id!==openDeleteId)); setOpenDeleteId(null) }}
                 >
                   Delete
@@ -652,7 +651,6 @@ function ManufacturingOrderPage() {
               </div>
             </div>
           )}
-          <Footer />
         </main>
       )
     }
