@@ -24,26 +24,56 @@ const initialPipeline = {
 }
 
 const thaiCompanies = [
-  "PTT Public Company Limited",
-  "SCG (Siam Cement Group)",
-  "CP All Public Company Limited",
-  "Advanced Info Service (AIS)",
-  "Kasikornbank",
-  "Siam Commercial Bank",
-  "Bangkok Bank",
-  "True Corporation",
-  "Thai Beverage",
-  "Central Retail Corporation",
-  "Charoen Pokphand Foods",
-  "PTT Exploration and Production",
-  "Airports of Thailand",
-  "Energy Absolute",
-  "Gulf Energy Development",
-  "Intouch Holdings",
-  "Minor International",
-  "Indorama Ventures",
-  "Bangkok Dusit Medical Services",
-  "Electricity Generating Public Company"
+  { name: "PTT Public Company Limited", contact: "Auttapol Rerkpiboon", email: "auttapol.r@pttplc.com", phone: "02-537-2000", address: "555 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
+  { name: "SCG (Siam Cement Group)", contact: "Roongrote Rangsiyopash", email: "roongrote.r@scg.com", phone: "02-586-3333", address: "1 Siam Cement Rd, Bang Sue, Bangkok 10800" },
+  { name: "CP All Public Company Limited", contact: "Korsak Chairasmisak", email: "korsak.c@cpall.co.th", phone: "02-071-9000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500" },
+  { name: "Advanced Info Service (AIS)", contact: "Somchai Lertsutiwong", email: "somchai.l@ais.co.th", phone: "02-029-5000", address: "414 Phaholyothin Rd, Phaya Thai, Bangkok 10400" },
+  { name: "Kasikornbank", contact: "Kattiya Indaravijaya", email: "kattiya.i@kasikornbank.com", phone: "02-888-8888", address: "400/22 Phahon Yothin Rd, Phaya Thai, Bangkok 10400" },
+  { name: "Siam Commercial Bank", contact: "Arthid Nanthawithaya", email: "arthid.n@scb.co.th", phone: "02-777-7777", address: "9 Ratchadapisek Rd, Chatuchak, Bangkok 10900" },
+  { name: "Bangkok Bank", contact: "Chartsiri Sophonpanich", email: "chartsiri.s@bangkokbank.com", phone: "1333", address: "333 Silom Rd, Bang Rak, Bangkok 10500" },
+  { name: "True Corporation", contact: "Manat Manavutiveth", email: "manat.m@truecorp.co.th", phone: "1242", address: "18 True Tower, Ratchadaphisek Rd, Huai Khwang, Bangkok 10310" },
+  { name: "Thai Beverage", contact: "Thapana Sirivadhanabhakdi", email: "thapana.s@thaibev.com", phone: "02-785-5555", address: "14 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
+  { name: "Central Retail Corporation", contact: "Yol Phokasub", email: "yol.p@central.co.th", phone: "02-650-3600", address: "22 Soi Somkid, Ploenchit Rd, Pathum Wan, Bangkok 10330" },
+  { name: "Charoen Pokphand Foods", contact: "Prasit Boondoungprasert", email: "prasit.b@cpf.co.th", phone: "02-766-8000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500" },
+  { name: "PTT Exploration and Production", contact: "Montri Rawanchaikul", email: "montri.r@pttep.com", phone: "02-537-4000", address: "555/1 Energy Complex, Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
+  { name: "Airports of Thailand", contact: "Nitinai Sirismatthakarn", email: "nitinai.s@aot.co.th", phone: "02-535-1111", address: "333 Cherdwutagard Rd, Don Mueang, Bangkok 10210" },
+  { name: "Energy Absolute", contact: "Somphote Ahunai", email: "somphote.a@energyabsolute.co.th", phone: "02-248-2455", address: "89 AIA Capital Center, Ratchadaphisek Rd, Din Daeng, Bangkok 10400" },
+  { name: "Gulf Energy Development", contact: "Sarath Ratanavadi", email: "sarath.r@gulf.co.th", phone: "02-080-4499", address: "87 M. Thai Tower, All Seasons Place, Wireless Rd, Pathum Wan, Bangkok 10330" },
+  { name: "Intouch Holdings", contact: "Kim Siritaweechai", email: "kim.s@intouchcompany.com", phone: "02-118-6900", address: "87 M. Thai Tower, All Seasons Place, Wireless Rd, Pathum Wan, Bangkok 10330" },
+  { name: "Minor International", contact: "William Heinecke", email: "william.h@minor.com", phone: "02-365-7500", address: "88 The Parq Building, Ratchadaphisek Rd, Khlong Toei, Bangkok 10110" },
+  { name: "Indorama Ventures", contact: "Aloke Lohia", email: "aloke.l@indorama.net", phone: "02-661-6661", address: "75/102 Ocean Tower 2, Sukhumvit Soi 19, Watthana, Bangkok 10110" },
+  { name: "Bangkok Dusit Medical Services", contact: "Poramaporn Prasarttong-Osoth", email: "poramaporn.p@bdms.co.th", phone: "02-310-3000", address: "2 Soi Soonvijai 7, New Phetchaburi Rd, Huai Khwang, Bangkok 10310" },
+  { name: "Electricity Generating Public Company", contact: "Thepparat Theppitak", email: "thepparat.t@egco.com", phone: "02-998-5000", address: "222 Vibhavadi Rangsit Rd, Lak Si, Bangkok 10210" },
+  { name: "Delta Electronics (Thailand)", contact: "Jackie Chang", email: "info@deltathailand.com", phone: "02-709-2800", address: "909 Soi 9, Bangpoo Ind. Estate, Samut Prakan 10280" },
+  { name: "Global Power Synergy (GPSC)", contact: "Worawat Pitayasiri", email: "gpsc@gpscgroup.com", phone: "02-140-4600", address: "555/2 Energy Complex B, Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
+  { name: "Thai Oil", contact: "Wirat Uanarumit", email: "thayoil@thaioilgroup.com", phone: "02-797-2999", address: "555/1 Energy Complex A, Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
+  { name: "Ratch Group", contact: "Choosri Kietkajornkul", email: "ratch@ratch.co.th", phone: "02-794-9999", address: "72 Ngam Wong Wan Rd, Nonthaburi 11000" },
+  { name: "Krung Thai Bank", contact: "Payong Srivanich", email: "call.center@krungthai.com", phone: "02-111-1111", address: "35 Sukhumvit Rd, Watthana, Bangkok 10110" },
+  { name: "TMBThanachart Bank (TTB)", contact: "Piti Tantakasem", email: "ttb@ttbbank.com", phone: "1428", address: "3000 Phahon Yothin Rd, Chatuchak, Bangkok 10900" },
+  { name: "PTT Global Chemical (GC)", contact: "Kongkrapan Intarajang", email: "gc@pttgcgroup.com", phone: "02-265-8400", address: "555/1 Energy Complex A, Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
+  { name: "Osotspa", contact: "Wannipa Bhakdibutr", email: "osotspa@osotspa.com", phone: "02-351-1000", address: "348 Ramkhamhaeng Rd, Bang Kapi, Bangkok 10240" },
+  { name: "Carabao Group", contact: "Sathien Setthasit", email: "carabao@carabaogroup.com", phone: "02-636-6111", address: "393 Silom Rd, Bang Rak, Bangkok 10500" },
+  { name: "B.Grimm Power", contact: "Harald Link", email: "bgrimm@bgrimmpower.com", phone: "02-710-3000", address: "5 Krungthepkreetha Rd, Bang Kapi, Bangkok 10240" },
+  { name: "Banpu", contact: "Somruedee Chaimongkol", email: "banpu@banpu.co.th", phone: "02-694-6600", address: "1550 Thanapoom Tower, Phetchaburi Rd, Ratchathewi, Bangkok 10400" },
+  { name: "Berli Jucker (BJC)", contact: "Aswin Techajareonvikul", email: "bjc@bjc.co.th", phone: "02-367-1111", address: "99 Soi Rubia, Sukhumvit 42, Khlong Toei, Bangkok 10110" },
+  { name: "Home Product Center (HomePro)", contact: "Khunawut Thumpomkul", email: "contact@homepro.co.th", phone: "1284", address: "96/27 Moo 9 Bang Khen, Mueang Nonthaburi, Nonthaburi 11000" },
+  { name: "Land and Houses", contact: "Naporn Sunthornchitcharoen", email: "lh@lh.co.th", phone: "1198", address: "1 Q. House Lumpini, Sathon Tai Rd, Sathon, Bangkok 10120" },
+  { name: "Supalai", contact: "Prateep Tangmatitham", email: "supalai@supalai.com", phone: "1720", address: "1011 Supalai Grand Tower, Rama 3 Rd, Yan Nawa, Bangkok 10120" },
+  { name: "AP (Thailand)", contact: "Anuphong Assavabhokhin", email: "ap@apthai.com", phone: "1623", address: "170/57 Ocean Tower 1, Ratchadaphisek Rd, Khlong Toei, Bangkok 10110" },
+  { name: "Sansiri", contact: "Apichet Bunyakiet", email: "sansiri@sansiri.com", phone: "1685", address: "475 Siripinyo Bldg, Si Ayutthaya Rd, Ratchathewi, Bangkok 10400" },
+  { name: "Central Pattana (CPN)", contact: "Wallaya Chirathivat", email: "cpn@centralpattana.co.th", phone: "02-667-5555", address: "999/9 Rama 1 Rd, Pathum Wan, Bangkok 10330" },
+  { name: "MK Restaurant Group", contact: "Rit Thirakomen", email: "mk@mkrestaurantgroup.com", phone: "02-836-1000", address: "1200 Debaratna Rd, Bang Na, Bangkok 10260" },
+  { name: "Siam Makro (CP Axtra)", contact: "Saowaluck Thithapant", email: "cpaxtra@cpaxtra.co.th", phone: "02-067-8999", address: "1468 Phatthanakan Rd, Suan Luang, Bangkok 10250" },
+  { name: "Thai Union Group", contact: "Thiraphong Chansiri", email: "tu@thaiunion.com", phone: "02-298-0024", address: "72/1 Moo 7 Sethakit 1 Rd, Mueang Samut Sakhon, Samut Sakhon 74000" },
+  { name: "Sri Trang Agro-Industry", contact: "Viyavood Sincharoenkul", email: "sta@sritranggroup.com", phone: "02-207-4500", address: "10 Soi 10, Phetkasem Rd, Hat Yai, Songkhla 90110" },
+  { name: "KCE Electronics", contact: "Bancha Ongkosit", email: "kce@kce.co.th", phone: "02-326-0196", address: "72-72/1-3 Lat Krabang Ind. Estate, Lat Krabang, Bangkok 10520" },
+  { name: "Hana Microelectronics", contact: "Richard Han", email: "hana@hanagroup.com", phone: "02-551-1297", address: "10/4 Moo 3, Vibhavadi Rangsit Rd, Lak Si, Bangkok 10210" },
+  { name: "Muangthai Capital", contact: "Chuchat Petaumpai", email: "mtc@muangthaicap.com", phone: "02-483-8888", address: "32/1 Charan Sanitwong Rd, Bang Phlat, Bangkok 10700" },
+  { name: "Srisawad Corporation", contact: "Chatchai Kaewbootta", email: "sawad@srisawad.com", phone: "1652", address: "99/392 Chaeng Watthana Rd, Lak Si, Bangkok 10210" },
+  { name: "VGI", contact: "Nelson Leung", email: "vgi@vgi.co.th", phone: "02-273-8884", address: "21 TST Tower, Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
+  { name: "Plan B Media", contact: "Palin Lojanagosin", email: "planb@planbmedia.co.th", phone: "02-530-8053", address: "1213/420 Soi Lat Phrao 94, Wang Thonglang, Bangkok 10310" },
+  { name: "BTS Group Holdings", contact: "Keeree Kanjanapas", email: "bts@bts.co.th", phone: "02-617-7300", address: "21 Phahon Yothin Rd, Chatuchak, Bangkok 10900" },
+  { name: "Bangkok Expressway and Metro (BEM)", contact: "Sombat Kitjalaksana", email: "bem@bemplc.co.th", phone: "02-641-4611", address: "587 Sutthisan Winitchai Rd, Din Daeng, Bangkok 10400" }
 ]
 
 function CRMPage() {
@@ -58,6 +88,7 @@ function CRMPage() {
   const [detailContact, setDetailContact] = React.useState("")
   const [detailEmail, setDetailEmail] = React.useState("")
   const [detailPhone, setDetailPhone] = React.useState("")
+  const [detailAddress, setDetailAddress] = React.useState("")
   const [openPriority, setOpenPriority] = React.useState(null) // { stageIndex, cardIndex }
   const priorityClass = (p) => (p==='high' ? 'bg-red-100 text-red-700' : p==='medium' ? 'bg-orange-100 text-orange-700' : p==='low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
   const priorityLabel = (p) => (p && p!=='none' ? p.charAt(0).toUpperCase()+p.slice(1) : 'Set Priority')
@@ -67,6 +98,7 @@ function CRMPage() {
     opportunity: "",
     email: "",
     phone: "",
+    address: "",
     amount: 0,
     currency: "฿",
     priority: "none",
@@ -86,9 +118,7 @@ function CRMPage() {
   const [notification, setNotification] = React.useState({ show: false, message: "" })
   const [sortBy, setSortBy] = React.useState(null) // 'createdAt' | 'lastActivity' | 'expectedClose'
   const [sortAsc, setSortAsc] = React.useState(false)
-  const [showAddStageModal, setShowAddStageModal] = React.useState(false)
-  const [stageSearch, setStageSearch] = React.useState("")
-  const [showStageSuggestions, setShowStageSuggestions] = React.useState(false)
+  const [showCompanySuggestions, setShowCompanySuggestions] = React.useState(false)
 
   const showNotification = (msg) => {
     setNotification({ show: true, message: msg })
@@ -225,6 +255,7 @@ function CRMPage() {
     setDetailContact(d.contact || "")
     setDetailEmail(d.email || "")
     setDetailPhone(d.phone || "")
+    setDetailAddress(d.address || "")
     setOpenDetail({ stageIndex, cardIndex })
   }
 
@@ -233,7 +264,7 @@ function CRMPage() {
     const { stageIndex, cardIndex } = openDetail
     setStages((prev) => prev.map((s, i) => {
       if (i !== stageIndex) return s
-      const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, notes: detailNotes, contact: detailContact, email: detailEmail, phone: detailPhone } : d))
+      const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, notes: detailNotes, contact: detailContact, email: detailEmail, phone: detailPhone, address: detailAddress } : d))
       return { ...s, deals }
     }))
     setOpenDetail(null)
@@ -302,15 +333,9 @@ function CRMPage() {
     setMenuOpenIndex(null)
   }
   const addStage = () => {
-    setStageSearch("")
-    setShowStageSuggestions(false)
-    setShowAddStageModal(true)
-  }
-
-  const confirmAddStage = (name) => {
+    const name = window.prompt("New stage name")
     if (!name) return
     setStages((prev) => [...prev, { id: Date.now(), name, deals: [] }])
-    setShowAddStageModal(false)
   }
 
   // Deal card actions
@@ -865,6 +890,15 @@ function CRMPage() {
                             placeholder="Phone number"
                           />
                         </div>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Address</label>
+                          <input 
+                            value={detailAddress} 
+                            onChange={(e)=>setDetailAddress(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Company address"
+                          />
+                        </div>
                         <div className="pt-2">
                           <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
                           <textarea 
@@ -907,12 +941,45 @@ function CRMPage() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
                         <label className="text-sm font-medium text-slate-500">Company</label>
-                        <input 
-                          value={newDeal.company} 
-                          onChange={(e)=>setNewDeal({...newDeal, company:e.target.value})} 
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                          placeholder="Company name"
-                        />
+                        <div className="relative">
+                          <input 
+                            value={newDeal.company} 
+                            onChange={(e)=> {
+                              setNewDeal({...newDeal, company:e.target.value})
+                              setShowCompanySuggestions(true)
+                            }}
+                            onFocus={() => setShowCompanySuggestions(true)}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Search or enter company name..."
+                          />
+                          {showCompanySuggestions && newDeal.company && (
+                            <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+                              {thaiCompanies.filter(c => c.name.toLowerCase().includes(newDeal.company.toLowerCase())).map((c, i) => (
+                                <button
+                                  key={i}
+                                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                                  onClick={() => {
+                                    setNewDeal({...newDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || ""})
+                                    setShowCompanySuggestions(false)
+                                  }}
+                                >
+                                  <div className="font-medium">{c.name}</div>
+                                  <div className="text-xs text-slate-500">Contact: {c.contact}</div>
+                                </button>
+                              ))}
+                              {newDeal.company && !thaiCompanies.some(c => c.name.toLowerCase() === newDeal.company.toLowerCase()) && (
+                                <button
+                                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
+                                  onClick={() => {
+                                    setShowCompanySuggestions(false)
+                                  }}
+                                >
+                                  + Add "{newDeal.company}"
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
                         <label className="text-sm font-medium text-slate-500">Contact</label>
@@ -948,6 +1015,15 @@ function CRMPage() {
                           onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} 
                           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
                           placeholder="Phone number"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Address</label>
+                        <input 
+                          value={newDeal.address} 
+                          onChange={(e)=>setNewDeal({...newDeal, address:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Company address"
                         />
                       </div>
                       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
@@ -1023,6 +1099,7 @@ function CRMPage() {
                           contact: newDeal.contact || "",
                           email: newDeal.email || "",
                           phone: newDeal.phone || "",
+                          address: newDeal.address || "",
                           notes: "",
                           activitySchedules: [],
                           probability: 10,
@@ -1035,77 +1112,6 @@ function CRMPage() {
                       }}
                     >
                       Create Deal
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          {showAddStageModal && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 transition-opacity" onClick={() => setShowAddStageModal(false)}>
-              <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[400px] transition-all" onClick={(e) => e.stopPropagation()}>
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <h3 className="font-bold text-slate-800 text-lg">Add New Stage</h3>
-                    <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowAddStageModal(false)}>✕</button>
-                  </div>
-                  <div className="p-6">
-                    <div className="space-y-4">
-                      <div className="relative">
-                        <label className="block text-sm font-medium text-slate-500 mb-2">Company Name</label>
-                        <input 
-                          value={stageSearch} 
-                          onChange={(e) => {
-                            setStageSearch(e.target.value)
-                            setShowStageSuggestions(true)
-                          }}
-                          onFocus={() => setShowStageSuggestions(true)}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                          placeholder="Search or enter company name..."
-                          autoFocus
-                        />
-                        {showStageSuggestions && stageSearch && (
-                          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-                            {thaiCompanies.filter(c => c.toLowerCase().includes(stageSearch.toLowerCase())).map((c, i) => (
-                              <button
-                                key={i}
-                                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
-                                onClick={() => {
-                                  setStageSearch(c)
-                                  setShowStageSuggestions(false)
-                                }}
-                              >
-                                {c}
-                              </button>
-                            ))}
-                            {stageSearch && !thaiCompanies.some(c => c.toLowerCase() === stageSearch.toLowerCase()) && (
-                              <button
-                                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
-                                onClick={() => {
-                                  setShowStageSuggestions(false)
-                                }}
-                              >
-                                + Add "{stageSearch}"
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
-                    <button 
-                      className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm" 
-                      onClick={() => setShowAddStageModal(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium" 
-                      onClick={() => confirmAddStage(stageSearch)}
-                      disabled={!stageSearch.trim()}
-                    >
-                      Add Stage
                     </button>
                   </div>
                 </div>
