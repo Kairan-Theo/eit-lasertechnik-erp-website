@@ -3,7 +3,6 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
-import emailjs from '@emailjs/browser';
 import "./index.css"
 
 const initialPipeline = {
@@ -196,20 +195,22 @@ function CRMPage() {
     setTimeout(() => setNotification({ show: false, message: "" }), 3000)
   }
 
-  const notifyTeam = (msg) => {
+  const notifyTeam = (payload) => {
     try {
       const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-      list.unshift({
+      const base = typeof payload === "string" ? { message: payload } : (payload && typeof payload === "object" ? payload : { message: "" })
+      const item = {
         id: Date.now(),
-        message: msg,
+        message: base.message || "",
         timestamp: new Date().toISOString(),
         unread: true,
-        type: "info"
-      })
-      // Keep only last 50
+        type: base.type || "info",
+        source: base.source || "CRM",
+        company: base.company || "",
+      }
+      list.unshift(item)
       if (list.length > 50) list.length = 50
       localStorage.setItem("notifications", JSON.stringify(list))
-      // Dispatch storage event for current window to update immediately if listening
       window.dispatchEvent(new Event("storage"))
     } catch {}
   }
@@ -406,7 +407,7 @@ function CRMPage() {
     if (card) {
       const msg = `Moved "${card.title}" to ${stages[toStageIndex].name}`
       showNotification(msg)
-      notifyTeam(msg)
+      notifyTeam({ message: msg, source: "CRM", company: card.customer || "" })
     }
 
     setStages((prev) => {
