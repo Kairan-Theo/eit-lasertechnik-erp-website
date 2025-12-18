@@ -1,7 +1,6 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
-import Footer from "./components/footer.jsx"
 import "./index.css"
 
 function useInventory() {
@@ -361,7 +360,7 @@ function InventoryTable({ inv }) {
         <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
           <div className="text-lg font-semibold text-gray-900">No items found</div>
           <div className="text-sm text-gray-600 mt-1">Try adjusting your search or add a new item</div>
-          <button onClick={() => inv.setShowAdd(true)} className="mt-4 px-3 py-2 rounded-md bg-[#2D4485] text-white">Add Item</button>
+          <button onClick={() => inv.setShowAdd(true)} className="mt-4 btn-pill">Add Item</button>
         </div>
       ) : (
         <div className="overflow-x-auto bg-white rounded-xl shadow-sm border">
@@ -459,7 +458,7 @@ function InventoryTable({ inv }) {
                     <td className="p-3">{p.updatedAt}</td>
                     <td className="p-3">
                       <div className="flex gap-2">
-                        <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 rounded-md border border-gray-300 bg-white disabled:opacity-50">Update Stock</button>
+                        <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 text-xs rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white disabled:opacity-50">Update Stock</button>
                       </div>
                     </td>
                   </tr>
@@ -615,8 +614,8 @@ function AddItemForm({ onCancel, onSave, initialData }) {
         </div>
       </div>
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button disabled={!canSave} onClick={() => onSave({ ...f, serials: [] })} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Save</button>
+        <button onClick={onCancel} className="btn-pill">Cancel</button>
+        <button disabled={!canSave} onClick={() => onSave({ ...f, serials: [] })} className="btn-pill disabled:opacity-50">Save</button>
       </div>
     </div>
   )
@@ -644,8 +643,8 @@ function AdjustForm({ sku, current = 0, onCancel, onConfirm }) {
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason for change" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       </div>
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button disabled={!canConfirm} onClick={() => onConfirm(Number(newQty), note || "Stock update")} className="px-3 py-2 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Confirm</button>
+        <button onClick={onCancel} className="btn-pill">Cancel</button>
+        <button disabled={!canConfirm} onClick={() => onConfirm(Number(newQty), note || "Stock update")} className="btn-pill disabled:opacity-50">Confirm</button>
       </div>
     </div>
   )
@@ -670,8 +669,8 @@ function TransferForm({ sku, from, warehouses, onCancel, onConfirm }) {
       </div>
       <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Reference (e.g. Source Document)" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button onClick={() => onConfirm(qty, to, ref)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Transfer</button>
+        <button onClick={onCancel} className="btn-pill">Cancel</button>
+        <button onClick={() => onConfirm(qty, to, ref)} className="btn-pill">Transfer</button>
       </div>
     </div>
   )
@@ -684,8 +683,8 @@ function ImportForm({ onCancel, onFile }) {
       <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <div className="text-xs text-gray-600">Headers: sku,name,stockQty,reserved,price,updatedAt,warehouse,bin,lot,expiry</div>
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button onClick={() => onFile && onFile(file)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Import</button>
+        <button onClick={onCancel} className="btn-pill">Cancel</button>
+        <button onClick={() => onFile && onFile(file)} className="btn-pill">Import</button>
       </div>
     </div>
   )
@@ -751,7 +750,7 @@ function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
         </table>
       </div>
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Close</button>
+        <button onClick={onCancel} className="btn-pill">Close</button>
       </div>
     </div>
   )
@@ -766,8 +765,8 @@ function ReceiveForm({ sku, onCancel, onConfirm }) {
       <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} placeholder="Qty received" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="PO/GRN Reference" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button onClick={() => onConfirm(qty, ref)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Receive</button>
+        <button onClick={onCancel} className="btn-pill">Cancel</button>
+        <button onClick={() => onConfirm(qty, ref)} className="btn-pill">Receive</button>
       </div>
     </div>
   )
@@ -782,8 +781,8 @@ function DeliverForm({ sku, onCancel, onConfirm }) {
       <input type="number" min={0} value={qty} onChange={(e) => setQty(Math.max(0, Number(e.target.value)))} placeholder="Qty delivered" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="SO/DO Reference" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-2 rounded-md border border-gray-300 bg-white">Cancel</button>
-        <button onClick={() => onConfirm(qty, ref)} className="px-3 py-2 rounded-md bg-[#2D4485] text-white">Deliver</button>
+        <button onClick={onCancel} className="btn-pill">Cancel</button>
+        <button onClick={() => onConfirm(qty, ref)} className="btn-pill">Deliver</button>
       </div>
     </div>
   )
@@ -800,7 +799,7 @@ function InventoryPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Inventory Control Tower</h1>
               <button
-                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                className="inline-flex items-center justify-center min-w-[150px] btn-pill"
                 title="Add Item"
                 onClick={() => inv.setShowAdd(true)}
               >
@@ -808,13 +807,13 @@ function InventoryPage() {
               </button>
               <button
                 onClick={() => inv.setShowImport(true)}
-                className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                className="btn-pill"
               >
                 Import
               </button>
               <button
                 onClick={inv.exportCsv}
-                className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                className="btn-pill"
               >
                 Export
               </button>
@@ -831,7 +830,7 @@ function InventoryPage() {
                       inv.setHistoryFilter(null)
                       inv.setView(inv.view === "history" ? "inventory" : "history")
                     }}
-                    className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                    className="btn-pill"
                   >
                     {inv.view === "history" ? "Inventory" : "History"}
                   </button>
@@ -843,7 +842,6 @@ function InventoryPage() {
           </div>
         </div>
       </section>
-      <Footer />
     </main>
   )
 }

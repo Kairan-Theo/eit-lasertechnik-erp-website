@@ -344,7 +344,7 @@ function QuotationPage() {
                           <td className="p-2"><input type="text" inputMode="decimal" value={it.tax} onChange={(e) => q.updateItem(i, "tax", e.target.value)} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" /></td>
                           <td className="p-2 text-right">{(Number(it.qty || 0) * Number(it.price || 0) * (1 + Number(it.tax || 0) / 100)).toFixed(2)}</td>
                           <td className="p-2"><input value={it.note || ""} onChange={(e) => q.updateItem(i, "note", e.target.value)} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" /></td>
-                          <td className="p-2 text-right"><button onClick={() => q.removeItem(i)} className="px-3 py-1 rounded-full bg-red-50 text-red-600 hover:bg-red-100">Remove</button></td>
+                          <td className="p-2 text-right"><button onClick={() => q.removeItem(i)} className="px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] hover:bg-blue-100">Remove</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -399,8 +399,8 @@ function QuotationPage() {
                     </svg>
                   </button>
                   <div className="flex items-center justify-end gap-2">
-                    <button onClick={q.exportPdf} className="px-4 py-2 rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Export PDF</button>
-                    <button onClick={q.print} className="px-4 py-2 rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Print</button>
+                    <button onClick={q.exportPdf} className="px-4 py-2 rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
+                    <button onClick={q.print} className="px-4 py-2 rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Print</button>
                     <button onClick={sendAndSave} className="px-4 py-2 rounded-full bg-[#2D4485] text-white hover:bg-[#3D56A6]">Send</button>
                   </div>
                 </div>

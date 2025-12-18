@@ -176,7 +176,7 @@ function BOMPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Bill of Materials</h1>
               <button
-                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-[#3D56A6] text-white hover:bg-[#2D4485]"
+                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                 title="New BOM"
                 onClick={() => setShowNew(true)}
               >
@@ -609,7 +609,7 @@ function BOMPage() {
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setShowNew(false)}>Cancel</button>
                 <button
-                  className="px-4 py-2 rounded-md bg-[#3D56A6] text-white hover:bg-[#2D4485]"
+                  className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                   onClick={()=>{
                     const o = { id: Date.now(), product: newBom.product || "Untitled", version: newBom.version || "", type: newBom.type || "Manufacture", productTree: { product: newBom.product || "Untitled", photo: newBom.photo, systems: (newBom.systems||[]).map((s)=>({ name: s.name || "", photo: s.photo, components: (s.components||[]).map((c)=>({ name: c.name || "", qty: Number(c.qty)||0, photo: c.photo })) })) } }
                     const next = [o, ...boms]
@@ -793,7 +793,7 @@ function BOMPage() {
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenTreeId(null)}>Cancel</button>
                 <button
-                   className="px-4 py-2 rounded-md bg-[#3D56A6] text-white hover:bg-[#2D4485]"
+                   className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                    onClick={()=>{
                     const next = boms.map((x)=> x.id===openTreeId ? { ...x, productTree: editingTree, product: editingTree.product || "Untitled" } : x)
                     setAndPersist(next)

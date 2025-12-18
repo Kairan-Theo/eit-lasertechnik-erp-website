@@ -1,7 +1,6 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
-import Footer from "./components/footer.jsx"
 import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
@@ -37,7 +36,7 @@ function ComponentPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Component</h1>
               <button
-                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                 title="New component"
                 onClick={() => setShowNew(true)}
               >
@@ -80,10 +79,10 @@ function ComponentPage() {
                 {filtered.map((p)=> (
                   <tr key={p.id} className="border-t">
                     <td className="p-2">
-                      <a className="text-blue-600 hover:underline" href="#">{p.name}</a>
+                      <a className="text-[#3D56A6] hover:underline" href="#">{p.name}</a>
                     </td>
                     <td className="p-2 text-right">
-                      <span className="text-blue-600">{Number(p.qty).toFixed(2)}</span>
+                      <span className="text-[#3D56A6]">{Number(p.qty).toFixed(2)}</span>
                     </td>
                   </tr>
                 ))}
@@ -122,7 +121,7 @@ function ComponentPage() {
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setShowNew(false)}>Cancel</button>
                 <button
-                  className="px-4 py-2 rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                  className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                   onClick={() => {
                     const o = { id: Date.now(), name: newItem.name || "Untitled", sku: "", category: "", qty: Number(newItem.qty)||0, state: "", favorite: false }
                     const next = [o, ...products]
@@ -138,7 +137,6 @@ function ComponentPage() {
           </div>
         </div>
       )}
-      <Footer />
     </main>
   )
 }
