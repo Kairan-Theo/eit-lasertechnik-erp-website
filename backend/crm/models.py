@@ -35,6 +35,7 @@ class UserProfile(models.Model):
     # Comma-separated list of app names: "Manufacturing,Inventory,CRM,Project Management,Admin"
     # "all" means access to everything.
     allowed_apps = models.TextField(default="all", blank=True)
+    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.username}'s Profile"

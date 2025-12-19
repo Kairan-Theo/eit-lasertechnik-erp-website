@@ -68,8 +68,14 @@ def login(request):
         
         # Get allowed apps
         allowed_apps = ""
+        profile_pic_url = None
         if hasattr(user, 'profile'):
             allowed_apps = user.profile.allowed_apps
+            if user.profile.profile_picture:
+                try:
+                    profile_pic_url = request.build_absolute_uri(user.profile.profile_picture.url)
+                except:
+                    pass
         else:
             # Create if missing
             default_apps = "all" if user.is_staff else ""
@@ -82,7 +88,8 @@ def login(request):
             'email': user.email,
             'name': user.first_name or user.username,
             'role': 'Admin' if user.is_staff else 'User',
-            'allowed_apps': allowed_apps
+            'allowed_apps': allowed_apps,
+            'profile_picture': profile_pic_url
         })
     else:
         return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
@@ -182,3 +189,45 @@ def my_allowed_apps(request):
         UserProfile.objects.create(user=user, allowed_apps=default)
         allowed = default
     return Response({'allowed_apps': allowed})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    user = request.user
+    data = request.data
+    
+    # Update basic info
+    if 'name' in data:
+        user.first_name = data['name']
+    
+    # Update email if provided and different
+    if 'email' in data and data['email'] != user.email:
+        if User.objects.filter(email=data['email']).exclude(id=user.id).exists():
+            return Response({'error': 'Email already in use'}, status=status.HTTP_400_BAD_REQUEST)
+        user.email = data['email']
+        user.username = data['email']
+    
+    user.save()
+    
+    # Update profile fields
+    if not hasattr(user, 'profile'):
+        UserProfile.objects.create(user=user)
+        
+    # Handle profile picture
+    if 'profile_picture' in request.FILES:
+        user.profile.profile_picture = request.FILES['profile_picture']
+        user.profile.save()
+    
+    # Construct image URL
+    profile_pic_url = None
+    if user.profile.profile_picture:
+        try:
+            profile_pic_url = request.build_absolute_uri(user.profile.profile_picture.url)
+        except:
+            pass
+
+    return Response({
+        'name': user.first_name,
+        'email': user.email,
+        'profile_picture': profile_pic_url
+    })

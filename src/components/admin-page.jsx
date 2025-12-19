@@ -1,4 +1,5 @@
 import React from "react"
+import { Search } from "lucide-react"
 
 export default function AdminPage() {
   const [view, setView] = React.useState(() => {
@@ -115,6 +116,15 @@ function UserPermissions() {
   const appsList = ["Manufacturing", "Inventory", "CRM", "Project Management", "Admin"]
   const [draft, setDraft] = React.useState({})
   const [saving, setSaving] = React.useState(false)
+  const [search, setSearch] = React.useState("")
+
+  const filteredUsers = React.useMemo(() => {
+    if (!Array.isArray(users)) return []
+    return users.filter(u => 
+      (u.name || "").toLowerCase().includes(search.toLowerCase()) || 
+      (u.email || "").toLowerCase().includes(search.toLowerCase())
+    )
+  }, [users, search])
 
   const fetchUsers = async () => {
     try {
@@ -158,10 +168,7 @@ function UserPermissions() {
     setUsers(users.map(u => (u.id === userId ? { ...u, allowed_apps: newAppsStr } : u)))
   }
   
-  const handleGrantAll = async (userId) => {
-      setDraft({ ...draft, [userId]: "all" })
-      setUsers(users.map(u => u.id === userId ? { ...u, allowed_apps: "all" } : u))
-  }
+
 
   const handleSave = async () => {
     if (!Object.keys(draft).length) return
@@ -194,6 +201,18 @@ function UserPermissions() {
 
   return (
     <div className="card overflow-hidden">
+      <div className="p-3 border-b border-gray-200 bg-gray-50/50">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+          <input 
+            type="text" 
+            placeholder="Search users..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-1.5 rounded-full border border-gray-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all shadow-sm hover:border-gray-300"
+          />
+        </div>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -205,11 +224,10 @@ function UserPermissions() {
                   {app}
                 </th>
               ))}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {users.map(user => {
+            {filteredUsers.map(user => {
                 const currentApps = user.allowed_apps || ""
                 const isAll = currentApps === "all"
                 const appList = isAll ? appsList : currentApps.split(",")
@@ -243,16 +261,6 @@ function UserPermissions() {
                             </td>
                         )
                     })}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {!isAll && (
-                            <button onClick={() => handleGrantAll(user.id)} className="text-[#2D4485] hover:text-blue-900 text-xs font-medium">
-                                Grant All
-                            </button>
-                        )}
-                        {draft[user.id] !== undefined && (
-                          <span className="ml-3 text-xs text-orange-600 font-medium">Unsaved</span>
-                        )}
-                    </td>
                   </tr>
                 )
             })}
