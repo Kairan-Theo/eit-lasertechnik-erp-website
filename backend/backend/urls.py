@@ -26,7 +26,19 @@ router.register(r'deals', DealViewSet)
 def health(request):
     return JsonResponse({"status": "ok"})
 
+def root_view(request):
+    return JsonResponse({
+        "status": "running",
+        "message": "EIT Lasertechnik Backend API is running.",
+        "endpoints": {
+            "admin": "/admin/",
+            "api": "/api/",
+            "health": "/health/"
+        }
+    })
+
 urlpatterns = [
+    path('', root_view),
     path('admin/', admin.site.urls),
     path('health/', health),
     path('api/', include(router.urls)),
