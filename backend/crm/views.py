@@ -20,7 +20,7 @@ class DealViewSet(viewsets.ModelViewSet):
         
         if old_stage != updated_instance.stage:
             Notification.objects.create(
-                message=f"CRM Move: {updated_instance.title} ({old_stage} -> {updated_instance.stage})",
+                message=f"CRM  {updated_instance.customer} - {updated_instance.title} ({old_stage} -> {updated_instance.stage})",
                 type="crm_move"
             )
 
@@ -169,7 +169,7 @@ def get_notifications(request):
         expected_close__gte=date.today()
     )
     for deal in upcoming_deals:
-        msg = f"Deal '{deal.title}' is due on {deal.expected_close}"
+        msg = f"CRM  {deal.customer} - Deal '{deal.title}' is due on {deal.expected_close}"
         # Avoid duplicate alerts for the same day
         if not Notification.objects.filter(message=msg, created_at__date=date.today()).exists():
              Notification.objects.create(message=msg, type="alert")

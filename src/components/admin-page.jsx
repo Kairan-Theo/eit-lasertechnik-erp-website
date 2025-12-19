@@ -333,7 +333,27 @@ function Notifications({ setActiveTab }) {
             {teamAlerts.map((n) => (
               <div key={n.id} className={`p-3 rounded-md border ${!n.is_read ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-200'} flex justify-between items-start`}>
                  <div className="cursor-pointer flex-1" onClick={() => handleNotificationClick(n)}>
-                    <span className={`text-sm block ${!n.is_read ? 'text-blue-800 font-medium' : 'text-gray-800'}`}>{n.message}</span>
+                    <span className={`text-sm block ${!n.is_read ? 'text-blue-800 font-medium' : 'text-gray-800'}`}>
+                      {(() => {
+                        const m = String(n.message || "")
+                        const dashIdx = m.indexOf(" - ")
+                        const header = dashIdx >= 0 ? m.slice(0, dashIdx) : m
+                        const rest = dashIdx >= 0 ? m.slice(dashIdx + 3) : ""
+                        const parts = header.split("  ")
+                        const page = parts[0] || ""
+                        const company = parts[1] || ""
+                        const hasStructured = !!(page && company && dashIdx >= 0)
+                        return (
+                          <>
+                            {company ? <span className="font-bold">{company}</span> : null}
+                            {(company && page) ? " " : null}
+                            {page ? <span className="font-bold">{page}</span> : null}
+                            {company ? " - " : null}
+                            {hasStructured ? rest : (!page && !company ? m : rest)}
+                          </>
+                        )
+                      })()}
+                    </span>
                     <span className="text-xs text-gray-500">{new Date(n.created_at).toLocaleString()}</span>
                  </div>
                  {!n.is_read && (

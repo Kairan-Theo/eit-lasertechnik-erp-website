@@ -1149,10 +1149,7 @@ function CRMPage() {
                                         value={it.dueAt || ""}
                                         onChange={(e)=>{
                                           const { stageIndex, cardIndex } = openActivity
-                                          updateDeal(stageIndex, cardIndex, (prev)=>({
-                                            ...prev,
-                                            activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, dueAt: e.target.value } : s)
-                                          }))
+                                          updateSchedule(stageIndex, cardIndex, i, { dueAt: e.target.value })
                                         }}
                                         disabled={!isEditing}
                                         className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
