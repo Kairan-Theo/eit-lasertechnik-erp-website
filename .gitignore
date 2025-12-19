@@ -26,7 +26,18 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# python
-.venv
-__pycache__
+# python / django
+__pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+db.sqlite3
+staticfiles/
+media/
+*.sqlite3

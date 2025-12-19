@@ -34,6 +34,8 @@ export default function Navigation() {
   const [profileName, setProfileName] = React.useState("")
   const [profileCompany, setProfileCompany] = React.useState("")
   const [profileEmail, setProfileEmail] = React.useState("")
+  const [profileImage, setProfileImage] = React.useState(null)
+  const [previewImage, setPreviewImage] = React.useState(null)
 
   // Password Form State
   const [currentPassword, setCurrentPassword] = React.useState("")
@@ -45,6 +47,7 @@ export default function Navigation() {
       setProfileName(user.name || "")
       setProfileCompany(user.company || "")
       setProfileEmail(user.email || "")
+      setPreviewImage(user.profile_picture || null)
     }
   }, [user])
 
@@ -134,17 +137,24 @@ export default function Navigation() {
           })
         })
         setDueCount(count)
-        let unread = 0
-        try {
-          const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-          if (Array.isArray(list)) {
-            unread = list.reduce((acc, n) => acc + (n && n.unread !== false ? 1 : 0), 0)
-          }
-        } catch {}
-        
-        // User requested to ONLY show notifications for CRM moves (which are in the 'notifications' list)
-        // and NOT for due invoices or initial welcome.
-        setNotificationsCount(unread)
+        const token = localStorage.getItem("authToken")
+        if (!token) {
+          setNotificationsCount(0)
+        } else {
+          fetch("http://localhost:8001/api/notifications/", {
+            headers: { "Authorization": `Token ${token}` }
+          })
+            .then(r => r.ok ? r.json() : [])
+            .then(list => {
+              if (Array.isArray(list)) {
+                const unread = list.reduce((acc, n) => acc + (n && n.is_read === false ? 1 : 0), 0)
+                setNotificationsCount(unread)
+              } else {
+                setNotificationsCount(0)
+              }
+            })
+            .catch(() => setNotificationsCount(0))
+        }
       } catch {
         setDueCount(0)
         setNotificationsCount(0)
@@ -259,10 +269,10 @@ export default function Navigation() {
               </div>
             ) : (
               <>
-                <a href="/login.html" className="hidden sm:block rounded-full px-4 py-2 bg-white/10 hover:bg-white/20 transition">
+                <a href="/login.html" className="hidden sm:block rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition">
                   Log in
                 </a>
-                <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-5 py-2 font-semibold shadow-sm transition hover:-translate-y-0.5">
+                <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-4 py-1.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5">
                   Sign up
                 </a>
               </>
@@ -281,6 +291,26 @@ export default function Navigation() {
           </DialogHeader>
           <form onSubmit={handleEditProfileSubmit}>
             <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="picture" className="text-right">
+                  Picture
+                </Label>
+                <div className="col-span-3">
+                  <Input
+                    id="picture"
+                    type="file"
+                    onChange={(e) => {
+                      const file = e.target.files[0]
+                      if (file) {
+                          setProfileImage(file)
+                          setPreviewImage(URL.createObjectURL(file))
+                      }
+                    }}
+                    accept="image/*"
+                  />
+                  {previewImage && <img src={previewImage} alt="Preview" className="mt-2 w-16 h-16 rounded-full object-cover" />}
+                </div>
+              </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">
                   Name
