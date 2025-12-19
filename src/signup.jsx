@@ -18,15 +18,43 @@ function SignupPage() {
     setForm((f) => ({ ...f, [id]: value }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.name || !form.email || !form.password || !form.confirm) return
-    if (form.password !== form.confirm) return
+    if (form.password !== form.confirm) {
+      alert("Passwords do not match")
+      return
+    }
+    
     try {
-      const payload = { name: form.name, email: form.email }
-      localStorage.setItem("registeredUser", JSON.stringify(payload))
-    } catch {}
-    window.location.href = "/apps.html"
+      const response = await fetch('http://localhost:8001/api/auth/signup/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: form.email, // Use email as username
+          email: form.email,
+          password: form.password,
+          first_name: form.name
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // User requirement: after sign up, it need to log iin again
+        alert("Account created successfully! Please log in.")
+        window.location.href = "/login.html"
+      } else {
+        // Handle errors (e.g., username already exists)
+        const errorMsg = data.username ? `Email already taken` : (data.email ? data.email[0] : "Signup failed")
+        alert(errorMsg)
+      }
+    } catch (error) {
+      console.error("Signup error:", error)
+      alert("An error occurred during signup. Please try again.")
+    }
   }
 
   return (
