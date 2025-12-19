@@ -129,7 +129,7 @@ function UserPermissions() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("authToken")
-      const response = await fetch("http://localhost:8001/api/users/", {
+      const response = await fetch("http://localhost:8000/api/users/", {
         headers: {
           "Authorization": `Token ${token}`
         }
@@ -176,7 +176,7 @@ function UserPermissions() {
     try {
       const token = localStorage.getItem("authToken")
       for (const [userId, allowed] of Object.entries(draft)) {
-        const response = await fetch("http://localhost:8001/api/users/permissions/", {
+        const response = await fetch("http://localhost:8000/api/users/permissions/", {
           method: "POST",
           headers: {
             "Authorization": `Token ${token}`,
@@ -282,7 +282,7 @@ function Notifications({ setActiveTab }) {
   const loadNotifications = async () => {
     try {
       const token = localStorage.getItem("authToken")
-      const response = await fetch("http://localhost:8001/api/notifications/", {
+      const response = await fetch("http://localhost:8000/api/notifications/", {
         headers: { "Authorization": `Token ${token}` }
       })
       if (response.ok) {
@@ -301,7 +301,7 @@ function Notifications({ setActiveTab }) {
   const handleMarkRead = async (id) => {
     try {
       const token = localStorage.getItem("authToken")
-      await fetch("http://localhost:8001/api/notifications/read/", {
+      await fetch("http://localhost:8000/api/notifications/read/", {
         method: "POST",
         headers: { 
             "Authorization": `Token ${token}`,

@@ -19,27 +19,28 @@ const initialPipeline = {
   Demo: [],
   Decision: [],
   Connection: [],
+  "Contract Sent": [],
   "Close Won": [
     { id: 4, title: "Negotiated and made contract", customer: "Konvy", amount: 80000, currency: "฿", priority: "low", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 10*24*60*60*1000).toISOString().split('T')[0] },
   ],
 }
 
 const thaiCompanies = [
-  { name: "EIT LASERTECHNIK (Einstein Industrie Technik)", contact: "Sales Team", email: "sales@eitlaser.com", phone: "02-052-9544", address: "1/120 Ramkamhaeng Soi 184, Minburi, Minburi, Bangkok 10510" },
-  { name: "PTT Public Company Limited", contact: "Auttapol Rerkpiboon", email: "auttapol.r@pttplc.com", phone: "02-537-2000", address: "555 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
-  { name: "SCG (Siam Cement Group)", contact: "Roongrote Rangsiyopash", email: "roongrote.r@scg.com", phone: "02-586-3333", address: "1 Siam Cement Rd, Bang Sue, Bangkok 10800" },
-  { name: "CP All Public Company Limited", contact: "Korsak Chairasmisak", email: "korsak.c@cpall.co.th", phone: "02-071-9000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500" },
-  { name: "Advanced Info Service (AIS)", contact: "Somchai Lertsutiwong", email: "somchai.l@ais.co.th", phone: "02-029-5000", address: "414 Phaholyothin Rd, Phaya Thai, Bangkok 10400" },
-  { name: "Kasikornbank", contact: "Kattiya Indaravijaya", email: "kattiya.i@kasikornbank.com", phone: "02-888-8888", address: "400/22 Phahon Yothin Rd, Phaya Thai, Bangkok 10400" },
-  { name: "Siam Commercial Bank", contact: "Arthid Nanthawithaya", email: "arthid.n@scb.co.th", phone: "02-777-7777", address: "9 Ratchadapisek Rd, Chatuchak, Bangkok 10900" },
-  { name: "Bangkok Bank", contact: "Chartsiri Sophonpanich", email: "chartsiri.s@bangkokbank.com", phone: "1333", address: "333 Silom Rd, Bang Rak, Bangkok 10500" },
-  { name: "True Corporation", contact: "Manat Manavutiveth", email: "manat.m@truecorp.co.th", phone: "1242", address: "18 True Tower, Ratchadaphisek Rd, Huai Khwang, Bangkok 10310" },
-  { name: "Thai Beverage", contact: "Thapana Sirivadhanabhakdi", email: "thapana.s@thaibev.com", phone: "02-785-5555", address: "14 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
-  { name: "Central Retail Corporation", contact: "Yol Phokasub", email: "yol.p@central.co.th", phone: "02-650-3600", address: "22 Soi Somkid, Ploenchit Rd, Pathum Wan, Bangkok 10330" },
-  { name: "Charoen Pokphand Foods", contact: "Prasit Boondoungprasert", email: "prasit.b@cpf.co.th", phone: "02-766-8000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500" },
-  { name: "PTT Exploration and Production", contact: "Montri Rawanchaikul", email: "montri.r@pttep.com", phone: "02-537-4000", address: "555/1 Energy Complex, Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900" },
-  { name: "Airports of Thailand", contact: "Nitinai Sirismatthakarn", email: "nitinai.s@aot.co.th", phone: "02-535-1111", address: "333 Cherdwutagard Rd, Don Mueang, Bangkok 10210" },
-  { name: "Energy Absolute", contact: "Somphote Ahunai", email: "somphote.a@energyabsolute.co.th", phone: "02-248-2455", address: "89 AIA Capital Center, Ratchadaphisek Rd, Din Daeng, Bangkok 10400" },
+  { name: "EIT LASERTECHNIK (Einstein Industrie Technik)", contact: "Sales Team", email: "sales@eitlaser.com", phone: "02-052-9544", address: "1/120 Ramkamhaeng Soi 184, Minburi, Minburi, Bangkok 10510", taxId: "" },
+  { name: "PTT Public Company Limited", contact: "Auttapol Rerkpiboon", email: "auttapol.r@pttplc.com", phone: "02-537-2000", address: "555 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900", taxId: "0107544000108" },
+  { name: "SCG (Siam Cement Group)", contact: "Roongrote Rangsiyopash", email: "roongrote.r@scg.com", phone: "02-586-3333", address: "1 Siam Cement Rd, Bang Sue, Bangkok 10800", taxId: "0107537000114" },
+  { name: "CP All Public Company Limited", contact: "Korsak Chairasmisak", email: "korsak.c@cpall.co.th", phone: "02-071-9000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500", taxId: "0107542000011" },
+  { name: "Advanced Info Service (AIS)", contact: "Somchai Lertsutiwong", email: "somchai.l@ais.co.th", phone: "02-029-5000", address: "414 Phaholyothin Rd, Phaya Thai, Bangkok 10400", taxId: "0107535000265" },
+  { name: "Kasikornbank", contact: "Kattiya Indaravijaya", email: "kattiya.i@kasikornbank.com", phone: "02-888-8888", address: "400/22 Phahon Yothin Rd, Phaya Thai, Bangkok 10400", taxId: "0107536000315" },
+  { name: "Siam Commercial Bank", contact: "Arthid Nanthawithaya", email: "arthid.n@scb.co.th", phone: "02-777-7777", address: "9 Ratchadapisek Rd, Chatuchak, Bangkok 10900", taxId: "0107536000102" },
+  { name: "Bangkok Bank", contact: "Chartsiri Sophonpanich", email: "chartsiri.s@bangkokbank.com", phone: "1333", address: "333 Silom Rd, Bang Rak, Bangkok 10500", taxId: "0107536000374" },
+  { name: "True Corporation", contact: "Manat Manavutiveth", email: "manat.m@truecorp.co.th", phone: "1242", address: "18 True Tower, Ratchadaphisek Rd, Huai Khwang, Bangkok 10310", taxId: "0107536000081" },
+  { name: "Thai Beverage", contact: "Thapana Sirivadhanabhakdi", email: "thapana.s@thaibev.com", phone: "02-785-5555", address: "14 Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900", taxId: "0107546000342" },
+  { name: "Central Retail Corporation", contact: "Yol Phokasub", email: "yol.p@central.co.th", phone: "02-650-3600", address: "22 Soi Somkid, Ploenchit Rd, Pathum Wan, Bangkok 10330", taxId: "0107562000386" },
+  { name: "Charoen Pokphand Foods", contact: "Prasit Boondoungprasert", email: "prasit.b@cpf.co.th", phone: "02-766-8000", address: "313 C.P. Tower, Silom Rd, Bang Rak, Bangkok 10500", taxId: "0107537000246" },
+  { name: "PTT Exploration and Production", contact: "Montri Rawanchaikul", email: "montri.r@pttep.com", phone: "02-537-4000", address: "555/1 Energy Complex, Vibhavadi Rangsit Rd, Chatuchak, Bangkok 10900", taxId: "0107535000206" },
+  { name: "Airports of Thailand", contact: "Nitinai Sirismatthakarn", email: "nitinai.s@aot.co.th", phone: "02-535-1111", address: "333 Cherdwutagard Rd, Don Mueang, Bangkok 10210", taxId: "0107545000292" },
+  { name: "Energy Absolute", contact: "Somphote Ahunai", email: "somphote.a@energyabsolute.co.th", phone: "02-248-2455", address: "89 AIA Capital Center, Ratchadaphisek Rd, Din Daeng, Bangkok 10400", taxId: "0107551000061" },
   { name: "Gulf Energy Development", contact: "Sarath Ratanavadi", email: "sarath.r@gulf.co.th", phone: "02-080-4499", address: "87 M. Thai Tower, All Seasons Place, Wireless Rd, Pathum Wan, Bangkok 10330" },
   { name: "Intouch Holdings", contact: "Kim Siritaweechai", email: "kim.s@intouchcompany.com", phone: "02-118-6900", address: "87 M. Thai Tower, All Seasons Place, Wireless Rd, Pathum Wan, Bangkok 10330" },
   { name: "Minor International", contact: "William Heinecke", email: "william.h@minor.com", phone: "02-365-7500", address: "88 The Parq Building, Ratchadaphisek Rd, Khlong Toei, Bangkok 10110" },
@@ -141,8 +142,7 @@ function CRMPage() {
   const [detailEmail, setDetailEmail] = React.useState("")
   const [detailPhone, setDetailPhone] = React.useState("")
   const [detailAddress, setDetailAddress] = React.useState("")
-  const [isEditingDetail, setIsEditingDetail] = React.useState(false)
-  const [detailPage, setDetailPage] = React.useState(0)
+  const [detailTaxId, setDetailTaxId] = React.useState("")
   const [openPriority, setOpenPriority] = React.useState(null) // { stageIndex, cardIndex }
   const priorityClass = (p) => (p==='high' ? 'bg-red-100 text-red-700' : p==='medium' ? 'bg-orange-100 text-orange-700' : p==='low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
   const priorityLabel = (p) => (p && p!=='none' ? p.charAt(0).toUpperCase()+p.slice(1) : 'Set Priority')
@@ -153,6 +153,7 @@ function CRMPage() {
     email: "",
     phone: "",
     address: "",
+    taxId: "",
     amount: 0,
     currency: "฿",
     priority: "none",
@@ -170,17 +171,13 @@ function CRMPage() {
   const [openScheduleMenuKey, setOpenScheduleMenuKey] = React.useState(null) // { stageIndex, cardIndex, idx }
   const [editingScheduleKey, setEditingScheduleKey] = React.useState(null) // { stageIndex, cardIndex, idx }
   const [notification, setNotification] = React.useState({ show: false, message: "" })
-  const [sortBy, setSortBy] = React.useState('createdAt')
+  const [sortBy, setSortBy] = React.useState(null) // 'createdAt' | 'lastActivity' | 'expectedClose'
   const [sortAsc, setSortAsc] = React.useState(false)
-  const [query, setQuery] = React.useState("")
   const [showCompanySuggestions, setShowCompanySuggestions] = React.useState(false)
   const [openEmail, setOpenEmail] = React.useState(null) // { stageIndex, cardIndex, to }
   const [emailSubject, setEmailSubject] = React.useState("")
   const [emailBody, setEmailBody] = React.useState("")
   const [isSending, setIsSending] = React.useState(false)
-  const [showImport, setShowImport] = React.useState(false)
-  const [importing, setImporting] = React.useState(false)
-  const [importInfo, setImportInfo] = React.useState({ name: "", count: 0, error: "" })
   const [emailConfig, setEmailConfig] = React.useState(() => {
     try {
       return JSON.parse(localStorage.getItem("email_config")) || { serviceId: "", templateId: "", publicKey: "" }
@@ -196,57 +193,13 @@ function CRMPage() {
     setShowEmailSettings(false)
     showNotification("Email settings saved")
   }
-  const parseCsvText = (text) => {
-    const lines = text.split(/\r?\n/).filter((l) => l.trim().length)
-    if (!lines.length) return []
-    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase())
-    return lines.slice(1).map((line) => {
-      const cols = line.split(",").map((c) => c.trim())
-      const item = {}
-      headers.forEach((h, i) => { item[h] = cols[i] })
-      return item
-    })
-  }
-  const normalizePriority = (p) => {
-    const t = String(p || "").toLowerCase()
-    if (t.includes("high")) return "high"
-    if (t.includes("medium")) return "medium"
-    if (t.includes("low")) return "low"
-    return "none"
-  }
-  const importDeals = (rows) => {
-    setStages((prev) => {
-      const next = prev.map((s) => ({ ...s, deals: [...s.deals] }))
-      rows.forEach((r) => {
-        const stageName = String(r.stage || r.pipeline || prev[0]?.name || "").toLowerCase()
-        let idx = next.findIndex((s) => s.name.toLowerCase() === stageName)
-        if (idx < 0) idx = 0
-        const deal = {
-          id: Date.now() + Math.floor(Math.random() * 100000),
-          title: r.title || r.opportunity || "Untitled",
-          customer: r.customer || r.company || "",
-          amount: Number(r.amount || 0),
-          currency: r.currency || "฿",
-          priority: normalizePriority(r.priority),
-          contact: r.contact || "",
-          email: r.email || "",
-          phone: r.phone || "",
-          notes: r.notes || "",
-          createdAt: r.createdat || r.createdAt || new Date().toISOString(),
-          expectedClose: r.expectedclose || r.expectedClose || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-        }
-        next[idx].deals.push(deal)
-      })
-      return next
-    })
-  }
 
   const showNotification = (msg) => {
     setNotification({ show: true, message: msg })
     setTimeout(() => setNotification({ show: false, message: "" }), 3000)
   }
 
-  const notifyTeam = (msg) => {
+  const notifyTeam = (msg, type = "info", company = "", source = "") => {
     try {
       const list = JSON.parse(localStorage.getItem("notifications") || "[]")
       list.unshift({
@@ -254,7 +207,9 @@ function CRMPage() {
         message: msg,
         timestamp: new Date().toISOString(),
         unread: true,
-        type: "info"
+        type,
+        company: company || "",
+        source: source || ""
       })
       // Keep only last 50
       if (list.length > 50) list.length = 50
@@ -327,38 +282,6 @@ function CRMPage() {
     sunday.setDate(monday.getDate()+6)
     return d>=monday && d<=sunday
   }
-  const isNextWeek = (ms) => {
-    if (!ms) return false
-    const d = new Date(ms)
-    const today = new Date()
-    const start = new Date(today)
-    start.setHours(0,0,0,0)
-    const dow = start.getDay()
-    const mondayOffset = (dow+6)%7
-    const monday = new Date(start)
-    monday.setDate(start.getDate()-mondayOffset)
-    const nextMonday = new Date(monday)
-    nextMonday.setDate(monday.getDate()+7)
-    const nextSunday = new Date(nextMonday)
-    nextSunday.setDate(nextMonday.getDate()+6)
-    return d>=nextMonday && d<=nextSunday
-  }
-  const formatDate = (v) => {
-    if (!v) return "-"
-    const d = typeof v === "number" ? new Date(v) : new Date(v)
-    const t = d.getTime()
-    if (!Number.isFinite(t)) return "-"
-    return d.toLocaleDateString()
-  }
-  const relativeDay = (ms) => {
-    if (!ms) return "-"
-    const now = Date.now()
-    const diff = Math.floor((ms - now) / 86400000)
-    if (diff === 0) return "Today"
-    if (diff > 0) return `in ${diff}d`
-    return `${Math.abs(diff)}d ago`
-  }
-  const sortKeyLabel = (k) => (k === 'createdAt' ? 'Create date' : k === 'lastActivity' ? 'Last activity' : k === 'expectedClose' ? 'Close date' : 'None')
   const formatActivityPreviewText = (s) => {
     if (!s) return ""
     const t = String(s).trim()
@@ -514,49 +437,18 @@ function CRMPage() {
     setDetailEmail(d.email || "")
     setDetailPhone(d.phone || "")
     setDetailAddress(d.address || "")
-    setIsEditingDetail(false)
-    setDetailPage(0)
+    setDetailTaxId(d.taxId || "")
     setOpenDetail({ stageIndex, cardIndex })
   }
 
   const saveDetail = async () => {
     if (!openDetail) return
     const { stageIndex, cardIndex } = openDetail
-    const current = stages[stageIndex].deals[cardIndex]
     setStages((prev) => prev.map((s, i) => {
       if (i !== stageIndex) return s
-      const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, notes: detailNotes, contact: detailContact, email: detailEmail, phone: detailPhone, address: detailAddress } : d))
+      const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, notes: detailNotes, contact: detailContact, email: detailEmail, phone: detailPhone, address: detailAddress, taxId: detailTaxId } : d))
       return { ...s, deals }
     }))
-    
-    try {
-      const token = localStorage.getItem("authToken")
-      const headers = {
-        "Content-Type": "application/json",
-        ...(token ? { "Authorization": `Token ${token}` } : {})
-      }
-      await fetch(`${API_BASE}/deals/${current.id}/`, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({
-           notes: detailNotes,
-           contact: detailContact,
-           email: detailEmail,
-           phone: detailPhone,
-           address: detailAddress
-        })
-      })
-
-      const arr = JSON.parse(localStorage.getItem("crmContacts") || "[]")
-      const name = current.customer || ""
-      const idx = arr.findIndex((c) => (c && c.name) === name)
-      const next = { name, contact: detailContact, email: detailEmail, phone: detailPhone, address: detailAddress, updatedAt: new Date().toISOString() }
-      if (idx >= 0) arr[idx] = { ...arr[idx], ...next }
-      else arr.unshift(next)
-      localStorage.setItem("crmContacts", JSON.stringify(arr.slice(0, 500)))
-    } catch (err) {
-      console.error("Failed to save deal details", err)
-    }
     setOpenDetail(null)
   }
 
@@ -579,25 +471,14 @@ function CRMPage() {
     
     const card = stages[fromStageIndex].deals[cardIndex]
     if (card) {
-      const msg = `Moved "${card.title}" to ${stages[toStageIndex].name}`
+      const fromStageName = stages[fromStageIndex].name
+      const stageName = stages[toStageIndex].name
+      const sname = String(stageName || "").toLowerCase()
+      const isClosedWon = sname.includes("close") && sname.includes("won")
+      const baseMsg = `CRM: Moved "${card.title}" from ${fromStageName} --> ${stageName}`
+      const msg = isClosedWon ? `${baseMsg} — Create PO or Receive PO` : baseMsg
       showNotification(msg)
-      notifyTeam(msg)
-
-      // API Update
-      try {
-        const token = localStorage.getItem("authToken")
-        const headers = {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Token ${token}` } : {})
-        }
-        await fetch(`${API_BASE}/deals/${card.id}/`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ stage: stages[toStageIndex].name })
-        })
-      } catch (err) {
-        console.error("Failed to update deal stage", err)
-      }
+      notifyTeam(msg, isClosedWon ? "success" : "info", card.customer || "", "CRM")
     }
 
     setStages((prev) => {
@@ -784,10 +665,7 @@ function CRMPage() {
             </select>
           </div>
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setShowImport(true)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
-            >Import</button>
+            <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">Import</button>
             <button 
               onClick={() => { setNewDeal(defaultNewDeal); setShowNewForm(true); }}
               className="px-5 py-2 text-sm font-medium text-white bg-[#2D4485] rounded-lg hover:bg-[#3D56A6] shadow-md transition-all hover:shadow-lg transform hover:-translate-y-0.5"
@@ -806,8 +684,6 @@ function CRMPage() {
               type="text" 
               placeholder="Search deals..." 
               className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all bg-slate-50 focus:bg-white" 
-              value={query}
-              onChange={(e)=>setQuery(e.target.value)}
             />
             <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 group-focus-within:text-[#2D4485] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -834,9 +710,6 @@ function CRMPage() {
                 </button>
               )
             })}
-            <span className="ml-2 px-2 py-1 rounded bg-slate-100 text-slate-700 text-xs">
-              Sorted: {sortKeyLabel(sortBy)} {sortAsc ? '↑' : '↓'}
-            </span>
           </div>
         </div>
       </div>
@@ -845,16 +718,11 @@ function CRMPage() {
       <section className="w-full overflow-x-auto h-[calc(100vh-140px)] bg-slate-50">
         <div className="flex h-full p-6 gap-6">
 
-            {stages.map((stage, stageIndex) => {
+          {stages.map((stage, stageIndex) => {
              const total = totalFor(stage.deals);
              const prob = getProbability(stage.name);
              const weighted = total * (prob / 100);
              const sortedDeals = sortDeals(stage.deals, sortBy, sortAsc);
-             const q = query.trim().toLowerCase()
-             const filteredDeals = q ? sortedDeals.filter((d)=>{
-               const pool = [d.title, d.customer, d.contact, d.email, d.phone, d.notes]
-               return pool.some((x)=>String(x||"").toLowerCase().includes(q))
-             }) : sortedDeals
              
              return (
               <div
@@ -899,7 +767,7 @@ function CRMPage() {
 
                 {/* Cards Container */}
                 <div className="flex-1 overflow-y-auto p-3">
-                  {filteredDeals.map((d, cardIndex) => (
+                  {sortedDeals.map((d, cardIndex) => (
                     <div
                       key={d.id}
                       className="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card"
@@ -909,8 +777,8 @@ function CRMPage() {
                       <div className="mb-2">
                         <span 
                           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
-                          onClick={(e) => { e.stopPropagation(); openDealDetail(stageIndex, cardIndex); }}
-                          title="Open company profile"
+                          onClick={(e) => { e.stopPropagation(); openEmailModal(stageIndex, cardIndex); }}
+                          title="Click to send email"
                         >
                           <svg className="w-4 h-4 text-[#2D4485]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                           <span className="truncate text-xs leading-tight max-w-[280px]">{d.customer}</span>
@@ -936,38 +804,21 @@ function CRMPage() {
                           <span className="text-xs font-normal text-slate-400">{d.currency}</span>
                           {d.amount.toLocaleString()}
                         </div>
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                          {sortBy === 'createdAt' && (
-                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                              Created {relativeDay(createdMs(d))}
-                            </span>
-                          )}
-                          {sortBy === 'lastActivity' && (
-                            <span className={`px-2 py-0.5 rounded-full border ${isThisWeek(lastActivityMs(d)) ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-700 border-slate-200"}`}>
-                              Activity {relativeDay(lastActivityMs(d))}
-                            </span>
-                          )}
-                          {sortBy === 'expectedClose' && (
-                            <span className={`px-2 py-0.5 rounded-full border ${closeMs(d) && closeMs(d) < Date.now() ? "bg-red-50 text-red-700 border-red-200" : "bg-blue-50 text-[#2D4485] border-blue-100"}`}>
-                              Close {relativeDay(closeMs(d))}
-                            </span>
-                          )}
-                        </div>
                       </div>
 
                       <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
                         <div className="flex items-center gap-2 relative">
-                           <button
-                             className={`text-xs px-2 py-0.5 rounded-full border ${d.priority === 'high' ? 'bg-red-50 text-red-700 border-red-200' : d.priority === 'medium' ? 'bg-orange-50 text-orange-700 border-orange-200' : d.priority === 'low' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}
-                             title={`Priority: ${d.priority}`}
+                           <div 
+                             className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-bold shadow-sm ${d.priority === 'high' ? 'bg-red-500 ring-2 ring-red-100' : d.priority === 'medium' ? 'bg-orange-400 ring-2 ring-orange-100' : 'bg-[#2D4485] ring-2 ring-blue-100'} cursor-pointer hover:scale-110 transition-transform`}
                              onClick={(e) => {
-                               e.stopPropagation();
-                               const open = openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex
-                               setOpenPriority(open ? null : { stageIndex, cardIndex })
+                                e.stopPropagation();
+                                const open = openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex
+                                setOpenPriority(open ? null : { stageIndex, cardIndex })
                              }}
+                             title={`Priority: ${d.priority}`}
                            >
-                             {d.priority === 'high' ? 'High' : d.priority === 'medium' ? 'Medium' : d.priority === 'low' ? 'Low' : 'None'}
-                           </button>
+                              {d.customer.charAt(0)}
+                           </div>
                            {openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex && (
                               <div className="absolute left-0 bottom-8 bg-white border border-slate-200 rounded-lg shadow-xl z-20 w-32 py-1">
                                 <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "low"); setOpenPriority(null); }}>Low</button>
@@ -988,26 +839,15 @@ function CRMPage() {
                            >
                              {(() => {
                                 const item = nextSchedule(d)
-                                const ms = nextDueMs(d)
-                                const count = (d.activitySchedules||[]).length
-                                if (item) {
-                                  const label = isThisWeek(ms) ? "This week" : isNextWeek(ms) ? "Next week" : formatDate(ms)
-                                  const style = isThisWeek(ms)
-                                    ? "bg-blue-50 text-[#2D4485] border-blue-100"
-                                    : isNextWeek(ms)
-                                      ? "bg-violet-50 text-violet-700 border-violet-200"
-                                      : "bg-slate-100 text-slate-700 border-slate-200"
-                                  return (
-                                    <>
-                                      <span className={`text-[11px] px-2 py-0.5 rounded-full border ${style}`}>{label}</span>
-                                      <span className="text-[11px] px-2 py-0.5 rounded-full border bg-slate-100 text-slate-700 border-slate-200">{count} activities</span>
-                                    </>
-                                  )
-                                }
-                                return (
-                                  <>
-                                    <span className="text-[11px] px-2 py-0.5 rounded-full border bg-slate-100 text-slate-500 border-slate-200">No activities</span>
-                                  </>
+                                return item ? (
+                                   <>
+                                     <div className={`w-2 h-2 rounded-full ${isThisWeek(item.dueAt) ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+                                     <span className="text-[10px] text-slate-500 font-medium truncate max-w-[80px]">{formatActivityPreviewText(item.text || "Activity")}</span>
+                                   </>
+                                ) : (
+                                   <>
+                                     <svg className="w-3.5 h-3.5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                   </>
                                 )
                              })()}
                            </div>
@@ -1143,32 +983,19 @@ function CRMPage() {
                                 const isEditing = !!(editingScheduleKey && editingScheduleKey.stageIndex===openActivity.stageIndex && editingScheduleKey.cardIndex===openActivity.cardIndex && editingScheduleKey.idx===i)
                                 return (
                                   <>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="datetime-local"
-                                        value={it.dueAt || ""}
-                                        onChange={(e)=>{
-                                          const { stageIndex, cardIndex } = openActivity
-                                          updateSchedule(stageIndex, cardIndex, i, { dueAt: e.target.value })
-                                        }}
-                                        disabled={!isEditing}
-                                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
-                                      />
-                                      {isEditing && (
-                                        <button
-                                          className="px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs"
-                                          onClick={()=>{
-                                            try { 
-                                              const el = document.getElementById(`scheduleText-${openActivity.stageIndex}-${openActivity.cardIndex}-${i}`)
-                                              if (el) el.focus()
-                                            } catch {}
-                                          }}
-                                          title="OK"
-                                        >
-                                          OK
-                                        </button>
-                                      )}
-                                    </div>
+                                    <input
+                                      type="datetime-local"
+                                      value={it.dueAt || ""}
+                                      onChange={(e)=>{
+                                        const { stageIndex, cardIndex } = openActivity
+                                        updateDeal(stageIndex, cardIndex, (prev)=>({
+                                          ...prev,
+                                          activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, dueAt: e.target.value } : s)
+                                        }))
+                                      }}
+                                      disabled={!isEditing}
+                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                    />
                                     <input
                                       type="text"
                                       value={it.text || ""}
@@ -1177,7 +1004,6 @@ function CRMPage() {
                                         updateSchedule(stageIndex, cardIndex, i, { text: e.target.value })
                                       }}
                                       placeholder="Details"
-                                      id={`scheduleText-${openActivity.stageIndex}-${openActivity.cardIndex}-${i}`}
                                       className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <div className="relative">
@@ -1227,30 +1053,18 @@ function CRMPage() {
                             <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
                               <div className="flex flex-wrap items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-inner">
                                 <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Due</span>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="datetime-local"
-                                    value={scheduleDueInput}
-                                    onChange={(e)=>setScheduleDueInput(e.target.value)}
-                                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
-                                  />
-                                  <button
-                                    className="px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs"
-                                    onClick={()=>{
-                                      try { const el = document.getElementById('newScheduleText'); if (el) el.focus() } catch {}
-                                    }}
-                                    title="OK"
-                                  >
-                                    OK
-                                  </button>
-                                </div>
+                                <input
+                                  type="datetime-local"
+                                  value={scheduleDueInput}
+                                  onChange={(e)=>setScheduleDueInput(e.target.value)}
+                                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                                />
                                 <input
                                   type="text"
                                   value={scheduleText}
                                   onChange={(e)=>setScheduleText(e.target.value)}
                                   placeholder="Scheduled activity details"
                                   autoFocus
-                                  id="newScheduleText"
                                   className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                                 />
                               </div>
@@ -1282,14 +1096,6 @@ function CRMPage() {
                       </>
                     )})()}
                   </div>
-                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end bg-slate-50/50">
-                    <button
-                      className="px-4 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm transition-all text-sm font-medium"
-                      onClick={() => setOpenActivity(null)}
-                    >
-                      OK
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1299,203 +1105,81 @@ function CRMPage() {
               <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[520px] transition-all" onClick={(e) => e.stopPropagation()}>
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    {(() => { const d = stages[openDetail.stageIndex].deals[openDetail.cardIndex]; const s = stages[openDetail.stageIndex].name; const p = getProbability(s); return (
-                      <>
-                        <div className="flex items-center gap-3">
-                          <h3 className="font-bold text-slate-800 text-lg">{d.customer}</h3>
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 border border-slate-200">{s}</span>
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-24 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-[#2D4485]/70" style={{ width: `${p}%` }}></div></div>
-                            <span className="text-xs text-slate-600">{p}%</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center rounded-md border border-slate-200 bg-white overflow-hidden text-xs">
-                            <button className={`px-3 py-1 ${detailPage===0 ? "bg-slate-100 text-slate-900" : "text-slate-700 hover:bg-slate-50"}`} onClick={() => setDetailPage(0)}>Profile</button>
-                            <button className={`px-3 py-1 ${detailPage===1 ? "bg-slate-100 text-slate-900" : "text-slate-700 hover:bg-slate-50"}`} onClick={() => setDetailPage(1)}>Connection</button>
-                          </div>
-                          {!isEditingDetail && (
-                            <button className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs" onClick={() => setIsEditingDetail(true)}>Edit</button>
-                          )}
-                          <button className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs" onClick={() => { setOpenEmail({ stageIndex: openDetail.stageIndex, cardIndex: openDetail.cardIndex, to: d.email || "" }); setEmailSubject(`Regarding: ${d.title}`); setEmailBody(`Dear ${d.contact || "Partner"},\n\n`) }}>Email</button>
-                          <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setOpenDetail(null)}>✕</button>
-                        </div>
-                      </>
-                    )})()}
+                    <h3 className="font-bold text-slate-800 text-lg">Company Details</h3>
+                    <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setOpenDetail(null)}>✕</button>
                   </div>
                   <div className="p-6">
-                    {(() => { const d = stages[openDetail.stageIndex].deals[openDetail.cardIndex]; const s = stages[openDetail.stageIndex].name; const lastMs = lastActivityMs(d); const next = nextSchedule(d); return (
-                      <>
-                        {!isEditingDetail ? (
-                          <>
-                            {detailPage === 0 && (
-                              <div className="space-y-6">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                  <div className="rounded-lg border border-slate-200 p-4">
-                                    <div className="text-xs text-slate-500 mb-1">Contact</div>
-                                    <div className="text-sm font-semibold text-slate-800">{detailContact || d.contact || "-"}</div>
-                                    <div className="mt-2 text-xs text-slate-600">
-                                      <a href={`mailto:${detailEmail || d.email || ""}`} className="underline">{detailEmail || d.email || "-"}</a>
-                                    </div>
-                                    <div className="mt-1 text-xs text-slate-600">
-                                      <a href={`tel:${detailPhone || d.phone || ""}`} className="underline">{detailPhone || d.phone || "-"}</a>
-                                    </div>
-                                  </div>
-                                  <div className="rounded-lg border border-slate-200 p-4">
-                                    <div className="text-xs text-slate-500 mb-1">Company</div>
-                                    <div className="text-sm text-slate-800">{detailAddress || d.address || "-"}</div>
-                                  </div>
-                                </div>
-                                <div className="rounded-lg border border-slate-200 p-4">
-                                  <div className="text-xs text-slate-500 mb-2">Notes</div>
-                                  <div className="text-sm text-slate-800 whitespace-pre-line">{detailNotes || d.notes || "–"}</div>
-                                </div>
-                              </div>
-                            )}
-                            {detailPage === 1 && (
-                              <div className="space-y-6">
-                                <div className="rounded-lg border border-slate-200 p-4">
-                                  <div className="text-xs text-slate-500 mb-2">Connection</div>
-                                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">Stage: {s}</span>
-                                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">Created {relativeDay(createdMs(d))}</span>
-                                    <span className={`px-2 py-0.5 rounded border ${isThisWeek(lastMs) ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-700 border-slate-200"}`}>Last {relativeDay(lastMs)}</span>
-                                    <span className={`${next ? "px-2 py-0.5 rounded bg-blue-50 text-[#2D4485] border border-blue-100" : "px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200"}`}>{next ? `Next ${new Date(next.dueAt ?? next.startAt).toLocaleDateString()}` : "No upcoming"}</span>
-                                  </div>
-                                </div>
-                                <div className="rounded-lg border border-slate-200 p-4">
-                                  <div className="text-xs text-slate-500 mb-1">Schedules</div>
-                                  <div className="space-y-1">
-                                    {(d.activitySchedules || []).map((a, i) => (
-                                      <div key={i} className="text-xs text-slate-700 flex items-center gap-2">
-                                        <span className="inline-block w-24">{new Date(a.dueAt ?? a.startAt).toLocaleDateString()}</span>
-                                        <span className="inline-block flex-1">{formatActivityPreviewText(a.text)}</span>
-                                      </div>
-                                    ))}
-                                    {!(d.activitySchedules || []).length && <div className="text-xs text-slate-500">No schedules</div>}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                              <label className="text-sm font-medium text-slate-500">Contact</label>
-                              <input value={detailContact} onChange={(e)=>setDetailContact(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" placeholder="Contact person" />
-                            </div>
-                            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                              <label className="text-sm font-medium text-slate-500">Email</label>
-                              <input value={detailEmail} onChange={(e)=>setDetailEmail(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" placeholder="Email address" />
-                            </div>
-                            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                              <label className="text-sm font-medium text-slate-500">Phone</label>
-                              <input value={detailPhone} onChange={(e)=>setDetailPhone(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" placeholder="Phone number" />
-                            </div>
-                            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                              <label className="text-sm font-medium text-slate-500">Address</label>
-                              <input value={detailAddress} onChange={(e)=>setDetailAddress(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" placeholder="Company address" />
-                            </div>
-                            <div className="pt-2">
-                              <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
-                              <textarea value={detailNotes} onChange={(e)=>setDetailNotes(e.target.value)} className="w-full min-h-[120px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all resize-y" placeholder="Add notes about this deal..." />
-                            </div>
-                          </div>
-                        )}
-                      </>
+                    {(() => { const d = stages[openDetail.stageIndex].deals[openDetail.cardIndex]; return (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Contact</label>
+                          <input 
+                            value={detailContact} 
+                            onChange={(e)=>setDetailContact(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Contact person"
+                          />
+                        </div>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Email</label>
+                          <input 
+                            value={detailEmail} 
+                            onChange={(e)=>setDetailEmail(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Email address"
+                          />
+                        </div>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Phone</label>
+                          <input 
+                            value={detailPhone} 
+                            onChange={(e)=>setDetailPhone(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Phone number"
+                          />
+                        </div>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Address</label>
+                          <input 
+                            value={detailAddress} 
+                            onChange={(e)=>setDetailAddress(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Company address"
+                          />
+                        </div>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                          <label className="text-sm font-medium text-slate-500">Tax ID</label>
+                          <input 
+                            value={detailTaxId} 
+                            onChange={(e)=>setDetailTaxId(e.target.value)} 
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                            placeholder="Tax ID"
+                          />
+                        </div>
+                        <div className="pt-2">
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
+                          <textarea 
+                            value={detailNotes} 
+                            onChange={(e)=>setDetailNotes(e.target.value)} 
+                            className="w-full min-h-[120px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all resize-y" 
+                            placeholder="Add notes about this deal..." 
+                          />
+                        </div>
+                      </div>
                     )})()}
                   </div>
                   <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
-                    {!isEditingDetail ? (
-                      <>
-                        <div className="mr-auto text-xs text-slate-600">Page {detailPage+1} of 2</div>
-                        {detailPage > 0 && (
-                          <button className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors text-sm" onClick={() => setDetailPage(detailPage-1)}>Back</button>
-                        )}
-                        {detailPage < 1 && (
-                          <button className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors text-sm" onClick={() => setDetailPage(detailPage+1)}>Next</button>
-                        )}
-                        <button className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm" onClick={() => setOpenDetail(null)}>Close</button>
-                      </>
-                    ) : (
-                      <>
-                        <button className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm" onClick={() => setIsEditingDetail(false)}>Cancel</button>
-                        <button className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium" onClick={() => { saveDetail(); setIsEditingDetail(false) }}>Save Changes</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          {showImport && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40" onClick={() => setShowImport(false)}>
-              <div className="absolute left-1/2 top-28 -translate-x-1/2 w-[520px]" onClick={(e) => e.stopPropagation()}>
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <h3 className="font-bold text-slate-800 text-lg">Import Deals</h3>
-                    <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowImport(false)}>✕</button>
-                  </div>
-                  <div className="p-6 space-y-4">
-                    <div className="text-sm text-slate-700">
-                      Upload `.csv` or `.json` with fields like: `title, customer, amount, currency, priority, stage, createdAt, expectedClose`.
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="file"
-                        accept=".csv,.json"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0]
-                          if (!f) return
-                          setImportInfo({ name: f.name, count: 0, error: "" })
-                          const reader = new FileReader()
-                          reader.onload = () => {
-                            try {
-                              let rows = []
-                              const text = String(reader.result || "")
-                              if (f.name.toLowerCase().endsWith(".json")) {
-                                const data = JSON.parse(text)
-                                rows = Array.isArray(data) ? data : []
-                              } else {
-                                rows = parseCsvText(text)
-                              }
-                              setImportInfo({ name: f.name, count: rows.length, error: "" })
-                              e.target.dataset.rows = JSON.stringify(rows)
-                            } catch (err) {
-                              setImportInfo({ name: f.name, count: 0, error: "Invalid file format" })
-                            }
-                          }
-                          reader.readAsText(f)
-                        }}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div className="text-xs text-slate-600">
-                      {importInfo.name && (
-                        <span>File: {importInfo.name} • Rows: {importInfo.count} {importInfo.error && `• ${importInfo.error}`}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
-                    <button className="btn-outline" onClick={() => setShowImport(false)}>Cancel</button>
-                    <button
-                      className="btn-primary"
-                      disabled={importing}
-                      onClick={() => {
-                        const input = document.querySelector('input[type="file"][accept=".csv,.json"]')
-                        const data = input?.dataset?.rows ? JSON.parse(input.dataset.rows) : []
-                        if (!data.length) {
-                          setImportInfo((i) => ({ ...i, error: "No data to import" }))
-                          return
-                        }
-                        setImporting(true)
-                        importDeals(data)
-                        setImporting(false)
-                        setShowImport(false)
-                        showNotification(`Imported ${data.length} deals`)
-                      }}
+                    <button 
+                      className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm" 
+                      onClick={() => setOpenDetail(null)}
                     >
-                      {importing ? "Importing..." : "Import"}
+                      Cancel
+                    </button>
+                    <button 
+                      className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium" 
+                      onClick={saveDetail}
+                    >
+                      Save Changes
                     </button>
                   </div>
                 </div>
@@ -1532,7 +1216,7 @@ function CRMPage() {
                                   key={i}
                                   className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
                                   onClick={() => {
-                                    setNewDeal({...newDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || ""})
+                                    setNewDeal({...newDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || "", taxId: c.taxId || ""})
                                     setShowCompanySuggestions(false)
                                   }}
                                 >
@@ -1597,6 +1281,15 @@ function CRMPage() {
                           onChange={(e)=>setNewDeal({...newDeal, address:e.target.value})} 
                           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
                           placeholder="Company address"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+                        <label className="text-sm font-medium text-slate-500">Tax ID</label>
+                        <input 
+                          value={newDeal.taxId} 
+                          onChange={(e)=>setNewDeal({...newDeal, taxId:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Tax ID"
                         />
                       </div>
                       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
@@ -1672,6 +1365,8 @@ function CRMPage() {
                           contact: newDeal.contact || "",
                           email: newDeal.email || "",
                           phone: newDeal.phone || "",
+                          address: newDeal.address || "",
+                          taxId: newDeal.taxId || "",
                           notes: "",
                           stage: stageName
                         }
@@ -1698,15 +1393,17 @@ function CRMPage() {
                         } catch (err) {
                           console.error("Error creating deal", err)
                         }
-
+                        setStages((prev)=>prev.map((s,i)=> i===newDeal.stageIndex ? { ...s, deals: [...s.deals, deal] } : s))
+                        setShowNewForm(false)
+                        setNewDeal(defaultNewDeal)
                         try {
-                          const arr = JSON.parse(localStorage.getItem("crmContacts") || "[]")
-                          const name = dealData.customer || ""
-                          const idx = arr.findIndex((c) => (c && c.name) === name)
-                          const next = { name, contact: dealData.contact, email: dealData.email, phone: dealData.phone, address: newDeal.address || "", updatedAt: new Date().toISOString() }
-                          if (idx >= 0) arr[idx] = { ...arr[idx], ...next }
-                          else arr.unshift(next)
-                          localStorage.setItem("crmContacts", JSON.stringify(arr.slice(0, 500)))
+                          const stageName = stages[newDeal.stageIndex]?.name || ""
+                          const sname = String(stageName).toLowerCase()
+                          const isClosedWon = sname.includes("close") && sname.includes("won")
+                          const baseMsg = `CRM: Created "${deal.title}" in ${stageName}`
+                          const msg = isClosedWon ? `${baseMsg} — Create PO or Receive PO` : baseMsg
+                          showNotification(msg)
+                          notifyTeam(msg, isClosedWon ? "success" : "info", deal.customer || "", "CRM")
                         } catch {}
                       }}
                     >
