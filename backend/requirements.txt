@@ -1,5 +1,5 @@
-django==6.0
-python-dotenv==1.0.1
+Django>=4.2,<5.0
 djangorestframework
 django-cors-headers
-Pillow
+python-dotenv==1.0.1
+psycopg2-binary
