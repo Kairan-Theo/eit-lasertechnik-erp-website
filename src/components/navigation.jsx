@@ -34,6 +34,8 @@ export default function Navigation() {
   const [profileName, setProfileName] = React.useState("")
   const [profileCompany, setProfileCompany] = React.useState("")
   const [profileEmail, setProfileEmail] = React.useState("")
+  const [profileImage, setProfileImage] = React.useState(null)
+  const [previewImage, setPreviewImage] = React.useState(null)
 
   // Password Form State
   const [currentPassword, setCurrentPassword] = React.useState("")
@@ -45,6 +47,7 @@ export default function Navigation() {
       setProfileName(user.name || "")
       setProfileCompany(user.company || "")
       setProfileEmail(user.email || "")
+      setPreviewImage(user.profile_picture || null)
     }
   }, [user])
 
@@ -288,6 +291,26 @@ export default function Navigation() {
           </DialogHeader>
           <form onSubmit={handleEditProfileSubmit}>
             <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="picture" className="text-right">
+                  Picture
+                </Label>
+                <div className="col-span-3">
+                  <Input
+                    id="picture"
+                    type="file"
+                    onChange={(e) => {
+                      const file = e.target.files[0]
+                      if (file) {
+                          setProfileImage(file)
+                          setPreviewImage(URL.createObjectURL(file))
+                      }
+                    }}
+                    accept="image/*"
+                  />
+                  {previewImage && <img src={previewImage} alt="Preview" className="mt-2 w-16 h-16 rounded-full object-cover" />}
+                </div>
+              </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">
                   Name

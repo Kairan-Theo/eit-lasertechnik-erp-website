@@ -64,7 +64,7 @@ function LoginPage() {
         localStorage.setItem("userRole", data.role)
         localStorage.setItem("authToken", data.token)
         localStorage.setItem("allowedApps", data.allowed_apps)
-        localStorage.setItem("currentUser", JSON.stringify({ email: data.email, role: data.role, name: data.name }))
+        localStorage.setItem("currentUser", JSON.stringify({ email: data.email, role: data.role, name: data.name, profile_picture: data.profile_picture }))
         window.location.href = "/apps.html"
       } else {
         setError(data.error || "Login failed")
