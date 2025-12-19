@@ -163,9 +163,11 @@ export default function Navigation() {
     compute()
     const id = setInterval(compute, 2000)
     window.addEventListener("storage", compute)
+    window.addEventListener("notificationUpdated", compute)
     return () => {
       clearInterval(id)
       window.removeEventListener("storage", compute)
+      window.removeEventListener("notificationUpdated", compute)
     }
   }, [isAuthenticated])
 

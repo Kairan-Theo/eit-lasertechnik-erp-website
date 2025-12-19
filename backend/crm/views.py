@@ -5,12 +5,28 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification
-from .serializers import DealSerializer, UserSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer
+from datetime import date, timedelta
 
 class DealViewSet(viewsets.ModelViewSet):
     queryset = Deal.objects.all().order_by('-created_at')
     serializer_class = DealSerializer
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        old_stage = instance.stage
+        updated_instance = serializer.save()
+        
+        if old_stage != updated_instance.stage:
+            Notification.objects.create(
+                message=f"CRM Move: {updated_instance.title} ({old_stage} -> {updated_instance.stage})",
+                type="crm_move"
+            )
+
+class ActivityScheduleViewSet(viewsets.ModelViewSet):
+    queryset = ActivitySchedule.objects.all().order_by('due_at')
+    serializer_class = ActivityScheduleSerializer
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -147,6 +163,17 @@ def get_notifications(request):
     """
     Get recent notifications for admins.
     """
+    # Check for upcoming due dates (next 3 days)
+    upcoming_deals = Deal.objects.filter(
+        expected_close__lte=date.today() + timedelta(days=3),
+        expected_close__gte=date.today()
+    )
+    for deal in upcoming_deals:
+        msg = f"Deal '{deal.title}' is due on {deal.expected_close}"
+        # Avoid duplicate alerts for the same day
+        if not Notification.objects.filter(message=msg, created_at__date=date.today()).exists():
+             Notification.objects.create(message=msg, type="alert")
+
     # Get unread notifications or last 20
     notifications = Notification.objects.all().order_by('-created_at')[:20]
     data = []
