@@ -1,5 +1,4 @@
 import React from "react"
-// notifications moved to dedicated page: src/notification.jsx
 
 export default function AdminPage() {
   const [view, setView] = React.useState(() => {
@@ -45,12 +44,35 @@ export default function AdminPage() {
                 <p className="text-sm text-gray-600">View quotations, invoices and emails.</p>
                 <button onClick={() => setView("customerHistory")} className="mt-4 btn-primary">Open</button>
               </div>
+              <div className="card p-6 border-l-4 border-l-[#2D4485]">
+                <h2 className="text-lg font-semibold text-[#2D4485] mb-2">User Permissions</h2>
+                <p className="text-sm text-gray-600">Manage user access to apps.</p>
+                <button onClick={() => setView("userPermissions")} className="mt-4 btn-primary">Manage</button>
+              </div>
             </div>
 
           </>
         )}
 
-        {/* notifications view removed; use notification.html */}
+        {view === "userPermissions" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold text-[#2D4485]">User Permissions</h1>
+              <button onClick={() => setView("home")} className="btn-outline">Back</button>
+            </div>
+            <UserPermissions />
+          </div>
+        )}
+
+        {view === "notifications" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold text-[#2D4485]">Notifications</h1>
+              <button onClick={() => setView("home")} className="btn-outline">Back</button>
+            </div>
+            <Notifications setActiveTab={setView} />
+          </div>
+        )}
 
         {view === "productSearch" && (
           <div className="space-y-4">
@@ -86,6 +108,239 @@ export default function AdminPage() {
   )
 }
 
+function UserPermissions() {
+  const [users, setUsers] = React.useState([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState("")
+  const appsList = ["Manufacturing", "Inventory", "CRM", "Project Management", "Admin"]
+  const [draft, setDraft] = React.useState({})
+  const [saving, setSaving] = React.useState(false)
+
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const response = await fetch("http://localhost:8001/api/users/", {
+        headers: {
+          "Authorization": `Token ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setUsers(data)
+      } else {
+        setError("Failed to fetch users")
+      }
+    } catch (e) {
+      setError("Error connecting to server")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  React.useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const handleToggle = async (userId, appName, currentApps) => {
+    const base = draft[userId] !== undefined ? draft[userId] : currentApps
+    const apps = base === "all" ? appsList : base.split(",").filter(a => a)
+    let newApps = []
+    
+    if (apps.includes(appName)) {
+        newApps = apps.filter(a => a !== appName)
+    } else {
+        newApps = [...apps, appName]
+    }
+    
+    const newAppsStr = newApps.join(",")
+    
+    setDraft({ ...draft, [userId]: newAppsStr })
+    setUsers(users.map(u => (u.id === userId ? { ...u, allowed_apps: newAppsStr } : u)))
+  }
+  
+  const handleGrantAll = async (userId) => {
+      setDraft({ ...draft, [userId]: "all" })
+      setUsers(users.map(u => u.id === userId ? { ...u, allowed_apps: "all" } : u))
+  }
+
+  const handleSave = async () => {
+    if (!Object.keys(draft).length) return
+    setSaving(true)
+    try {
+      const token = localStorage.getItem("authToken")
+      for (const [userId, allowed] of Object.entries(draft)) {
+        const response = await fetch("http://localhost:8001/api/users/permissions/", {
+          method: "POST",
+          headers: {
+            "Authorization": `Token ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ user_id: Number(userId), allowed_apps: allowed })
+        })
+        if (!response.ok) {
+          throw new Error("Failed to save")
+        }
+      }
+      setDraft({})
+    } catch (e) {
+      alert("Failed to save changes")
+    } finally {
+      setSaving(false)
+    }
+  }
+  
+  if (loading) return <div>Loading users...</div>
+  if (error) return <div className="text-red-600">{error}</div>
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+              {appsList.map(app => (
+                <th key={app} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {app}
+                </th>
+              ))}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {users.map(user => {
+                const currentApps = user.allowed_apps || ""
+                const isAll = currentApps === "all"
+                const appList = isAll ? appsList : currentApps.split(",")
+                // Check if this is a new user (no apps assigned and not admin)
+                const isNewUser = !user.is_staff && currentApps === ""
+                
+                return (
+                  <tr key={user.id} className={isNewUser ? "bg-blue-50/50" : ""}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                        {user.name}
+                        {isNewUser && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">NEW</span>}
+                      </div>
+                      <div className="text-sm text-gray-500">{user.email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.is_staff ? "bg-purple-100 text-purple-800" : "bg-green-100 text-green-800"}`}>
+                        {user.is_staff ? "Admin" : "User"}
+                      </span>
+                    </td>
+                    {appsList.map(app => {
+                        const hasAccess = isAll || appList.includes(app)
+                        return (
+                            <td key={app} className="px-6 py-4 whitespace-nowrap text-center">
+                                <input 
+                                    type="checkbox" 
+                                    checked={hasAccess}
+                                    onChange={() => handleToggle(user.id, app, currentApps)}
+                                    className="h-4 w-4 text-[#2D4485] focus:ring-[#2D4485] border-gray-300 rounded"
+                                />
+                            </td>
+                        )
+                    })}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {!isAll && (
+                            <button onClick={() => handleGrantAll(user.id)} className="text-[#2D4485] hover:text-blue-900 text-xs font-medium">
+                                Grant All
+                            </button>
+                        )}
+                        {draft[user.id] !== undefined && (
+                          <span className="ml-3 text-xs text-orange-600 font-medium">Unsaved</span>
+                        )}
+                    </td>
+                  </tr>
+                )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="p-4 border-t bg-gray-50 flex items-center justify-end">
+        <button onClick={handleSave} disabled={saving || !Object.keys(draft).length} className={`btn-primary ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}>
+          {saving ? "Saving..." : "Save changes"}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function Notifications({ setActiveTab }) {
+  const [teamAlerts, setTeamAlerts] = React.useState([])
+
+  const loadNotifications = async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const response = await fetch("http://localhost:8001/api/notifications/", {
+        headers: { "Authorization": `Token ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setTeamAlerts(data)
+      }
+    } catch {
+      setTeamAlerts([])
+    }
+  }
+
+  React.useEffect(() => {
+    loadNotifications()
+  }, [])
+  
+  const handleMarkRead = async (id) => {
+    try {
+      const token = localStorage.getItem("authToken")
+      await fetch("http://localhost:8001/api/notifications/read/", {
+        method: "POST",
+        headers: { 
+            "Authorization": `Token ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ id })
+      })
+      setTeamAlerts(teamAlerts.map(n => n.id === id ? { ...n, is_read: true } : n))
+    } catch {}
+  }
+
+  const handleNotificationClick = (notification) => {
+      if (notification.type === 'signup' && setActiveTab) {
+          setActiveTab('userPermissions')
+      }
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-6">
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-[#2D4485]">Notifications</h2>
+          <button onClick={loadNotifications} className="text-sm text-blue-600 hover:underline">Refresh</button>
+        </div>
+        {teamAlerts.length === 0 ? (
+          <div className="text-sm text-gray-600">No recent notifications.</div>
+        ) : (
+          <div className="max-h-[600px] overflow-y-auto pr-2 space-y-2">
+            {teamAlerts.map((n) => (
+              <div key={n.id} className={`p-3 rounded-md border ${!n.is_read ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-200'} flex justify-between items-start`}>
+                 <div className="cursor-pointer flex-1" onClick={() => handleNotificationClick(n)}>
+                    <span className={`text-sm block ${!n.is_read ? 'text-blue-800 font-medium' : 'text-gray-800'}`}>{n.message}</span>
+                    <span className="text-xs text-gray-500">{new Date(n.created_at).toLocaleString()}</span>
+                 </div>
+                 {!n.is_read && (
+                    <button onClick={() => handleMarkRead(n.id)} className="text-xs text-blue-600 hover:underline ml-4">
+                        Mark Read
+                    </button>
+                 )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function ProductSearch() {
   const [query, setQuery] = React.useState("")

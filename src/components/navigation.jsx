@@ -134,17 +134,24 @@ export default function Navigation() {
           })
         })
         setDueCount(count)
-        let unread = 0
-        try {
-          const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-          if (Array.isArray(list)) {
-            unread = list.reduce((acc, n) => acc + (n && n.unread !== false ? 1 : 0), 0)
-          }
-        } catch {}
-        
-        // User requested to ONLY show notifications for CRM moves (which are in the 'notifications' list)
-        // and NOT for due invoices or initial welcome.
-        setNotificationsCount(unread)
+        const token = localStorage.getItem("authToken")
+        if (!token) {
+          setNotificationsCount(0)
+        } else {
+          fetch("http://localhost:8001/api/notifications/", {
+            headers: { "Authorization": `Token ${token}` }
+          })
+            .then(r => r.ok ? r.json() : [])
+            .then(list => {
+              if (Array.isArray(list)) {
+                const unread = list.reduce((acc, n) => acc + (n && n.is_read === false ? 1 : 0), 0)
+                setNotificationsCount(unread)
+              } else {
+                setNotificationsCount(0)
+              }
+            })
+            .catch(() => setNotificationsCount(0))
+        }
       } catch {
         setDueCount(0)
         setNotificationsCount(0)
@@ -259,10 +266,10 @@ export default function Navigation() {
               </div>
             ) : (
               <>
-                <a href="/login.html" className="hidden sm:block rounded-full px-4 py-2 bg-white/10 hover:bg-white/20 transition">
+                <a href="/login.html" className="hidden sm:block rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition">
                   Log in
                 </a>
-                <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-5 py-2 font-semibold shadow-sm transition hover:-translate-y-0.5">
+                <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-4 py-1.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5">
                   Sign up
                 </a>
               </>
