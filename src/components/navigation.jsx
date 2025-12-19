@@ -195,7 +195,7 @@ export default function Navigation() {
           <div className="flex items-center gap-3">
             {isAuthenticated && (
               <button
-                onClick={() => (window.location.href = "/admin.html?view=notifications")}
+                onClick={() => (window.location.href = "/notification.html")}
                 className="relative inline-flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition"
                 aria-label="Due notifications"
                 title={notificationsCount > 0 ? `${notificationsCount} notifications` : "No notifications"}
