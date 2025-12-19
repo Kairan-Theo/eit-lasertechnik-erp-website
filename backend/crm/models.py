@@ -30,6 +30,15 @@ class Deal(models.Model):
     def __str__(self):
         return self.title
 
+class ActivitySchedule(models.Model):
+    deal = models.ForeignKey(Deal, related_name='activity_schedules', on_delete=models.CASCADE)
+    due_at = models.DateTimeField(null=True, blank=True)
+    text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.deal.title} - {self.text}"
+
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     # Comma-separated list of app names: "Manufacturing,Inventory,CRM,Project Management,Admin"

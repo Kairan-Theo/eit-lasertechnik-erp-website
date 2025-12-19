@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal
+from .models import Deal, ActivitySchedule
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -18,7 +18,14 @@ class UserSerializer(serializers.ModelSerializer):
         )
         return user
 
+class ActivityScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActivitySchedule
+        fields = '__all__'
+
 class DealSerializer(serializers.ModelSerializer):
+    activity_schedules = ActivityScheduleSerializer(many=True, read_only=True)
+    
     class Meta:
         model = Deal
         fields = '__all__'

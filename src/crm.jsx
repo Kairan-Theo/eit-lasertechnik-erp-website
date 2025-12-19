@@ -79,13 +79,63 @@ const thaiCompanies = [
   { name: "Bangkok Expressway and Metro (BEM)", contact: "Sombat Kitjalaksana", email: "bem@bemplc.co.th", phone: "02-641-4611", address: "587 Sutthisan Winitchai Rd, Din Daeng, Bangkok 10400" }
 ]
 
+const API_BASE = "http://localhost:8001/api"
+
 function CRMPage() {
   const [stages, setStages] = React.useState(
-    Object.entries(initialPipeline).map(([name, deals], idx) => ({ id: idx + 1, name, deals }))
+    Object.keys(initialPipeline).map((name, idx) => ({ id: idx + 1, name, deals: [] }))
   )
   const [menuOpenIndex, setMenuOpenIndex] = React.useState(null)
   const [openCardMenu, setOpenCardMenu] = React.useState(null) // { stageIndex, cardIndex }
   const [showNewForm, setShowNewForm] = React.useState(false)
+
+  React.useEffect(() => {
+    fetchDeals()
+  }, [])
+
+  const fetchDeals = async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      const res = await fetch(`${API_BASE}/deals/`, { headers })
+      if (!res.ok) throw new Error("Failed to fetch deals")
+      const data = await res.json()
+      
+      setStages(prev => {
+        const newStages = prev.map(s => ({ ...s, deals: [] }))
+        data.forEach(d => {
+          const deal = {
+            id: d.id,
+            title: d.title,
+            customer: d.customer,
+            amount: Number(d.amount),
+            currency: d.currency,
+            priority: d.priority,
+            contact: d.contact,
+            email: d.email,
+            phone: d.phone,
+            notes: d.notes,
+            createdAt: d.created_at,
+            expectedClose: d.expected_close,
+            activitySchedules: (d.activity_schedules || []).map(s => ({
+              id: s.id,
+              dueAt: s.due_at ? s.due_at.slice(0, 16) : "",
+              text: s.text
+            }))
+          }
+          const stageIndex = newStages.findIndex(s => s.name === d.stage)
+          if (stageIndex >= 0) {
+            newStages[stageIndex].deals.push(deal)
+          } else if (newStages.length > 0) {
+            newStages[0].deals.push(deal)
+          }
+        })
+        return newStages
+      })
+    } catch (err) {
+      console.error("Error loading deals:", err)
+    }
+  }
   const [openDetail, setOpenDetail] = React.useState(null) // { stageIndex, cardIndex }
   const [detailNotes, setDetailNotes] = React.useState("")
   const [detailContact, setDetailContact] = React.useState("")
@@ -244,6 +294,111 @@ function CRMPage() {
       return { ...s, deals }
     }))
   }
+
+  const addSchedule = async (stageIndex, cardIndex, dueAt, text) => {
+    const deal = stages[stageIndex].deals[cardIndex]
+    const tempId = Date.now()
+    const newSchedule = { id: tempId, dueAt, text }
+    
+    setStages(prev => prev.map((s, i) => {
+      if (i !== stageIndex) return s
+      const deals = s.deals.map((d, j) => j === cardIndex ? { ...d, activitySchedules: [...(d.activitySchedules || []), newSchedule] } : d)
+      return { ...s, deals }
+    }))
+
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      const res = await fetch(`${API_BASE}/activity_schedules/`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          deal: deal.id,
+          due_at: dueAt,
+          text: text
+        })
+      })
+      if (!res.ok) throw new Error("Failed to add schedule")
+      const saved = await res.json()
+      
+      setStages(prev => prev.map((s, i) => {
+        if (i !== stageIndex) return s
+        const deals = s.deals.map((d, j) => {
+          if (j !== cardIndex) return d
+          const activitySchedules = (d.activitySchedules || []).map(sch => sch.id === tempId ? { ...sch, id: saved.id } : sch)
+          return { ...d, activitySchedules }
+        })
+        return { ...s, deals }
+      }))
+    } catch (err) {
+      console.error("Failed to add schedule", err)
+    }
+  }
+
+  const updateSchedule = async (stageIndex, cardIndex, scheduleIdx, updates) => {
+    const deal = stages[stageIndex].deals[cardIndex]
+    const schedule = deal.activitySchedules[scheduleIdx]
+    if (!schedule.id) return
+
+    setStages(prev => prev.map((s, i) => {
+      if (i !== stageIndex) return s
+      const deals = s.deals.map((d, j) => {
+        if (j !== cardIndex) return d
+        const activitySchedules = d.activitySchedules.map((sch, k) => k === scheduleIdx ? { ...sch, ...updates } : sch)
+        return { ...d, activitySchedules }
+      })
+      return { ...s, deals }
+    }))
+
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      const body = {}
+      if (updates.dueAt !== undefined) body.due_at = updates.dueAt
+      if (updates.text !== undefined) body.text = updates.text
+
+      await fetch(`${API_BASE}/activity_schedules/${schedule.id}/`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(body)
+      })
+    } catch (err) {
+      console.error("Failed to update schedule", err)
+    }
+  }
+
+  const deleteSchedule = async (stageIndex, cardIndex, scheduleIdx) => {
+    const deal = stages[stageIndex].deals[cardIndex]
+    const schedule = deal.activitySchedules[scheduleIdx]
+    if (!schedule.id) return
+
+    setStages(prev => prev.map((s, i) => {
+      if (i !== stageIndex) return s
+      const deals = s.deals.map((d, j) => {
+        if (j !== cardIndex) return d
+        const activitySchedules = d.activitySchedules.filter((_, k) => k !== scheduleIdx)
+        return { ...d, activitySchedules }
+      })
+      return { ...s, deals }
+    }))
+
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      await fetch(`${API_BASE}/activity_schedules/${schedule.id}/`, {
+        method: "DELETE",
+        headers
+      })
+    } catch (err) {
+      console.error("Failed to delete schedule", err)
+    }
+  }
  
   const reorderSchedule = (stageIndex, cardIndex, fromIdx, toIdx) => {
     if (fromIdx===toIdx || fromIdx==null || toIdx==null) return
@@ -286,7 +441,7 @@ function CRMPage() {
     setOpenDetail({ stageIndex, cardIndex })
   }
 
-  const saveDetail = () => {
+  const saveDetail = async () => {
     if (!openDetail) return
     const { stageIndex, cardIndex } = openDetail
     setStages((prev) => prev.map((s, i) => {
@@ -308,12 +463,12 @@ function CRMPage() {
   const onCardDragStart = (stageIndex, cardIndex, e) => {
     e.dataTransfer.setData("card", JSON.stringify({ stageIndex, cardIndex }))
   }
-  const onCardDrop = (toStageIndex, e) => {
+  const onCardDrop = async (toStageIndex, e) => {
     const payload = e.dataTransfer.getData("card")
     if (!payload) return
     const { stageIndex: fromStageIndex, cardIndex } = JSON.parse(payload)
     if (fromStageIndex === toStageIndex) return
-    // Get card details for notification before state update
+    
     const card = stages[fromStageIndex].deals[cardIndex]
     if (card) {
       const fromStageName = stages[fromStageIndex].name
@@ -328,8 +483,8 @@ function CRMPage() {
 
     setStages((prev) => {
       const next = prev.map((s) => ({ ...s, deals: [...s.deals] }))
-      const [card] = next[fromStageIndex].deals.splice(cardIndex, 1)
-      next[toStageIndex].deals.push(card)
+      const [movedCard] = next[fromStageIndex].deals.splice(cardIndex, 1)
+      next[toStageIndex].deals.push(movedCard)
       return next
     })
   }
@@ -378,7 +533,10 @@ function CRMPage() {
   }
 
   // Deal card actions
-  const setCardPriority = (stageIndex, cardIndex, priority) => {
+  const setCardPriority = async (stageIndex, cardIndex, priority) => {
+    const currentDeal = stages[stageIndex].deals[cardIndex]
+    
+    // Optimistic update
     setStages((prev) => prev.map((s, i) => {
       if (i !== stageIndex) return s
       const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, priority } : d))
@@ -386,8 +544,26 @@ function CRMPage() {
     }))
     setOpenCardMenu(null)
     setOpenPriority(null)
+
+    // API Update
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      await fetch(`${API_BASE}/deals/${currentDeal.id}/`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ priority })
+      })
+    } catch (err) {
+      console.error("Failed to update priority", err)
+      // Revert if needed (optional)
+    }
   }
-  const editCard = (stageIndex, cardIndex) => {
+
+  const editCard = async (stageIndex, cardIndex) => {
     const s = stages[stageIndex]
     const d = s.deals[cardIndex]
     const title = window.prompt("Edit opportunity title", d.title)
@@ -401,22 +577,57 @@ function CRMPage() {
       alert("Amount must be a number")
       return
     }
+
+    // Optimistic update
     setStages((prev) => prev.map((stage, i) => {
       if (i !== stageIndex) return stage
       const deals = stage.deals.map((deal, j) => (j === cardIndex ? { ...deal, title, customer, amount } : deal))
       return { ...stage, deals }
     }))
     setOpenCardMenu(null)
+
+    // API Update
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      await fetch(`${API_BASE}/deals/${d.id}/`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ title, customer, amount })
+      })
+    } catch (err) {
+      console.error("Failed to update deal", err)
+    }
   }
-  const deleteCard = (stageIndex, cardIndex) => {
+
+  const deleteCard = async (stageIndex, cardIndex) => {
     const ok = window.confirm("Delete this opportunity?")
     if (!ok) return
+    
+    const dealId = stages[stageIndex].deals[cardIndex].id
+
+    // Optimistic update
     setStages((prev) => prev.map((stage, i) => {
       if (i !== stageIndex) return stage
       const deals = stage.deals.filter((_, j) => j !== cardIndex)
       return { ...stage, deals }
     }))
     setOpenCardMenu(null)
+
+    // API Update
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      await fetch(`${API_BASE}/deals/${dealId}/`, {
+        method: "DELETE",
+        headers
+      })
+    } catch (err) {
+      console.error("Failed to delete deal", err)
+    }
   }
 
   const getProbability = (stageName) => {
@@ -790,10 +1001,7 @@ function CRMPage() {
                                       value={it.text || ""}
                                       onChange={(e)=>{
                                         const { stageIndex, cardIndex } = openActivity
-                                        updateDeal(stageIndex, cardIndex, (prev)=>({
-                                          ...prev,
-                                          activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, text: e.target.value } : s)
-                                        }))
+                                        updateSchedule(stageIndex, cardIndex, i, { text: e.target.value })
                                       }}
                                       placeholder="Details"
                                       className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
@@ -873,10 +1081,7 @@ function CRMPage() {
                                     const dueAt = scheduleDueInput
                                     if (!dueAt) return
                                     const { stageIndex, cardIndex } = openActivity
-                                    updateDeal(stageIndex, cardIndex, (prev)=>({
-                                      ...prev,
-                                      activitySchedules: [...(prev.activitySchedules||[]), { startAt: null, dueAt, text: scheduleText || "" }]
-                                    }))
+                                    addSchedule(stageIndex, cardIndex, dueAt, scheduleText || "")
                                     setOpenScheduleFor(false)
                                     setScheduleDueInput("")
                                     setScheduleText("")
@@ -1149,24 +1354,44 @@ function CRMPage() {
                     </button>
                     <button
                       className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
-                      onClick={() => {
-                        const deal = {
-                          id: Date.now(),
+                      onClick={async () => {
+                        const stageName = stages[newDeal.stageIndex].name
+                        const dealData = {
                           title: newDeal.opportunity || newDeal.company || "Untitled",
                           customer: newDeal.company || newDeal.contact || "",
                           amount: Number(newDeal.amount) || 0,
                           currency: newDeal.currency || "฿",
-                          priority: newDeal.priority,
+                          priority: newDeal.priority || "none",
                           contact: newDeal.contact || "",
                           email: newDeal.email || "",
                           phone: newDeal.phone || "",
                           address: newDeal.address || "",
                           taxId: newDeal.taxId || "",
                           notes: "",
-                          activitySchedules: [],
-                          probability: 10,
-                          createdAt: new Date().toISOString(),
-                          expectedClose: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
+                          stage: stageName
+                        }
+
+                        try {
+                          const token = localStorage.getItem("authToken")
+                          const headers = {
+                            "Content-Type": "application/json",
+                            ...(token ? { "Authorization": `Token ${token}` } : {})
+                          }
+                          const res = await fetch(`${API_BASE}/deals/`, {
+                            method: "POST",
+                            headers,
+                            body: JSON.stringify(dealData)
+                          })
+                          
+                          if (res.ok) {
+                            await fetchDeals()
+                            setShowNewForm(false)
+                            setNewDeal(defaultNewDeal)
+                          } else {
+                            console.error("Failed to create deal")
+                          }
+                        } catch (err) {
+                          console.error("Error creating deal", err)
                         }
                         setStages((prev)=>prev.map((s,i)=> i===newDeal.stageIndex ? { ...s, deals: [...s.deals, deal] } : s))
                         setShowNewForm(false)

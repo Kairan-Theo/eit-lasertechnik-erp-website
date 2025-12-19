@@ -20,10 +20,11 @@ from django.http import JsonResponse
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from crm.views import DealViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, my_allowed_apps, update_profile
+from crm.views import DealViewSet, ActivityScheduleViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, my_allowed_apps, update_profile
 
 router = DefaultRouter()
 router.register(r'deals', DealViewSet)
+router.register(r'activity_schedules', ActivityScheduleViewSet)
 
 def health(request):
     return JsonResponse({"status": "ok"})
