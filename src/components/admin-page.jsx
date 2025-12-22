@@ -18,8 +18,8 @@ export default function AdminPage() {
             <h1 className="text-3xl font-bold text-[#2D4485] mb-8">Admin</h1>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="card p-6">
-                <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Product Order</h2>
-                <p className="text-sm text-gray-600">Create and manage product orders.</p>
+                <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Purchase Order</h2>
+                <p className="text-sm text-gray-600">Create and manage purchase orders.</p>
                 <button onClick={() => setView("poToQuotation")} className="mt-4 btn-primary">Open</button>
               </div>
               <div className="card p-6">
@@ -98,7 +98,7 @@ export default function AdminPage() {
         {view === "poToQuotation" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-[#2D4485]">Product Order</h1>
+              <h1 className="text-2xl font-bold text-[#2D4485]">Purchase Order</h1>
               <button onClick={() => setView("home")} className="btn-outline">Back</button>
             </div>
             <PoToQuotation />
