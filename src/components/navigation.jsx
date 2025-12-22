@@ -1,5 +1,6 @@
 "use client"
 import React from "react"
+import { API_BASE_URL } from "../config"
 import { User, LogOut, ChevronDown, Lock, Edit, Bell } from "lucide-react"
 import {
   Dialog,
@@ -141,8 +142,11 @@ export default function Navigation() {
         if (!token) {
           setNotificationsCount(0)
         } else {
-          fetch("http://localhost:8001/api/notifications/", {
-            headers: { "Authorization": `Token ${token}` }
+          fetch(`${API_BASE_URL}/api/notifications/`, {
+            headers: { 
+              "Authorization": `Token ${token}`,
+              "Cache-Control": "no-store"
+            }
           })
             .then(r => r.ok ? r.json() : [])
             .then(list => {
