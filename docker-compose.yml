@@ -4,6 +4,8 @@ services:
   db:
     image: postgres:15
     container_name: eit_postgres
+    env_file:
+      - ./backend/.env
     environment:
       POSTGRES_DB: eit_crm
       POSTGRES_USER: postgres
