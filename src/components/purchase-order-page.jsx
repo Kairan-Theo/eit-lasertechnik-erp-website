@@ -11,6 +11,7 @@ export default function PurchaseOrderPage() {
   const [poList, setPoList] = React.useState([])
   const [printingPo, setPrintingPo] = React.useState(null)
   const [errors, setErrors] = React.useState({})
+  const fileInputRef = React.useRef(null)
 
   const handlePrint = (po) => {
     setPrintingPo(po)
@@ -134,6 +135,76 @@ export default function PurchaseOrderPage() {
       localStorage.setItem("poList", JSON.stringify(next))
     } catch {}
   }, [])
+  const handleImportClick = () => {
+    if (fileInputRef.current) fileInputRef.current.click()
+  }
+  const normalizeImportedItem = (it) => {
+    const qty = Number(it?.qty || 0)
+    const price = Number(it?.price || 0)
+    const tax = Number(it?.tax || 0)
+    return {
+      product: String(it?.product || ""),
+      description: String(it?.description || ""),
+      note: String(it?.note || ""),
+      qty: Number.isFinite(qty) ? qty : 0,
+      price: Number.isFinite(price) ? price : 0,
+      tax: Number.isFinite(tax) ? tax : 0,
+    }
+  }
+  const normalizeImportedPo = (p) => {
+    const num = String(p?.poNumber || "").trim()
+    const now = new Date().toISOString()
+    return {
+      poNumber: num || generatePoNumber(),
+      customer: {
+        name: String(p?.customer?.name || ""),
+        company: String(p?.customer?.company || ""),
+        email: String(p?.customer?.email || ""),
+        companyEmail: String(p?.customer?.companyEmail || ""),
+        phone: String(p?.customer?.phone || ""),
+        companyPhone: String(p?.customer?.companyPhone || ""),
+      },
+      extraFields: {
+        refQuotation: String(p?.extraFields?.refQuotation || ""),
+        orderDate: String(p?.extraFields?.orderDate || ""),
+        deliveryDate: String(p?.extraFields?.deliveryDate || ""),
+        paymentTerms: String(p?.extraFields?.paymentTerms || ""),
+        deliveryTo: String(p?.extraFields?.deliveryTo || ""),
+      },
+      items: Array.isArray(p?.items) ? p.items.map(normalizeImportedItem) : [],
+      updatedAt: p?.updatedAt || now,
+    }
+  }
+  const handleImportFile = async (e) => {
+    const f = e.target.files && e.target.files[0]
+    if (!f) return
+    try {
+      const text = await f.text()
+      const data = JSON.parse(text)
+      let imported = []
+      if (Array.isArray(data)) {
+        imported = data
+      } else if (data && typeof data === "object") {
+        imported = [data]
+      }
+      const normalized = imported.map(normalizeImportedPo).filter((x) => Array.isArray(x.items) && x.items.length)
+      if (!normalized.length) {
+        e.target.value = ""
+        return
+      }
+      const next = [...poList]
+      normalized.forEach((p) => {
+        const idx = next.findIndex((x) => String(x.poNumber || "") === String(p.poNumber || ""))
+        if (idx >= 0) {
+          next[idx] = p
+        } else {
+          next.unshift(p)
+        }
+      })
+      persistPoList(next)
+    } catch {}
+    e.target.value = ""
+  }
   const startNew = () => {
     setPoNumber("")
     setCustomer({ name: "", company: "", email: "", companyEmail: "", phone: "", companyPhone: "" })
@@ -209,7 +280,17 @@ export default function PurchaseOrderPage() {
       {!showForm && (
         <>
           <div className="mb-4">
-            <button onClick={startNew} className="btn-primary">Add Purchase Order</button>
+            <div className="flex gap-2">
+              <button onClick={startNew} className="btn-primary">Add Purchase Order</button>
+              <button onClick={handleImportClick} className="btn-outline">Import</button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={handleImportFile}
+                className="hidden"
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
