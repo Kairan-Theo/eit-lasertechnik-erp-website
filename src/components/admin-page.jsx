@@ -9,9 +9,11 @@ import {
   Plus, 
   Download,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  Lock
 } from "lucide-react"
 import PurchaseOrderPage from "./purchase-order-page.jsx"
+import { API_BASE_URL } from "../config"
 
 // Helper to get all data from localStorage
 const getAllData = () => {
@@ -402,6 +404,212 @@ function CustomerHistory({ data }) {
   )
 }
 
+function PermissionsManager() {
+  const [users, setUsers] = React.useState([])
+  const [loading, setLoading] = React.useState(false)
+  const [savingId, setSavingId] = React.useState(null)
+  const APPS = ["Manufacturing", "Inventory", "CRM", "Project Management", "Admin"]
+  const parseAllowed = (allowed) => {
+    if (!allowed) return []
+    if (allowed === "all") return [...APPS]
+    return allowed.split(",").map(s => s.trim()).filter(Boolean)
+  }
+  const [me, setMe] = React.useState(null)
+  const loadMe = React.useCallback(async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const cuRaw = localStorage.getItem("currentUser")
+      let cu = null
+      try { cu = JSON.parse(cuRaw || "{}") } catch {}
+      if (!cu || (!cu.email && !cu.name)) {
+        setMe(null)
+        return
+      }
+      let allowed = localStorage.getItem("allowedApps")
+      if (token) {
+        try {
+          const r = await fetch(`${API_BASE_URL}/api/auth/me/allowed-apps/`, { headers: { "Authorization": `Token ${token}` } })
+          if (r.ok) {
+            const d = await r.json()
+            if (typeof d.allowed_apps === "string") {
+              allowed = d.allowed_apps
+              localStorage.setItem("allowedApps", d.allowed_apps)
+            }
+          }
+        } catch {}
+      }
+      const role = localStorage.getItem("userRole")
+      setMe({ id: null, email: cu.email || "", name: cu.name || "", is_staff: role === "Admin", allowed_apps: allowed || "" })
+    } catch {
+      setMe(null)
+    }
+  }, [])
+  const fetchUsers = React.useCallback(async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem("authToken")
+      if (!token) {
+        setUsers([])
+        setLoading(false)
+        return
+      }
+      const r = await fetch(`${API_BASE_URL}/api/users/`, {
+        headers: { "Authorization": `Token ${token}` }
+      })
+      if (r.ok) {
+        const d = await r.json()
+        setUsers(Array.isArray(d) ? d : [])
+      } else {
+        setUsers([])
+      }
+    } catch {
+      setUsers([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+  React.useEffect(() => {
+    loadMe()
+    fetchUsers()
+  }, [fetchUsers, loadMe])
+  React.useEffect(() => {
+    if (me && !me.id && users.length) {
+      const m = users.find(u => me.email && u.email === me.email)
+      if (m) {
+        setMe({ ...me, id: m.id, allowed_apps: m.allowed_apps ?? me.allowed_apps, is_staff: m.is_staff })
+      }
+    }
+  }, [users, me])
+  const isChecked = (allowed, app) => {
+    return parseAllowed(allowed).includes(app)
+  }
+  const save = async (userId, allowed) => {
+    try {
+      setSavingId(userId)
+      const token = localStorage.getItem("authToken")
+      if (!token) return
+      const r = await fetch(`${API_BASE_URL}/api/users/permissions/`, {
+        method: "POST",
+        headers: { "Authorization": `Token ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, allowed_apps: allowed })
+      })
+      if (!r.ok) {
+        const u = users.find(x => x.id === userId)
+        await fetchUsers()
+        setUsers(prev => prev.map(x => x.id === userId ? u || x : x))
+      }
+    } catch {
+    } finally {
+      setSavingId(null)
+    }
+  }
+  const toggleApp = (userId, app) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id !== userId) return u
+      const list = parseAllowed(u.allowed_apps || "")
+      let nextList = []
+      if (list.includes(app)) {
+        nextList = list.filter(a => a !== app)
+      } else {
+        nextList = [...list, app]
+      }
+      const nextAllowed = nextList.length === APPS.length ? "all" : (nextList.length ? nextList.join(",") : "")
+      const updated = { ...u, allowed_apps: nextAllowed }
+      save(userId, nextAllowed)
+      return updated
+    }))
+    if (me && me.id === userId) {
+      const list = parseAllowed(me.allowed_apps || "")
+      let nextList = []
+      if (list.includes(app)) {
+        nextList = list.filter(a => a !== app)
+      } else {
+        nextList = [...list, app]
+      }
+      const nextAllowed = nextList.length === APPS.length ? "all" : (nextList.length ? nextList.join(",") : "")
+      setMe({ ...me, allowed_apps: nextAllowed })
+    }
+  }
+  const setAll = (userId) => {
+    const nextAllowed = "all"
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, allowed_apps: nextAllowed } : u))
+    save(userId, nextAllowed)
+    if (me && me.id === userId) setMe({ ...me, allowed_apps: nextAllowed })
+  }
+  const setNone = (userId) => {
+    const nextAllowed = ""
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, allowed_apps: nextAllowed } : u))
+    save(userId, nextAllowed)
+    if (me && me.id === userId) setMe({ ...me, allowed_apps: nextAllowed })
+  }
+  return (
+    <div className="bg-white rounded-xl border shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900">User Permissions</h2>
+        <button onClick={fetchUsers} className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-gray-100 hover:bg-gray-200">Refresh</button>
+      </div>
+      {loading ? (
+        <div className="py-6 text-center text-gray-500">Loading users...</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-gray-700 border-b">
+                <th className="p-3 text-left">User</th>
+                <th className="p-3 text-left">Role</th>
+                <th className="p-3 text-left">Allowed Apps</th>
+                <th className="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {[...(me ? [me] : []), ...users.filter(u => !me || u.email !== me.email)].map(u => (
+                <tr key={u.id} className="hover:bg-gray-50">
+                  <td className="p-3">
+                    <div className="font-medium text-gray-900">{me && u.email === me.email ? "You" : u.name}</div>
+                    <div className="text-xs text-gray-500">{u.email}</div>
+                  </td>
+                  <td className="p-3">{u.is_staff ? "Admin" : "User"}</td>
+                  <td className="p-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {APPS.map(app => (
+                        <label key={app} className="inline-flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={isChecked(u.allowed_apps, app)}
+                            onChange={() => toggleApp(u.id, app)}
+                          />
+                          <span>{app}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="p-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => setAll(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300">All</button>
+                      <button onClick={() => setNone(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300">None</button>
+                      <button
+                        onClick={() => save(u.id, u.allowed_apps)}
+                        className={`px-3 py-1.5 text-xs rounded bg-[#2D4485] text-white ${savingId===u.id ? "opacity-50" : ""}`}
+                        disabled={!u.id || savingId===u.id}
+                      >
+                        Save
+                      </button>
+                      {savingId===u.id && <span className="text-xs text-gray-500">Saving...</span>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {users.length === 0 && (
+                <tr><td colSpan={4} className="p-8 text-center text-gray-500">No users available</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const [activeTab, setActiveTab] = React.useState("dashboard")
   const [data, setData] = React.useState({ quotations: [], invoices: [], customers: [], purchaseOrders: [] })
@@ -472,6 +680,15 @@ export default function AdminPage() {
             <Users className="w-5 h-5" />
             Customer History
           </button>
+          <button
+            onClick={() => setActiveTab("permissions")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "permissions" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <Lock className="w-5 h-5" />
+            User Permissions
+          </button>
         </nav>
       </aside>
 
@@ -484,6 +701,7 @@ export default function AdminPage() {
             {activeTab === "invoices" && "Invoices"}
             {activeTab === "purchase-orders" && "Purchase Orders"}
             {activeTab === "customers" && "Customer History"}
+            {activeTab === "permissions" && "User Permissions"}
           </h1>
         </header>
 
@@ -492,6 +710,7 @@ export default function AdminPage() {
         {activeTab === "invoices" && <InvoiceList list={data.invoices} />}
         {activeTab === "purchase-orders" && <PurchaseOrderPage />}
         {activeTab === "customers" && <CustomerHistory data={data} />}
+        {activeTab === "permissions" && <PermissionsManager />}
       </main>
     </div>
   )

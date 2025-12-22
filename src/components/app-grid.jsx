@@ -1,5 +1,6 @@
 import React from "react"
 import { Factory, Package, Users, Settings, Briefcase, ArrowRight } from "lucide-react"
+import { API_BASE_URL } from "../config"
 
 const apps = [
   {
@@ -50,7 +51,7 @@ export default function AppGrid() {
     try {
       const token = localStorage.getItem("authToken")
       if (!token) return
-      const r = await fetch("http://localhost:8001/api/auth/me/allowed-apps/", {
+      const r = await fetch(`${API_BASE_URL}/api/auth/me/allowed-apps/`, {
         headers: { "Authorization": `Token ${token}` }
       })
       if (r.ok) {

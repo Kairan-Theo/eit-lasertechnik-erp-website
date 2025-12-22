@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import "./index.css"
+import { API_BASE_URL } from "./config"
 // Inline SVG icons to avoid external dependency issues
 const EyeIcon = (props) => (
   <svg
@@ -49,7 +50,7 @@ function LoginPage() {
     const password = formEl.querySelector("#password")?.value || ""
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/login/', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
