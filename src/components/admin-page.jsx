@@ -18,10 +18,21 @@ const getAllData = () => {
   const data = {
     quotations: [],
     invoices: [],
-    customers: []
+    customers: [],
+    purchaseOrders: []
   }
 
   try {
+    // Get Purchase Orders
+    try {
+      const poList = JSON.parse(localStorage.getItem("poList") || "[]")
+      if (Array.isArray(poList)) {
+        data.purchaseOrders = poList
+      }
+    } catch (e) {
+      console.error("Error parsing poList", e)
+    }
+
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
       if (key && key.startsWith("history:")) {
@@ -54,6 +65,7 @@ const getAllData = () => {
   // Sort by date descending
   data.quotations.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
   data.invoices.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
+  data.purchaseOrders.sort((a, b) => new Date(b.updatedAt || b.extraFields?.orderDate) - new Date(a.updatedAt || a.extraFields?.orderDate))
   
   return data
 }
@@ -61,7 +73,7 @@ const getAllData = () => {
 function Dashboard({ data }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl border shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-500 text-sm font-medium">Total Quotations</h3>
@@ -79,6 +91,15 @@ function Dashboard({ data }) {
             </div>
           </div>
           <div className="text-2xl font-bold text-gray-900">{data.invoices.length}</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-500 text-sm font-medium">Purchase Orders</h3>
+            <div className="p-2 bg-orange-50 rounded-lg">
+              <ShoppingCart className="w-5 h-5 text-orange-600" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{data.purchaseOrders.length}</div>
         </div>
         <div className="bg-white p-6 rounded-xl border shadow-sm">
           <div className="flex items-center justify-between mb-4">
@@ -148,6 +169,40 @@ function Dashboard({ data }) {
                 ))}
                 {data.invoices.length === 0 && (
                   <tr><td colSpan={4} className="py-4 text-center text-gray-500">No invoices found</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border shadow-sm p-6 lg:col-span-2">
+          <h3 className="font-semibold text-gray-900 mb-4">Recent Purchase Orders</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b">
+                  <th className="pb-2">PO Number</th>
+                  <th className="pb-2">Vendor</th>
+                  <th className="pb-2">Items</th>
+                  <th className="pb-2 text-right">Total Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {data.purchaseOrders.slice(0, 5).map((po, i) => {
+                  const total = (po.items || []).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 1.07
+                  return (
+                    <tr key={i}>
+                      <td className="py-3 font-medium text-orange-600">{po.poNumber}</td>
+                      <td className="py-3">{po.customer?.company || po.customer?.name || "-"}</td>
+                      <td className="py-3">{po.items?.length || 0}</td>
+                      <td className="py-3 text-right">
+                        THB {total.toFixed(2)}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {data.purchaseOrders.length === 0 && (
+                  <tr><td colSpan={4} className="py-4 text-center text-gray-500">No purchase orders found</td></tr>
                 )}
               </tbody>
             </table>
@@ -349,7 +404,7 @@ function CustomerHistory({ data }) {
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = React.useState("dashboard")
-  const [data, setData] = React.useState({ quotations: [], invoices: [], customers: [] })
+  const [data, setData] = React.useState({ quotations: [], invoices: [], customers: [], purchaseOrders: [] })
 
   // Refresh data when tab changes or periodically
   React.useEffect(() => {

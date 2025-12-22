@@ -1,4 +1,5 @@
 import React from "react"
+import { createPortal } from "react-dom"
 import { PurchaseOrderTemplate } from "./purchase-order-template.jsx"
 
 export default function PurchaseOrderPage() {
@@ -8,70 +9,22 @@ export default function PurchaseOrderPage() {
   const [items, setItems] = React.useState([{ product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
   const [showForm, setShowForm] = React.useState(false)
   const [poList, setPoList] = React.useState([])
-  const [exportingPo, setExportingPo] = React.useState(null)
+  const [printingPo, setPrintingPo] = React.useState(null)
   const [errors, setErrors] = React.useState({})
 
-  const generatePdf = async (element, filename) => {
-    const opt = { 
-        margin: 0, 
-        filename, 
-        image: { type: "jpeg", quality: 0.98 }, 
-        html2canvas: { scale: 2, useCORS: true }, 
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } 
-    }
-
-    try {
-        const loadLib = () =>
-        new Promise((resolve) => {
-          if (window.html2pdf) return resolve(window.html2pdf)
-          const s = document.createElement("script")
-          s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"
-          s.onload = () => resolve(window.html2pdf)
-          s.onerror = () => resolve(null)
-          document.head.appendChild(s)
-        })
-        const lib = await loadLib()
-        if (typeof lib === "function") {
-             const clone = element.cloneNode(true)
-             Object.assign(clone.style, {
-                position: "fixed",
-                left: "-10000px",
-                top: "0",
-                display: "block",
-                background: "#ffffff",
-                width: "210mm",
-                zIndex: "-1000"
-             })
-             document.body.appendChild(clone)
-             
-             try {
-                await lib().set(opt).from(clone).save()
-                return true
-             } finally {
-                document.body.removeChild(clone)
-             }
-        } else {
-            alert("PDF library failed to load. Please check your internet connection.")
-            return false
-        }
-    } catch (e) {
-        console.error(e)
-        alert(`Failed to generate PDF: ${e.message}`)
-        return false
-    }
+  const handlePrint = (po) => {
+    setPrintingPo(po)
+    // Allow time for the portal to render
+    setTimeout(() => {
+        window.print()
+        // Optional: clear after print dialog closes (though in some browsers this runs immediately)
+        // We'll keep it open or clear it? 
+        // Better to clear it on user action or just leave it hidden (since CSS handles display)
+        // But we want to stop rendering it to save memory/DOM.
+        // The print dialog blocks the main thread in many browsers, so this runs after close.
+        setPrintingPo(null)
+    }, 100)
   }
-
-  React.useEffect(() => {
-    if (!exportingPo) return
-    const timer = setTimeout(async () => {
-        const element = document.getElementById("po-pdf-export-container")
-        if (element) {
-            await generatePdf(element, `PO_${exportingPo.poNumber}.pdf`)
-        }
-        setExportingPo(null)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [exportingPo])
 
   const prefilledRef = React.useRef(false)
   const saveTimer = React.useRef(null)
@@ -202,25 +155,29 @@ export default function PurchaseOrderPage() {
     const next = poList.filter((_, i) => i !== idx)
     persistPoList(next)
   }
-  const generateFromList = (idx) => {
-    const p = poList[idx]
-    if (!p) return
-    localStorage.setItem("poInbound", JSON.stringify(p))
-    window.location.href = "/quotation.html"
-  }
   const generate = async () => {
     const errs = validateCustomer(customer)
     setErrors(errs)
     if (Object.values(errs).some((e) => !!e)) return
-    const payload = { poNumber, customer, extraFields, items }
-    localStorage.setItem("poInbound", JSON.stringify(payload))
-    
-    const element = document.getElementById("po-pdf-hidden-container")
-    if (!element) return
 
-    const filename = `PO_${poNumber}.pdf`
-    const success = await generatePdf(element, filename)
-    if (success) setShowForm(false)
+    // Create the payload for saving and printing
+    const payload = { poNumber, customer, extraFields, items, updatedAt: new Date().toISOString() }
+    
+    // Save to list (similar to saveDraft)
+    const idx = poList.findIndex((p) => p.poNumber === poNumber)
+    let nextList = []
+    if (idx >= 0) {
+      nextList = poList.slice()
+      nextList[idx] = payload
+    } else {
+      nextList = [payload, ...poList]
+    }
+    persistPoList(nextList)
+    
+    // Trigger print/export
+    handlePrint(payload)
+    
+    setShowForm(false)
   }
   const saveDraft = () => {
     const errs = validateCustomer(customer)
@@ -275,8 +232,7 @@ export default function PurchaseOrderPage() {
                     <td className="p-2">
                       <div className="flex gap-2">
                           <button onClick={() => editPo(i)} className="btn-outline">Edit</button>
-                          <button onClick={() => setExportingPo(p)} className="btn-outline">Export PDF</button>
-                          <button onClick={() => generateFromList(i)} className="btn-primary">Generate Quotation</button>
+                          <button onClick={() => handlePrint(p)} className="btn-outline">Export PDF</button>
                           <button onClick={() => deletePo(i)} className="btn-outline text-red-600">Delete</button>
                         </div>
                     </td>
@@ -504,34 +460,43 @@ export default function PurchaseOrderPage() {
         </>
       )}
       <div style={{ position: "absolute", left: "-9999px", top: 0, width: "210mm" }}>
-         <div id="po-pdf-hidden-container">
-            <PurchaseOrderTemplate q={{
-                customer,
-                items,
-                extraFields,
-                details: { number: poNumber, currency: "THB" },
-                subtotal: items.reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0),
-                taxTotal: (items.reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 0.07),
-                total: (items.reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 1.07)
-            }} />
-         </div>
+         {/* Hidden containers removed as we use window.print() now */}
       </div>
 
-      <div style={{ position: "absolute", left: "-9999px", top: 0, width: "210mm" }}>
-         <div id="po-pdf-export-container">
-            {exportingPo && (
-                <PurchaseOrderTemplate q={{
-                    customer: exportingPo.customer || {},
-                    items: exportingPo.items || [],
-                    extraFields: exportingPo.extraFields || {},
-                    details: { number: exportingPo.poNumber, currency: "THB" },
-                    subtotal: (exportingPo.items||[]).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0),
-                    taxTotal: ((exportingPo.items||[]).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 0.07),
-                    total: ((exportingPo.items||[]).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 1.07)
-                }} />
-            )}
-         </div>
-      </div>
+      {printingPo && createPortal(
+        <div className="print-portal">
+            <style>
+            {`
+                @media print {
+                    body > *:not(.print-portal) { display: none !important; }
+                    .print-portal { 
+                        display: block !important; 
+                        position: absolute; 
+                        top: 0; 
+                        left: 0; 
+                        width: 100%; 
+                        background: white; 
+                        z-index: 9999;
+                    }
+                    @page { margin: 0; size: auto; }
+                }
+                /* Hide on screen */
+                .print-portal { display: none; }
+                @media print { .print-portal { display: block; } }
+            `}
+            </style>
+            <PurchaseOrderTemplate q={{
+                customer: printingPo.customer || {},
+                items: printingPo.items || [],
+                extraFields: printingPo.extraFields || {},
+                details: { number: printingPo.poNumber, currency: "THB" },
+                subtotal: (printingPo.items||[]).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0),
+                taxTotal: ((printingPo.items||[]).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 0.07),
+                total: ((printingPo.items||[]).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 1.07)
+            }} />
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
