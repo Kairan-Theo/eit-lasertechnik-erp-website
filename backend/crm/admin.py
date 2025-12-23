@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Stage
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -101,3 +101,9 @@ class ContactAdmin(admin.ModelAdmin):
     list_display = ("contact_person", "customer", "email", "phone")
     search_fields = ("contact_person", "customer__company_name", "email", "phone")
     list_filter = ("customer",)
+
+@admin.register(Stage)
+class StageAdmin(admin.ModelAdmin):
+    list_display = ("stage_name", "stage_order")
+    search_fields = ("stage_name",)
+    ordering = ("stage_order", "stage_name")
