@@ -234,8 +234,25 @@ def update_user_permissions(request):
         print(f"Error updating permissions: {e}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated, IsAdminUser])
+def set_user_password(request):
+    user_id = request.data.get('user_id')
+    new_password = request.data.get('new_password')
+    if not user_id or not new_password:
+        return Response({'error': 'user_id and new_password are required'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        user = User.objects.get(id=user_id)
+        user.set_password(new_password)
+        user.save()
+        return Response({'success': True, 'message': 'Password updated'})
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_notifications(request):
     """
     Get recent notifications for admins.
@@ -265,7 +282,7 @@ def get_notifications(request):
     return Response(data)
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([IsAuthenticated])
 def mark_notification_read(request):
     """
     Mark a notification as read.
@@ -280,6 +297,16 @@ def mark_notification_read(request):
         except Notification.DoesNotExist:
             pass
     return Response({'error': 'Invalid ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_notification(request, pk):
+    try:
+        n = Notification.objects.get(id=pk)
+        n.delete()
+        return Response({'success': True})
+    except Notification.DoesNotExist:
+        return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

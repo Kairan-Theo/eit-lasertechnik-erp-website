@@ -20,14 +20,11 @@ from django.http import JsonResponse
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from crm.views import DealViewSet, ActivityScheduleViewSet, QuotationViewSet, InvoiceViewSet, PurchaseOrderViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, my_allowed_apps, update_profile
+from crm.views import DealViewSet, ActivityScheduleViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password
 
 router = DefaultRouter()
 router.register(r'deals', DealViewSet)
 router.register(r'activity_schedules', ActivityScheduleViewSet)
-router.register(r'quotations', QuotationViewSet)
-router.register(r'invoices', InvoiceViewSet)
-router.register(r'purchase_orders', PurchaseOrderViewSet)
 
 def health(request):
     return JsonResponse({"status": "ok"})
@@ -52,8 +49,10 @@ urlpatterns = [
     path('api/auth/login/', login),
     path('api/users/', get_users),
     path('api/users/permissions/', update_user_permissions),
+    path('api/users/password/', set_user_password),
     path('api/notifications/', get_notifications),
     path('api/notifications/read/', mark_notification_read),
+    path('api/notifications/<int:pk>/', delete_notification),
     path('api/auth/me/allowed-apps/', my_allowed_apps),
     path('api/auth/profile/update/', update_profile),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

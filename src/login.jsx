@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import "./index.css"
-import { API_BASE_URL } from "./config"
 // Inline SVG icons to avoid external dependency issues
 const EyeIcon = (props) => (
   <svg
@@ -46,10 +45,15 @@ function LoginPage() {
     e.preventDefault()
     setError("")
     const formEl = e.target
-    const email = formEl.querySelector("#email")?.value || ""
-    const password = formEl.querySelector("#password")?.value || ""
+    const email = (formEl.querySelector("#email")?.value || "").trim().toLowerCase()
+    const password = (formEl.querySelector("#password")?.value || "").trim()
+    if (!email || !password) {
+      setError("Please provide both email and password")
+      return
+    }
 
     try {
+      const { API_BASE_URL } = await import("./config.js")
       const response = await fetch(`${API_BASE_URL}/api/auth/login/`, {
         method: 'POST',
         headers: {
@@ -71,7 +75,8 @@ function LoginPage() {
         setError(data.error || "Login failed")
       }
     } catch (err) {
-      setError("Unable to connect to server")
+      console.error("Login error:", err)
+      setError("Unable to connect to server: " + (err.message || "Unknown error"))
     }
   }
 

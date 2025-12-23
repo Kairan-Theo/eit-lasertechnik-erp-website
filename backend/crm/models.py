@@ -75,8 +75,10 @@ class Deal(models.Model):
 
 class ActivitySchedule(models.Model):
     deal = models.ForeignKey(Deal, related_name='activity_schedules', on_delete=models.CASCADE)
+    start_at = models.DateTimeField(null=True, blank=True)
     due_at = models.DateTimeField(null=True, blank=True)
     text = models.TextField(blank=True)
+    assignee = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
