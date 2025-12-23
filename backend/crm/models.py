@@ -3,6 +3,16 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+class Customer(models.Model):
+    company_name = models.CharField(max_length=255)
+    tax_id = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.company_name
+
 class Quotation(models.Model):
     number = models.CharField(max_length=100, unique=True)
     customer = models.JSONField(default=dict, blank=True)
@@ -52,7 +62,7 @@ class Deal(models.Model):
     ]
 
     title = models.CharField(max_length=200)
-    customer = models.CharField(max_length=200)
+    customer = models.ForeignKey('Customer', null=True, blank=True, on_delete=models.SET_NULL, related_name='deals')
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     currency = models.CharField(max_length=10, default="฿")
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='none')
@@ -102,6 +112,20 @@ class Notification(models.Model):
 
     def __str__(self):
         return self.message
+
+class Contact(models.Model):
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='contacts')
+    contact_person = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone = models.CharField(max_length=20)
+
+class Stage(models.Model):
+    stage_name = models.CharField(max_length=50)
+    stage_order = models.IntegerField()
+    def __str__(self):
+        return self.stage_name
+    class Meta:
+        ordering = ['stage_order', 'stage_name']
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):

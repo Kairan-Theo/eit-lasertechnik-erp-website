@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -53,7 +53,7 @@ class UserProfileForm(forms.ModelForm):
 class DealAdmin(admin.ModelAdmin):
     list_display = ("title", "customer", "amount", "currency", "priority", "stage", "created_at", "expected_close")
     list_filter = ("priority", "stage", "currency")
-    search_fields = ("title", "customer", "contact", "email", "phone", "notes")
+    search_fields = ("title", "customer__company_name", "contact", "email", "phone", "notes")
 
 @admin.register(ActivitySchedule)
 class ActivityScheduleAdmin(admin.ModelAdmin):
@@ -89,3 +89,15 @@ class InvoiceAdmin(admin.ModelAdmin):
 class PurchaseOrderAdmin(admin.ModelAdmin):
     list_display = ("number", "created_by", "updated_at")
     search_fields = ("number", "customer__name", "customer__email")
+
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ("company_name", "tax_id", "created_at", "updated_at")
+    search_fields = ("company_name", "tax_id")
+    ordering = ("company_name",)
+
+@admin.register(Contact)
+class ContactAdmin(admin.ModelAdmin):
+    list_display = ("contact_person", "customer", "email", "phone")
+    search_fields = ("contact_person", "customer__company_name", "email", "phone")
+    list_filter = ("customer",)
