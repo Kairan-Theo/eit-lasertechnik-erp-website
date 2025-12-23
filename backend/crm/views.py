@@ -10,7 +10,7 @@ from .serializers import DealSerializer, UserSerializer, ActivityScheduleSeriali
 from datetime import date, timedelta
 
 class DealViewSet(viewsets.ModelViewSet):
-    queryset = Deal.objects.all().order_by('-created_at')
+    queryset = Deal.objects.all().order_by('-id')
     serializer_class = DealSerializer
 
     def perform_update(self, serializer):
@@ -20,7 +20,7 @@ class DealViewSet(viewsets.ModelViewSet):
         
         if old_stage != updated_instance.stage:
             Notification.objects.create(
-                message=f"CRM  {updated_instance.customer} - {updated_instance.title} ({old_stage} -> {updated_instance.stage})",
+                message=f"CRM  {updated_instance.customer} ({old_stage} -> {updated_instance.stage})",
                 type="crm_move"
             )
 
@@ -240,17 +240,6 @@ def get_notifications(request):
     """
     Get recent notifications for admins.
     """
-    # Check for upcoming due dates (next 3 days)
-    upcoming_deals = Deal.objects.filter(
-        expected_close__lte=date.today() + timedelta(days=3),
-        expected_close__gte=date.today()
-    )
-    for deal in upcoming_deals:
-        msg = f"CRM  {deal.customer} - Deal '{deal.title}' is due on {deal.expected_close}"
-        # Avoid duplicate alerts for the same day
-        if not Notification.objects.filter(message=msg, created_at__date=date.today()).exists():
-             Notification.objects.create(message=msg, type="alert")
-
     # Get unread notifications or last 20
     notifications = Notification.objects.all().order_by('-created_at')[:20]
     data = []
