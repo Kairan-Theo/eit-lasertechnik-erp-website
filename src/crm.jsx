@@ -1366,7 +1366,7 @@ function CRMPage() {
                           email: newDeal.email || "",
                           phone: newDeal.phone || "",
                           address: newDeal.address || "",
-                          taxId: newDeal.taxId || "",
+                          tax_id: newDeal.taxId || "",
                           notes: "",
                           stage: stageName
                         }
@@ -1387,24 +1387,23 @@ function CRMPage() {
                             await fetchDeals()
                             setShowNewForm(false)
                             setNewDeal(defaultNewDeal)
+                            try {
+                              const sname = String(stageName).toLowerCase()
+                              const isClosedWon = sname.includes("close") && sname.includes("won")
+                              const baseMsg = `CRM: Created "${dealData.title}" in ${stageName}`
+                              const msg = isClosedWon ? `${baseMsg} — Create PO or Receive PO` : baseMsg
+                              showNotification(msg)
+                              notifyTeam(msg, isClosedWon ? "success" : "info", dealData.customer || "", "CRM")
+                            } catch {}
                           } else {
-                            console.error("Failed to create deal")
+                            const errorText = await res.text()
+                            console.error("Failed to create deal:", errorText)
+                            showNotification("Failed to create deal: " + errorText)
                           }
                         } catch (err) {
                           console.error("Error creating deal", err)
+                          showNotification("Error creating deal: " + err.message)
                         }
-                        setStages((prev)=>prev.map((s,i)=> i===newDeal.stageIndex ? { ...s, deals: [...s.deals, deal] } : s))
-                        setShowNewForm(false)
-                        setNewDeal(defaultNewDeal)
-                        try {
-                          const stageName = stages[newDeal.stageIndex]?.name || ""
-                          const sname = String(stageName).toLowerCase()
-                          const isClosedWon = sname.includes("close") && sname.includes("won")
-                          const baseMsg = `CRM: Created "${deal.title}" in ${stageName}`
-                          const msg = isClosedWon ? `${baseMsg} — Create PO or Receive PO` : baseMsg
-                          showNotification(msg)
-                          notifyTeam(msg, isClosedWon ? "success" : "info", deal.customer || "", "CRM")
-                        } catch {}
                       }}
                     >
                       Create Deal

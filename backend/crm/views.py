@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer
 from datetime import date, timedelta
 
 class DealViewSet(viewsets.ModelViewSet):
@@ -28,6 +28,74 @@ class ActivityScheduleViewSet(viewsets.ModelViewSet):
     queryset = ActivitySchedule.objects.all().order_by('due_at')
     serializer_class = ActivityScheduleSerializer
 
+class QuotationViewSet(viewsets.ModelViewSet):
+    queryset = Quotation.objects.all().order_by('-updated_at')
+    serializer_class = QuotationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        number = self.request.data.get('number')
+        instance = None
+        if number:
+            try:
+                instance = Quotation.objects.get(number=number)
+            except Quotation.DoesNotExist:
+                instance = None
+        if instance:
+            for field in ['customer', 'items', 'details', 'totals', 'doc_type']:
+                if field in self.request.data:
+                    setattr(instance, field, self.request.data.get(field))
+            instance.created_by = self.request.user
+            instance.save()
+            self.kwargs['pk'] = instance.pk
+        else:
+            serializer.save(created_by=self.request.user)
+
+class InvoiceViewSet(viewsets.ModelViewSet):
+    queryset = Invoice.objects.all().order_by('-updated_at')
+    serializer_class = InvoiceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        number = self.request.data.get('number')
+        instance = None
+        if number:
+            try:
+                instance = Invoice.objects.get(number=number)
+            except Invoice.DoesNotExist:
+                instance = None
+        if instance:
+            for field in ['customer', 'items', 'details', 'totals']:
+                if field in self.request.data:
+                    setattr(instance, field, self.request.data.get(field))
+            instance.created_by = self.request.user
+            instance.save()
+            self.kwargs['pk'] = instance.pk
+        else:
+            serializer.save(created_by=self.request.user)
+
+class PurchaseOrderViewSet(viewsets.ModelViewSet):
+    queryset = PurchaseOrder.objects.all().order_by('-updated_at')
+    serializer_class = PurchaseOrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        number = self.request.data.get('number')
+        instance = None
+        if number:
+            try:
+                instance = PurchaseOrder.objects.get(number=number)
+            except PurchaseOrder.DoesNotExist:
+                instance = None
+        if instance:
+            for field in ['customer', 'items', 'extra_fields', 'totals']:
+                if field in self.request.data:
+                    setattr(instance, field, self.request.data.get(field))
+            instance.created_by = self.request.user
+            instance.save()
+            self.kwargs['pk'] = instance.pk
+        else:
+            serializer.save(created_by=self.request.user)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup(request):
@@ -147,15 +215,24 @@ def update_user_permissions(request):
         
     try:
         user = User.objects.get(id=user_id)
-        if not hasattr(user, 'profile'):
-            UserProfile.objects.create(user=user)
+        if hasattr(user, 'profile'):
+            profile = user.profile
+        else:
+            profile = UserProfile.objects.create(user=user)
         
-        user.profile.allowed_apps = allowed_apps
-        user.profile.save()
+        # Ensure allowed_apps is a string
+        if allowed_apps is None:
+            allowed_apps = ""
+            
+        profile.allowed_apps = allowed_apps
+        profile.save()
         
         return Response({'success': True, 'message': 'Permissions updated'})
     except User.DoesNotExist:
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print(f"Error updating permissions: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdminUser])

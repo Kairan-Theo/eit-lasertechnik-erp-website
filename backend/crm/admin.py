@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -74,3 +74,18 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = ("message", "type", "is_read", "created_at")
     list_filter = ("type", "is_read")
     search_fields = ("message",)
+
+@admin.register(Quotation)
+class QuotationAdmin(admin.ModelAdmin):
+    list_display = ("number", "created_by", "updated_at")
+    search_fields = ("number", "customer__name", "customer__email")
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    list_display = ("number", "created_by", "updated_at")
+    search_fields = ("number", "customer__name", "customer__email")
+
+@admin.register(PurchaseOrder)
+class PurchaseOrderAdmin(admin.ModelAdmin):
+    list_display = ("number", "created_by", "updated_at")
+    search_fields = ("number", "customer__name", "customer__email")
