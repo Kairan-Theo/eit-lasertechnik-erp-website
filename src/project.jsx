@@ -17,7 +17,8 @@ import {
   differenceInDays, 
   addDays, 
   isSameMonth,
-  startOfDay
+  startOfDay,
+  isValid
 } from "date-fns"
 
 function ProjectPage() {
@@ -35,6 +36,13 @@ function ProjectPage() {
 
   const [editingTask, setEditingTask] = React.useState(null)
   const [isModalOpen, setIsModalOpen] = React.useState(false)
+  const [isProjectModalOpen, setIsProjectModalOpen] = React.useState(false)
+  const [newProject, setNewProject] = React.useState({
+    title: "",
+    customer: "",
+    amount: 0,
+    stage: "Appointment Schedule"
+  })
 
   // Dimensions
   const dayWidth = 40 // pixels per day
@@ -142,6 +150,37 @@ function ProjectPage() {
       fetchDeals()
     } catch (err) {
       alert("Error deleting task: " + err.message)
+    }
+  }
+
+  const handleSaveProject = async (e) => {
+    e.preventDefault()
+    try {
+      const token = localStorage.getItem("authToken")
+      const res = await fetch(`${API_BASE_URL}/api/deals/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Token ${token}` } : {})
+        },
+        body: JSON.stringify(newProject)
+      })
+
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`Failed to create project: ${res.status} ${res.statusText} - ${errorText}`)
+      }
+      
+      setIsProjectModalOpen(false)
+      setNewProject({
+        title: "",
+        customer: "",
+        amount: 0,
+        stage: "Appointment Schedule"
+      })
+      fetchDeals()
+    } catch (err) {
+      alert("Error creating project: " + err.message)
     }
   }
 
@@ -262,6 +301,12 @@ function ProjectPage() {
             <p className="text-slate-500 text-sm">Gantt Chart View</p>
           </div>
           <div className="flex gap-2">
+            <button 
+              onClick={() => setIsProjectModalOpen(true)}
+              className="px-3 py-1.5 text-sm bg-slate-900 text-white hover:bg-slate-800 rounded font-medium shadow-sm"
+            >
+              + New Project
+            </button>
             <button 
               onClick={() => setRange(prev => ({ start: addMonths(prev.start, -1), end: addMonths(prev.end, -1) }))}
               className="px-3 py-1.5 text-sm bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
@@ -397,6 +442,86 @@ function ProjectPage() {
             </div>
           </div>
         </div>
+        {/* Project Modal */}
+        {isProjectModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 border border-slate-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-slate-900">New Project</h3>
+                <button onClick={() => setIsProjectModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                  ✕
+                </button>
+              </div>
+              
+              <form onSubmit={handleSaveProject} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Project Title</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={newProject.title}
+                    onChange={e => setNewProject({...newProject, title: e.target.value})}
+                    placeholder="e.g. Website Redesign"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Customer / Client</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={newProject.customer}
+                    onChange={e => setNewProject({...newProject, customer: e.target.value})}
+                    placeholder="e.g. Acme Corp"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Amount</label>
+                  <input 
+                    type="number" 
+                    value={newProject.amount}
+                    onChange={e => setNewProject({...newProject, amount: parseFloat(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Stage</label>
+                  <select 
+                    value={newProject.stage}
+                    onChange={e => setNewProject({...newProject, stage: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  >
+                    <option value="Appointment Schedule">Appointment Schedule</option>
+                    <option value="Qualified to Buy">Qualified to Buy</option>
+                    <option value="Presentation Scheduled">Presentation Scheduled</option>
+                    <option value="Decision Maker Bought-In">Decision Maker Bought-In</option>
+                    <option value="Contract Sent">Contract Sent</option>
+                    <option value="Closed Won">Closed Won</option>
+                    <option value="Closed Lost">Closed Lost</option>
+                  </select>
+                </div>
+                
+                <div className="flex justify-end gap-2 pt-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsProjectModalOpen(false)}
+                    className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="px-4 py-2 text-sm text-white bg-slate-900 hover:bg-slate-800 rounded-md"
+                  >
+                    Create Project
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Modal */}
         {isModalOpen && editingTask && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -426,11 +551,11 @@ function ProjectPage() {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
                     <input 
                       type="date" 
-                      value={format(editingTask.start, "yyyy-MM-dd")}
-                      onChange={e => setEditingTask({
-                        ...editingTask, 
-                        start: new Date(e.target.value)
-                      })}
+                      value={isValid(editingTask.start) ? format(editingTask.start, "yyyy-MM-dd") : ""}
+                      onChange={e => {
+                        const date = e.target.value ? new Date(e.target.value) : new Date()
+                        setEditingTask({ ...editingTask, start: date })
+                      }}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
                     />
                   </div>
@@ -438,11 +563,11 @@ function ProjectPage() {
                     <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
                     <input 
                       type="date" 
-                      value={format(editingTask.end, "yyyy-MM-dd")}
-                      onChange={e => setEditingTask({
-                        ...editingTask, 
-                        end: new Date(e.target.value)
-                      })}
+                      value={isValid(editingTask.end) ? format(editingTask.end, "yyyy-MM-dd") : ""}
+                      onChange={e => {
+                        const date = e.target.value ? new Date(e.target.value) : new Date()
+                        setEditingTask({ ...editingTask, end: date })
+                      }}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
                     />
                   </div>
