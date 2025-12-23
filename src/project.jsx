@@ -22,7 +22,7 @@ import {
 } from "date-fns"
 
 function ProjectPage() {
-  const [deals, setDeals] = React.useState([])
+  const [projects, setProjects] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState("")
   
@@ -51,19 +51,19 @@ function ProjectPage() {
   const groupHeaderHeight = 40 // Height for deal title row (optional, or just first row)
 
   React.useEffect(() => {
-    fetchDeals()
+    fetchProjects()
   }, [])
 
-  const fetchDeals = async () => {
+  const fetchProjects = async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem("authToken")
-      const res = await fetch(`${API_BASE_URL}/api/deals/`, {
+      const res = await fetch(`${API_BASE_URL}/api/projects/`, {
         headers: token ? { "Authorization": `Token ${token}` } : {}
       })
-      if (!res.ok) throw new Error("Failed to fetch deals")
+      if (!res.ok) throw new Error("Failed to fetch projects")
       const data = await res.json()
-      setDeals(Array.isArray(data) ? data : [])
+      setProjects(Array.isArray(data) ? data : [])
     } catch (e) {
       setError(e.message)
     } finally {
@@ -71,10 +71,10 @@ function ProjectPage() {
     }
   }
 
-  const handleAddTask = (dealId) => {
+  const handleAddTask = (projectId) => {
     setEditingTask({
-      deal: dealId,
-      text: "New Task",
+      project: projectId,
+      title: "New Task",
       start: new Date(),
       end: addDays(new Date(), 5),
       assignee: ""
@@ -90,29 +90,32 @@ function ProjectPage() {
   const handleSaveTask = async (e) => {
     e.preventDefault()
     if (!editingTask) return
-
+    if (!isValid(editingTask.start) || !isValid(editingTask.end)) {
+      alert("Please select valid start and end dates")
+      return
+    }
+    if (editingTask.end < editingTask.start) {
+      alert("End date cannot be before start date")
+      return
+    }
     try {
       const token = localStorage.getItem("authToken")
-      // Calculate due_at based on start and end
-      // Note: Backend expects ISO strings
       const payload = {
-        text: editingTask.text,
-        start_at: editingTask.start.toISOString(),
-        due_at: editingTask.end.toISOString(),
+        title: editingTask.title,
+        start_date: editingTask.start.toISOString().slice(0, 10),
+        due_date: editingTask.end.toISOString().slice(0, 10),
         assignee: editingTask.assignee
       }
 
-      // If deal is present in editingTask, it's a new task (POST)
-      // Otherwise it's an update (PATCH) to existing task ID
       const isNew = !editingTask.id
 
       if (isNew) {
-        payload.deal = editingTask.deal
+        payload.project = editingTask.project
       }
 
       const url = isNew 
-        ? `${API_BASE_URL}/api/activity_schedules/` 
-        : `${API_BASE_URL}/api/activity_schedules/${editingTask.id}/`
+        ? `${API_BASE_URL}/api/tasks/` 
+        : `${API_BASE_URL}/api/tasks/${editingTask.id}/`
       
       const method = isNew ? "POST" : "PATCH"
 
@@ -128,7 +131,7 @@ function ProjectPage() {
       if (!res.ok) throw new Error("Failed to save task")
       
       setIsModalOpen(false)
-      fetchDeals() // Refresh data
+      fetchProjects()
     } catch (err) {
       alert("Error saving task: " + err.message)
     }
@@ -139,7 +142,7 @@ function ProjectPage() {
     
     try {
       const token = localStorage.getItem("authToken")
-      const res = await fetch(`${API_BASE_URL}/api/activity_schedules/${editingTask.id}/`, {
+      const res = await fetch(`${API_BASE_URL}/api/tasks/${editingTask.id}/`, {
         method: "DELETE",
         headers: token ? { "Authorization": `Token ${token}` } : {}
       })
@@ -147,7 +150,7 @@ function ProjectPage() {
       if (!res.ok) throw new Error("Failed to delete task")
       
       setIsModalOpen(false)
-      fetchDeals()
+      fetchProjects()
     } catch (err) {
       alert("Error deleting task: " + err.message)
     }
@@ -157,13 +160,28 @@ function ProjectPage() {
     e.preventDefault()
     try {
       const token = localStorage.getItem("authToken")
-      const res = await fetch(`${API_BASE_URL}/api/deals/`, {
+      if (!token) {
+        alert("You must be logged in to create a project")
+        return
+      }
+      const title = (newProject.title || "").trim()
+      const customer = (newProject.customer || "").trim()
+      if (!title || !customer) {
+        alert("Please provide both title and customer")
+        return
+      }
+      const stage = newProject.stage
+      let status = "planned"
+      if (stage === "Closed Won") status = "completed"
+      else if (stage === "Contract Sent" || stage === "Presentation Scheduled" || stage === "Decision Maker Bought-In" || stage === "Qualified to Buy") status = "in_progress"
+      const payload = { name: title, write_customer_name: customer, status }
+      const res = await fetch(`${API_BASE_URL}/api/projects/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Token ${token}` } : {})
+          "Authorization": `Token ${token}`
         },
-        body: JSON.stringify(newProject)
+        body: JSON.stringify(payload)
       })
 
       if (!res.ok) {
@@ -175,10 +193,9 @@ function ProjectPage() {
       setNewProject({
         title: "",
         customer: "",
-        amount: 0,
         stage: "Appointment Schedule"
       })
-      fetchDeals()
+      fetchProjects()
     } catch (err) {
       alert("Error creating project: " + err.message)
     }
@@ -196,35 +213,31 @@ function ProjectPage() {
       { bar: "bg-rose-400", border: "border-rose-500", text: "text-rose-900" },   // Red (Stats)
     ]
 
-    return deals.map((deal, index) => {
+    return projects.map((project, index) => {
       const color = colors[index % colors.length]
-      const schedules = deal.activity_schedules || []
+      const tsks = project.tasks || []
       
-      // If no schedules, create a placeholder or skip?
-      // Let's show the deal as a group even if empty.
-      
-      const tasks = schedules.map(s => {
-        // Fallbacks
-        const startDate = s.start_at ? new Date(s.start_at) : (s.created_at ? new Date(s.created_at) : new Date())
-        const endDate = s.due_at ? new Date(s.due_at) : addDays(startDate, 5) // Default duration 5 days
+      const tasks = tsks.map(s => {
+        const startDate = s.start_date ? new Date(s.start_date) : new Date()
+        const endDate = s.due_date ? new Date(s.due_date) : addDays(startDate, 5)
         
         return {
           id: s.id,
-          text: s.text || "Untitled Task",
+          text: s.title || "Untitled Task",
           start: startDate,
           end: endDate,
-          assignee: s.assignee || deal.contact || "Unassigned"
+          assignee: s.assignee || "Unassigned"
         }
       })
 
       return {
-        id: deal.id,
-        title: deal.title, // e.g. "Planning"
+        id: project.id,
+        title: project.name,
         tasks: tasks,
         color
       }
     })
-  }, [deals])
+  }, [projects])
 
   // Timeline Headers
   const timeline = React.useMemo(() => {

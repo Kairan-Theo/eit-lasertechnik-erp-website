@@ -127,6 +127,55 @@ class Stage(models.Model):
     class Meta:
         ordering = ['stage_order', 'stage_name']
 
+class Project(models.Model):
+    PRIORITY_CHOICES = [
+        ('none', 'None'),
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+    ]
+    STATUS_CHOICES = [
+        ('planned', 'Planned'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('on_hold', 'On Hold'),
+    ]
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='projects')
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planned')
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='none')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.name
+
+class Task(models.Model):
+    PRIORITY_CHOICES = [
+        ('none', 'None'),
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+    ]
+    STATUS_CHOICES = [
+        ('todo', 'To Do'),
+        ('in_progress', 'In Progress'),
+        ('done', 'Done'),
+        ('blocked', 'Blocked'),
+    ]
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    assignee = models.CharField(max_length=100, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='none')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.title
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:

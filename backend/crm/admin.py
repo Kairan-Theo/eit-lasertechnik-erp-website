@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Stage
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Stage, Project, Task
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -107,3 +107,17 @@ class StageAdmin(admin.ModelAdmin):
     list_display = ("stage_name", "stage_order")
     search_fields = ("stage_name",)
     ordering = ("stage_order", "stage_name")
+
+@admin.register(Project)
+class ProjectAdmin(admin.ModelAdmin):
+    list_display = ("name", "customer", "status", "priority", "start_date", "end_date", "updated_at")
+    list_filter = ("status", "priority")
+    search_fields = ("name", "customer__company_name", "description")
+    ordering = ("-updated_at", "name")
+
+@admin.register(Task)
+class TaskAdmin(admin.ModelAdmin):
+    list_display = ("title", "project", "assignee", "status", "priority", "due_date", "updated_at")
+    list_filter = ("status", "priority", "assignee")
+    search_fields = ("title", "project__name", "assignee", "description")
+    ordering = ("-updated_at", "due_date")
