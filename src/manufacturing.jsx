@@ -1,7 +1,9 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
+import { createPortal } from "react-dom"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
+import { JobOrderTemplate } from "./components/job-order-template.jsx"
 import "./index.css"
 
 function ManufacturingOrderPage() {
@@ -14,14 +16,18 @@ function ManufacturingOrderPage() {
   const [scheduleDueInput, setScheduleDueInput] = React.useState("")
   const [scheduleText, setScheduleText] = React.useState("")
   const [showNew, setShowNew] = React.useState(false)
-  const [newOrder, setNewOrder] = React.useState({ product: "", productNo: "", unit: "Unit", quantity: 1, scheduledDate: "", completedDate: "", productionTime: "", responsible: "", priority: "None", customer: "" })
+  const [newOrder, setNewOrder] = React.useState({ product: "", productNo: "", jobOrderCode: "", unit: "Unit", quantity: 1, totalQuantity: 1, scheduledDate: "", completedDate: "", productionTime: "", responsible: "", priority: "None", customer: "" })
   const [editingCustomerId, setEditingCustomerId] = React.useState(null)
   const [editingCustomerValue, setEditingCustomerValue] = React.useState("")
   const [editingProductId, setEditingProductId] = React.useState(null)
   const [editingProductValue, setEditingProductValue] = React.useState("")
+  const [editingJobOrderCodeId, setEditingJobOrderCodeId] = React.useState(null)
+  const [editingJobOrderCodeValue, setEditingJobOrderCodeValue] = React.useState("")
   const [openStateId, setOpenStateId] = React.useState(null)
   const [editingQtyId, setEditingQtyId] = React.useState(null)
   const [editingQtyValue, setEditingQtyValue] = React.useState("")
+  const [editingTotalQtyId, setEditingTotalQtyId] = React.useState(null)
+  const [editingTotalQtyValue, setEditingTotalQtyValue] = React.useState("")
   const [openPriorityId, setOpenPriorityId] = React.useState(null)
   const [openDeleteId, setOpenDeleteId] = React.useState(null)
   const [openSortMenu, setOpenSortMenu] = React.useState(false)
@@ -36,6 +42,15 @@ function ManufacturingOrderPage() {
   const [dragOverIdx, setDragOverIdx] = React.useState(null)
   const [inventoryItems, setInventoryItems] = React.useState([])
   const [showProductDropdown, setShowProductDropdown] = React.useState(false)
+  const [printingOrder, setPrintingOrder] = React.useState(null)
+
+  const handlePrint = (o) => {
+    setPrintingOrder(o)
+    setTimeout(() => {
+      window.print()
+      setPrintingOrder(null)
+    }, 100)
+  }
 
   React.useEffect(() => {
     try {
@@ -49,10 +64,10 @@ function ManufacturingOrderPage() {
   React.useEffect(() => {
     if (!orders.length) {
       const seed = [
-        { id: 1, ref: "WH/MO/00001", start: new Date(Date.now() - 2*24*60*60*1000).toISOString(), product: "Laser Cladding Machine", nextActivity: "", customer: "Big C Supercenter PLC", componentStatus: "", quantity: 1, state: "", favorite: false, selected: false },
-        { id: 2, ref: "WH/MO/00002", start: new Date(Date.now() - 1*24*60*60*1000).toISOString(), product: "Laser Welding Machine", nextActivity: "", customer: "SIANGHAI EITING TRADING COMPANY", componentStatus: "", quantity: 1, state: "", favorite: true, selected: false },
-        { id: 3, ref: "WH/MO/00003", start: new Date().toISOString(), product: "Cake", nextActivity: "", customer: "METRO MACHINERY", componentStatus: "", quantity: 10, state: "", favorite: false, selected: false },
-        { id: 4, ref: "WH/MO/00004", start: new Date().toISOString(), product: "mohinga", nextActivity: "", customer: "Konvy", componentStatus: "", quantity: 5, state: "", favorite: false, selected: false },
+        { id: 1, ref: "WH/MO/00001", jobOrderCode: "JO-001", start: new Date(Date.now() - 2*24*60*60*1000).toISOString(), product: "Laser Cladding Machine", nextActivity: "", customer: "Big C Supercenter PLC", componentStatus: "", quantity: 1, totalQuantity: 1, state: "", favorite: false, selected: false },
+        { id: 2, ref: "WH/MO/00002", jobOrderCode: "JO-002", start: new Date(Date.now() - 1*24*60*60*1000).toISOString(), product: "Laser Welding Machine", nextActivity: "", customer: "SIANGHAI EITING TRADING COMPANY", componentStatus: "", quantity: 1, totalQuantity: 1, state: "", favorite: true, selected: false },
+        { id: 3, ref: "WH/MO/00003", jobOrderCode: "JO-003", start: new Date().toISOString(), product: "Cake", nextActivity: "", customer: "METRO MACHINERY", componentStatus: "", quantity: 10, totalQuantity: 10, state: "", favorite: false, selected: false },
+        { id: 4, ref: "WH/MO/00004", jobOrderCode: "JO-004", start: new Date().toISOString(), product: "mohinga", nextActivity: "", customer: "Konvy", componentStatus: "", quantity: 5, totalQuantity: 5, state: "", favorite: false, selected: false },
       ]
       setOrders(seed)
       localStorage.setItem("mfgOrders", JSON.stringify(seed))
@@ -72,6 +87,7 @@ function ManufacturingOrderPage() {
   const toggleFavorite = (id) => setAndPersist(orders.map(o => o.id===id ? { ...o, favorite: !o.favorite } : o))
   const toggleSelected = (id) => setAndPersist(orders.map(o => o.id===id ? { ...o, selected: !o.selected } : o))
   const totalQty = orders.reduce((a,b)=>a+(parseInt(b.quantity,10)||0),0)
+  const totalTotalQty = orders.reduce((a,b)=>a+(parseInt(b.totalQuantity,10)||0),0)
   const relStart = (iso) => {
     const d = new Date(iso)
     const today = new Date()
@@ -252,10 +268,12 @@ function ManufacturingOrderPage() {
                   <th className="p-3 w-8"></th>
                   <th className="p-3 text-left font-medium">Priority</th>
                   <th className="p-3 text-left font-medium">Purchase Order</th>
-                  <th className="p-3 text-left font-medium">Product No.</th>
+                  <th className="p-3 text-left font-medium">Job Order Code</th>
+                  <th className="p-3 text-left font-medium">Item code</th>
                   <th className="p-3 text-left font-medium">Product</th>
                   <th className="p-3 text-left font-medium">Unit</th>
                   <th className="p-3 text-right font-medium">Quantity</th>
+                  <th className="p-3 text-right font-medium">Total Quantity</th>
                   <th className="p-3 text-left font-medium">Start</th>
                   <th className="p-3 text-left font-medium">Completed Date</th>
                   <th className="p-3 text-left font-medium">Production Time</th>
@@ -301,6 +319,44 @@ function ManufacturingOrderPage() {
                     <td className="p-3">
                       <a className="text-[#3D56A6] hover:underline font-medium" href="#">{o.ref}</a>
                     </td>
+                    <td className="p-3">
+                      {editingJobOrderCodeId===o.id ? (
+                        <input
+                          autoFocus
+                          value={editingJobOrderCodeValue}
+                          onChange={(e)=>setEditingJobOrderCodeValue(e.target.value)}
+                          onBlur={()=>{
+                            const v = editingJobOrderCodeValue.trim()
+                            const next = orders.map(x=>x.id===o.id?{...x, jobOrderCode:v}:x)
+                            setAndPersist(next)
+                            setEditingJobOrderCodeId(null)
+                            setEditingJobOrderCodeValue("")
+                          }}
+                          onKeyDown={(e)=>{
+                            if (e.key==='Enter') {
+                              e.preventDefault()
+                              const v = editingJobOrderCodeValue.trim()
+                              const next = orders.map(x=>x.id===o.id?{...x, jobOrderCode:v}:x)
+                              setAndPersist(next)
+                              setEditingJobOrderCodeId(null)
+                              setEditingJobOrderCodeValue("")
+                            } else if (e.key==='Escape') {
+                              setEditingJobOrderCodeId(null)
+                              setEditingJobOrderCodeValue("")
+                            }
+                          }}
+                          className="w-32 rounded-md border border-gray-300 px-2 py-1"
+                        />
+                      ) : (
+                        <button
+                          className="text-[#3D56A6] hover:underline"
+                          onClick={()=>{ setEditingJobOrderCodeId(o.id); setEditingJobOrderCodeValue(o.jobOrderCode || "") }}
+                          title="Edit Job Order Code"
+                        >
+                          {o.jobOrderCode || '-'}
+                        </button>
+                      )}
+                    </td>
                     <td className="p-3 text-gray-700">{o.productNo || '-'}</td>
                     <td className="p-3">
                       {editingProductId===o.id ? (
@@ -341,7 +397,6 @@ function ManufacturingOrderPage() {
                         </button>
                       )}
                     </td>
-                    <td className="p-3 text-gray-700">{o.unit || '-'}</td>
                     <td className="p-3 text-right">
                       {editingQtyId===o.id ? (
                         <input
@@ -351,7 +406,7 @@ function ManufacturingOrderPage() {
                           step="1"
                           value={editingQtyValue}
                           onChange={(e)=>setEditingQtyValue(e.target.value)}
-                          onBlur={()=>{
+                          onBlur={()=>{ 
                             const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
                             const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
                             setAndPersist(next)
@@ -381,6 +436,49 @@ function ManufacturingOrderPage() {
                           title="Edit quantity"
                         >
                           {String(parseInt(o.quantity,10)||0)}
+                        </button>
+                      )}
+                    </td>
+                    <td className="p-3 text-gray-700">{o.unit || 'Unit'}</td>
+                    <td className="p-3 text-right">
+                      {editingTotalQtyId===o.id ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={editingTotalQtyValue}
+                          onChange={(e)=>setEditingTotalQtyValue(e.target.value)}
+                          onBlur={()=>{
+                            const v = Math.max(0, Math.floor(Number(editingTotalQtyValue||0)))
+                            const next = orders.map(x=>x.id===o.id?{...x, totalQuantity:v}:x)
+                            setAndPersist(next)
+                            setEditingTotalQtyId(null)
+                            setEditingTotalQtyValue("")
+                          }}
+                          onKeyDown={(e)=>{
+                            if (e.key==='Enter') {
+                              e.preventDefault()
+                              const v = Math.max(0, Math.floor(Number(editingTotalQtyValue||0)))
+                              const next = orders.map(x=>x.id===o.id?{...x, totalQuantity:v}:x)
+                              setAndPersist(next)
+                              setEditingTotalQtyId(null)
+                              setEditingTotalQtyValue("")
+                            } else if (e.key==='Escape') {
+                              setEditingTotalQtyId(null)
+                              setEditingTotalQtyValue("")
+                            }
+                          }}
+                          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-right bg-white"
+                          placeholder="0"
+                        />
+                      ) : (
+                        <button
+                          className="text-[#3D56A6] font-medium hover:underline"
+                          onClick={()=>{ setEditingTotalQtyId(o.id); setEditingTotalQtyValue(String(parseInt(o.totalQuantity,10)||0)) }}
+                          title="Edit total quantity"
+                        >
+                          {String(parseInt(o.totalQuantity,10)||0)}
                         </button>
                       )}
                     </td>
@@ -564,8 +662,10 @@ function ManufacturingOrderPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t">
-                  <td className="p-3" colSpan={6}></td>
+                  <td className="p-3" colSpan={7}></td>
                   <td className="p-3 text-right font-bold text-gray-900">{String(parseInt(totalQty,10)||0)}</td>
+                  <td className="p-3"></td>
+                  <td className="p-3 text-right font-bold text-gray-900">{String(parseInt(totalTotalQty,10)||0)}</td>
                   <td className="p-3" colSpan={8}></td>
                 </tr>
               </tfoot>
@@ -609,7 +709,11 @@ function ManufacturingOrderPage() {
               <div className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-3">
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
-                    <div className="text-sm text-gray-700">Product No.</div>
+                    <div className="text-sm text-gray-700">Job Order Code</div>
+                    <input value={newOrder.jobOrderCode} onChange={(e)=>setNewOrder({...newOrder, jobOrderCode:e.target.value})} placeholder="e.g. JO-001" className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Item code</div>
                     <input value={newOrder.productNo} onChange={(e)=>setNewOrder({...newOrder, productNo:e.target.value})} placeholder="e.g. LCM-001" className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
@@ -627,6 +731,12 @@ function ManufacturingOrderPage() {
                     <div className="text-sm text-gray-700">Quantity</div>
                     <div className="flex items-center gap-3">
                       <input type="number" value={newOrder.quantity} onChange={(e)=>setNewOrder({...newOrder, quantity:Number(e.target.value)})} className="w-28 rounded-md border border-gray-300 px-2 py-1" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Total Quantity</div>
+                    <div className="flex items-center gap-3">
+                      <input type="number" value={newOrder.totalQuantity} onChange={(e)=>setNewOrder({...newOrder, totalQuantity:Number(e.target.value)})} className="w-28 rounded-md border border-gray-300 px-2 py-1" />
                     </div>
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
@@ -669,6 +779,7 @@ function ManufacturingOrderPage() {
                         const o = {
                           id: Date.now(),
                           ref,
+                          jobOrderCode: newOrder.jobOrderCode || "",
                           start: newOrder.scheduledDate || new Date().toISOString(),
                           productNo: newOrder.productNo || "",
                           product: newOrder.product || "Untitled",
@@ -680,6 +791,7 @@ function ManufacturingOrderPage() {
                           customer: newOrder.customer || "",
                           componentStatus: "",
                           quantity: Number(newOrder.quantity) || 1,
+                          totalQuantity: Number(newOrder.totalQuantity) || 1,
                           state: "",
                           priority: newOrder.priority || "None",
                           favorite: false,
@@ -698,7 +810,31 @@ function ManufacturingOrderPage() {
               </div>
             </div>
           )}
-        </main>
+          {printingOrder && createPortal(
+        <div className="print-portal">
+          <style>
+            {`
+              @media print {
+                body > *:not(.print-portal) { display: none !important; }
+                .print-portal { 
+                  display: block !important; 
+                  position: absolute; 
+                  top: 0; 
+                  left: 0; 
+                  width: 100%; 
+                  background: white; 
+                  z-index: 9999;
+                }
+                @page { margin: 0; size: auto; }
+              }
+              .print-portal { display: none; }
+            `}
+          </style>
+          <JobOrderTemplate order={printingOrder} />
+        </div>,
+        document.body
+      )}
+    </main>
       )
     }
 
