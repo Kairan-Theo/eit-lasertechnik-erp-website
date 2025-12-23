@@ -1,4 +1,5 @@
 import React from "react"
+import { API_BASE_URL } from "./config"
 
 function useInvoiceState() {
   const [customer, setCustomer] = React.useState({
@@ -110,6 +111,23 @@ function useInvoiceState() {
       const invoices = Array.isArray(existing.invoices) ? existing.invoices : []
       invoices.push({ ...payload, savedAt: new Date().toISOString() })
       localStorage.setItem(key, JSON.stringify({ ...existing, customer, invoices }))
+    } catch {}
+    try {
+      const token = localStorage.getItem("authToken")
+      if (token) {
+        const body = {
+          number: details.number,
+          customer,
+          items,
+          details,
+          totals: { subtotal, taxTotal, total }
+        }
+        fetch(`${API_BASE_URL}/api/invoices/`, {
+          method: "POST",
+          headers: { "Authorization": `Token ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }).catch(() => {})
+      }
     } catch {}
   }
 

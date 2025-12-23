@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import "./index.css"
+import { API_BASE_URL } from "./config"
 
 function useQuotationState() {
   const [docType, setDocType] = React.useState("Quotation")
@@ -71,6 +72,24 @@ function useQuotationState() {
       const quotations = Array.isArray(existing.quotations) ? existing.quotations : []
       quotations.push({ ...payload, savedAt: new Date().toISOString() })
       localStorage.setItem(key, JSON.stringify({ ...existing, customer, quotations }))
+    } catch {}
+    try {
+      const token = localStorage.getItem("authToken")
+      if (token) {
+        const body = {
+          number: details.number,
+          customer,
+          items,
+          details,
+          totals: { subtotal, taxTotal, total },
+          doc_type: docType
+        }
+        fetch(`${API_BASE_URL}/api/quotations/`, {
+          method: "POST",
+          headers: { "Authorization": `Token ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }).catch(() => {})
+      }
     } catch {}
   }
   const confirm = () => {

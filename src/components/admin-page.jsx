@@ -1,4 +1,4 @@
-﻿import React from "react"
+﻿﻿import React from "react"
 import { 
   LayoutDashboard, 
   FileText, 
@@ -488,59 +488,62 @@ function PermissionsManager() {
       setSavingId(userId)
       const token = localStorage.getItem("authToken")
       if (!token) return
+      console.log(`Saving permissions for user ${userId}: ${allowed}`)
       const r = await fetch(`${API_BASE_URL}/api/users/permissions/`, {
         method: "POST",
         headers: { "Authorization": `Token ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId, allowed_apps: allowed })
       })
       if (!r.ok) {
-        const u = users.find(x => x.id === userId)
+        console.error("Failed to save permissions", r.status, await r.text())
+        alert("Failed to save permissions. Please try again.")
         await fetchUsers()
-        setUsers(prev => prev.map(x => x.id === userId ? u || x : x))
+      } else {
+        console.log("Permissions saved successfully")
       }
-    } catch {
+    } catch (e) {
+      console.error("Error saving permissions", e)
+      alert("Error saving permissions: " + e.message)
+      await fetchUsers()
     } finally {
       setSavingId(null)
     }
   }
+
   const toggleApp = (userId, app) => {
-    setUsers(prev => prev.map(u => {
-      if (u.id !== userId) return u
-      const list = parseAllowed(u.allowed_apps || "")
-      let nextList = []
-      if (list.includes(app)) {
-        nextList = list.filter(a => a !== app)
-      } else {
-        nextList = [...list, app]
-      }
-      const nextAllowed = nextList.length === APPS.length ? "all" : (nextList.length ? nextList.join(",") : "")
-      const updated = { ...u, allowed_apps: nextAllowed }
-      save(userId, nextAllowed)
-      return updated
-    }))
-    if (me && me.id === userId) {
-      const list = parseAllowed(me.allowed_apps || "")
-      let nextList = []
-      if (list.includes(app)) {
-        nextList = list.filter(a => a !== app)
-      } else {
-        nextList = [...list, app]
-      }
-      const nextAllowed = nextList.length === APPS.length ? "all" : (nextList.length ? nextList.join(",") : "")
-      setMe({ ...me, allowed_apps: nextAllowed })
+    const user = users.find(u => u.id === userId)
+    if (!user) return
+
+    const list = parseAllowed(user.allowed_apps || "")
+    let nextList = []
+    if (list.includes(app)) {
+      nextList = list.filter(a => a !== app)
+    } else {
+      nextList = [...list, app]
     }
+    const nextAllowed = nextList.length === APPS.length ? "all" : (nextList.length ? nextList.join(",") : "")
+    
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, allowed_apps: nextAllowed } : u))
+    
+    if (me && me.id === userId) {
+      setMe(prev => ({ ...prev, allowed_apps: nextAllowed }))
+    }
+    
+    save(userId, nextAllowed)
   }
+
   const setAll = (userId) => {
     const nextAllowed = "all"
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, allowed_apps: nextAllowed } : u))
+    if (me && me.id === userId) setMe(prev => ({ ...prev, allowed_apps: nextAllowed }))
     save(userId, nextAllowed)
-    if (me && me.id === userId) setMe({ ...me, allowed_apps: nextAllowed })
   }
+
   const setNone = (userId) => {
     const nextAllowed = ""
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, allowed_apps: nextAllowed } : u))
+    if (me && me.id === userId) setMe(prev => ({ ...prev, allowed_apps: nextAllowed }))
     save(userId, nextAllowed)
-    if (me && me.id === userId) setMe({ ...me, allowed_apps: nextAllowed })
   }
   return (
     <div className="bg-white rounded-xl border shadow-sm p-6">

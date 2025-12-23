@@ -3,6 +3,46 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+class Quotation(models.Model):
+    number = models.CharField(max_length=100, unique=True)
+    customer = models.JSONField(default=dict, blank=True)
+    items = models.JSONField(default=list, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+    totals = models.JSONField(default=dict, blank=True)
+    doc_type = models.CharField(max_length=50, default="Quotation")
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="quotations")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Quotation {self.number}"
+
+class Invoice(models.Model):
+    number = models.CharField(max_length=100, unique=True)
+    customer = models.JSONField(default=dict, blank=True)
+    items = models.JSONField(default=list, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+    totals = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Invoice {self.number}"
+
+class PurchaseOrder(models.Model):
+    number = models.CharField(max_length=100, unique=True)
+    customer = models.JSONField(default=dict, blank=True)
+    extra_fields = models.JSONField(default=dict, blank=True)
+    items = models.JSONField(default=list, blank=True)
+    totals = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="purchase_orders")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"PO {self.number}"
+
 class Deal(models.Model):
     PRIORITY_CHOICES = [
         ('none', 'None'),
@@ -19,6 +59,9 @@ class Deal(models.Model):
     contact = models.CharField(max_length=200, blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
+    tax_id = models.CharField(max_length=50, blank=True)
+    items = models.JSONField(default=list, blank=True)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     expected_close = models.DateField(null=True, blank=True)
