@@ -5,13 +5,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer
 from datetime import date, timedelta
 
 class DealViewSet(viewsets.ModelViewSet):
     queryset = Deal.objects.all().order_by('-created_at')
     serializer_class = DealSerializer
+    permission_classes = [AllowAny]
 
     def perform_update(self, serializer):
         instance = serializer.instance
@@ -27,6 +28,65 @@ class DealViewSet(viewsets.ModelViewSet):
 class ActivityScheduleViewSet(viewsets.ModelViewSet):
     queryset = ActivitySchedule.objects.all().order_by('due_at')
     serializer_class = ActivityScheduleSerializer
+
+class ProjectViewSet(viewsets.ModelViewSet):
+    queryset = Project.objects.all().order_by('-updated_at')
+    serializer_class = ProjectSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        name = (data.get('name') or '').strip()
+        if not name:
+            return Response({'error': 'name is required'}, status=status.HTTP_400_BAD_REQUEST)
+        # Resolve customer
+        customer = None
+        cid = data.get('customer_id')
+        write_name = (data.get('write_customer_name') or '').strip()
+        if cid:
+            try:
+                customer = Customer.objects.get(id=cid)
+            except Customer.DoesNotExist:
+                return Response({'error': 'customer_id not found'}, status=status.HTTP_400_BAD_REQUEST)
+        elif write_name:
+            customer, _ = Customer.objects.get_or_create(company_name=write_name)
+        # Dates
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        try:
+            if start_date:
+                start_date = date.fromisoformat(start_date)
+            else:
+                start_date = None
+            if end_date:
+                end_date = date.fromisoformat(end_date)
+            else:
+                end_date = None
+        except Exception:
+            return Response({'error': 'Invalid date format, expected YYYY-MM-DD'}, status=status.HTTP_400_BAD_REQUEST)
+        status_val = data.get('status') or 'planned'
+        if status_val not in dict(Project.STATUS_CHOICES):
+            status_val = 'planned'
+        priority_val = data.get('priority') or 'none'
+        if priority_val not in dict(Project.PRIORITY_CHOICES):
+            priority_val = 'none'
+        project = Project.objects.create(
+            name=name,
+            description=data.get('description') or '',
+            customer=customer,
+            start_date=start_date,
+            end_date=end_date,
+            status=status_val,
+            priority=priority_val,
+        )
+        serializer = self.get_serializer(project)
+        headers = {'Location': f"{request.build_absolute_uri('/api/projects/')}{project.id}/"}
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+class TaskViewSet(viewsets.ModelViewSet):
+    queryset = Task.objects.all().order_by('due_date')
+    serializer_class = TaskSerializer
+    permission_classes = [AllowAny]
 
 class QuotationViewSet(viewsets.ModelViewSet):
     queryset = Quotation.objects.all().order_by('-updated_at')
@@ -252,7 +312,7 @@ def set_user_password(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_notifications(request):
     """
     Get recent notifications for admins.

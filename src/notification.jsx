@@ -14,16 +14,26 @@ function NotificationsPage() {
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem("authToken")
-      if (!token) return
-
-      const response = await fetch(`${API_BASE_URL}/api/notifications/`, {
-        headers: {
-          "Authorization": `Token ${token}`,
-          "Cache-Control": "no-store"
+      if (token) {
+        const response = await fetch(`${API_BASE_URL}/api/notifications/`, {
+          headers: {
+            "Authorization": `Token ${token}`,
+            "Cache-Control": "no-store"
+          }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setNotifications(data)
         }
-      })
-      if (response.ok) {
-        const data = await response.json()
+      } else {
+        const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+        const data = list.map(n => ({
+          id: n.id,
+          message: n.message,
+          created_at: n.timestamp,
+          is_read: !n.unread,
+          type: n.type || "info"
+        }))
         setNotifications(data)
       }
     } catch (error) {
@@ -36,7 +46,13 @@ function NotificationsPage() {
     // Listen for updates from other components
     const handleUpdate = () => fetchNotifications()
     window.addEventListener("notificationUpdated", handleUpdate)
-    return () => window.removeEventListener("notificationUpdated", handleUpdate)
+    window.addEventListener("storage", handleUpdate)
+    const interval = setInterval(fetchNotifications, 5000)
+    return () => {
+      window.removeEventListener("notificationUpdated", handleUpdate)
+      window.removeEventListener("storage", handleUpdate)
+      clearInterval(interval)
+    }
   }, [])
 
   const markAsRead = async (id) => {
@@ -45,14 +61,20 @@ function NotificationsPage() {
     
     try {
       const token = localStorage.getItem("authToken")
-      await fetch(`${API_BASE_URL}/api/notifications/read/`, {
-        method: "POST",
-        headers: { 
-            "Authorization": `Token ${token}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ id })
-      })
+      if (token) {
+        await fetch(`${API_BASE_URL}/api/notifications/read/`, {
+          method: "POST",
+          headers: { 
+              "Authorization": `Token ${token}`,
+              "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ id })
+        })
+      } else {
+        const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+        const next = list.map(n => n.id === id ? { ...n, unread: false } : n)
+        localStorage.setItem("notifications", JSON.stringify(next))
+      }
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {
       console.error("Failed to mark as read", err)
@@ -66,19 +88,23 @@ function NotificationsPage() {
 
     try {
       const token = localStorage.getItem("authToken")
-      // We can iterate or add a bulk endpoint. For now, iterate locally or assume backend handles it.
-      // Since backend might not have bulk endpoint, we loop.
-      const unread = notifications.filter(n => !n.is_read)
-      await Promise.all(unread.map(n => 
-        fetch(`${API_BASE_URL}/api/notifications/read/`, {
-            method: "POST",
-            headers: { 
-                "Authorization": `Token ${token}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ id: n.id })
-        })
-      ))
+      if (token) {
+        const unread = notifications.filter(n => !n.is_read)
+        await Promise.all(unread.map(n => 
+          fetch(`${API_BASE_URL}/api/notifications/read/`, {
+              method: "POST",
+              headers: { 
+                  "Authorization": `Token ${token}`,
+                  "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ id: n.id })
+          })
+        ))
+      } else {
+        const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+        const next = list.map(n => ({ ...n, unread: false }))
+        localStorage.setItem("notifications", JSON.stringify(next))
+      }
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {
       console.error("Failed to mark all as read", err)
@@ -94,30 +120,20 @@ function NotificationsPage() {
 
     try {
       const token = localStorage.getItem("authToken")
-      // Assuming we have a delete endpoint or we use 'read' to hide? 
-      // The user said "delete the noti, not the data".
-      // Usually this means deleting the Notification object, not the CRM Deal.
-      // So DELETE /api/notifications/{id}/ is appropriate if it exists.
-      // If not, we might need to rely on backend implementation. 
-      // Based on previous turn, I think I used a loop for this too or just hid it.
-      // Let's assume standard REST delete or similar.
-      // If no delete endpoint, we might just hide it locally? No, persistent.
-      // Let's try DELETE request.
-      const res = await fetch(`${API_BASE_URL}/api/notifications/${id}/`, {
-        method: "DELETE",
-        headers: {
-          "Authorization": `Token ${token}`
+      if (token) {
+        const res = await fetch(`${API_BASE_URL}/api/notifications/${id}/`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Token ${token}`
+          }
+        })
+        if (!res.ok) {
+          console.warn("Delete might not be implemented on backend")
         }
-      })
-      
-      if (!res.ok) {
-        // If DELETE not supported, maybe just mark read?
-        // But user explicitly wanted to "clear".
-        // Let's assume the backend supports it or I should have added it.
-        // I didn't add backend code for delete.
-        // So I will just mark as read and maybe filter them out from view?
-        // User said: "when click clear all , make all clear" "i only want delete the noti".
-        console.warn("Delete might not be implemented on backend, hiding locally")
+      } else {
+        const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+        const next = list.filter(n => n.id !== id)
+        localStorage.setItem("notifications", JSON.stringify(next))
       }
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {
@@ -131,13 +147,16 @@ function NotificationsPage() {
     
     try {
       const token = localStorage.getItem("authToken")
-      // Delete all
-      await Promise.all(notifications.map(n => 
-        fetch(`${API_BASE_URL}/api/notifications/${n.id}/`, {
-            method: "DELETE",
-            headers: { "Authorization": `Token ${token}` }
-        })
-      ))
+      if (token) {
+        await Promise.all(notifications.map(n => 
+          fetch(`${API_BASE_URL}/api/notifications/${n.id}/`, {
+              method: "DELETE",
+              headers: { "Authorization": `Token ${token}` }
+          })
+        ))
+      } else {
+        localStorage.setItem("notifications", JSON.stringify([]))
+      }
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {
       console.error("Failed to clear all", err)
@@ -169,6 +188,12 @@ function NotificationsPage() {
             </div>
             
             <div className="flex gap-2">
+              <button
+                onClick={fetchNotifications}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 shadow-sm"
+              >
+                Refresh
+              </button>
                <button
                 onClick={markAllAsRead}
                 disabled={unreadCount === 0}

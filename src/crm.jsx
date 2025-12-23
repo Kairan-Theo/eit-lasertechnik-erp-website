@@ -5,6 +5,7 @@ import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import emailjs from '@emailjs/browser';
 import "./index.css"
+import { API_BASE_URL } from "./config"
 
 const initialPipeline = {
   "Appointment Schedule": [
@@ -79,7 +80,7 @@ const thaiCompanies = [
   { name: "Bangkok Expressway and Metro (BEM)", contact: "Sombat Kitjalaksana", email: "bem@bemplc.co.th", phone: "02-641-4611", address: "587 Sutthisan Winitchai Rd, Din Daeng, Bangkok 10400" }
 ]
 
-const API_BASE = "http://localhost:8001/api"
+const API_BASE = `${API_BASE_URL}/api`
 
 function CRMPage() {
   const [stages, setStages] = React.useState(
@@ -107,7 +108,7 @@ function CRMPage() {
           const deal = {
             id: d.id,
             title: d.title,
-            customer: d.customer,
+            customer: d.customer_name || "",
             amount: Number(d.amount),
             currency: d.currency,
             priority: d.priority,
@@ -479,6 +480,21 @@ function CRMPage() {
       const msg = isClosedWon ? `${baseMsg} — Create PO or Receive PO` : baseMsg
       showNotification(msg)
       notifyTeam(msg, isClosedWon ? "success" : "info", card.customer || "", "CRM")
+      window.dispatchEvent(new Event("notificationUpdated"))
+      try {
+        const token = localStorage.getItem("authToken")
+        await fetch(`${API_BASE}/deals/${card.id}/`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Token ${token}` } : {})
+          },
+          body: JSON.stringify({ stage: stageName })
+        })
+        window.dispatchEvent(new Event("notificationUpdated"))
+      } catch (err) {
+        console.error("Failed to persist stage change", err)
+      }
     }
 
     setStages((prev) => {
@@ -596,7 +612,7 @@ function CRMPage() {
       await fetch(`${API_BASE}/deals/${d.id}/`, {
         method: "PATCH",
         headers,
-        body: JSON.stringify({ title, customer, amount })
+        body: JSON.stringify({ title, amount })
       })
     } catch (err) {
       console.error("Failed to update deal", err)
@@ -781,7 +797,7 @@ function CRMPage() {
                           title="Click to send email"
                         >
                           <svg className="w-4 h-4 text-[#2D4485]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="truncate text-xs leading-tight max-w-[280px]">{d.customer}</span>
+                          <span className="truncate text-xs leading-tight max-w-[280px]">{d.customer_name || d.contact || d.email || d.title}</span>
                         </span>
                       </div>
                       <div className="flex justify-between items-start gap-2 mb-3">
@@ -1168,15 +1184,15 @@ function CRMPage() {
                       </div>
                     )})()}
                   </div>
-                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+                  <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
                     <button 
                       className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm" 
                       onClick={() => setOpenDetail(null)}
                     >
                       Cancel
                     </button>
-                    <button 
-                      className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium" 
+                    <button
+                      className="px-5 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
                       onClick={saveDetail}
                     >
                       Save Changes
@@ -1188,16 +1204,16 @@ function CRMPage() {
           )}
           {showNewForm && (
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 transition-opacity" onClick={() => setShowNewForm(false)}>
-              <div className="absolute left-1/2 top-20 -translate-x-1/2 w-[520px] transition-all" onClick={(e) => e.stopPropagation()}>
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <h3 className="font-bold text-slate-800 text-lg">New Customer</h3>
+              <div className="absolute left-1/2 top-16 -translate-x-1/2 w-[420px] z-50 transition-all" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 text-lg">New Deal</h3>
                     <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowNewForm(false)}>✕</button>
                   </div>
-                  <div className="p-6">
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Company</label>
+                  <div className="p-4 max-h-[60vh] overflow-y-auto">
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Company</label>
                         <div className="relative">
                           <input 
                             value={newDeal.company} 
@@ -1238,8 +1254,8 @@ function CRMPage() {
                           )}
                         </div>
                       </div>
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Contact</label>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Contact</label>
                         <input 
                           value={newDeal.contact} 
                           onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} 
@@ -1247,8 +1263,8 @@ function CRMPage() {
                           placeholder="Contact person"
                         />
                       </div>
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Opportunity</label>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Opportunity</label>
                         <input 
                           value={newDeal.opportunity} 
                           onChange={(e)=>setNewDeal({...newDeal, opportunity:e.target.value})} 
@@ -1256,8 +1272,8 @@ function CRMPage() {
                           placeholder="Deal opportunity name"
                         />
                       </div>
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Email</label>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Email</label>
                         <input 
                           value={newDeal.email} 
                           onChange={(e)=>setNewDeal({...newDeal, email:e.target.value})} 
@@ -1265,8 +1281,8 @@ function CRMPage() {
                           placeholder="Email address"
                         />
                       </div>
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Phone</label>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Phone</label>
                         <input 
                           value={newDeal.phone} 
                           onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} 
@@ -1274,8 +1290,8 @@ function CRMPage() {
                           placeholder="Phone number"
                         />
                       </div>
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Address</label>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Address</label>
                         <input 
                           value={newDeal.address} 
                           onChange={(e)=>setNewDeal({...newDeal, address:e.target.value})} 
@@ -1283,8 +1299,8 @@ function CRMPage() {
                           placeholder="Company address"
                         />
                       </div>
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Tax ID</label>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Tax ID</label>
                         <input 
                           value={newDeal.taxId} 
                           onChange={(e)=>setNewDeal({...newDeal, taxId:e.target.value})} 
@@ -1292,8 +1308,8 @@ function CRMPage() {
                           placeholder="Tax ID"
                         />
                       </div>
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Amount</label>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Amount</label>
                         <div className="flex items-center gap-3 w-full">
                           <div className="relative flex-1">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{newDeal.currency}</span>
@@ -1311,8 +1327,8 @@ function CRMPage() {
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Priority</label>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Priority</label>
                         <div className="flex items-center gap-3">
                           {[1,2,3].map(n => {
                             const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
@@ -1331,8 +1347,8 @@ function CRMPage() {
                           })}
                         </div>
                       </div>
-                      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                        <label className="text-sm font-medium text-slate-500">Stage</label>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">Stage</label>
                         <select 
                           value={newDeal.stageIndex} 
                           onChange={(e)=>setNewDeal({...newDeal, stageIndex:Number(e.target.value)})} 
@@ -1347,18 +1363,20 @@ function CRMPage() {
                   </div>
                   <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
                     <button
+                      type="button"
                       className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm"
                       onClick={() => setShowNewForm(false)}
                     >
                       Cancel
                     </button>
                     <button
-                      className="px-6 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
+                      type="button"
+                      className="px-5 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
                       onClick={async () => {
                         const stageName = stages[newDeal.stageIndex].name
                         const dealData = {
                           title: newDeal.opportunity || newDeal.company || "Untitled",
-                          customer: newDeal.company || newDeal.contact || "",
+                          customer: null,
                           amount: Number(newDeal.amount) || 0,
                           currency: newDeal.currency || "฿",
                           priority: newDeal.priority || "none",
