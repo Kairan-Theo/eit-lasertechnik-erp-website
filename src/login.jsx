@@ -38,20 +38,47 @@ const EyeOffIcon = (props) => (
 )
 
 function LoginPage() {
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    const formEl = e.target
-    const email = formEl.querySelector("#email")?.value || ""
-    const role = /admin/i.test(email) ? "Admin" : "User"
-    try {
-      localStorage.setItem("isAuthenticated", "true")
-      localStorage.setItem("userRole", role)
-      localStorage.setItem("currentUser", JSON.stringify({ email, role }))
-    } catch {}
-    window.location.href = "/apps.html"
-  }
-
+  const [error, setError] = React.useState("")
   const [showPassword, setShowPassword] = React.useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError("")
+    const formEl = e.target
+    const email = (formEl.querySelector("#email")?.value || "").trim().toLowerCase()
+    const password = (formEl.querySelector("#password")?.value || "").trim()
+    if (!email || !password) {
+      setError("Please provide both email and password")
+      return
+    }
+
+    try {
+      const { API_BASE_URL } = await import("./config.js")
+      const response = await fetch(`${API_BASE_URL}/api/auth/login/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        localStorage.setItem("isAuthenticated", "true")
+        localStorage.setItem("userRole", data.role)
+        localStorage.setItem("authToken", data.token)
+        localStorage.setItem("allowedApps", data.allowed_apps)
+        localStorage.setItem("currentUser", JSON.stringify({ email: data.email, role: data.role, name: data.name, profile_picture: data.profile_picture }))
+        window.location.href = "/apps.html"
+      } else {
+        setError(data.error || "Login failed")
+      }
+    } catch (err) {
+      console.error("Login error:", err)
+      setError("Unable to connect to server: " + (err.message || "Unknown error"))
+    }
+  }
 
   return (
     <main className="min-h-screen bg-white">
@@ -59,6 +86,11 @@ function LoginPage() {
       <section className="w-full py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
         <div className="max-w-md mx-auto bg-white rounded-2xl shadow-sm p-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">Log in to EIT Lasertechnik</h1>
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-md border border-red-200">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">

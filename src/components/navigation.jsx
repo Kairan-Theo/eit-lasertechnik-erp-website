@@ -1,5 +1,6 @@
 "use client"
 import React from "react"
+import { API_BASE_URL } from "../config"
 import { User, LogOut, ChevronDown, Lock, Edit, Bell } from "lucide-react"
 import {
   Dialog,
@@ -34,6 +35,8 @@ export default function Navigation() {
   const [profileName, setProfileName] = React.useState("")
   const [profileCompany, setProfileCompany] = React.useState("")
   const [profileEmail, setProfileEmail] = React.useState("")
+  const [profileImage, setProfileImage] = React.useState(null)
+  const [previewImage, setPreviewImage] = React.useState(null)
 
   // Password Form State
   const [currentPassword, setCurrentPassword] = React.useState("")
@@ -45,6 +48,7 @@ export default function Navigation() {
       setProfileName(user.name || "")
       setProfileCompany(user.company || "")
       setProfileEmail(user.email || "")
+      setPreviewImage(user.profile_picture || null)
     }
   }, [user])
 
@@ -113,7 +117,6 @@ export default function Navigation() {
     if (!isAuthenticated) {
       setDueCount(0)
       setNotificationsCount(0)
-      return
     }
     const compute = () => {
       try {
@@ -134,28 +137,36 @@ export default function Navigation() {
           })
         })
         setDueCount(count)
-        let unread = 0
-        try {
-          const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-          if (Array.isArray(list)) {
-            unread = list.reduce((acc, n) => acc + (n && n.unread !== false ? 1 : 0), 0)
-          }
-        } catch {}
-        let total = count + unread
-        if (total === 0 && !localStorage.getItem("hasShownNotifDot")) {
-          total = 1
-          localStorage.setItem("hasShownNotifDot", "true")
+        const token = localStorage.getItem("authToken")
+        const headers = {
+          "Cache-Control": "no-store",
+          ...(token ? { "Authorization": `Token ${token}` } : {})
         }
-        setNotificationsCount(total)
+        fetch(`${API_BASE_URL}/api/notifications/`, { headers })
+          .then(r => r.ok ? r.json() : [])
+          .then(list => {
+            if (Array.isArray(list)) {
+              const unread = list.reduce((acc, n) => acc + (n && n.is_read === false ? 1 : 0), 0)
+              setNotificationsCount(unread)
+            } else {
+              setNotificationsCount(0)
+            }
+          })
+          .catch(() => setNotificationsCount(0))
       } catch {
         setDueCount(0)
-        setNotificationsCount(localStorage.getItem("hasShownNotifDot") ? 0 : 1)
-        localStorage.setItem("hasShownNotifDot", "true")
+        setNotificationsCount(0)
       }
     }
     compute()
-    const id = setInterval(compute, 60 * 60 * 1000)
-    return () => clearInterval(id)
+    const id = setInterval(compute, 2000)
+    window.addEventListener("storage", compute)
+    window.addEventListener("notificationUpdated", compute)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener("storage", compute)
+      window.removeEventListener("notificationUpdated", compute)
+    }
   }, [isAuthenticated])
 
   return (
@@ -184,14 +195,14 @@ export default function Navigation() {
           <div className="flex items-center gap-3">
             {isAuthenticated && (
               <button
-                onClick={() => (window.location.href = "/admin.html?view=notifications")}
+                onClick={() => (window.location.href = "/notification.html")}
                 className="relative inline-flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition"
                 aria-label="Due notifications"
                 title={notificationsCount > 0 ? `${notificationsCount} notifications` : "No notifications"}
               >
                 <Bell className="w-6 h-6" />
                 {notificationsCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] text-white font-bold ring-2 ring-[#2D4485]">
+                  <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white font-bold ring-2 ring-red-300">
                     {notificationsCount}
                   </span>
                 )}
@@ -248,7 +259,7 @@ export default function Navigation() {
                     
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-[#2D4485] hover:bg-blue-50 transition-colors text-left"
                     >
                       <LogOut className="w-4 h-4" />
                       Log out
@@ -258,10 +269,10 @@ export default function Navigation() {
               </div>
             ) : (
               <>
-                <a href="/login.html" className="hidden sm:block rounded-full px-4 py-2 bg-white/10 hover:bg-white/20 transition">
+                <a href="/login.html" className="hidden sm:block rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition">
                   Log in
                 </a>
-                <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-5 py-2 font-semibold shadow-sm transition hover:-translate-y-0.5">
+                <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-4 py-1.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5">
                   Sign up
                 </a>
               </>
@@ -280,6 +291,26 @@ export default function Navigation() {
           </DialogHeader>
           <form onSubmit={handleEditProfileSubmit}>
             <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="picture" className="text-right">
+                  Picture
+                </Label>
+                <div className="col-span-3">
+                  <Input
+                    id="picture"
+                    type="file"
+                    onChange={(e) => {
+                      const file = e.target.files[0]
+                      if (file) {
+                          setProfileImage(file)
+                          setPreviewImage(URL.createObjectURL(file))
+                      }
+                    }}
+                    accept="image/*"
+                  />
+                  {previewImage && <img src={previewImage} alt="Preview" className="mt-2 w-16 h-16 rounded-full object-cover" />}
+                </div>
+              </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">
                   Name

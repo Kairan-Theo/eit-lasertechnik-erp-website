@@ -18,15 +18,51 @@ function SignupPage() {
     setForm((f) => ({ ...f, [id]: value }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.name || !form.email || !form.password || !form.confirm) return
-    if (form.password !== form.confirm) return
+    const name = (form.name || "").trim()
+    const email = (form.email || "").trim().toLowerCase()
+    const password = (form.password || "").trim()
+    const confirm = (form.confirm || "").trim()
+    if (!name || !email || !password || !confirm) {
+      alert("Please fill out all fields")
+      return
+    }
+    if (password !== confirm) {
+      alert("Passwords do not match")
+      return
+    }
+    
     try {
-      const payload = { name: form.name, email: form.email }
-      localStorage.setItem("registeredUser", JSON.stringify(payload))
-    } catch {}
-    window.location.href = "/apps.html"
+      const { API_BASE_URL } = await import("./config.js")
+      const response = await fetch(`${API_BASE_URL}/api/auth/signup/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: email,
+          email: email,
+          password: password,
+          first_name: name
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // User requirement: after sign up, it need to log iin again
+        alert("Account created successfully! Please log in.")
+        window.location.href = "/login.html"
+      } else {
+        // Handle errors (e.g., username already exists)
+        const errorMsg = data.username ? `Email already taken` : (data.email ? data.email[0] : "Signup failed")
+        alert(errorMsg)
+      }
+    } catch (error) {
+      console.error("Signup error:", error)
+      alert("An error occurred during signup: " + (error.message || "Unknown error"))
+    }
   }
 
   return (

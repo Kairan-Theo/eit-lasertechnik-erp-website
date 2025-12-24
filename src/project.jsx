@@ -3,189 +3,635 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import "./index.css"
+import { API_BASE_URL } from "./config"
+import { 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  eachDayOfInterval, 
+  eachMonthOfInterval, 
+  eachWeekOfInterval, 
+  format, 
+  addMonths, 
+  differenceInDays, 
+  addDays, 
+  isSameMonth,
+  startOfDay,
+  isValid
+} from "date-fns"
 
-function usePM() {
-  const [projects, setProjects] = React.useState(() => {
-    try {
-      const v = JSON.parse(localStorage.getItem("pmProjects") || "[]")
-      return Array.isArray(v) ? v : []
-    } catch {
-      return []
-    }
+function ProjectPage() {
+  const [projects, setProjects] = React.useState([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState("")
+  
+  // Default range: current month to +3 months
+  const [range, setRange] = React.useState(() => {
+    const now = new Date()
+    const start = startOfMonth(now)
+    const end = endOfMonth(addMonths(now, 3))
+    return { start, end }
   })
-  const [selectedId, setSelectedId] = React.useState(null)
-  const [filter, setFilter] = React.useState("All")
+
+  const [editingTask, setEditingTask] = React.useState(null)
+  const [isModalOpen, setIsModalOpen] = React.useState(false)
+  const [isProjectModalOpen, setIsProjectModalOpen] = React.useState(false)
+  const [newProject, setNewProject] = React.useState({
+    title: "",
+    customer: "",
+    amount: 0,
+    stage: "Appointment Schedule"
+  })
+
+  // Dimensions
+  const dayWidth = 40 // pixels per day
+  const headerHeight = 60
+  const rowHeight = 40 // Height for task row
+  const groupHeaderHeight = 40 // Height for deal title row (optional, or just first row)
 
   React.useEffect(() => {
-    if (!projects.length) {
-      const seed = [
-        { id: 1, name: "Laser Welding Intro", customer: "Konvy", status: "Planned", startDate: new Date().toISOString().slice(0,10), dueDate: "", tasks: [
-          { id: 1, title: "Prepare quotation", assignee: "Sales", dueDate: "", status: "Todo" },
-        ] },
-      ]
-      setProjects(seed)
-      try { localStorage.setItem("pmProjects", JSON.stringify(seed)) } catch {}
-      setSelectedId(1)
-    }
+    fetchProjects()
   }, [])
 
-  const saveProjects = (next) => {
-    setProjects(next)
-    try { localStorage.setItem("pmProjects", JSON.stringify(next)) } catch {}
+  const fetchProjects = async () => {
+    setLoading(true)
+    try {
+      const token = localStorage.getItem("authToken")
+      const res = await fetch(`${API_BASE_URL}/api/projects/`, {
+        headers: token ? { "Authorization": `Token ${token}` } : {}
+      })
+      if (!res.ok) throw new Error("Failed to fetch projects")
+      const data = await res.json()
+      setProjects(Array.isArray(data) ? data : [])
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const addProject = (p) => {
-    const id = Date.now()
-    const proj = { id, name: p.name || "Untitled", customer: p.customer || "", status: p.status || "Planned", startDate: p.startDate || new Date().toISOString().slice(0,10), dueDate: p.dueDate || "", tasks: [] }
-    saveProjects([proj, ...projects])
-    setSelectedId(id)
+  const handleAddTask = (projectId) => {
+    setEditingTask({
+      project: projectId,
+      title: "New Task",
+      start: new Date(),
+      end: addDays(new Date(), 5),
+      assignee: ""
+    })
+    setIsModalOpen(true)
   }
-  const addTask = (pid, t) => {
-    const id = Date.now()
-    const next = projects.map((p) => p.id === pid ? { ...p, tasks: [{ id, title: t.title || "Task", assignee: t.assignee || "", dueDate: t.dueDate || "", status: t.status || "Todo" }, ...p.tasks] } : p)
-    saveProjects(next)
-  }
-  const setTaskStatus = (pid, tid, status) => {
-    const next = projects.map((p) => p.id === pid ? { ...p, tasks: p.tasks.map((tk) => tk.id === tid ? { ...tk, status } : tk) } : p)
-    saveProjects(next)
-  }
-  const updateProject = (pid, patch) => {
-    const next = projects.map((p) => p.id === pid ? { ...p, ...patch } : p)
-    saveProjects(next)
-  }
-  const current = projects.find((p) => p.id === selectedId) || null
-  const statuses = ["All", "Todo", "Doing", "Done"]
-  const filteredTasks = current ? current.tasks.filter((t) => filter === "All" ? true : t.status === filter) : []
-  return { projects, current, statuses, filteredTasks, selectedId, setSelectedId, filter, setFilter, addProject, addTask, setTaskStatus, updateProject }
-}
 
-function PMPage() {
-  const pm = usePM()
-  const [showNew, setShowNew] = React.useState(false)
-  const [projForm, setProjForm] = React.useState({ name: "", customer: "", dueDate: "" })
-  const [taskForm, setTaskForm] = React.useState({ title: "", assignee: "", dueDate: "" })
-  const canAddProject = Boolean(projForm.name)
-  const canAddTask = pm.current && Boolean(taskForm.title)
+  const handleTaskClick = (task) => {
+    setEditingTask({ ...task })
+    setIsModalOpen(true)
+  }
+
+  const handleSaveTask = async (e) => {
+    e.preventDefault()
+    if (!editingTask) return
+    if (!isValid(editingTask.start) || !isValid(editingTask.end)) {
+      alert("Please select valid start and end dates")
+      return
+    }
+    if (editingTask.end < editingTask.start) {
+      alert("End date cannot be before start date")
+      return
+    }
+    try {
+      const token = localStorage.getItem("authToken")
+      const payload = {
+        title: editingTask.title,
+        start_date: editingTask.start.toISOString().slice(0, 10),
+        due_date: editingTask.end.toISOString().slice(0, 10),
+        assignee: editingTask.assignee
+      }
+
+      const isNew = !editingTask.id
+
+      if (isNew) {
+        payload.project = editingTask.project
+      }
+
+      const url = isNew 
+        ? `${API_BASE_URL}/api/tasks/` 
+        : `${API_BASE_URL}/api/tasks/${editingTask.id}/`
+      
+      const method = isNew ? "POST" : "PATCH"
+
+      const res = await fetch(url, {
+        method: method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Token ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!res.ok) throw new Error("Failed to save task")
+      
+      setIsModalOpen(false)
+      fetchProjects()
+    } catch (err) {
+      alert("Error saving task: " + err.message)
+    }
+  }
+
+  const handleDeleteTask = async () => {
+    if (!editingTask || !window.confirm("Delete this task?")) return
+    
+    try {
+      const token = localStorage.getItem("authToken")
+      const res = await fetch(`${API_BASE_URL}/api/tasks/${editingTask.id}/`, {
+        method: "DELETE",
+        headers: token ? { "Authorization": `Token ${token}` } : {}
+      })
+      
+      if (!res.ok) throw new Error("Failed to delete task")
+      
+      setIsModalOpen(false)
+      fetchProjects()
+    } catch (err) {
+      alert("Error deleting task: " + err.message)
+    }
+  }
+
+  const handleSaveProject = async (e) => {
+    e.preventDefault()
+    try {
+      const token = localStorage.getItem("authToken")
+      if (!token) {
+        alert("You must be logged in to create a project")
+        return
+      }
+      const title = (newProject.title || "").trim()
+      const customer = (newProject.customer || "").trim()
+      if (!title || !customer) {
+        alert("Please provide both title and customer")
+        return
+      }
+      const stage = newProject.stage
+      let status = "planned"
+      if (stage === "Closed Won") status = "completed"
+      else if (stage === "Contract Sent" || stage === "Presentation Scheduled" || stage === "Decision Maker Bought-In" || stage === "Qualified to Buy") status = "in_progress"
+      const payload = { name: title, write_customer_name: customer, status }
+      const res = await fetch(`${API_BASE_URL}/api/projects/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Token ${token}`
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`Failed to create project: ${res.status} ${res.statusText} - ${errorText}`)
+      }
+      
+      setIsProjectModalOpen(false)
+      setNewProject({
+        title: "",
+        customer: "",
+        stage: "Appointment Schedule"
+      })
+      fetchProjects()
+    } catch (err) {
+      alert("Error creating project: " + err.message)
+    }
+  }
+
+  // Process data into rows
+  // Hierarchy: Deal (Phase) -> Tasks
+  const rows = React.useMemo(() => {
+    // Colors for different phases/deals
+    const colors = [
+      { bar: "bg-amber-400", border: "border-amber-500", text: "text-amber-900" }, // Yellow (Planning)
+      { bar: "bg-lime-400", border: "border-lime-500", text: "text-lime-900" },   // Green (Packaging)
+      { bar: "bg-orange-400", border: "border-orange-500", text: "text-orange-900" }, // Orange (Marketing)
+      { bar: "bg-sky-400", border: "border-sky-500", text: "text-sky-900" },     // Blue (Sales)
+      { bar: "bg-rose-400", border: "border-rose-500", text: "text-rose-900" },   // Red (Stats)
+    ]
+
+    return projects.map((project, index) => {
+      const color = colors[index % colors.length]
+      const tsks = project.tasks || []
+      
+      const tasks = tsks.map(s => {
+        const startDate = s.start_date ? new Date(s.start_date) : new Date()
+        const endDate = s.due_date ? new Date(s.due_date) : addDays(startDate, 5)
+        
+        return {
+          id: s.id,
+          text: s.title || "Untitled Task",
+          start: startDate,
+          end: endDate,
+          assignee: s.assignee || "Unassigned"
+        }
+      })
+
+      return {
+        id: project.id,
+        title: project.name,
+        tasks: tasks,
+        color
+      }
+    })
+  }, [projects])
+
+  // Timeline Headers
+  const timeline = React.useMemo(() => {
+    const months = eachMonthOfInterval({ start: range.start, end: range.end })
+    const monthData = months.map(m => {
+      const start = startOfMonth(m) < range.start ? range.start : startOfMonth(m)
+      const end = endOfMonth(m) > range.end ? range.end : endOfMonth(m)
+      const days = differenceInDays(end, start) + 1
+      
+      // Calculate weeks in this month fragment
+      // This is tricky because weeks can cross months.
+      // Simplification: Just show W1, W2, W3, W4 based on day of month approx?
+      // Or actual weeks.
+      
+      // Let's generate actual weeks for the sub-header
+      // We'll iterate days and group by week.
+      
+      return {
+        date: m,
+        label: format(m, "MMMM"),
+        width: days * dayWidth
+      }
+    })
+
+    // Generate weeks for the entire range
+    const weeks = []
+    let current = startOfWeek(range.start, { weekStartsOn: 1 })
+    while (current <= range.end) {
+      const end = endOfWeek(current, { weekStartsOn: 1 })
+      // intersection with range
+      const visibleStart = current < range.start ? range.start : current
+      const visibleEnd = end > range.end ? range.end : end
+      
+      if (visibleStart <= visibleEnd) {
+        const days = differenceInDays(visibleEnd, visibleStart) + 1
+        weeks.push({
+          start: visibleStart,
+          end: visibleEnd,
+          label: `W${format(current, "w")}`, // Week number
+          width: days * dayWidth
+        })
+      }
+      current = addDays(current, 7)
+    }
+
+    return { months: monthData, weeks }
+  }, [range])
+
+  const totalWidth = differenceInDays(range.end, range.start) * dayWidth
+
+  const getX = (date) => {
+    const d = new Date(date)
+    if (d < range.start) return 0
+    const diff = differenceInDays(d, range.start)
+    return diff * dayWidth
+  }
+
+  const getWidth = (start, end) => {
+    const s = new Date(start) < range.start ? range.start : new Date(start)
+    const e = new Date(end)
+    const days = differenceInDays(e, s)
+    return Math.max(dayWidth, days * dayWidth) // Minimum 1 day width
+  }
+
   return (
-    <main className="min-h-screen bg-white">
-      <Navigation />
-      <section className="w-full py-10 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Project Management</h1>
-            <button className="px-3 py-1.5 rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white" onClick={() => setShowNew(true)}>Add Project</button>
+    <LanguageProvider>
+      <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans">
+        <Navigation className="bg-white border-b border-slate-200" />
+        
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">PROJECT MANAGEMENT</h1>
+            <p className="text-slate-500 text-sm">Gantt Chart View</p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-sm border p-4">
-                <div className="text-sm font-semibold text-gray-900 mb-3">Projects</div>
-                <div className="space-y-2">
-                  {pm.projects.map((p) => (
-                    <button key={p.id} onClick={() => pm.setSelectedId(p.id)} className={`w-full text-left px-3 py-2 rounded-md border ${pm.selectedId===p.id ? "border-[#2D4485] bg-[#2D4485]/5" : "border-gray-200 bg-white hover:bg-gray-50"}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="font-semibold text-gray-900">{p.name}</div>
-                        <button
-                          className="text-xs px-2 py-0.5 rounded-md border border-gray-300 text-[#2D4485] bg-white hover:bg-gray-50"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            const name = window.prompt("Edit project name", p.name)
-                            if (!name || !name.trim()) return
-                            pm.updateProject(p.id, { name: name.trim() })
-                          }}
-                        >
-                          Edit
-                        </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setIsProjectModalOpen(true)}
+              className="px-3 py-1.5 text-sm bg-slate-900 text-white hover:bg-slate-800 rounded font-medium shadow-sm"
+            >
+              + New Project
+            </button>
+            <button 
+              onClick={() => setRange(prev => ({ start: addMonths(prev.start, -1), end: addMonths(prev.end, -1) }))}
+              className="px-3 py-1.5 text-sm bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
+            >
+              Previous Month
+            </button>
+            <button 
+              onClick={() => setRange(prev => ({ start: addMonths(prev.start, 1), end: addMonths(prev.end, 1) }))}
+              className="px-3 py-1.5 text-sm bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
+            >
+              Next Month
+            </button>
+          </div>
+        </div>
+
+        {/* Main Chart Area */}
+        <div className="flex-1 overflow-hidden flex flex-col relative">
+          {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80">Loading...</div>}
+          
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sidebar (Deal Titles) */}
+            <div className="w-64 flex-shrink-0 bg-white border-r border-slate-200 z-10 flex flex-col">
+              {/* Header spacer */}
+              <div className="h-[60px] border-b border-slate-200 bg-white box-border"></div> 
+              
+              {/* Rows */}
+              <div className="overflow-hidden">
+                {rows.map(row => (
+                  <div key={row.id}>
+                    {/* Deal Header */}
+                    <div className="h-10 flex items-center justify-between px-4 font-semibold text-slate-700 bg-slate-50 border-b border-slate-200">
+                      <span className="truncate mr-2">{row.title}</span>
+                      <button 
+                        onClick={() => handleAddTask(row.id)}
+                        className="flex-shrink-0 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-900 transition-colors shadow-sm"
+                        title="Add Task to this Project"
+                      >
+                        + Add Task
+                      </button>
+                    </div>
+                    {/* Task Rows Placeholder */}
+                    {row.tasks.map(task => (
+                      <div 
+                        key={task.id} 
+                        onClick={() => handleTaskClick(task)}
+                        className="h-14 flex flex-col justify-center px-8 border-b border-slate-100 text-sm text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer group"
+                      >
+                        <span className="truncate group-hover:text-slate-900">{task.text}</span>
                       </div>
-                      <div className="text-xs text-gray-600">{p.customer || "-"} • {p.status}</div>
-                      <div className="text-xs text-gray-500">Due: {p.dueDate || "-"}</div>
-                    </button>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-xl shadow-sm border p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-sm font-semibold text-gray-900">Tasks</div>
-                  <div className="flex items-center gap-2">
-                    <select value={pm.filter} onChange={(e) => pm.setFilter(e.target.value)} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
-                      {pm.statuses.map((s) => <option key={s}>{s}</option>)}
-                    </select>
-                    <button className="px-3 py-1.5 rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200" onClick={() => pm.current && pm.addTask(pm.current.id, taskForm)} disabled={!canAddTask}>Add Task</button>
+
+            {/* Gantt Grid */}
+            <div className="flex-1 overflow-auto bg-white relative">
+              <div style={{ width: `${totalWidth}px`, minWidth: '100%' }}>
+                
+                {/* Timeline Header */}
+                <div className="sticky top-0 z-20 bg-white">
+                  {/* Months */}
+                  <div className="flex h-8 border-b border-slate-200">
+                    {timeline.months.map((m, i) => (
+                      <div 
+                        key={i} 
+                        className="flex items-center justify-center text-sm font-medium text-slate-600 border-r border-slate-200 bg-slate-50"
+                        style={{ width: `${m.width}px` }}
+                      >
+                        {m.label}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Weeks */}
+                  <div className="flex h-[28px] border-b border-slate-200">
+                    {timeline.weeks.map((w, i) => (
+                      <div 
+                        key={i} 
+                        className="flex items-center justify-center text-xs text-slate-500 border-r border-slate-200"
+                        style={{ width: `${w.width}px` }}
+                      >
+                        W{format(w.start, "w")}
+                      </div>
+                    ))}
                   </div>
                 </div>
-                {pm.current ? (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                      <input value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} placeholder="Task title" className="rounded-md border border-gray-300 px-3 py-2" />
-                      <input value={taskForm.assignee} onChange={(e) => setTaskForm({ ...taskForm, assignee: e.target.value })} placeholder="Assignee" className="rounded-md border border-gray-300 px-3 py-2" />
-                      <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2" />
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-sm">
-                        <thead>
-                          <tr className="text-left text-gray-600">
-                            <th className="p-2">Task</th>
-                            <th className="p-2">Assignee</th>
-                            <th className="p-2">Due</th>
-                            <th className="p-2">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pm.filteredTasks.map((t) => (
-                            <tr key={t.id} className="border-t">
-                              <td className="p-2">{t.title}</td>
-                              <td className="p-2">{t.assignee || "-"}</td>
-                              <td className="p-2">{t.dueDate || "-"}</td>
-                              <td className="p-2">
-                                <select value={t.status} onChange={(e) => pm.setTaskStatus(pm.current.id, t.id, e.target.value)} className="rounded-md border border-gray-300 px-2 py-1">
-                                  <option>Todo</option>
-                                  <option>Doing</option>
-                                  <option>Done</option>
-                                </select>
-                              </td>
-                            </tr>
-                          ))}
-                          {!pm.filteredTasks.length && (
-                            <tr><td className="p-2 text-gray-500" colSpan={4}>No tasks</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-sm text-gray-600">Select a project</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {showNew && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setShowNew(false)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="text-lg font-semibold mb-4 text-gray-900">New Project</div>
-            <div className="space-y-3">
-              <input value={projForm.name} onChange={(e) => setProjForm({ ...projForm, name: e.target.value })} placeholder="Project name" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-              <input value={projForm.customer} onChange={(e) => setProjForm({ ...projForm, customer: e.target.value })} placeholder="Customer" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-              <input type="date" value={projForm.dueDate} onChange={(e) => setProjForm({ ...projForm, dueDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setShowNew(false)} className="px-3 py-1.5 rounded-md border border-gray-300 bg-white">Cancel</button>
-                <button disabled={!canAddProject} onClick={() => { pm.addProject(projForm); setShowNew(false); setProjForm({ name: "", customer: "", dueDate: "" }) }} className="px-3 py-1.5 rounded-md bg-[#2D4485] text-white disabled:opacity-50">Add</button>
+                {/* Grid Lines (Vertical) */}
+                <div className="absolute inset-0 top-[60px] pointer-events-none">
+                   {timeline.weeks.map((w, i) => (
+                      <div 
+                        key={i} 
+                        className="absolute top-0 bottom-0 border-r border-slate-100"
+                        style={{ left: `${getX(w.start) + w.width}px` }}
+                      />
+                    ))}
+                </div>
+
+                {/* Task Bars */}
+                <div className="relative pt-0">
+                  {rows.map(row => (
+                    <div key={row.id}>
+                      {/* Deal Spacer (Matches Sidebar) */}
+                      <div className="h-10 border-b border-slate-100 bg-slate-50"></div>
+                      
+                      {/* Tasks */}
+                      {row.tasks.map(task => {
+                        const x = getX(task.start)
+                        const w = getWidth(task.start, task.end)
+                        return (
+                          <div key={task.id} className="h-14 relative border-b border-slate-100 group">
+                            {/* Bar */}
+                            <div 
+                              onClick={() => handleTaskClick(task)}
+                              className={`absolute h-4 rounded-full shadow-sm ${row.color.bar} top-6 cursor-pointer hover:opacity-80 transition-opacity`}
+                              style={{ left: `${x}px`, width: `${w}px` }}
+                            >
+                              {/* Assignee Label */}
+                              <div className="absolute -top-5 left-0 text-xs text-slate-500 whitespace-nowrap group-hover:text-slate-800">
+                                {task.assignee}
+                              </div>
+                            </div>
+                            
+                            {/* Optional: Dependency Line Connector Logic could go here */}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+
               </div>
             </div>
           </div>
         </div>
-      )}
-    </main>
+        {/* Project Modal */}
+        {isProjectModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 border border-slate-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-slate-900">New Project</h3>
+                <button onClick={() => setIsProjectModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                  ✕
+                </button>
+              </div>
+              
+              <form onSubmit={handleSaveProject} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Project Title</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={newProject.title}
+                    onChange={e => setNewProject({...newProject, title: e.target.value})}
+                    placeholder="e.g. Website Redesign"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Customer / Client</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={newProject.customer}
+                    onChange={e => setNewProject({...newProject, customer: e.target.value})}
+                    placeholder="e.g. Acme Corp"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Amount</label>
+                  <input 
+                    type="number" 
+                    value={newProject.amount}
+                    onChange={e => setNewProject({...newProject, amount: parseFloat(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Stage</label>
+                  <select 
+                    value={newProject.stage}
+                    onChange={e => setNewProject({...newProject, stage: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  >
+                    <option value="Appointment Schedule">Appointment Schedule</option>
+                    <option value="Qualified to Buy">Qualified to Buy</option>
+                    <option value="Presentation Scheduled">Presentation Scheduled</option>
+                    <option value="Decision Maker Bought-In">Decision Maker Bought-In</option>
+                    <option value="Contract Sent">Contract Sent</option>
+                    <option value="Closed Won">Closed Won</option>
+                    <option value="Closed Lost">Closed Lost</option>
+                  </select>
+                </div>
+                
+                <div className="flex justify-end gap-2 pt-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsProjectModalOpen(false)}
+                    className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="px-4 py-2 text-sm text-white bg-slate-900 hover:bg-slate-800 rounded-md"
+                  >
+                    Create Project
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal */}
+        {isModalOpen && editingTask && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 border border-slate-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {editingTask.id ? "Edit Task" : "Add New Task"}
+                </h3>
+                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                  ✕
+                </button>
+              </div>
+              
+              <form onSubmit={handleSaveTask} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Task Name</label>
+                  <input 
+                    type="text" 
+                    value={editingTask.text}
+                    onChange={e => setEditingTask({...editingTask, text: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+                    <input 
+                      type="date" 
+                      value={isValid(editingTask.start) ? format(editingTask.start, "yyyy-MM-dd") : ""}
+                      onChange={e => {
+                        const date = e.target.value ? new Date(e.target.value) : new Date()
+                        setEditingTask({ ...editingTask, start: date })
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
+                    <input 
+                      type="date" 
+                      value={isValid(editingTask.end) ? format(editingTask.end, "yyyy-MM-dd") : ""}
+                      onChange={e => {
+                        const date = e.target.value ? new Date(e.target.value) : new Date()
+                        setEditingTask({ ...editingTask, end: date })
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
+                  <input 
+                    type="text" 
+                    value={editingTask.assignee}
+                    onChange={e => setEditingTask({...editingTask, assignee: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  />
+                </div>
+
+                <div className="flex justify-between pt-4">
+                  {editingTask.id && (
+                    <button 
+                      type="button" 
+                      onClick={handleDeleteTask}
+                      className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <div className={`flex gap-2 ${!editingTask.id ? 'w-full justify-end' : ''}`}>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsModalOpen(false)}
+                      className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="px-4 py-2 text-sm text-white bg-slate-900 hover:bg-slate-800 rounded-md"
+                    >
+                      {editingTask.id ? "Save Changes" : "Create Task"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </LanguageProvider>
   )
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <LanguageProvider>
-      <PMPage />
-    </LanguageProvider>
-  </React.StrictMode>,
-)
+export default ProjectPage
+
+const root = ReactDOM.createRoot(document.getElementById("root"))
+root.render(<ProjectPage />)

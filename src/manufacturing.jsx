@@ -1,8 +1,9 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
+import { createPortal } from "react-dom"
 import Navigation from "./components/navigation.jsx"
-import Footer from "./components/footer.jsx"
 import { LanguageProvider } from "./components/language-context"
+import { JobOrderTemplate } from "./components/job-order-template.jsx"
 import "./index.css"
 
 function ManufacturingOrderPage() {
@@ -15,14 +16,18 @@ function ManufacturingOrderPage() {
   const [scheduleDueInput, setScheduleDueInput] = React.useState("")
   const [scheduleText, setScheduleText] = React.useState("")
   const [showNew, setShowNew] = React.useState(false)
-  const [newOrder, setNewOrder] = React.useState({ product: "", quantity: 1, scheduledDate: "", priority: "None", customer: "" })
+  const [newOrder, setNewOrder] = React.useState({ product: "", productNo: "", jobOrderCode: "", unit: "Unit", quantity: 1, totalQuantity: 1, scheduledDate: "", completedDate: "", productionTime: "", responsible: "", priority: "None", customer: "" })
   const [editingCustomerId, setEditingCustomerId] = React.useState(null)
   const [editingCustomerValue, setEditingCustomerValue] = React.useState("")
   const [editingProductId, setEditingProductId] = React.useState(null)
   const [editingProductValue, setEditingProductValue] = React.useState("")
+  const [editingJobOrderCodeId, setEditingJobOrderCodeId] = React.useState(null)
+  const [editingJobOrderCodeValue, setEditingJobOrderCodeValue] = React.useState("")
   const [openStateId, setOpenStateId] = React.useState(null)
   const [editingQtyId, setEditingQtyId] = React.useState(null)
   const [editingQtyValue, setEditingQtyValue] = React.useState("")
+  const [editingTotalQtyId, setEditingTotalQtyId] = React.useState(null)
+  const [editingTotalQtyValue, setEditingTotalQtyValue] = React.useState("")
   const [openPriorityId, setOpenPriorityId] = React.useState(null)
   const [openDeleteId, setOpenDeleteId] = React.useState(null)
   const [openSortMenu, setOpenSortMenu] = React.useState(false)
@@ -35,13 +40,34 @@ function ManufacturingOrderPage() {
   const popoverRef = React.useRef(null)
   const [draggingScheduleKey, setDraggingScheduleKey] = React.useState(null)
   const [dragOverIdx, setDragOverIdx] = React.useState(null)
+  const [inventoryItems, setInventoryItems] = React.useState([])
+  const [showProductDropdown, setShowProductDropdown] = React.useState(false)
+  const [printingOrder, setPrintingOrder] = React.useState(null)
+
+  const handlePrint = (o) => {
+    setPrintingOrder(o)
+    setTimeout(() => {
+      window.print()
+      setPrintingOrder(null)
+    }, 100)
+  }
+
+  React.useEffect(() => {
+    try {
+      const data = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
+      if (Array.isArray(data)) {
+        setInventoryItems(data)
+      }
+    } catch {}
+  }, [])
+
   React.useEffect(() => {
     if (!orders.length) {
       const seed = [
-        { id: 1, ref: "WH/MO/00001", start: new Date(Date.now() - 2*24*60*60*1000).toISOString(), product: "Laser Cladding Machine", nextActivity: "", customer: "Big C Supercenter PLC", componentStatus: "", quantity: 1, state: "", favorite: false, selected: false },
-        { id: 2, ref: "WH/MO/00002", start: new Date(Date.now() - 1*24*60*60*1000).toISOString(), product: "Laser Welding Machine", nextActivity: "", customer: "SIANGHAI EITING TRADING COMPANY", componentStatus: "", quantity: 1, state: "", favorite: true, selected: false },
-        { id: 3, ref: "WH/MO/00003", start: new Date().toISOString(), product: "Cake", nextActivity: "", customer: "METRO MACHINERY", componentStatus: "", quantity: 10, state: "", favorite: false, selected: false },
-        { id: 4, ref: "WH/MO/00004", start: new Date().toISOString(), product: "mohinga", nextActivity: "", customer: "Konvy", componentStatus: "", quantity: 5, state: "", favorite: false, selected: false },
+        { id: 1, ref: "WH/MO/00001", jobOrderCode: "JO-001", start: new Date(Date.now() - 2*24*60*60*1000).toISOString(), product: "Laser Cladding Machine", nextActivity: "", customer: "Big C Supercenter PLC", componentStatus: "", quantity: 1, totalQuantity: 1, state: "", favorite: false, selected: false },
+        { id: 2, ref: "WH/MO/00002", jobOrderCode: "JO-002", start: new Date(Date.now() - 1*24*60*60*1000).toISOString(), product: "Laser Welding Machine", nextActivity: "", customer: "SIANGHAI EITING TRADING COMPANY", componentStatus: "", quantity: 1, totalQuantity: 1, state: "", favorite: true, selected: false },
+        { id: 3, ref: "WH/MO/00003", jobOrderCode: "JO-003", start: new Date().toISOString(), product: "Cake", nextActivity: "", customer: "METRO MACHINERY", componentStatus: "", quantity: 10, totalQuantity: 10, state: "", favorite: false, selected: false },
+        { id: 4, ref: "WH/MO/00004", jobOrderCode: "JO-004", start: new Date().toISOString(), product: "mohinga", nextActivity: "", customer: "Konvy", componentStatus: "", quantity: 5, totalQuantity: 5, state: "", favorite: false, selected: false },
       ]
       setOrders(seed)
       localStorage.setItem("mfgOrders", JSON.stringify(seed))
@@ -61,6 +87,7 @@ function ManufacturingOrderPage() {
   const toggleFavorite = (id) => setAndPersist(orders.map(o => o.id===id ? { ...o, favorite: !o.favorite } : o))
   const toggleSelected = (id) => setAndPersist(orders.map(o => o.id===id ? { ...o, selected: !o.selected } : o))
   const totalQty = orders.reduce((a,b)=>a+(parseInt(b.quantity,10)||0),0)
+  const totalTotalQty = orders.reduce((a,b)=>a+(parseInt(b.totalQuantity,10)||0),0)
   const relStart = (iso) => {
     const d = new Date(iso)
     const today = new Date()
@@ -81,7 +108,7 @@ function ManufacturingOrderPage() {
     }
     return { text: `In ${diffDays} days`, cls: "text-blue-600" }
   }
-  const stateClass = (s) => (s==='Processing' ? 'bg-blue-100 text-blue-700' : s==='Finished' ? 'bg-green-100 text-green-700' : s==='Cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-700')
+  const stateClass = (s) => (s==='Processing' ? 'bg-blue-50 text-[#2D4485]' : s==='Finished' ? 'bg-green-100 text-green-700' : s==='Cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-700')
   const componentStatusClass = (s) => (s==='Not Available' ? 'bg-red-100 text-red-700' : s==='Available' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700')
   const priorityClass = (p) => (p==='High' ? 'bg-red-100 text-red-700' : p==='Medium' ? 'bg-orange-100 text-orange-700' : p==='Low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
   const priorityRank = (p) => (p==='High'?3:p==='Medium'?2:p==='Low'?1:0)
@@ -186,7 +213,7 @@ function ManufacturingOrderPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Manufacturing Order</h1>
               <button
-                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                className="inline-flex items-center justify-center min-w-[150px] btn-pill"
                 title="New MO"
                 onClick={() => setShowNew(true)}
               >
@@ -194,7 +221,7 @@ function ManufacturingOrderPage() {
               </button>
               <div className="relative">
                 <button
-                  className="px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+                  className="btn-pill shadow-sm"
                   title="Sort and group"
                   onClick={()=>setOpenSortMenu((v)=>!v)}
                 >
@@ -218,14 +245,14 @@ function ManufacturingOrderPage() {
                 )}
               </div>
               <button
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="btn-pill"
                 title="Component"
                 onClick={() => window.location.href = "/products.html"}
               >
                 Component
               </button>
               <button
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="btn-pill"
                 title="Bill of Materials"
                 onClick={() => window.location.href = "/bom.html"}
               >
@@ -240,15 +267,22 @@ function ManufacturingOrderPage() {
                 <tr className="text-gray-700 bg-gray-50">
                   <th className="p-3 w-8"></th>
                   <th className="p-3 text-left font-medium">Priority</th>
-                  <th className="p-3 text-left font-medium">Reference</th>
-                <th className="p-3 text-left font-medium">Start</th>
-                <th className="p-3 text-left font-medium">Product</th>
-                <th className="p-3 text-left font-medium">Customer</th>
-                <th className="p-3 text-left font-medium">Component Status</th>
-                <th className="p-3 text-right font-medium">Quantity</th>
-                <th className="p-3 text-left font-medium">State</th>
-                <th className="p-3 w-8"></th>
-              </tr>
+                  <th className="p-3 text-left font-medium">Purchase Order</th>
+                  <th className="p-3 text-left font-medium">Job Order Code</th>
+                  <th className="p-3 text-left font-medium">Item code</th>
+                  <th className="p-3 text-left font-medium">Product</th>
+                  <th className="p-3 text-left font-medium">Unit</th>
+                  <th className="p-3 text-right font-medium">Quantity</th>
+                  <th className="p-3 text-right font-medium">Total Quantity</th>
+                  <th className="p-3 text-left font-medium">Start</th>
+                  <th className="p-3 text-left font-medium">Completed Date</th>
+                  <th className="p-3 text-left font-medium">Production Time</th>
+                  <th className="p-3 text-left font-medium">Responsible</th>
+                  <th className="p-3 text-left font-medium">Customer</th>
+                  <th className="p-3 text-left font-medium">Component Status</th>
+                  <th className="p-3 text-left font-medium">State</th>
+                  <th className="p-3 w-8"></th>
+                </tr>
               </thead>
               <tbody>
                 {[...orders].sort((a,b)=>{
@@ -284,6 +318,169 @@ function ManufacturingOrderPage() {
                     </td>
                     <td className="p-3">
                       <a className="text-[#3D56A6] hover:underline font-medium" href="#">{o.ref}</a>
+                    </td>
+                    <td className="p-3">
+                      {editingJobOrderCodeId===o.id ? (
+                        <input
+                          autoFocus
+                          value={editingJobOrderCodeValue}
+                          onChange={(e)=>setEditingJobOrderCodeValue(e.target.value)}
+                          onBlur={()=>{
+                            const v = editingJobOrderCodeValue.trim()
+                            const next = orders.map(x=>x.id===o.id?{...x, jobOrderCode:v}:x)
+                            setAndPersist(next)
+                            setEditingJobOrderCodeId(null)
+                            setEditingJobOrderCodeValue("")
+                          }}
+                          onKeyDown={(e)=>{
+                            if (e.key==='Enter') {
+                              e.preventDefault()
+                              const v = editingJobOrderCodeValue.trim()
+                              const next = orders.map(x=>x.id===o.id?{...x, jobOrderCode:v}:x)
+                              setAndPersist(next)
+                              setEditingJobOrderCodeId(null)
+                              setEditingJobOrderCodeValue("")
+                            } else if (e.key==='Escape') {
+                              setEditingJobOrderCodeId(null)
+                              setEditingJobOrderCodeValue("")
+                            }
+                          }}
+                          className="w-32 rounded-md border border-gray-300 px-2 py-1"
+                        />
+                      ) : (
+                        <button
+                          className="text-[#3D56A6] hover:underline"
+                          onClick={()=>{ setEditingJobOrderCodeId(o.id); setEditingJobOrderCodeValue(o.jobOrderCode || "") }}
+                          title="Edit Job Order Code"
+                        >
+                          {o.jobOrderCode || '-'}
+                        </button>
+                      )}
+                    </td>
+                    <td className="p-3 text-gray-700">{o.productNo || '-'}</td>
+                    <td className="p-3">
+                      {editingProductId===o.id ? (
+                        <input
+                          autoFocus
+                          value={editingProductValue}
+                          onChange={(e)=>setEditingProductValue(e.target.value)}
+                          onBlur={()=>{
+                            const v = editingProductValue.trim()
+                            const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
+                            setAndPersist(next)
+                            setEditingProductId(null)
+                            setEditingProductValue("")
+                          }}
+                          onKeyDown={(e)=>{
+                            if (e.key==='Enter') {
+                              e.preventDefault()
+                              const v = editingProductValue.trim()
+                              const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
+                              setAndPersist(next)
+                              setEditingProductId(null)
+                              setEditingProductValue("")
+                            } else if (e.key==='Escape') {
+                              setEditingProductId(null)
+                              setEditingProductValue("")
+                            }
+                          }}
+                          className="w-72 rounded-md border border-gray-300 px-2 py-1"
+                          placeholder="Add product"
+                        />
+                      ) : (
+                        <button
+                          className="text-[#3D56A6] hover:underline"
+                          onClick={()=>{ setEditingProductId(o.id); setEditingProductValue(o.product || "") }}
+                          title="Edit product"
+                        >
+                          {o.product || 'Add product'}
+                        </button>
+                      )}
+                    </td>
+                    <td className="p-3 text-right">
+                      {editingQtyId===o.id ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={editingQtyValue}
+                          onChange={(e)=>setEditingQtyValue(e.target.value)}
+                          onBlur={()=>{ 
+                            const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
+                            const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
+                            setAndPersist(next)
+                            setEditingQtyId(null)
+                            setEditingQtyValue("")
+                          }}
+                          onKeyDown={(e)=>{
+                            if (e.key==='Enter') {
+                              e.preventDefault()
+                              const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
+                              const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
+                              setAndPersist(next)
+                              setEditingQtyId(null)
+                              setEditingQtyValue("")
+                            } else if (e.key==='Escape') {
+                              setEditingQtyId(null)
+                              setEditingQtyValue("")
+                            }
+                          }}
+                          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-right bg-white"
+                          placeholder="0"
+                        />
+                      ) : (
+                        <button
+                          className="text-[#3D56A6] font-medium hover:underline"
+                          onClick={()=>{ setEditingQtyId(o.id); setEditingQtyValue(String(parseInt(o.quantity,10)||0)) }}
+                          title="Edit quantity"
+                        >
+                          {String(parseInt(o.quantity,10)||0)}
+                        </button>
+                      )}
+                    </td>
+                    <td className="p-3 text-gray-700">{o.unit || 'Unit'}</td>
+                    <td className="p-3 text-right">
+                      {editingTotalQtyId===o.id ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={editingTotalQtyValue}
+                          onChange={(e)=>setEditingTotalQtyValue(e.target.value)}
+                          onBlur={()=>{
+                            const v = Math.max(0, Math.floor(Number(editingTotalQtyValue||0)))
+                            const next = orders.map(x=>x.id===o.id?{...x, totalQuantity:v}:x)
+                            setAndPersist(next)
+                            setEditingTotalQtyId(null)
+                            setEditingTotalQtyValue("")
+                          }}
+                          onKeyDown={(e)=>{
+                            if (e.key==='Enter') {
+                              e.preventDefault()
+                              const v = Math.max(0, Math.floor(Number(editingTotalQtyValue||0)))
+                              const next = orders.map(x=>x.id===o.id?{...x, totalQuantity:v}:x)
+                              setAndPersist(next)
+                              setEditingTotalQtyId(null)
+                              setEditingTotalQtyValue("")
+                            } else if (e.key==='Escape') {
+                              setEditingTotalQtyId(null)
+                              setEditingTotalQtyValue("")
+                            }
+                          }}
+                          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-right bg-white"
+                          placeholder="0"
+                        />
+                      ) : (
+                        <button
+                          className="text-[#3D56A6] font-medium hover:underline"
+                          onClick={()=>{ setEditingTotalQtyId(o.id); setEditingTotalQtyValue(String(parseInt(o.totalQuantity,10)||0)) }}
+                          title="Edit total quantity"
+                        >
+                          {String(parseInt(o.totalQuantity,10)||0)}
+                        </button>
+                      )}
                     </td>
                     <td className="p-3">
                       {editingStartId===o.id ? (
@@ -328,45 +525,9 @@ function ManufacturingOrderPage() {
                         </button>
                       )}
                     </td>
-                    <td className="p-3">
-                      {editingProductId===o.id ? (
-                        <input
-                          autoFocus
-                          value={editingProductValue}
-                          onChange={(e)=>setEditingProductValue(e.target.value)}
-                          onBlur={()=>{
-                            const v = editingProductValue.trim()
-                            const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
-                            setAndPersist(next)
-                            setEditingProductId(null)
-                            setEditingProductValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const v = editingProductValue.trim()
-                              const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
-                              setAndPersist(next)
-                              setEditingProductId(null)
-                              setEditingProductValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingProductId(null)
-                              setEditingProductValue("")
-                            }
-                          }}
-                          className="w-72 rounded-md border border-gray-300 px-2 py-1"
-                          placeholder="Add product"
-                        />
-                      ) : (
-                        <button
-                          className="text-[#3D56A6] hover:underline"
-                          onClick={()=>{ setEditingProductId(o.id); setEditingProductValue(o.product || "") }}
-                          title="Edit product"
-                        >
-                          {o.product || 'Add product'}
-                        </button>
-                      )}
-                    </td>
+                    <td className="p-3 text-gray-700">{o.completedDate ? fmtFullDate(new Date(o.completedDate).getTime()) : '-'}</td>
+                    <td className="p-3 text-gray-700">{o.productionTime || '-'}</td>
+                    <td className="p-3 text-gray-700">{o.responsible || '-'}</td>
                     <td className="p-3">
                       {editingCustomerId===o.id ? (
                         <input
@@ -439,48 +600,6 @@ function ManufacturingOrderPage() {
                         )}
                       </div>
                     </td>
-                    <td className="p-3 text-right">
-                      {editingQtyId===o.id ? (
-                        <input
-                          autoFocus
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={editingQtyValue}
-                          onChange={(e)=>setEditingQtyValue(e.target.value)}
-                          onBlur={()=>{
-                            const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
-                            const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
-                            setAndPersist(next)
-                            setEditingQtyId(null)
-                            setEditingQtyValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
-                              const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
-                              setAndPersist(next)
-                              setEditingQtyId(null)
-                              setEditingQtyValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingQtyId(null)
-                              setEditingQtyValue("")
-                            }
-                          }}
-                          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-right bg-white"
-                          placeholder="0"
-                        />
-                      ) : (
-                        <button
-                          className="text-[#3D56A6] font-medium hover:underline"
-                          onClick={()=>{ setEditingQtyId(o.id); setEditingQtyValue(String(parseInt(o.quantity,10)||0)) }}
-                          title="Edit quantity"
-                        >
-                          {String(parseInt(o.quantity,10)||0)}
-                        </button>
-                      )}
-                    </td>
                     <td className="p-3">
                       <div className="relative inline-block">
                         <button
@@ -523,11 +642,18 @@ function ManufacturingOrderPage() {
                     <td className="p-3 text-center">
                       <div className="relative inline-block">
                         <button
-                          className="px-2 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                          aria-label="Delete order"
+                          className="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-900 hover:bg-gray-900 hover:text-white shadow-sm"
                           onClick={()=>setOpenDeleteId(openDeleteId===o.id?null:o.id)}
                           title="Delete order"
                         >
-                          🗑️
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                            <path d="M10 11v6"></path>
+                            <path d="M14 11v6"></path>
+                            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+                          </svg>
                         </button>
                       </div>
                     </td>
@@ -538,7 +664,9 @@ function ManufacturingOrderPage() {
                 <tr className="border-t">
                   <td className="p-3" colSpan={7}></td>
                   <td className="p-3 text-right font-bold text-gray-900">{String(parseInt(totalQty,10)||0)}</td>
-                  <td className="p-3" colSpan={2}></td>
+                  <td className="p-3"></td>
+                  <td className="p-3 text-right font-bold text-gray-900">{String(parseInt(totalTotalQty,10)||0)}</td>
+                  <td className="p-3" colSpan={8}></td>
                 </tr>
               </tfoot>
             </table>
@@ -558,7 +686,7 @@ function ManufacturingOrderPage() {
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenDeleteId(null)}>Cancel</button>
                 <button
-                  className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
+                  className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                   onClick={() => { setAndPersist(orders.filter((x)=>x.id!==openDeleteId)); setOpenDeleteId(null) }}
                 >
                   Delete
@@ -581,10 +709,34 @@ function ManufacturingOrderPage() {
               <div className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-3">
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Job Order Code</div>
+                    <input value={newOrder.jobOrderCode} onChange={(e)=>setNewOrder({...newOrder, jobOrderCode:e.target.value})} placeholder="e.g. JO-001" className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Item code</div>
+                    <input value={newOrder.productNo} onChange={(e)=>setNewOrder({...newOrder, productNo:e.target.value})} placeholder="e.g. LCM-001" className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
                     <div className="text-sm text-gray-700">Product</div>
                     <div className="flex items-center gap-2">
                       <input value={newOrder.product} onChange={(e)=>setNewOrder({...newOrder, product:e.target.value})} placeholder="Product to build..." className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
-                      <button className="px-2 py-1 rounded border border-gray-300">▾</button>
+                      <button className="btn-pill px-3">▾</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Unit</div>
+                    <input value={newOrder.unit} onChange={(e)=>setNewOrder({...newOrder, unit:e.target.value})} className="w-28 rounded-md border border-gray-300 px-2 py-1" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Quantity</div>
+                    <div className="flex items-center gap-3">
+                      <input type="number" value={newOrder.quantity} onChange={(e)=>setNewOrder({...newOrder, quantity:Number(e.target.value)})} className="w-28 rounded-md border border-gray-300 px-2 py-1" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Total Quantity</div>
+                    <div className="flex items-center gap-3">
+                      <input type="number" value={newOrder.totalQuantity} onChange={(e)=>setNewOrder({...newOrder, totalQuantity:Number(e.target.value)})} className="w-28 rounded-md border border-gray-300 px-2 py-1" />
                     </div>
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
@@ -592,10 +744,16 @@ function ManufacturingOrderPage() {
                     <input type="datetime-local" value={newOrder.scheduledDate} onChange={(e)=>setNewOrder({...newOrder, scheduledDate:e.target.value})} className="w-64 rounded-md border border-gray-300 px-2 py-1" />
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
-                    <div className="text-sm text-gray-700">Quantity</div>
-                    <div className="flex items-center gap-3">
-                      <input type="number" value={newOrder.quantity} onChange={(e)=>setNewOrder({...newOrder, quantity:Number(e.target.value)})} className="w-28 rounded-md border border-gray-300 px-2 py-1" />
-                    </div>
+                    <div className="text-sm text-gray-700">Completed Date</div>
+                    <input type="datetime-local" value={newOrder.completedDate} onChange={(e)=>setNewOrder({...newOrder, completedDate:e.target.value})} className="w-64 rounded-md border border-gray-300 px-2 py-1" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Production Time</div>
+                    <input value={newOrder.productionTime} onChange={(e)=>setNewOrder({...newOrder, productionTime:e.target.value})} placeholder="e.g. 2 Days" className="w-64 rounded-md border border-gray-300 px-2 py-1" />
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Responsible</div>
+                    <input value={newOrder.responsible} onChange={(e)=>setNewOrder({...newOrder, responsible:e.target.value})} placeholder="Person responsible" className="w-64 rounded-md border border-gray-300 px-2 py-1" />
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
                     <div className="text-sm text-gray-700">Customer Company</div>
@@ -613,12 +771,32 @@ function ManufacturingOrderPage() {
                 </div>
               </div>
                   <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
-                    <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setShowNew(false)}>Cancel</button>
+                    <button className="btn-pill" onClick={() => setShowNew(false)}>Cancel</button>
                     <button
-                      className="px-4 py-2 rounded-md bg-purple-700 text-white hover:bg-purple-800"
+                      className="btn-pill"
                       onClick={() => {
                         const ref = `WH/MO/${String((orders[0]?.id||0)+1).padStart(5,'0')}`
-                        const o = { id: Date.now(), ref, start: newOrder.scheduledDate || new Date().toISOString(), product: newOrder.product || "Untitled", nextActivity: "", customer: newOrder.customer || "", componentStatus: "", quantity: Number(newOrder.quantity)||1, state: "", favorite: false, selected: false, priority: newOrder.priority || "None" }
+                        const o = {
+                          id: Date.now(),
+                          ref,
+                          jobOrderCode: newOrder.jobOrderCode || "",
+                          start: newOrder.scheduledDate || new Date().toISOString(),
+                          productNo: newOrder.productNo || "",
+                          product: newOrder.product || "Untitled",
+                          unit: newOrder.unit || "Unit",
+                          completedDate: newOrder.completedDate || "",
+                          productionTime: newOrder.productionTime || "",
+                          responsible: newOrder.responsible || "",
+                          nextActivity: "",
+                          customer: newOrder.customer || "",
+                          componentStatus: "",
+                          quantity: Number(newOrder.quantity) || 1,
+                          totalQuantity: Number(newOrder.totalQuantity) || 1,
+                          state: "",
+                          priority: newOrder.priority || "None",
+                          favorite: false,
+                          selected: false,
+                        }
                         const next = [o, ...orders]
                         setOrders(next)
                         localStorage.setItem("mfgOrders", JSON.stringify(next))
@@ -632,8 +810,31 @@ function ManufacturingOrderPage() {
               </div>
             </div>
           )}
-          <Footer />
-        </main>
+          {printingOrder && createPortal(
+        <div className="print-portal">
+          <style>
+            {`
+              @media print {
+                body > *:not(.print-portal) { display: none !important; }
+                .print-portal { 
+                  display: block !important; 
+                  position: absolute; 
+                  top: 0; 
+                  left: 0; 
+                  width: 100%; 
+                  background: white; 
+                  z-index: 9999;
+                }
+                @page { margin: 0; size: auto; }
+              }
+              .print-portal { display: none; }
+            `}
+          </style>
+          <JobOrderTemplate order={printingOrder} />
+        </div>,
+        document.body
+      )}
+    </main>
       )
     }
 

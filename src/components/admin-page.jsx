@@ -1,1110 +1,720 @@
-import React from "react"
+﻿﻿﻿﻿import React from "react"
+import { 
+  LayoutDashboard, 
+  FileText, 
+  Receipt, 
+  ShoppingCart, 
+  Users, 
+  Search, 
+  Plus, 
+  Download,
+  Trash2,
+  ExternalLink,
+  Lock
+} from "lucide-react"
+import PurchaseOrderPage from "./purchase-order-page.jsx"
+import { API_BASE_URL } from "../config"
 
-export default function AdminPage() {
-  const [view, setView] = React.useState(() => {
+// Helper to get all data from localStorage
+const getAllData = () => {
+  const data = {
+    quotations: [],
+    invoices: [],
+    customers: [],
+    purchaseOrders: []
+  }
+
+  try {
+    // Get Purchase Orders
     try {
-      const params = new URLSearchParams(window.location.search)
-      return params.get("view") || "home"
-    } catch {
-      return "home"
+      const poList = JSON.parse(localStorage.getItem("poList") || "[]")
+      if (Array.isArray(poList)) {
+        data.purchaseOrders = poList
+      }
+    } catch (e) {
+      console.error("Error parsing poList", e)
     }
-  })
-  return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {view === "home" && (
-          <>
-            <h1 className="text-3xl font-bold text-[#2D4485] mb-8">Admin</h1>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="card p-6">
-                <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Product Order</h2>
-                <p className="text-sm text-gray-600">Create and manage product orders.</p>
-                <button onClick={() => setView("poToQuotation")} className="mt-4 btn-primary">Open</button>
-              </div>
-              <div className="card p-6">
-                <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Quotation</h2>
-                <p className="text-sm text-gray-600">Create and manage customer quotations.</p>
-                <a href="/quotation.html" className="inline-block mt-4 btn-primary">Open</a>
-              </div>
-              <div className="card p-6">
-                <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Invoice</h2>
-                <p className="text-sm text-gray-600">Create and send invoices.</p>
-                <a href="/invoice.html" className="inline-block mt-4 btn-primary">Open</a>
-              </div>
-            </div>
 
-            <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="card p-6">
-                <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Search Products</h2>
-                <p className="text-sm text-gray-600">Find products by name or SKU.</p>
-                <button onClick={() => setView("productSearch")} className="mt-4 btn-primary">Open</button>
-              </div>
-              <div className="card p-6">
-                <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Customer History</h2>
-                <p className="text-sm text-gray-600">View quotations, invoices and emails.</p>
-                <button onClick={() => setView("customerHistory")} className="mt-4 btn-primary">Open</button>
-              </div>
-            </div>
-
-          </>
-        )}
-
-        {view === "notifications" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-[#2D4485]">Notifications</h1>
-              <button onClick={() => setView("home")} className="btn-outline">Back</button>
-            </div>
-            <Notifications />
-          </div>
-        )}
-
-        {view === "productSearch" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-[#2D4485]">Search Products</h1>
-              <button onClick={() => setView("home")} className="btn-outline">Back</button>
-            </div>
-            <ProductSearch />
-          </div>
-        )}
-
-        {view === "customerHistory" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-[#2D4485]">Customer History</h1>
-              <button onClick={() => setView("home")} className="btn-outline">Back</button>
-            </div>
-            <CustomerHistory />
-          </div>
-        )}
-
-        {view === "poToQuotation" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-[#2D4485]">Product Order</h1>
-              <button onClick={() => setView("home")} className="btn-outline">Back</button>
-            </div>
-            <PoToQuotation />
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function Notifications() {
-  const [dueAlerts, setDueAlerts] = React.useState([])
-  const [inventoryAlerts, setInventoryAlerts] = React.useState({ low: [], expiring: [] })
-  React.useEffect(() => {
-    try {
-      const keys = Object.keys(localStorage).filter((k) => k.startsWith("history:"))
-      const upcoming = []
-      keys.forEach((k) => {
-        const h = JSON.parse(localStorage.getItem(k) || "{}")
-        ;(h.invoices || []).forEach((inv) => {
-          const due = inv.details?.dueDate
-          if (due) {
-            const d = new Date(due).getTime()
-            const now = Date.now()
-            const diffDays = Math.ceil((d - now) / (1000 * 60 * 60 * 24))
-            if (diffDays <= 7 && diffDays >= 0) {
-              upcoming.push({ key: k, number: inv.details?.number, dueDate: due, days: diffDays })
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith("history:")) {
+        try {
+          const item = JSON.parse(localStorage.getItem(key))
+          if (item) {
+            if (item.customer) {
+              data.customers.push(item.customer)
+            }
+            if (Array.isArray(item.quotations)) {
+              item.quotations.forEach(q => {
+                data.quotations.push({ ...q, customerName: item.customer?.name || item.customer?.company })
+              })
+            }
+            if (Array.isArray(item.invoices)) {
+              item.invoices.forEach(inv => {
+                data.invoices.push({ ...inv, customerName: item.customer?.name || item.customer?.company })
+              })
             }
           }
-        })
-      })
-      setDueAlerts(upcoming.sort((a, b) => a.days - b.days))
-    } catch {
-      setDueAlerts([])
+        } catch (e) {
+          console.error("Error parsing key", key, e)
+        }
+      }
     }
-    try {
-      const inventory = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
-      const low = inventory.filter((it) => Number(it.minStock || 0) > 0 && Number(it.stockQty || 0) < Number(it.minStock || 0))
-      const expiring = inventory.filter((it) => {
-        if (!it.expiry) return false
-        const d = new Date(it.expiry).getTime()
-        if (isNaN(d)) return false
-        const diffDays = Math.ceil((d - Date.now()) / (1000 * 60 * 60 * 24))
-        return diffDays <= 14 && diffDays >= 0
-      })
-      setInventoryAlerts({ low, expiring })
-    } catch {
-      setInventoryAlerts({ low: [], expiring: [] })
-    }
-  }, [])
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Upcoming Payment Due</h2>
-        {dueAlerts.length === 0 ? (
-          <div className="text-sm text-gray-600">No upcoming payments in 7 days.</div>
-        ) : (
-          <ul className="list-disc ml-5 text-sm text-gray-900">
-            {dueAlerts.map((a, i) => (
-              <li key={i}>
-                {a.number} due on {new Date(a.dueDate).toLocaleDateString()} ({a.days} day{a.days !== 1 ? "s" : ""} left)
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="space-y-6">
-        <div className="card p-6">
-          <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Inventory — Low Stock</h2>
-          {inventoryAlerts.low.length === 0 ? (
-            <div className="text-sm text-gray-600">No low stock alerts.</div>
-          ) : (
-            <ul className="list-disc ml-5 text-sm text-gray-900">
-              {inventoryAlerts.low.map((it, i) => (
-                <li key={i}>{it.sku} • {it.name} • {Number(it.stockQty || 0)} / min {Number(it.minStock || 0)} • {it.warehouse || "Main"}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="card p-6">
-          <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Inventory — Expiring Soon</h2>
-          {inventoryAlerts.expiring.length === 0 ? (
-            <div className="text-sm text-gray-600">No items expiring within 14 days.</div>
-          ) : (
-            <ul className="list-disc ml-5 text-sm text-gray-900">
-              {inventoryAlerts.expiring.map((it, i) => (
-                <li key={i}>{it.sku} • {it.name} • expires {new Date(it.expiry).toLocaleDateString()} • {it.warehouse || "Main"} • lot {it.lot || "-"}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+  } catch (e) {
+    console.error("Error accessing localStorage", e)
+  }
+
+  // Sort by date descending
+  data.quotations.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
+  data.invoices.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
+  data.purchaseOrders.sort((a, b) => new Date(b.updatedAt || b.extraFields?.orderDate) - new Date(a.updatedAt || a.extraFields?.orderDate))
+  
+  return data
 }
 
-function ProductSearch() {
-  const [query, setQuery] = React.useState("")
-  const [results, setResults] = React.useState([])
-  React.useEffect(() => {
-    try {
-      const inventory = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
-      const r = inventory.filter((p) => (p.name || "").toLowerCase().includes(query.toLowerCase()) || (p.sku || "").toLowerCase().includes(query.toLowerCase()))
-      setResults(r.slice(0, 10))
-    } catch {
-      setResults([])
-    }
-  }, [query])
+function Dashboard({ data }) {
   return (
-    <div className="card p-6">
-      <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Search Products</h2>
-      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or SKU" className="w-full rounded-md border border-gray-300 px-3 py-2 mb-3" />
-      <ul className="divide-y">
-        {results.map((p, i) => (
-          <li key={i} className="py-2 text-sm">
-            <span className="font-semibold">{p.name}</span> <span className="text-gray-500">({p.sku})</span>
-          </li>
-        ))}
-        {!results.length && <li className="py-2 text-sm text-gray-500">No components found</li>}
-      </ul>
-    </div>
-  )
-}
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-500 text-sm font-medium">Total Quotations</h3>
+            <div className="p-2 bg-blue-50 rounded-lg">
+              <FileText className="w-5 h-5 text-blue-600" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{data.quotations.length}</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-500 text-sm font-medium">Total Invoices</h3>
+            <div className="p-2 bg-green-50 rounded-lg">
+              <Receipt className="w-5 h-5 text-green-600" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{data.invoices.length}</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-500 text-sm font-medium">Purchase Orders</h3>
+            <div className="p-2 bg-orange-50 rounded-lg">
+              <ShoppingCart className="w-5 h-5 text-orange-600" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{data.purchaseOrders.length}</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-500 text-sm font-medium">Customers</h3>
+            <div className="p-2 bg-purple-50 rounded-lg">
+              <Users className="w-5 h-5 text-purple-600" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{data.customers.length}</div>
+        </div>
+      </div>
 
-function CustomerHistory() {
-  const [query, setQuery] = React.useState("")
-  const [filter, setFilter] = React.useState("")
-  const [customers, setCustomers] = React.useState([])
-  const [expandedIndex, setExpandedIndex] = React.useState(-1)
-  const [bigDoc, setBigDoc] = React.useState(null)
-  const [docType, setDocType] = React.useState("all")
-  const [docView, setDocView] = React.useState("table")
-  const [sortKey, setSortKey] = React.useState("date")
-  const [sortDir, setSortDir] = React.useState("desc")
-  const [page, setPage] = React.useState(1)
-  React.useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const f = params.get("filter") || ""
-      if (f) {
-        setQuery(f)
-        setFilter(f)
-        setExpandedIndex(0)
-      }
-    } catch {}
-  }, [])
-  const buildCustomers = React.useCallback(() => {
-    try {
-      const keys = Object.keys(localStorage).filter((k) => k.startsWith("history:"))
-      const list = []
-      keys.forEach((k) => {
-        try {
-          const v = JSON.parse(localStorage.getItem(k) || "{}")
-          const invoices = Array.isArray(v.invoices) ? v.invoices : []
-          const map = new Map()
-          invoices.forEach((inv) => {
-            ;(inv.items || []).forEach((it) => {
-              const n = (it.description || it.product || "").trim()
-              if (!n) return
-              const prev = map.get(n) || { name: n, qty: 0 }
-              prev.qty += Number(it.qty || 0)
-              map.set(n, prev)
-            })
-          })
-          let last = 0
-          ;[...(v.quotations || []), ...invoices].forEach((d) => {
-            const t = new Date(d.savedAt || 0).getTime()
-            if (t > last) last = t
-          })
-          list.push({
-            key: k.slice("history:".length),
-            name: v.customer?.name || "",
-            company: v.customer?.company || "",
-            email: v.customer?.email || "",
-            phone: v.customer?.phone || "",
-            companyEmail: v.customer?.companyEmail || "",
-            companyPhone: v.customer?.companyPhone || "",
-            products: Array.from(map.values()).sort((a, b) => b.qty - a.qty),
-            last,
-            raw: v,
-          })
-        } catch {}
-      })
-      const merged = list.sort((a, b) => b.last - a.last)
-      const cleaned = merged.filter((c) => ((c.name || c.company || c.email || c.phone || "").trim().length > 0))
-      setCustomers(cleaned)
-    } catch {
-      setCustomers([])
-    }
-  }, [])
-  React.useEffect(() => {
-    buildCustomers()
-  }, [buildCustomers])
-  const filtered = React.useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    const base = customers
-    if (!q) return base
-    return base.filter(
-      (c) =>
-        (c.name || "").toLowerCase().includes(q) ||
-        (c.company || "").toLowerCase().includes(q) ||
-        (c.email || "").toLowerCase().includes(q) ||
-        (c.companyEmail || "").toLowerCase().includes(q) ||
-        (c.phone || "").toLowerCase().includes(q) ||
-        (c.companyPhone || "").toLowerCase().includes(q),
-    )
-  }, [customers, filter])
-  const allDocs = React.useMemo(() => {
-    const docs = []
-    customers.forEach((c) => {
-      ;(c.raw?.quotations || []).forEach((q) => {
-        docs.push({
-          type: "quotation",
-          number: q.details?.number || "",
-          currency: q.details?.currency || "",
-          total: q.totals?.total,
-          savedAt: q.savedAt,
-          customerName: c.name || c.company || c.email || c.phone || "",
-          items: Array.isArray(q.items) ? q.items : [],
-        })
-      })
-      ;(c.raw?.invoices || []).forEach((inv) => {
-        docs.push({
-          type: "invoice",
-          number: inv.details?.number || "",
-          currency: inv.details?.currency || "",
-          total: inv.totals?.total,
-          savedAt: inv.savedAt,
-          dueDate: inv.details?.dueDate,
-          customerName: c.name || c.company || c.email || c.phone || "",
-          items: Array.isArray(inv.items) ? inv.items : [],
-        })
-      })
-    })
-    return docs.sort((a, b) => new Date(b.savedAt || 0).getTime() - new Date(a.savedAt || 0).getTime())
-  }, [customers])
-  const pageSize = docView === "cards" ? 12 : 20
-  const historyResults = React.useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    let base = allDocs
-    if (docType !== "all") {
-      base = base.filter((d) => d.type === docType)
-    }
-    if (q) {
-      base = base.filter((d) => {
-        if ((d.number || "").toLowerCase().includes(q)) return true
-        if ((d.customerName || "").toLowerCase().includes(q)) return true
-        return (d.items || []).some((it) => ((it.description || it.product || "").toLowerCase().includes(q)))
-      })
-    }
-    base = base.slice().sort((a, b) => {
-      if (sortKey === "amount") {
-        const va = Number(a.total || 0)
-        const vb = Number(b.total || 0)
-        return sortDir === "asc" ? va - vb : vb - va
-      } else {
-        const ta = new Date(a.savedAt || 0).getTime()
-        const tb = new Date(b.savedAt || 0).getTime()
-        return sortDir === "asc" ? ta - tb : tb - ta
-      }
-    })
-    const start = (page - 1) * pageSize
-    return base.slice(start, start + pageSize)
-  }, [allDocs, filter, docType, sortKey, sortDir, page, pageSize])
-  const totalCount = React.useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    let base = allDocs
-    if (docType !== "all") base = base.filter((d) => d.type === docType)
-    if (q) {
-      base = base.filter((d) => {
-        if ((d.number || "").toLowerCase().includes(q)) return true
-        if ((d.customerName || "").toLowerCase().includes(q)) return true
-        return (d.items || []).some((it) => ((it.description || it.product || "").toLowerCase().includes(q)))
-      })
-    }
-    return base.length
-  }, [allDocs, filter, docType])
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-  const goPrev = () => setPage((p) => Math.max(1, p - 1))
-  const goNext = () => setPage((p) => Math.min(totalPages, p + 1))
-  const currencySymbol = (cur) => (cur === "THB" ? "฿" : cur === "USD" ? "$" : cur === "EUR" ? "€" : cur === "GBP" ? "£" : cur || "")
-  return (
-    <div className="card p-6">
-      <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Customer History</h2>
-      <div className="flex items-center gap-2 mb-3">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name, company, email, phone" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        <button onClick={() => { setFilter(query); setPage(1) }} className="btn-primary">Search</button>
-      </div>
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div className="text-sm text-gray-700">View:</div>
-        <div className="flex rounded-md border border-gray-300 overflow-hidden">
-          <button className={`px-3 py-1 text-sm ${docView === "table" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocView("table"); setPage(1) }}>Table</button>
-          <button className={`px-3 py-1 text-sm ${docView === "cards" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocView("cards"); setPage(1) }}>Cards</button>
-        </div>
-        <div className="text-sm text-gray-700 ml-2">Type:</div>
-        <div className="flex rounded-md border border-gray-300 overflow-hidden">
-          <button className={`px-3 py-1 text-sm ${docType === "all" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocType("all"); setPage(1) }}>All</button>
-          <button className={`px-3 py-1 text-sm ${docType === "quotation" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocType("quotation"); setPage(1) }}>Quotations</button>
-          <button className={`px-3 py-1 text-sm ${docType === "invoice" ? "bg-gray-200" : "bg-white"}`} onClick={() => { setDocType("invoice"); setPage(1) }}>Invoices</button>
-        </div>
-        <div className="text-sm text-gray-700 ml-2">Sort:</div>
-        <select value={sortKey} onChange={(e) => { setSortKey(e.target.value); setPage(1) }} className="rounded-md border border-gray-300 px-2 py-1 text-sm">
-          <option value="date">Date</option>
-          <option value="amount">Amount</option>
-        </select>
-        <select value={sortDir} onChange={(e) => { setSortDir(e.target.value); setPage(1) }} className="rounded-md border border-gray-300 px-2 py-1 text-sm">
-          <option value="desc">Desc</option>
-          <option value="asc">Asc</option>
-        </select>
-      </div>
-      <div className="card p-4">
-        <div className="font-semibold text-gray-900 mb-2">Customers</div>
-        <ul className="divide-y">
-          {filtered.map((c, i) => {
-            const open = expandedIndex === i
-            return (
-              <li key={i} className="py-2 text-sm">
-                <button
-                  className="w-full text-left"
-                  onClick={() => setExpandedIndex(open ? -1 : i)}
-                >
-                  <div className="font-semibold text-gray-900">{c.name || c.company || c.email || c.phone}</div>
-                  <div className="text-gray-600 text-xs">{c.company}</div>
-                  <div className="text-gray-600 text-xs">{[c.email, c.companyEmail].filter(Boolean).join(" • ")}</div>
-                  <div className="text-gray-600 text-xs">{[c.phone, c.companyPhone].filter(Boolean).join(" • ")}</div>
-                  <div className="text-gray-700 text-xs">
-                    Top products: {c.products.slice(0, 3).map((p) => `${p.name} (${p.qty})`).join(", ") || "-"}
-                  </div>
-                  <div className="text-gray-700 text-xs">
-                    Quotations: {(c.raw?.quotations || []).length} • Invoices: {(c.raw?.invoices || []).length}
-                  </div>
-                </button>
-                {open && (
-                  <div className="mt-3 ml-2 space-y-3">
-                    <div className="bg-white rounded-xl border p-3 text-[12px]">
-                      <div className="font-semibold mb-2">Customer Info</div>
-                      <div className="grid grid-cols-1 gap-1 text-gray-800">
-                        <div><span className="text-gray-600">Name:</span> {c.name || "-"}</div>
-                        <div><span className="text-gray-600">Company:</span> {c.company || "-"}</div>
-                        <div><span className="text-gray-600">Email:</span> {[c.email, c.companyEmail].filter(Boolean).join(" • ") || "-"}</div>
-                        <div><span className="text-gray-600">Phone:</span> {[c.phone, c.companyPhone].filter(Boolean).join(" • ") || "-"}</div>
-                        <div className="flex flex-wrap gap-1 items-center"><span className="text-gray-600">Products:</span> {c.products.slice(0, 6).map((p, idx) => (
-                          <button key={idx} className="px-2 py-0.5 rounded-full border border-gray-300 text-xs hover:bg-gray-100" onClick={() => { setFilter(p.name); setQuery(p.name); setPage(1) }}>{p.name}</button>
-                        ))}</div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-semibold mb-2">Quotations</div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {(c.raw?.quotations || []).map((q, qi) => {
-                          const sym = currencySymbol(q.details?.currency)
-                          const subtotal = Array.isArray(q.items) ? q.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0), 0) : 0
-                          const taxTotal = Array.isArray(q.items) ? q.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0) * (Number(it.tax || 0) / 100), 0) : 0
-                          const total = Number(q.totals?.total ?? subtotal + taxTotal)
-                          return (
-                            <div
-                              key={qi}
-                              className="bg-white rounded-xl shadow-sm border p-2 text-[10px] aspect-square max-w-[220px] mx-auto cursor-pointer hover:shadow-md transition"
-                              onClick={() => setBigDoc({ type: "quotation", doc: q, customer: c })}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
-                                  <div className="text-[#2D4485] font-bold text-[12px]">EIT Lasertechnik</div>
-                                  <div className="text-gray-500 text-[10px]">Quotation</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-xs font-semibold text-[#2D4485]">{q.details?.number || "-"}</div>
-                                  <div className="text-[9px] text-gray-700">{q.details?.date || "-"}</div>
-                                </div>
-                              </div>
-                              <div className="text-[10px] text-gray-700 mb-2">
-                                <div className="font-semibold text-gray-900">Customer</div>
-                                <div>{c.name || "-"}</div>
-                                <div className="text-gray-600">{c.company || ""}</div>
-                                <div className="text-gray-600">{[c.email, c.companyEmail].filter(Boolean).join(" • ")}</div>
-                                <div className="text-gray-600">{[c.phone, c.companyPhone].filter(Boolean).join(" • ")}</div>
-                              </div>
-                              <div className="overflow-x-auto mb-2 h-[90px]">
-                                <table className="min-w-full text-[10px]">
-                                  <thead>
-                                    <tr className="bg-gray-100 text-gray-700">
-                                      <th className="p-1 text-left">QTY</th>
-                                      <th className="p-1 text-left">DESCRIPTION</th>
-                                      <th className="p-1 text-left">PRICE</th>
-                                      <th className="p-1 text-left">AMOUNT</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {(q.items || []).map((it, i) => {
-                                      const amount = Number(it.qty || 0) * Number(it.price || 0)
-                                      return (
-                                        <tr key={i} className="border-t">
-                                          <td className="p-1">{it.qty}</td>
-                                          <td className="p-1">
-                                            <div>{it.description || it.product}</div>
-                                            {it.note ? <div className="text-[8px] text-gray-500 mt-1">Note: {it.note}</div> : null}
-                                          </td>
-                                          <td className="p-1">{sym} {Number(it.price || 0).toFixed(2)}</td>
-                                          <td className="p-1">{sym} {amount.toFixed(2)}</td>
-                                        </tr>
-                                      )
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                              <div className="flex justify-end">
-                                <div className="w-28 text-[10px] space-y-1">
-                                  <div className="flex justify-between"><span className="text-gray-700">SUBTOTAL</span><span className="font-semibold">{sym} {subtotal.toFixed(2)}</span></div>
-                                  <div className="flex justify-between"><span className="text-gray-700">TAX</span><span className="font-semibold">{sym} {taxTotal.toFixed(2)}</span></div>
-                                  <div className="flex justify-between"><span className="text-gray-900 font-semibold">TOTAL</span><span className="font-semibold">{sym} {total.toFixed(2)}</span></div>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-semibold mb-2">Invoices</div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {(c.raw?.invoices || []).map((inv, ii) => {
-                          const sym = currencySymbol(inv.details?.currency)
-                          const subtotal = Array.isArray(inv.items) ? inv.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0), 0) : 0
-                          const taxTotal = Array.isArray(inv.items) ? inv.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0) * (Number(it.tax || 0) / 100), 0) : 0
-                          const total = Number(inv.totals?.total ?? subtotal + taxTotal)
-                          return (
-                            <div
-                              key={ii}
-                              className="bg-white rounded-xl shadow-sm border p-2 text-[10px] aspect-square max-w-[220px] mx-auto cursor-pointer hover:shadow-md transition"
-                              onClick={() => setBigDoc({ type: "invoice", doc: inv, customer: c })}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
-                                  <div className="text-[#2D4485] font-bold text-[12px]">EIT Lasertechnik</div>
-                                  <div className="text-gray-500 text-[10px]">Invoice</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-xs font-semibold text-[#2D4485]">{inv.details?.number || "-"}</div>
-                                  <div className="text-[9px] text-gray-700">{inv.details?.date || "-"}</div>
-                                  <div className="text-[9px] text-gray-700">{inv.details?.dueDate ? `Due ${new Date(inv.details.dueDate).toLocaleDateString()}` : ""}</div>
-                                </div>
-                              </div>
-                              <div className="text-[10px] text-gray-700 mb-2">
-                                <div className="font-semibold text-gray-900">Customer</div>
-                                <div>{c.name || "-"}</div>
-                                <div className="text-gray-600">{c.company || ""}</div>
-                                <div className="text-gray-600">{[c.email, c.companyEmail].filter(Boolean).join(" • ")}</div>
-                                <div className="text-gray-600">{[c.phone, c.companyPhone].filter(Boolean).join(" • ")}</div>
-                              </div>
-                              <div className="overflow-x-auto mb-2 h-[90px]">
-                                <table className="min-w-full text-[10px]">
-                                  <thead>
-                                    <tr className="bg-gray-100 text-gray-700">
-                                      <th className="p-1 text-left">QTY</th>
-                                      <th className="p-1 text-left">DESCRIPTION</th>
-                                      <th className="p-1 text-left">PRICE</th>
-                                      <th className="p-1 text-left">AMOUNT</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {(inv.items || []).map((it, i) => {
-                                      const amount = Number(it.qty || 0) * Number(it.price || 0)
-                                      return (
-                                        <tr key={i} className="border-t">
-                                          <td className="p-1">{it.qty}</td>
-                                          <td className="p-1">{it.description || it.product}</td>
-                                          <td className="p-1">{sym} {Number(it.price || 0).toFixed(2)}</td>
-                                          <td className="p-1">{sym} {amount.toFixed(2)}</td>
-                                        </tr>
-                                      )
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                              <div className="flex justify-end">
-                                <div className="w-28 text-[10px] space-y-1">
-                                  <div className="flex justify-between"><span className="text-gray-700">SUBTOTAL</span><span className="font-semibold">{sym} {subtotal.toFixed(2)}</span></div>
-                                  <div className="flex justify-between"><span className="text-gray-700">TAX</span><span className="font-semibold">{sym} {taxTotal.toFixed(2)}</span></div>
-                                  <div className="flex justify-between"><span className="text-gray-900 font-semibold">TOTAL</span><span className="font-semibold">{sym} {total.toFixed(2)}</span></div>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </li>
-            )
-          })}
-          {filtered.length === 0 && <li className="py-2 text-sm text-gray-600">No matching customers</li>}
-        </ul>
-      </div>
-      {filter && (
-      <div className="card p-4 mt-4">
-        <div className="font-semibold text-gray-900 mb-2">Matching History</div>
-        {docView === "table" ? (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border shadow-sm p-6">
+          <h3 className="font-semibold text-gray-900 mb-4">Recent Quotations</h3>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-600">
-                  <th className="p-2">Type</th>
-                  <th className="p-2">Number</th>
-                  <th className="p-2">Date</th>
-                  <th className="p-2">Amount</th>
-                  <th className="p-2">Customer</th>
+                <tr className="text-left text-gray-500 border-b">
+                  <th className="pb-2">Number</th>
+                  <th className="pb-2">Customer</th>
+                  <th className="pb-2">Date</th>
+                  <th className="pb-2 text-right">Amount</th>
                 </tr>
               </thead>
-              <tbody>
-                {historyResults.map((h, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="p-2">{h.type === "quotation" ? "Quotation" : "Invoice"}</td>
-                    <td className="p-2">{h.number}</td>
-                    <td className="p-2">{new Date(h.savedAt).toLocaleString()}</td>
-                    <td className="p-2">{h.total?.toFixed?.(2)} {h.currency}</td>
-                    <td className="p-2">{h.customerName}</td>
-                  </tr>
-                ))}
-                {historyResults.length === 0 && (
-                  <tr>
-                    <td className="p-2 text-gray-600" colSpan={5}>No history found</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {historyResults.map((h, i) => {
-              const sym = currencySymbol(h.currency)
-              return (
-                <div
-                  key={i}
-                  className="bg-white rounded-xl shadow-sm border p-2 text-[10px] aspect-square max-w-[220px] mx-auto cursor-pointer hover:shadow-md transition"
-                  onClick={() => setBigDoc({ type: h.type, doc: { details: { number: h.number, date: new Date(h.savedAt).toISOString().slice(0, 10), currency: h.currency }, items: h.items, totals: { total: h.total } }, customer: { name: h.customerName } })}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <div className="text-[#2D4485] font-bold text-[12px]">EIT Lasertechnik</div>
-                      <div className="text-gray-500 text-[10px]">{h.type === "quotation" ? "Quotation" : "Invoice"}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-semibold text-[#2D4485]">{h.number || "-"}</div>
-                      <div className="text-[9px] text-gray-700">{new Date(h.savedAt).toLocaleDateString()}</div>
-                    </div>
-                  </div>
-                  <div className="text-[10px] text-gray-700 mb-2">
-                    <div className="font-semibold text-gray-900">Customer</div>
-                    <div>{h.customerName || "-"}</div>
-                  </div>
-                  <div className="flex justify-end">
-                    <div className="w-28 text-[10px] space-y-1">
-                      <div className="flex justify-between"><span className="text-gray-700">TOTAL</span><span className="font-semibold">{sym} {Number(h.total || 0).toFixed(2)}</span></div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-            {historyResults.length === 0 && <div className="text-sm text-gray-600">No history found</div>}
-          </div>
-        )}
-        <div className="flex items-center justify-between mt-3">
-          <div className="text-sm text-gray-700">Page {page} / {totalPages}</div>
-          <div className="flex gap-2">
-            <button className="btn-outline" onClick={goPrev} disabled={page <= 1}>Prev</button>
-            <button className="btn-outline" onClick={goNext} disabled={page >= totalPages}>Next</button>
-          </div>
-        </div>
-      </div>
-      )}
-      {bigDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setBigDoc(null)}></div>
-          <div className="relative bg-white rounded-xl shadow-xl border w-full max-w-4xl mx-4 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-xl font-bold text-[#2D4485]">{bigDoc.type === "quotation" ? "Quotation" : "Invoice"} Preview</div>
-              <button className="btn-outline" onClick={() => setBigDoc(null)}>Close</button>
-            </div>
-            <div className="bg-white rounded-xl border shadow-sm p-6">
-              {(() => {
-                const d = bigDoc.doc
-                const c = bigDoc.customer
-                const sym = currencySymbol(d.details?.currency)
-                const subtotal = Array.isArray(d.items) ? d.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0), 0) : 0
-                const taxTotal = Array.isArray(d.items) ? d.items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.price || 0) * (Number(it.tax || 0) / 100), 0) : 0
-                const total = Number(d.totals?.total ?? subtotal + taxTotal)
-                return (
-                  <div>
-                    <div className="flex items-start justify-between mb-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-[#3D56A6] rounded flex items-center justify-center">
-                          <img src="/eit-icon.png" alt="EIT" className="w-8 h-8" />
-                        </div>
-                        <div className="leading-tight">
-                          <div className="text-[#3D56A6] font-bold text-lg">EIT Lasertechnik</div>
-                          <div className="text-gray-500 text-sm">{bigDoc.type === "quotation" ? "Quotation" : "Invoice"}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-[#3D56A6] tracking-wide">{bigDoc.type === "quotation" ? "QUOTATION" : "INVOICE"}</div>
-                        <div className="mt-2 text-sm text-gray-700">{bigDoc.type === "quotation" ? "Quotation Number" : "Invoice Number"} : <span className="font-semibold">{d.details?.number}</span></div>
-                        <div className="text-sm text-gray-700">{bigDoc.type === "quotation" ? "Quote Date" : "Invoice Date"} : <span className="font-semibold">{d.details?.date}</span></div>
-                        {bigDoc.type === "invoice" && d.details?.dueDate && <div className="text-sm text-gray-700">Due Date : <span className="font-semibold">{d.details?.dueDate}</span></div>}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                      <div>
-                        <div className="text-sm text-gray-600">{bigDoc.type === "quotation" ? "Quote to:" : "Bill to:"}</div>
-                        <div className="text-[#3D56A6] font-semibold text-lg">{c.name || c.company || "-"}</div>
-                        <div className="text-gray-600 text-sm">{c.company || ""}</div>
-                        <div className="text-gray-600 text-sm">{[c.email, c.companyEmail].filter(Boolean).join(" • ")}</div>
-                        <div className="text-gray-600 text-sm">{[c.phone, c.companyPhone].filter(Boolean).join(" • ")}</div>
-                      </div>
-                      <div className="md:text-right">
-                        <div className="text-sm text-gray-600">Currency:</div>
-                        <div className="text-gray-900 font-semibold">{d.details?.currency}</div>
-                      </div>
-                    </div>
-                    <div className="overflow-x-auto mb-6">
-                      <table className="min-w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-100 text-gray-700">
-                            <th className="p-2 text-left">QTY</th>
-                            <th className="p-2 text-left">DESCRIPTION</th>
-                            <th className="p-2 text-left">PRICE</th>
-                            <th className="p-2 text-left">AMOUNT</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(d.items || []).map((it, i) => {
-                            const amount = Number(it.qty || 0) * Number(it.price || 0)
-                            return (
-                              <tr key={i} className="border-t">
-                                <td className="p-2">{it.qty}</td>
-                                <td className="p-2">
-                                  <div>{it.description || it.product}</div>
-                                  {it.note ? <div className="text-xs text-gray-500 mt-1">Note: {it.note}</div> : null}
-                                </td>
-                                <td className="p-2">{sym} {Number(it.price || 0).toFixed(2)}</td>
-                                <td className="p-2">{sym} {amount.toFixed(2)}</td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                      <div>
-                        <div className="text-sm font-semibold text-gray-900 mb-2">Payment Method :</div>
-                        <div className="text-sm text-gray-700">Account Name : EIT Lasertechnik</div>
-                        <div className="text-sm text-gray-700">Bank/Credit Card</div>
-                        <div className="text-sm text-gray-700">Paypal : hello@eitlasertechnik.com</div>
-                      </div>
-                      <div className="md:text-right">
-                        <div className="flex justify-end">
-                          <div className="w-56">
-                            <div className="flex justify-between text-sm"><span className="text-gray-700">SUBTOTAL :</span><span className="font-semibold">{sym} {subtotal.toFixed(2)}</span></div>
-                            <div className="flex justify-between text-sm"><span className="text-gray-700">TAX :</span><span className="font-semibold">{sym} {taxTotal.toFixed(2)}</span></div>
-                            <div className="flex justify-between text-base mt-1"><span className="text-gray-900 font-semibold">TOTAL :</span><span className="font-bold text-[#3D56A6]">{sym} {total.toFixed(2)}</span></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PoToQuotation() {
-  const [poNumber, setPoNumber] = React.useState("")
-  const [customer, setCustomer] = React.useState({ name: "", company: "", email: "", companyEmail: "", phone: "", companyPhone: "" })
-  const [items, setItems] = React.useState([{ product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
-  const [showForm, setShowForm] = React.useState(false)
-  const [poList, setPoList] = React.useState([])
-  const [errors, setErrors] = React.useState({ email: "", companyEmail: "", phone: "", companyPhone: "" })
-  const prefilledRef = React.useRef(false)
-  const saveTimer = React.useRef(null)
-  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  const normalizePhone = (s) => {
-    const input = (s || "").trim()
-    const digits = input.replace(/\D+/g, "")
-    return input.startsWith("+") ? `+${digits}` : digits
-  }
-  const digitCount = (s) => (s || "").replace(/\D/g, "").length
-  const validateCustomer = React.useCallback((c) => {
-    return {
-      email: c.email && !emailRe.test(c.email) ? "Invalid email" : "",
-      companyEmail: c.companyEmail && !emailRe.test(c.companyEmail) ? "Invalid email" : "",
-      phone: c.phone && digitCount(c.phone) < 7 ? "Invalid phone" : "",
-      companyPhone: c.companyPhone && digitCount(c.companyPhone) < 7 ? "Invalid phone" : "",
-    }
-  }, [])
-  const isValid = React.useMemo(() => Object.values(errors).every((e) => !e), [errors])
-  const generatePoNumber = React.useCallback(() => {
-    try {
-      const d = new Date()
-      const yyyy = d.getFullYear()
-      const mm = String(d.getMonth() + 1).padStart(2, "0")
-      const dd = String(d.getDate()).padStart(2, "0")
-      const dateKey = `${yyyy}${mm}${dd}`
-      const k = `poSeq:${dateKey}`
-      const seq = Number(localStorage.getItem(k) || "0") + 1
-      localStorage.setItem(k, String(seq))
-      return `PO-${dateKey}-${String(seq).padStart(3, "0")}`
-    } catch {
-      const r = Math.floor(Math.random() * 1000)
-      return `PO-${Date.now()}-${String(r).padStart(3, "0")}`
-    }
-  }, [])
-  React.useEffect(() => {
-    try {
-      const data = JSON.parse(localStorage.getItem("poList") || "[]")
-      if (Array.isArray(data)) setPoList(data)
-    } catch {}
-  }, [])
-  React.useEffect(() => {
-    if (!showForm) return
-    if (!poNumber) {
-      setPoNumber(generatePoNumber())
-    }
-  }, [showForm, poNumber, generatePoNumber])
-  const addItem = () => setItems((prev) => [...prev, { product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
-  const updateItem = (i, field, value) => setItems((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: field === "qty" || field === "price" || field === "tax" ? Number(value) : value } : row)))
-  const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
-  const keyForCustomer = React.useCallback(() => {
-    const e = (customer.email || "").trim().toLowerCase()
-    if (e) return e
-    const ce = (customer.companyEmail || "").trim().toLowerCase()
-    if (ce) return ce
-    const p = (customer.phone || "").trim()
-    if (p) return p
-    const n = (customer.name || "").trim().toLowerCase()
-    if (n) return n
-    return ""
-  }, [customer])
-  React.useEffect(() => {
-    if (!showForm) return
-    const k = keyForCustomer()
-    if (!k) return
-    if (!prefilledRef.current) {
-      try {
-        const h = JSON.parse(localStorage.getItem(`history:${k}`) || "{}")
-        if (h.customer) {
-          setCustomer((prev) => ({
-            name: prev.name || h.customer.name || "",
-            company: prev.company || h.customer.company || "",
-            email: prev.email || h.customer.email || "",
-            companyEmail: prev.companyEmail || h.customer.companyEmail || "",
-            phone: prev.phone || h.customer.phone || "",
-            companyPhone: prev.companyPhone || h.customer.companyPhone || "",
-          }))
-          prefilledRef.current = true
-        }
-      } catch {}
-    }
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      try {
-        const h = JSON.parse(localStorage.getItem(`history:${k}`) || "{}")
-        const payload = {
-          ...h,
-          customer: { ...customer },
-          quotations: Array.isArray(h.quotations) ? h.quotations : [],
-          invoices: Array.isArray(h.invoices) ? h.invoices : [],
-          emails: Array.isArray(h.emails) ? h.emails : [],
-        }
-        localStorage.setItem(`history:${k}`, JSON.stringify(payload))
-      } catch {}
-    }, 500)
-    return () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current)
-        saveTimer.current = null
-      }
-    }
-  }, [showForm, customer.name, customer.company, customer.email, customer.phone, keyForCustomer])
-  const persistPoList = React.useCallback((next) => {
-    setPoList(next)
-    try {
-      localStorage.setItem("poList", JSON.stringify(next))
-    } catch {}
-  }, [])
-  const startNew = () => {
-    setPoNumber("")
-    setCustomer({ name: "", company: "", email: "", companyEmail: "", phone: "", companyPhone: "" })
-    setItems([{ product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
-    prefilledRef.current = false
-    setShowForm(true)
-  }
-  const editPo = (idx) => {
-    const p = poList[idx]
-    if (!p) return
-    setPoNumber(p.poNumber || "")
-    setCustomer(p.customer || { name: "", company: "", email: "", companyEmail: "", phone: "", companyPhone: "" })
-    setItems(Array.isArray(p.items) && p.items.length ? p.items : [{ product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
-    setShowForm(true)
-  }
-  const deletePo = (idx) => {
-    const next = poList.filter((_, i) => i !== idx)
-    persistPoList(next)
-  }
-  const generateFromList = (idx) => {
-    const p = poList[idx]
-    if (!p) return
-    localStorage.setItem("poInbound", JSON.stringify(p))
-    window.location.href = "/quotation.html"
-  }
-  const generate = () => {
-    const errs = validateCustomer(customer)
-    setErrors(errs)
-    if (Object.values(errs).some((e) => !!e)) return
-    const payload = { poNumber, customer, items }
-    localStorage.setItem("poInbound", JSON.stringify(payload))
-    window.location.href = "/quotation.html"
-  }
-  const saveDraft = () => {
-    const errs = validateCustomer(customer)
-    setErrors(errs)
-    if (Object.values(errs).some((e) => !!e)) return
-    const payload = { poNumber, customer, items, updatedAt: new Date().toISOString() }
-    const idx = poList.findIndex((p) => p.poNumber === poNumber)
-    if (idx >= 0) {
-      const next = poList.slice()
-      next[idx] = payload
-      persistPoList(next)
-    } else {
-      persistPoList([payload, ...poList])
-    }
-    setShowForm(false)
-  }
-  const confirmAndInvoice = () => {
-    const payload = {
-      customer,
-      items,
-      details: { currency: "THB" },
-    }
-    localStorage.setItem("confirmedQuotation", JSON.stringify(payload))
-    window.location.href = "/invoice.html"
-  }
-  return (
-    <div className="card p-6">
-      <h2 className="text-lg font-semibold text-[#2D4485] mb-2">Product Order</h2>
-      {!showForm && (
-        <>
-          <div className="mb-4">
-            <button onClick={startNew} className="btn-primary">Add Product Order</button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-600">
-                  <th className="p-2">PO Number</th>
-                  <th className="p-2">Customer</th>
-                  <th className="p-2">Items</th>
-                  <th className="p-2">Updated</th>
-                  <th className="p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {poList.map((p, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="p-2">{p.poNumber}</td>
-                    <td className="p-2">{p.customer?.name || p.customer?.company || p.customer?.email || p.customer?.phone || "-"}</td>
-                    <td className="p-2">{Array.isArray(p.items) ? p.items.length : 0}</td>
-                    <td className="p-2">{p.updatedAt ? new Date(p.updatedAt).toLocaleString() : "-"}</td>
-                    <td className="p-2">
-                      <div className="flex gap-2">
-                        <button onClick={() => editPo(i)} className="btn-outline">Edit</button>
-                        <button onClick={() => generateFromList(i)} className="btn-primary">Generate Quotation</button>
-                        <button onClick={() => deletePo(i)} className="btn-outline text-red-600">Delete</button>
-                      </div>
+              <tbody className="divide-y">
+                {data.quotations.slice(0, 5).map((q, i) => (
+                  <tr key={i}>
+                    <td className="py-3 font-medium text-blue-600">{q.details?.number}</td>
+                    <td className="py-3">{q.customerName || "-"}</td>
+                    <td className="py-3">{q.details?.date}</td>
+                    <td className="py-3 text-right">
+                      {q.details?.currency} {q.totals?.total?.toFixed(2)}
                     </td>
                   </tr>
                 ))}
-                {poList.length === 0 && (
-                  <tr>
-                    <td className="p-2 text-gray-600" colSpan={5}>No product orders yet</td>
-                  </tr>
+                {data.quotations.length === 0 && (
+                  <tr><td colSpan={4} className="py-4 text-center text-gray-500">No quotations found</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-        </>
-      )}
-      {showForm && (
-        <>
-          <input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Customer PO number" className="w-full rounded-md border border-gray-300 px-3 py-2 mb-3" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            <input
-              value={customer.name}
-              onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-              onBlur={(e) => setCustomer({ ...customer, name: e.target.value.trim() })}
-              placeholder="Customer name"
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-            />
-            <input
-              value={customer.company}
-              onChange={(e) => setCustomer({ ...customer, company: e.target.value })}
-              onBlur={(e) => setCustomer({ ...customer, company: e.target.value.trim() })}
-              placeholder="Company"
-              className="w-full rounded-md border border-gray-300 px-3 py-2"
-            />
-            <div>
-              <input
-                type="email"
-                value={customer.email}
-                onChange={(e) => {
-                  const next = { ...customer, email: e.target.value }
-                  setCustomer(next)
-                  setErrors(validateCustomer(next))
-                }}
-                onBlur={(e) => {
-                  const next = { ...customer, email: e.target.value.trim().toLowerCase() }
-                  setCustomer(next)
-                  setErrors(validateCustomer(next))
-                }}
-                placeholder="Email"
-                className={`w-full rounded-md border px-3 py-2 ${errors.email ? "border-red-500" : "border-gray-300"}`}
-              />
-              {errors.email && <div className="text-xs text-red-600 mt-1">{errors.email}</div>}
-            </div>
-            <div>
-              <input
-                type="email"
-                value={customer.companyEmail}
-                onChange={(e) => {
-                  const next = { ...customer, companyEmail: e.target.value }
-                  setCustomer(next)
-                  setErrors(validateCustomer(next))
-                }}
-                onBlur={(e) => {
-                  const next = { ...customer, companyEmail: e.target.value.trim().toLowerCase() }
-                  setCustomer(next)
-                  setErrors(validateCustomer(next))
-                }}
-                placeholder="Company email"
-                className={`w-full rounded-md border px-3 py-2 ${errors.companyEmail ? "border-red-500" : "border-gray-300"}`}
-              />
-              {errors.companyEmail && <div className="text-xs text-red-600 mt-1">{errors.companyEmail}</div>}
-            </div>
-            <div>
-              <input
-                type="tel"
-                value={customer.phone}
-                onChange={(e) => {
-                  const next = { ...customer, phone: e.target.value }
-                  setCustomer(next)
-                  setErrors(validateCustomer(next))
-                }}
-                onBlur={(e) => {
-                  const next = { ...customer, phone: normalizePhone(e.target.value) }
-                  setCustomer(next)
-                  setErrors(validateCustomer(next))
-                }}
-                placeholder="Phone"
-                className={`w-full rounded-md border px-3 py-2 ${errors.phone ? "border-red-500" : "border-gray-300"}`}
-              />
-              {errors.phone && <div className="text-xs text-red-600 mt-1">{errors.phone}</div>}
-            </div>
-            <div>
-              <input
-                type="tel"
-                value={customer.companyPhone}
-                onChange={(e) => {
-                  const next = { ...customer, companyPhone: e.target.value }
-                  setCustomer(next)
-                  setErrors(validateCustomer(next))
-                }}
-                onBlur={(e) => {
-                  const next = { ...customer, companyPhone: normalizePhone(e.target.value) }
-                  setCustomer(next)
-                  setErrors(validateCustomer(next))
-                }}
-                placeholder="Company phone"
-                className={`w-full rounded-md border px-3 py-2 ${errors.companyPhone ? "border-red-500" : "border-gray-300"}`}
-              />
-              {errors.companyPhone && <div className="text-xs text-red-600 mt-1">{errors.companyPhone}</div>}
-            </div>
-          </div>
-          <div className="overflow-x-auto mb-3">
+        </div>
+
+        <div className="bg-white rounded-xl border shadow-sm p-6">
+          <h3 className="font-semibold text-gray-900 mb-4">Recent Invoices</h3>
+          <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-600">
-                  <th className="p-2">Product</th>
-                  <th className="p-2">Description</th>
-                  <th className="p-2">Qty</th>
-                  <th className="p-2">Price</th>
-                  <th className="p-2">Tax %</th>
-                  <th className="p-2">Note</th>
-                  <th className="p-2"></th>
+                <tr className="text-left text-gray-500 border-b">
+                  <th className="pb-2">Number</th>
+                  <th className="pb-2">Customer</th>
+                  <th className="pb-2">Due Date</th>
+                  <th className="pb-2 text-right">Amount</th>
                 </tr>
               </thead>
-              <tbody>
-                {items.map((it, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="p-2"><input value={it.product} onChange={(e) => updateItem(i, "product", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                    <td className="p-2"><input value={it.description} onChange={(e) => updateItem(i, "description", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                    <td className="p-2"><input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, "qty", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                    <td className="p-2"><input type="number" min="0" step="0.01" value={it.price} onChange={(e) => updateItem(i, "price", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                    <td className="p-2"><input type="number" min="0" step="0.1" value={it.tax} onChange={(e) => updateItem(i, "tax", e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                    <td className="p-2"><input value={it.note} onChange={(e) => updateItem(i, "note", e.target.value)} placeholder="Add note" className="w-full rounded-md border border-gray-300 px-2 py-1" /></td>
-                    <td className="p-2 text-right"><button onClick={() => removeItem(i)} className="btn-outline text-red-600 hover:bg-red-100">Remove</button></td>
+              <tbody className="divide-y">
+                {data.invoices.slice(0, 5).map((inv, i) => (
+                  <tr key={i}>
+                    <td className="py-3 font-medium text-green-600">{inv.details?.number}</td>
+                    <td className="py-3">{inv.customerName || "-"}</td>
+                    <td className="py-3">{inv.details?.dueDate}</td>
+                    <td className="py-3 text-right">
+                      {inv.details?.currency} {inv.totals?.total?.toFixed(2)}
+                    </td>
                   </tr>
                 ))}
+                {data.invoices.length === 0 && (
+                  <tr><td colSpan={4} className="py-4 text-center text-gray-500">No invoices found</td></tr>
+                )}
               </tbody>
             </table>
           </div>
-          <div className="flex gap-3">
-            <button onClick={saveDraft} disabled={!isValid} className="btn-outline disabled:opacity-50">Save</button>
-            <button onClick={generate} disabled={!isValid} className="btn-primary disabled:opacity-50">Generate Quotation</button>
-            <button onClick={() => setShowForm(false)} className="btn-outline">Cancel</button>
+        </div>
+
+        <div className="bg-white rounded-xl border shadow-sm p-6 lg:col-span-2">
+          <h3 className="font-semibold text-gray-900 mb-4">Recent Purchase Orders</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b">
+                  <th className="pb-2">PO Number</th>
+                  <th className="pb-2">Vendor</th>
+                  <th className="pb-2">Items</th>
+                  <th className="pb-2 text-right">Total Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {data.purchaseOrders.slice(0, 5).map((po, i) => {
+                  const total = (po.items || []).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 1.07
+                  return (
+                    <tr key={i}>
+                      <td className="py-3 font-medium text-orange-600">{po.poNumber}</td>
+                      <td className="py-3">{po.customer?.company || po.customer?.name || "-"}</td>
+                      <td className="py-3">{po.items?.length || 0}</td>
+                      <td className="py-3 text-right">
+                        THB {total.toFixed(2)}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {data.purchaseOrders.length === 0 && (
+                  <tr><td colSpan={4} className="py-4 text-center text-gray-500">No purchase orders found</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function QuotationList({ list }) {
+  return (
+    <div className="bg-white rounded-xl border shadow-sm p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-semibold text-gray-900">Quotations</h2>
+        <a href="/quotation.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+          <Plus className="w-4 h-4" />
+          New Quotation
+        </a>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-gray-700 border-b">
+              <th className="p-3 text-left">Number</th>
+              <th className="p-3 text-left">Customer</th>
+              <th className="p-3 text-left">Date</th>
+              <th className="p-3 text-left">Items</th>
+              <th className="p-3 text-right">Total</th>
+              <th className="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {list.map((q, i) => (
+              <tr key={i} className="hover:bg-gray-50">
+                <td className="p-3 font-medium text-[#2D4485]">{q.details?.number}</td>
+                <td className="p-3">{q.customerName || "-"}</td>
+                <td className="p-3">{q.details?.date}</td>
+                <td className="p-3">{q.items?.length || 0}</td>
+                <td className="p-3 text-right font-medium">
+                  {q.details?.currency} {q.totals?.total?.toFixed(2)}
+                </td>
+                <td className="p-3 text-right">
+                   {/* In a real app, we'd have edit/view logic here. For now, just placeholder or load into edit page */}
+                   <span className="text-xs text-gray-400">View in History</span>
+                </td>
+              </tr>
+            ))}
+            {list.length === 0 && (
+              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No quotations found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function InvoiceList({ list }) {
+  return (
+    <div className="bg-white rounded-xl border shadow-sm p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-semibold text-gray-900">Invoices</h2>
+        <a href="/invoice.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+          <Plus className="w-4 h-4" />
+          New Invoice
+        </a>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-gray-700 border-b">
+              <th className="p-3 text-left">Number</th>
+              <th className="p-3 text-left">Customer</th>
+              <th className="p-3 text-left">Date</th>
+              <th className="p-3 text-left">Due Date</th>
+              <th className="p-3 text-right">Total</th>
+              <th className="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {list.map((inv, i) => (
+              <tr key={i} className="hover:bg-gray-50">
+                <td className="p-3 font-medium text-green-600">{inv.details?.number}</td>
+                <td className="p-3">{inv.customerName || "-"}</td>
+                <td className="p-3">{inv.details?.date}</td>
+                <td className="p-3">{inv.details?.dueDate}</td>
+                <td className="p-3 text-right font-medium">
+                  {inv.details?.currency} {inv.totals?.total?.toFixed(2)}
+                </td>
+                <td className="p-3 text-right">
+                   <span className="text-xs text-gray-400">View in History</span>
+                </td>
+              </tr>
+            ))}
+            {list.length === 0 && (
+              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No invoices found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function CustomerHistory({ data }) {
+  const [searchTerm, setSearchTerm] = React.useState("")
+  
+  // Filter customers based on search
+  // We need to map back to history keys to be useful
+  // But data.customers is just a list of customer objects. 
+  // Let's iterate localStorage keys again for this view to get the full "History" object.
+  
+  const [histories, setHistories] = React.useState([])
+
+  React.useEffect(() => {
+    const list = []
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith("history:")) {
+           const val = JSON.parse(localStorage.getItem(key))
+           list.push({ key, ...val })
+        }
+      }
+    } catch {}
+    setHistories(list)
+  }, [])
+
+  const filtered = histories.filter(h => {
+    const s = searchTerm.toLowerCase()
+    const name = h.customer?.name?.toLowerCase() || ""
+    const company = h.customer?.company?.toLowerCase() || ""
+    const email = h.customer?.email?.toLowerCase() || ""
+    return name.includes(s) || company.includes(s) || email.includes(s)
+  })
+
+  return (
+    <div className="space-y-6">
+       <div className="bg-white rounded-xl border shadow-sm p-6">
+         <div className="flex items-center gap-4 mb-6">
+           <div className="relative flex-1">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+             <input 
+               value={searchTerm}
+               onChange={(e) => setSearchTerm(e.target.value)}
+               placeholder="Search customers..." 
+               className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+             />
+           </div>
+         </div>
+
+         <div className="space-y-8">
+           {filtered.map((h, i) => (
+             <div key={i} className="border rounded-lg p-4">
+               <div className="flex justify-between items-start mb-4">
+                 <div>
+                   <h3 className="font-semibold text-lg text-[#2D4485]">{h.customer?.company || h.customer?.name || "Unknown Customer"}</h3>
+                   <div className="text-sm text-gray-500">{h.customer?.name} • {h.customer?.email} • {h.customer?.phone}</div>
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div>
+                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Quotations ({h.quotations?.length || 0})</h4>
+                   <div className="space-y-2">
+                     {(h.quotations || []).slice(0, 3).map((q, j) => (
+                       <div key={j} className="text-sm flex justify-between bg-gray-50 p-2 rounded">
+                         <span>{q.details?.number}</span>
+                         <span className="font-medium">{q.details?.currency} {q.totals?.total?.toFixed(2)}</span>
+                       </div>
+                     ))}
+                     {(h.quotations?.length || 0) > 3 && <div className="text-xs text-gray-400 italic">...and {h.quotations.length - 3} more</div>}
+                   </div>
+                 </div>
+                 <div>
+                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Invoices ({h.invoices?.length || 0})</h4>
+                   <div className="space-y-2">
+                     {(h.invoices || []).slice(0, 3).map((inv, j) => (
+                       <div key={j} className="text-sm flex justify-between bg-gray-50 p-2 rounded">
+                         <span>{inv.details?.number}</span>
+                         <span className="font-medium text-green-600">{inv.details?.currency} {inv.totals?.total?.toFixed(2)}</span>
+                       </div>
+                     ))}
+                     {(h.invoices?.length || 0) > 3 && <div className="text-xs text-gray-400 italic">...and {h.invoices.length - 3} more</div>}
+                   </div>
+                 </div>
+               </div>
+             </div>
+           ))}
+           {filtered.length === 0 && (
+             <div className="text-center py-8 text-gray-500">No customer history found</div>
+           )}
+         </div>
+       </div>
+    </div>
+  )
+}
+
+function PermissionsManager() {
+  const [users, setUsers] = React.useState([])
+  const [loading, setLoading] = React.useState(false)
+  const [savingId, setSavingId] = React.useState(null)
+  const APPS = ["Manufacturing", "Inventory", "CRM", "Project Management", "Admin"]
+  const parseAllowed = (allowed) => {
+    if (!allowed) return []
+    if (allowed === "all") return [...APPS]
+    return allowed.split(",").map(s => s.trim()).filter(Boolean)
+  }
+  const [me, setMe] = React.useState(null)
+  const loadMe = React.useCallback(async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const cuRaw = localStorage.getItem("currentUser")
+      let cu = null
+      try { cu = JSON.parse(cuRaw || "{}") } catch {}
+      if (!cu || (!cu.email && !cu.name)) {
+        setMe(null)
+        return
+      }
+      let allowed = localStorage.getItem("allowedApps")
+      if (token) {
+        try {
+          const r = await fetch(`${API_BASE_URL}/api/auth/me/allowed-apps/`, { headers: { "Authorization": `Token ${token}` } })
+          if (r.ok) {
+            const d = await r.json()
+            if (typeof d.allowed_apps === "string") {
+              allowed = d.allowed_apps
+              localStorage.setItem("allowedApps", d.allowed_apps)
+            }
+          }
+        } catch {}
+      }
+      const role = localStorage.getItem("userRole")
+      setMe({ id: null, email: cu.email || "", name: cu.name || "", is_staff: role === "Admin", allowed_apps: allowed || "" })
+    } catch {
+      setMe(null)
+    }
+  }, [])
+  const fetchUsers = React.useCallback(async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem("authToken")
+      if (!token) {
+        setUsers([])
+        setLoading(false)
+        return
+      }
+      const r = await fetch(`${API_BASE_URL}/api/users/`, {
+        headers: { "Authorization": `Token ${token}` }
+      })
+      if (r.ok) {
+        const d = await r.json()
+        setUsers(Array.isArray(d) ? d : [])
+      } else {
+        setUsers([])
+      }
+    } catch {
+      setUsers([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+  React.useEffect(() => {
+    loadMe()
+    fetchUsers()
+  }, [fetchUsers, loadMe])
+  React.useEffect(() => {
+    if (me && !me.id && users.length) {
+      const m = users.find(u => me.email && u.email === me.email)
+      if (m) {
+        setMe({ ...me, id: m.id, allowed_apps: m.allowed_apps ?? me.allowed_apps, is_staff: m.is_staff })
+      }
+    }
+  }, [users, me])
+  const isChecked = (allowed, app) => {
+    return parseAllowed(allowed).includes(app)
+  }
+  const save = async (userId, allowed) => {
+    try {
+      setSavingId(userId)
+      const token = localStorage.getItem("authToken")
+      if (!token) return
+      console.log(`Saving permissions for user ${userId}: ${allowed}`)
+      const r = await fetch(`${API_BASE_URL}/api/users/permissions/`, {
+        method: "POST",
+        headers: { "Authorization": `Token ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, allowed_apps: allowed })
+      })
+      if (!r.ok) {
+        console.error("Failed to save permissions", r.status, await r.text())
+        alert("Failed to save permissions. Please try again.")
+        await fetchUsers()
+      } else {
+        console.log("Permissions saved successfully")
+      }
+    } catch (e) {
+      console.error("Error saving permissions", e)
+      alert("Error saving permissions: " + e.message)
+      await fetchUsers()
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const toggleApp = (userId, app) => {
+    const user = users.find(u => u.id === userId)
+    if (!user) return
+
+    const list = parseAllowed(user.allowed_apps || "")
+    let nextList = []
+    if (list.includes(app)) {
+      nextList = list.filter(a => a !== app)
+    } else {
+      nextList = [...list, app]
+    }
+    const nextAllowed = nextList.length === APPS.length ? "all" : (nextList.length ? nextList.join(",") : "")
+    
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, allowed_apps: nextAllowed } : u))
+    
+    if (me && me.id === userId) {
+      setMe(prev => ({ ...prev, allowed_apps: nextAllowed }))
+    }
+    
+    save(userId, nextAllowed)
+  }
+
+  const setAll = (userId) => {
+    const nextAllowed = "all"
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, allowed_apps: nextAllowed } : u))
+    if (me && me.id === userId) setMe(prev => ({ ...prev, allowed_apps: nextAllowed }))
+    save(userId, nextAllowed)
+  }
+
+  const setNone = (userId) => {
+    const nextAllowed = ""
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, allowed_apps: nextAllowed } : u))
+    if (me && me.id === userId) setMe(prev => ({ ...prev, allowed_apps: nextAllowed }))
+    save(userId, nextAllowed)
+  }
+  return (
+    <div className="bg-white rounded-xl border shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900">User Permissions</h2>
+        <button onClick={fetchUsers} className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-gray-100 hover:bg-gray-200">Refresh</button>
+      </div>
+      {loading ? (
+        <div className="py-6 text-center text-gray-500">Loading users...</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-gray-700 border-b">
+                <th className="p-3 text-left">User</th>
+                <th className="p-3 text-left">Role</th>
+                <th className="p-3 text-left">Allowed Apps</th>
+                <th className="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {[...(me ? [me] : []), ...users.filter(u => !me || u.email !== me.email)].map(u => (
+                <tr key={u.id} className="hover:bg-gray-50">
+                  <td className="p-3">
+                    <div className="font-medium text-gray-900">{me && u.email === me.email ? "You" : u.name}</div>
+                    <div className="text-xs text-gray-500">{u.email}</div>
+                  </td>
+                  <td className="p-3">{u.is_staff ? "Admin" : "User"}</td>
+                  <td className="p-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {APPS.map(app => (
+                        <label key={app} className="inline-flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={isChecked(u.allowed_apps, app)}
+                            onChange={() => toggleApp(u.id, app)}
+                          />
+                          <span>{app}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="p-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => setAll(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300">All</button>
+                      <button onClick={() => setNone(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300">None</button>
+                      <button
+                        onClick={() => save(u.id, u.allowed_apps)}
+                        className={`px-3 py-1.5 text-xs rounded bg-[#2D4485] text-white ${savingId===u.id ? "opacity-50" : ""}`}
+                        disabled={!u.id || savingId===u.id}
+                      >
+                        Save
+                      </button>
+                      {savingId===u.id && <span className="text-xs text-gray-500">Saving...</span>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {users.length === 0 && (
+                <tr><td colSpan={4} className="p-8 text-center text-gray-500">No users available</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )
 }
 
+export default function AdminPage() {
+  const [activeTab, setActiveTab] = React.useState("dashboard")
+  const [data, setData] = React.useState({ quotations: [], invoices: [], customers: [], purchaseOrders: [] })
+
+  // Refresh data when tab changes or periodically
+  React.useEffect(() => {
+    setData(getAllData())
+  }, [activeTab])
+
+  // Handle URL params for direct navigation (e.g. from create page)
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const view = params.get("view")
+    if (view === "customerHistory") setActiveTab("customers")
+    if (view === "purchaseOrders") setActiveTab("purchase-orders")
+  }, [])
+
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <aside className="w-64 bg-white border-r hidden lg:block fixed top-16 bottom-0 overflow-y-auto pt-4">
+        <div className="px-6 mb-8">
+           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Admin Panel</h2>
+        </div>
+        <nav className="space-y-1 px-3">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "dashboard" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab("quotations")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "quotations" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            Quotations
+          </button>
+          <button
+            onClick={() => setActiveTab("invoices")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "invoices" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <Receipt className="w-5 h-5" />
+            Invoices
+          </button>
+          <button
+            onClick={() => setActiveTab("purchase-orders")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "purchase-orders" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <ShoppingCart className="w-5 h-5" />
+            Purchase Orders
+          </button>
+          <button
+            onClick={() => setActiveTab("customers")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "customers" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <Users className="w-5 h-5" />
+            Customer History
+          </button>
+          <button
+            onClick={() => setActiveTab("permissions")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "permissions" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <Lock className="w-5 h-5" />
+            User Permissions
+          </button>
+        </nav>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 lg:ml-64 p-8">
+        <header className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">
+            {activeTab === "dashboard" && "Dashboard"}
+            {activeTab === "quotations" && "Quotations"}
+            {activeTab === "invoices" && "Invoices"}
+            {activeTab === "purchase-orders" && "Purchase Orders"}
+            {activeTab === "customers" && "Customer History"}
+            {activeTab === "permissions" && "User Permissions"}
+          </h1>
+        </header>
+
+        {activeTab === "dashboard" && <Dashboard data={data} />}
+        {activeTab === "quotations" && <QuotationList list={data.quotations} />}
+        {activeTab === "invoices" && <InvoiceList list={data.invoices} />}
+        {activeTab === "purchase-orders" && <PurchaseOrderPage />}
+        {activeTab === "customers" && <CustomerHistory data={data} />}
+        {activeTab === "permissions" && <PermissionsManager />}
+      </main>
+    </div>
+  )
+}
