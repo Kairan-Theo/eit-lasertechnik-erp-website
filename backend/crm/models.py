@@ -109,34 +109,12 @@ class PurchaseOrder(models.Model):
         return f"PO {self.number}"
 
 class Deal(models.Model):
-    PRIORITY_CHOICES = [
-        ('none', 'None'),
-        ('low', 'Low'),
-        ('medium', 'Medium'),
-        ('high', 'High'),
-    ]
-
-    title = models.CharField(max_length=200)
-    customer = models.ForeignKey('Customer', null=True, blank=True, on_delete=models.SET_NULL, related_name='deals')
-    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    currency = models.CharField(max_length=10, default="฿")
-    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='none')
-    contact = models.CharField(max_length=200, blank=True)
-    email = models.EmailField(blank=True)
-    phone = models.CharField(max_length=50, blank=True)
-    address = models.TextField(blank=True)
-    tax_id = models.CharField(max_length=50, blank=True)
-    items = models.JSONField(default=list, blank=True)
-    notes = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    expected_close = models.DateField(null=True, blank=True)
-    
-    # We can store the pipeline stage as a string or a ChoiceField.
-    # For flexibility let's use CharField for now, or you can make a Stage model.
-    stage = models.CharField(max_length=100, default="Appointment Schedule")
-
+    customer = models.ForeignKey('Customer', null=True, blank=True, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    priority = models.CharField(max_length=20)
+    stage = models.ForeignKey('Stage', null=True, blank=True, on_delete=models.PROTECT)
     def __str__(self):
-        return self.title
+        return f"{self.customer} - {self.amount}"
 
 class ActivitySchedule(models.Model):
     deal = models.ForeignKey(Deal, related_name='activity_schedules', on_delete=models.CASCADE)
@@ -145,9 +123,8 @@ class ActivitySchedule(models.Model):
     text = models.TextField(blank=True)
     assignee = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
     def __str__(self):
-        return f"{self.deal.title} - {self.text}"
+        return f"{self.deal.customer} - {self.text}"
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')

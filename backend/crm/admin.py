@@ -51,15 +51,15 @@ class UserProfileForm(forms.ModelForm):
 
 @admin.register(Deal)
 class DealAdmin(admin.ModelAdmin):
-    list_display = ("title", "customer", "amount", "currency", "priority", "stage", "created_at", "expected_close")
-    list_filter = ("priority", "stage", "currency")
-    search_fields = ("title", "customer__company_name", "contact", "email", "phone", "notes")
+    list_display = ("customer", "amount", "priority", "stage")
+    list_filter = ("priority", "stage")
+    search_fields = ("customer__company_name",)
 
 @admin.register(ActivitySchedule)
 class ActivityScheduleAdmin(admin.ModelAdmin):
     list_display = ("deal", "due_at", "text", "created_at")
     list_filter = ("due_at",)
-    search_fields = ("deal__title", "text")
+    search_fields = ("deal__customer__company_name", "text")
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
