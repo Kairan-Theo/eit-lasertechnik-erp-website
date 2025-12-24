@@ -117,7 +117,6 @@ export default function Navigation() {
     if (!isAuthenticated) {
       setDueCount(0)
       setNotificationsCount(0)
-      return
     }
     const compute = () => {
       try {
@@ -139,26 +138,21 @@ export default function Navigation() {
         })
         setDueCount(count)
         const token = localStorage.getItem("authToken")
-        if (!token) {
-          setNotificationsCount(0)
-        } else {
-          fetch(`${API_BASE_URL}/api/notifications/`, {
-            headers: { 
-              "Authorization": `Token ${token}`,
-              "Cache-Control": "no-store"
+        const headers = {
+          "Cache-Control": "no-store",
+          ...(token ? { "Authorization": `Token ${token}` } : {})
+        }
+        fetch(`${API_BASE_URL}/api/notifications/`, { headers })
+          .then(r => r.ok ? r.json() : [])
+          .then(list => {
+            if (Array.isArray(list)) {
+              const unread = list.reduce((acc, n) => acc + (n && n.is_read === false ? 1 : 0), 0)
+              setNotificationsCount(unread)
+            } else {
+              setNotificationsCount(0)
             }
           })
-            .then(r => r.ok ? r.json() : [])
-            .then(list => {
-              if (Array.isArray(list)) {
-                const unread = list.reduce((acc, n) => acc + (n && n.is_read === false ? 1 : 0), 0)
-                setNotificationsCount(unread)
-              } else {
-                setNotificationsCount(0)
-              }
-            })
-            .catch(() => setNotificationsCount(0))
-        }
+          .catch(() => setNotificationsCount(0))
       } catch {
         setDueCount(0)
         setNotificationsCount(0)

@@ -6,6 +6,10 @@ import { LanguageProvider } from "./components/language-context"
 import emailjs from '@emailjs/browser';
 import "./index.css"
 import { API_BASE_URL } from "./config"
+import CRMCustomers from "./crm-customers.jsx"
+import CRMTickets from "./crm-tickets.jsx"
+import CRMLeads from "./crm-leads.jsx"
+import CRMAnalytics from "./crm-analytics.jsx"
 
 const initialPipeline = {
   "Appointment Schedule": [
@@ -86,6 +90,7 @@ function CRMPage() {
   const [stages, setStages] = React.useState(
     Object.keys(initialPipeline).map((name, idx) => ({ id: idx + 1, name, deals: [] }))
   )
+  const [activeTab, setActiveTab] = React.useState("Deals")
   const [menuOpenIndex, setMenuOpenIndex] = React.useState(null)
   const [openCardMenu, setOpenCardMenu] = React.useState(null) // { stageIndex, cardIndex }
   const [showNewForm, setShowNewForm] = React.useState(false)
@@ -663,139 +668,143 @@ function CRMPage() {
     <main className="min-h-screen bg-white font-sans text-gray-900">
       <Navigation />
       
-      {/* Top Header */}
       <div className="border-b border-slate-200 bg-white px-6 py-4">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-6">
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 cursor-pointer">
-              Deals
+              {activeTab}
             </h1>
             <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
-            <select className="bg-transparent border-none text-sm font-medium text-slate-600 hover:text-slate-900 focus:ring-0 cursor-pointer">
-              <option>Talent Acquisition</option>
-              <option>Sales Pipeline</option>
-            </select>
-            <select className="bg-transparent border-none text-sm font-medium text-slate-600 hover:text-slate-900 focus:ring-0 cursor-pointer">
-              <option>All deals</option>
-              <option>My deals</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">Import</button>
-            <button 
-              onClick={() => { setNewDeal(defaultNewDeal); setShowNewForm(true); }}
-              className="px-5 py-2 text-sm font-medium text-white bg-[#2D4485] rounded-lg hover:bg-[#3D56A6] shadow-md transition-all hover:shadow-lg transform hover:-translate-y-0.5"
-            >
-              + Create deal
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Bar */}
-      <div className="border-b border-slate-200 bg-white px-6 py-3 flex items-center justify-between flex-wrap gap-4 shadow-sm z-10 relative">
-        <div className="flex items-center gap-4 flex-1 flex-wrap">
-          <div className="relative group">
-            <input 
-              type="text" 
-              placeholder="Search deals..." 
-              className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all bg-slate-50 focus:bg-white" 
-            />
-            <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 group-focus-within:text-[#2D4485] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-600 overflow-x-auto">
-            {[
-              { label: 'Create date', key: 'createdAt' },
-              { label: 'Last activity', key: 'lastActivity' },
-              { label: 'Close date', key: 'expectedClose' },
-            ].map((item) => {
-              const active = sortBy === item.key
-              return (
+            <div className="flex items-center gap-2">
+              {["Deals", "Customers", "Tickets", "Leads", "Analytics"].map((tab) => (
                 <button
-                  key={item.key}
-                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1 ${active ? 'bg-slate-100 text-slate-900' : 'hover:bg-slate-100 hover:text-slate-900'}`}
-                  onClick={() => {
-                    if (sortBy === item.key) setSortAsc(!sortAsc)
-                    else { setSortBy(item.key); setSortAsc(false) }
-                  }}
-                  title={`Sort by ${item.label}${active ? (sortAsc ? ' (asc)' : ' (desc)') : ''}`}
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === tab
+                      ? "bg-slate-100 text-slate-900"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
                 >
-                  {item.label} <span className="text-[10px] opacity-50">{active ? (sortAsc ? '▲' : '▼') : '▼'}</span>
+                  {tab}
                 </button>
-              )
-            })}
+              ))}
+            </div>
           </div>
+          {activeTab === "Deals" && (
+            <div className="flex items-center gap-3">
+              <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">Import</button>
+              <button 
+                onClick={() => { setNewDeal(defaultNewDeal); setShowNewForm(true); }}
+                className="px-5 py-2 text-sm font-medium text-white bg-[#2D4485] rounded-lg hover:bg-[#3D56A6] shadow-md transition-all hover:shadow-lg transform hover:-translate-y-0.5"
+              >
+                + Create deal
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Board Content */}
-      <section className="w-full overflow-x-auto h-[calc(100vh-140px)] bg-slate-50">
-        <div className="flex h-full p-6 gap-6">
+      {activeTab === "Deals" && (
+        <div className="border-b border-slate-200 bg-white px-6 py-3 flex items-center justify-between flex-wrap gap-4 shadow-sm z-10 relative">
+          <div className="flex items-center gap-4 flex-1 flex-wrap">
+            <div className="relative group">
+              <input 
+                type="text" 
+                placeholder="Search deals..." 
+                className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all bg-slate-50 focus:bg-white" 
+              />
+              <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 group-focus-within:text-[#2D4485] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-600 overflow-x-auto">
+              {[
+                { label: 'Create date', key: 'createdAt' },
+                { label: 'Last activity', key: 'lastActivity' },
+                { label: 'Close date', key: 'expectedClose' },
+              ].map((item) => {
+                const active = sortBy === item.key
+                return (
+                  <button
+                    key={item.key}
+                    className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1 ${active ? 'bg-slate-100 text-slate-900' : 'hover:bg-slate-100 hover:text-slate-900'}`}
+                    onClick={() => {
+                      if (sortBy === item.key) setSortAsc(!sortAsc)
+                      else { setSortBy(item.key); setSortAsc(false) }
+                    }}
+                    title={`Sort by ${item.label}${active ? (sortAsc ? ' (asc)' : ' (desc)') : ''}`}
+                  >
+                    {item.label} <span className="text-[10px] opacity-50">{active ? (sortAsc ? '▲' : '▼') : '▼'}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
-          {stages.map((stage, stageIndex) => {
-             const total = totalFor(stage.deals);
-             const prob = getProbability(stage.name);
-             const weighted = total * (prob / 100);
-             const sortedDeals = sortDeals(stage.deals, sortBy, sortAsc);
-             
-             return (
-              <div
-                key={stage.id}
-                className="w-80 min-w-[20rem] flex flex-col h-full bg-slate-100/50 rounded-2xl border border-slate-200/60 group"
-                draggable
-                onDragStart={(e) => onStageDragStart(stageIndex, e)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  if (e.dataTransfer.getData("card")) onCardDrop(stageIndex, e)
-                  else if (e.dataTransfer.getData("stage") !== "") onStageDrop(stageIndex, e)
-                }}
-              >
-                {/* Column Header */}
-                <div 
-                  className="p-4 text-center border-b border-slate-200/60 cursor-grab active:cursor-grabbing bg-transparent group/header relative"
+      {activeTab === "Deals" ? (
+        <section className="w-full overflow-x-auto h-[calc(100vh-140px)] bg-slate-50">
+          <div className="flex h-full p-6 gap-6">
+            {stages.map((stage, stageIndex) => {
+              const total = totalFor(stage.deals);
+              const prob = getProbability(stage.name);
+              const weighted = total * (prob / 100);
+              const sortedDeals = sortDeals(stage.deals, sortBy, sortAsc);
+              return (
+                <div
+                  key={stage.id}
+                  className="w-80 min-w-[20rem] flex flex-col h-full bg-slate-100/50 rounded-2xl border border-slate-200/60 group"
                   draggable
                   onDragStart={(e) => onStageDragStart(stageIndex, e)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    if (e.dataTransfer.getData("card")) onCardDrop(stageIndex, e)
+                    else if (e.dataTransfer.getData("stage") !== "") onStageDrop(stageIndex, e)
+                  }}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-700 uppercase text-xs tracking-wider">{stage.name}</span>
-                    <div className="flex items-center gap-1">
-                       <span className="text-slate-500 text-xs font-medium bg-slate-200/60 px-2 py-0.5 rounded-full">{stage.deals.length}</span>
-                       <button 
-                         className="text-slate-400 hover:text-slate-600 opacity-0 group-hover/header:opacity-100 transition-opacity"
-                         onClick={(e) => { e.stopPropagation(); setMenuOpenIndex(menuOpenIndex === stageIndex ? null : stageIndex); }}
-                       >
-                         ⋯
-                       </button>
-                    </div>
-                  </div>
-                  {menuOpenIndex === stageIndex && (
-                    <div className="absolute right-2 top-8 bg-white border border-slate-200 rounded-lg shadow-xl z-30 w-32 text-left py-1">
-                      <button className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50" onClick={() => editStage(stageIndex)}>Edit Stage</button>
-                      <button className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 text-red-600" onClick={() => deleteStage(stageIndex)}>Delete Stage</button>
-                    </div>
-                  )}
-                  <div className="h-1 w-full bg-slate-200 rounded-full overflow-hidden mt-3">
-                    <div className="h-full bg-[#2D4485]/60" style={{ width: `${prob}%` }}></div>
-                  </div>
-                </div>
-
-                {/* Cards Container */}
-                <div className="flex-1 overflow-y-auto p-3">
-                  {sortedDeals.map((d, cardIndex) => (
-                    <div
-                      key={d.id}
-                      className="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card"
-                      draggable
-                      onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
-                     >
-                      <div className="mb-2">
-                        <span 
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
-                          onClick={(e) => { e.stopPropagation(); openEmailModal(stageIndex, cardIndex); }}
-                          title="Click to send email"
+                  <div 
+                    className="p-4 text-center border-b border-slate-200/60 cursor-grab active:cursor-grabbing bg-transparent group/header relative"
+                    draggable
+                    onDragStart={(e) => onStageDragStart(stageIndex, e)}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-slate-700 uppercase text-xs tracking-wider">{stage.name}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-500 text-xs font-medium bg-slate-200/60 px-2 py-0.5 rounded-full">{stage.deals.length}</span>
+                        <button 
+                          className="text-slate-400 hover:text-slate-600 opacity-0 group-hover/header:opacity-100 transition-opacity"
+                          onClick={(e) => { e.stopPropagation(); setMenuOpenIndex(menuOpenIndex === stageIndex ? null : stageIndex); }}
                         >
+                          ⋯
+                        </button>
+                      </div>
+                    </div>
+                    {menuOpenIndex === stageIndex && (
+                      <div className="absolute right-2 top-8 bg-white border border-slate-200 rounded-lg shadow-xl z-30 w-32 text-left py-1">
+                        <button className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50" onClick={() => editStage(stageIndex)}>Edit Stage</button>
+                        <button className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 text-red-600" onClick={() => deleteStage(stageIndex)}>Delete Stage</button>
+                      </div>
+                    )}
+                    <div className="h-1 w-full bg-slate-200 rounded-full overflow-hidden mt-3">
+                      <div className="h-full bg-[#2D4485]/60" style={{ width: `${prob}%` }}></div>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-3">
+                    {sortedDeals.map((d, cardIndex) => (
+                      <div
+                        key={d.id}
+                        className="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card"
+                        draggable
+                        onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
+                      >
+                        <div className="mb-2">
+                          <span 
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); openEmailModal(stageIndex, cardIndex); }}
+                            title="Click to send email"
+                          >
                           <svg className="w-4 h-4 text-[#2D4485]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                           <span className="truncate text-xs leading-tight max-w-[280px]">{d.customer_name || d.contact || d.email || d.title}</span>
                         </span>
@@ -1608,6 +1617,25 @@ function CRMPage() {
             </div>
           )}
       </section>
+      ) : activeTab === "Customers" ? (
+        <div className="min-h-screen bg-white">
+          <CRMCustomers />
+        </div>
+      ) : activeTab === "Tickets" ? (
+        <div className="min-h-screen bg-white">
+          <CRMTickets />
+        </div>
+      ) : activeTab === "Leads" ? (
+        <div className="min-h-screen bg-white">
+          <CRMLeads />
+        </div>
+      ) : activeTab === "Analytics" ? (
+        <div className="min-h-screen bg-white">
+          <CRMAnalytics />
+        </div>
+      ) : (
+        <div className="p-6 text-slate-600">Coming soon</div>
+      )}
     </main>
   )
 }

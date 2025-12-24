@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Stage, Project, Task
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Stage, Project, Task, SupportTicket
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -121,3 +121,10 @@ class TaskAdmin(admin.ModelAdmin):
     list_filter = ("status", "priority", "assignee")
     search_fields = ("title", "project__name", "assignee", "description")
     ordering = ("-updated_at", "due_date")
+
+@admin.register(SupportTicket)
+class SupportTicketAdmin(admin.ModelAdmin):
+    list_display = ("ticket_id", "title", "customer", "status", "priority", "assigned_to", "updated_at")
+    list_filter = ("status", "priority", "assigned_to")
+    search_fields = ("ticket_id", "title", "customer__company_name", "description")
+    ordering = ("-updated_at",)

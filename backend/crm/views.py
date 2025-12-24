@@ -5,9 +5,24 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer
 from datetime import date, timedelta
+
+class LeadViewSet(viewsets.ModelViewSet):
+    queryset = Lead.objects.all().order_by('-created_at')
+    serializer_class = LeadSerializer
+    permission_classes = [AllowAny] # Ideally IsAuthenticated
+
+class CustomerViewSet(viewsets.ModelViewSet):
+    queryset = Customer.objects.all().order_by('company_name')
+    serializer_class = CustomerSerializer
+    permission_classes = [AllowAny] # Ideally IsAuthenticated, but sticking to pattern
+
+class SupportTicketViewSet(viewsets.ModelViewSet):
+    queryset = SupportTicket.objects.all().order_by('-updated_at')
+    serializer_class = SupportTicketSerializer
+    permission_classes = [AllowAny] # Ideally IsAuthenticated
 
 class DealViewSet(viewsets.ModelViewSet):
     queryset = Deal.objects.all().order_by('-created_at')
@@ -82,6 +97,43 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(project)
         headers = {'Location': f"{request.build_absolute_uri('/api/projects/')}{project.id}/"}
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_crm_analytics(request):
+    from django.db.models import Count, Sum
+    
+    total_deals = Deal.objects.count()
+    won_deals = Deal.objects.filter(stage='Close Won')
+    won_value = won_deals.aggregate(Sum('amount'))['amount__sum'] or 0
+    
+    deals_by_stage_data = Deal.objects.values('stage').annotate(count=Count('id'))
+    deals_by_stage = {item['stage']: item['count'] for item in deals_by_stage_data}
+    
+    total_leads = Lead.objects.count()
+    leads_by_status_data = Lead.objects.values('status').annotate(count=Count('id'))
+    leads_by_status = {item['status']: item['count'] for item in leads_by_status_data}
+    
+    total_tickets = SupportTicket.objects.count()
+    tickets_by_status_data = SupportTicket.objects.values('status').annotate(count=Count('id'))
+    tickets_by_status = {item['status']: item['count'] for item in tickets_by_status_data}
+
+    data = {
+        "deals": {
+            "total": total_deals,
+            "won_value": won_value,
+            "by_stage": deals_by_stage
+        },
+        "leads": {
+            "total": total_leads,
+            "by_status": leads_by_status
+        },
+        "tickets": {
+            "total": total_tickets,
+            "by_status": tickets_by_status
+        }
+    }
+    return Response(data)
 
 class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all().order_by('due_date')

@@ -14,28 +14,25 @@ function NotificationsPage() {
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem("authToken")
-      if (token) {
-        const response = await fetch(`${API_BASE_URL}/api/notifications/`, {
-          headers: {
-            "Authorization": `Token ${token}`,
-            "Cache-Control": "no-store"
-          }
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setNotifications(data)
-        }
-      } else {
-        const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-        const data = list.map(n => ({
-          id: n.id,
-          message: n.message,
-          created_at: n.timestamp,
-          is_read: !n.unread,
-          type: n.type || "info"
-        }))
-        setNotifications(data)
+      const headers = {
+        "Cache-Control": "no-store",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
       }
+      const response = await fetch(`${API_BASE_URL}/api/notifications/`, { headers })
+      if (response.ok) {
+        const data = await response.json()
+        setNotifications(data)
+        return
+      }
+      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const data = list.map(n => ({
+        id: n.id,
+        message: n.message,
+        created_at: n.timestamp,
+        is_read: !n.unread,
+        type: n.type || "info"
+      }))
+      setNotifications(data)
     } catch (error) {
       console.error("Failed to fetch notifications:", error)
     }
