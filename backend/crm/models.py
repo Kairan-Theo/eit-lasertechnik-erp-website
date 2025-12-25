@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 class Customer(models.Model):
     company_name = models.CharField(max_length=255)
@@ -109,12 +110,24 @@ class PurchaseOrder(models.Model):
         return f"PO {self.number}"
 
 class Deal(models.Model):
+    title = models.CharField(max_length=200, default="Untitled Deal")
     customer = models.ForeignKey('Customer', null=True, blank=True, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    priority = models.CharField(max_length=20)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency = models.CharField(max_length=10, default="฿")
+    priority = models.CharField(max_length=20, default="medium")
+    contact = models.CharField(max_length=100, blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
+    tax_id = models.CharField(max_length=50, blank=True)
+    items = models.JSONField(default=list, blank=True)
+    notes = models.TextField(blank=True)
     stage = models.ForeignKey('Stage', null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now)
+    expected_close = models.DateField(null=True, blank=True)
+
     def __str__(self):
-        return f"{self.customer} - {self.amount}"
+        return f"{self.title} - {self.amount}"
 
 class ActivitySchedule(models.Model):
     deal = models.ForeignKey(Deal, related_name='activity_schedules', on_delete=models.CASCADE)

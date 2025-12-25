@@ -1382,7 +1382,10 @@ function CRMPage() {
                       type="button"
                       className="px-5 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
                       onClick={async () => {
-                        const stageName = stages[newDeal.stageIndex].name
+                        let stageName = ""
+                        try {
+                          stageName = stages[newDeal.stageIndex]?.name || stages[0]?.name || ""
+                        } catch {}
                         const dealData = {
                           title: newDeal.opportunity || newDeal.company || "Untitled",
                           customer: null,
@@ -1395,7 +1398,11 @@ function CRMPage() {
                           address: newDeal.address || "",
                           tax_id: newDeal.taxId || "",
                           notes: "",
-                          stage: stageName
+                          stage: stageName,
+                          write_customer_name: newDeal.company || ""
+                        }
+                        if ((newDeal.company || "").trim()) {
+                          dealData.write_customer_name = newDeal.company.trim()
                         }
 
                         try {

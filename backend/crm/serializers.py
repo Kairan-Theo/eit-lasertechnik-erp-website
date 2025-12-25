@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead
+from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, Stage
 
 class LeadSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
@@ -55,6 +55,9 @@ class ActivityScheduleSerializer(serializers.ModelSerializer):
 class DealSerializer(serializers.ModelSerializer):
     activity_schedules = ActivityScheduleSerializer(many=True, read_only=True)
     customer_name = serializers.SerializerMethodField()
+    stage = serializers.SlugRelatedField(slug_field='stage_name', queryset=Stage.objects.all(), required=False, allow_null=True)
+    customer_id = serializers.PrimaryKeyRelatedField(source='customer', queryset=Customer.objects.all(), write_only=True, required=False)
+    write_customer_name = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = Deal
@@ -63,6 +66,8 @@ class DealSerializer(serializers.ModelSerializer):
             'title',
             'customer',
             'customer_name',
+            'customer_id',
+            'write_customer_name',
             'amount',
             'currency',
             'priority',
@@ -78,9 +83,24 @@ class DealSerializer(serializers.ModelSerializer):
             'stage',
             'activity_schedules',
         ]
+        read_only_fields = ['created_at', 'customer_name', 'activity_schedules']
 
     def get_customer_name(self, obj):
         return obj.customer.company_name if obj.customer else ""
+    
+    def create(self, validated_data):
+        write_name = self.initial_data.get('write_customer_name') or self.initial_data.get('customer_name') or None
+        if write_name and not validated_data.get('customer'):
+            name = write_name.strip()
+            if name:
+                cust, _ = Customer.objects.get_or_create(company_name=name)
+                validated_data['customer'] = cust
+        validated_data.pop('write_customer_name', None)
+        if not validated_data.get('currency'):
+            validated_data['currency'] = '฿'
+        if not validated_data.get('title'):
+            validated_data['title'] = 'Untitled Deal'
+        return super().create(validated_data)
 
 class QuotationSerializer(serializers.ModelSerializer):
     class Meta:

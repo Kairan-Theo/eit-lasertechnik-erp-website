@@ -15,20 +15,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
-load_dotenv(dotenv_path)
-
-print("DB_NAME =", os.getenv("DB_NAME"))
-print("DB_HOST =", os.getenv("DB_HOST"))
+load_dotenv(dotenv_path, override=True)
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Add this to settings.py after the dotenv load
-print("Current file:", __file__)
-print("Project root:", BASE_DIR)
-print("Env file path:", dotenv_path)
-print("Env file exists:", os.path.exists(dotenv_path))
 
 
 # Quick-start development settings - unsuitable for production
@@ -70,6 +61,10 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'authorization',
+]
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -155,3 +150,5 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
