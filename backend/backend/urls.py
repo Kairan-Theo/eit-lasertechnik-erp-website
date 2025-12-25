@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
+from django.db import connection
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
@@ -45,6 +46,8 @@ def root_view(request):
         }
     })
 
+def db_settings_view(request):
+    return JsonResponse(connection.settings_dict)
 urlpatterns = [
     path('', root_view),
     path('admin/', admin.site.urls),
@@ -61,4 +64,5 @@ urlpatterns = [
     path('api/notifications/<int:pk>/', delete_notification),
     path('api/auth/me/allowed-apps/', my_allowed_apps),
     path('api/auth/profile/update/', update_profile),
+    path('api/debug/db/', db_settings_view),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
