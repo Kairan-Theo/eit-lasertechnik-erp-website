@@ -5,6 +5,7 @@ import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import { JobOrderTemplate } from "./components/job-order-template.jsx"
 import "./index.css"
+import { API_BASE_URL } from "./config"
 
 function ManufacturingOrderPage() {
   const [orders, setOrders] = React.useState(() => {
@@ -16,7 +17,7 @@ function ManufacturingOrderPage() {
   const [scheduleDueInput, setScheduleDueInput] = React.useState("")
   const [scheduleText, setScheduleText] = React.useState("")
   const [showNew, setShowNew] = React.useState(false)
-  const [newOrder, setNewOrder] = React.useState({ product: "", productNo: "", jobOrderCode: "", unit: "Unit", quantity: 1, totalQuantity: 1, scheduledDate: "", completedDate: "", productionTime: "", responsible: "", priority: "None", customer: "" })
+  const [newOrder, setNewOrder] = React.useState({ product: "", productNo: "", jobOrderCode: "", purchaseOrder: "", unit: "Unit", quantity: 1, totalQuantity: 1, scheduledDate: "", completedDate: "", productionTime: "", responsible: "", priority: "None", customer: "" })
   const [editingCustomerId, setEditingCustomerId] = React.useState(null)
   const [editingCustomerValue, setEditingCustomerValue] = React.useState("")
   const [editingProductId, setEditingProductId] = React.useState(null)
@@ -43,6 +44,9 @@ function ManufacturingOrderPage() {
   const [inventoryItems, setInventoryItems] = React.useState([])
   const [showProductDropdown, setShowProductDropdown] = React.useState(false)
   const [printingOrder, setPrintingOrder] = React.useState(null)
+  const [poList, setPoList] = React.useState([])
+  const [showPoSuggestions, setShowPoSuggestions] = React.useState(false)
+  const [crmPoNumbers, setCrmPoNumbers] = React.useState([])
 
   const handlePrint = (o) => {
     setPrintingOrder(o)
@@ -59,6 +63,25 @@ function ManufacturingOrderPage() {
         setInventoryItems(data)
       }
     } catch {}
+  }, [])
+  React.useEffect(() => {
+    try {
+      const data = JSON.parse(localStorage.getItem("poList") || "[]")
+      if (Array.isArray(data)) setPoList(data)
+    } catch {}
+  }, [])
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { "Authorization": `Token ${token}` } : {}
+        const res = await fetch(`${API_BASE_URL}/api/deals/`, { headers })
+        if (!res.ok) return
+        const data = await res.json()
+        const nums = Array.from(new Set((data || []).map(d => String(d.po_number || "").trim()).filter(Boolean)))
+        setCrmPoNumbers(nums)
+      } catch {}
+    })()
   }, [])
 
   React.useEffect(() => {
@@ -110,7 +133,15 @@ function ManufacturingOrderPage() {
   }
   const stateClass = (s) => (s==='Processing' ? 'bg-blue-50 text-[#2D4485]' : s==='Finished' ? 'bg-green-100 text-green-700' : s==='Cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-700')
   const componentStatusClass = (s) => (s==='Not Available' ? 'bg-red-100 text-red-700' : s==='Available' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700')
-  const priorityClass = (p) => (p==='High' ? 'bg-red-100 text-red-700' : p==='Medium' ? 'bg-orange-100 text-orange-700' : p==='Low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
+  const priorityClass = (p) => (
+    p==='High'
+      ? 'bg-red-500 text-white ring-2 ring-red-100'
+      : p==='Medium'
+      ? 'bg-orange-400 text-white ring-2 ring-orange-100'
+      : p==='Low'
+      ? 'bg-[#2D4485] text-white ring-2 ring-blue-100'
+      : 'bg-slate-400 text-white ring-2 ring-slate-200'
+  )
   const priorityRank = (p) => (p==='High'?3:p==='Medium'?2:p==='Low'?1:0)
   const nextDueMs = (o) => {
     const arr = (o.activitySchedules||[]).map((it)=>new Date(it.dueAt ?? it.startAt).getTime()).filter((n)=>Number.isFinite(n))
@@ -267,8 +298,8 @@ function ManufacturingOrderPage() {
                 <tr className="text-gray-700 bg-gray-50">
                   <th className="p-3 w-8"></th>
                   <th className="p-3 text-left font-medium">Priority</th>
+                  <th className="p-3 text-left font-medium">Job Order</th>
                   <th className="p-3 text-left font-medium">Purchase Order</th>
-                  <th className="p-3 text-left font-medium">Job Order Code</th>
                   <th className="p-3 text-left font-medium">Item code</th>
                   <th className="p-3 text-left font-medium">Product</th>
                   <th className="p-3 text-left font-medium">Unit</th>
@@ -317,9 +348,6 @@ function ManufacturingOrderPage() {
                       </div>
                     </td>
                     <td className="p-3">
-                      <a className="text-[#3D56A6] hover:underline font-medium" href="#">{o.ref}</a>
-                    </td>
-                    <td className="p-3">
                       {editingJobOrderCodeId===o.id ? (
                         <input
                           autoFocus
@@ -351,11 +379,14 @@ function ManufacturingOrderPage() {
                         <button
                           className="text-[#3D56A6] hover:underline"
                           onClick={()=>{ setEditingJobOrderCodeId(o.id); setEditingJobOrderCodeValue(o.jobOrderCode || "") }}
-                          title="Edit Job Order Code"
+                          title="Edit Job Order"
                         >
                           {o.jobOrderCode || '-'}
                         </button>
                       )}
+                    </td>
+                    <td className="p-3">
+                      <a className="text-[#3D56A6] hover:underline font-medium" href="#">{o.ref}</a>
                     </td>
                     <td className="p-3 text-gray-700">{o.productNo || '-'}</td>
                     <td className="p-3">
@@ -713,6 +744,39 @@ function ManufacturingOrderPage() {
                     <input value={newOrder.jobOrderCode} onChange={(e)=>setNewOrder({...newOrder, jobOrderCode:e.target.value})} placeholder="e.g. JO-001" className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
                   </div>
                   <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <div className="text-sm text-gray-700">Purchase Order</div>
+                    <div className="relative">
+                      <input
+                        value={newOrder.purchaseOrder}
+                        onChange={(e)=>{ setNewOrder({...newOrder, purchaseOrder:e.target.value}); setShowPoSuggestions(true) }}
+                        onFocus={()=>setShowPoSuggestions(true)}
+                        placeholder="e.g. PO-1234"
+                        className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none"
+                      />
+                      {showPoSuggestions && newOrder.purchaseOrder && (() => {
+                        const q = newOrder.purchaseOrder.toLowerCase()
+                        const candidates = Array.from(new Set([
+                          ...orders.map(o => String(o.ref || "").trim()).filter(Boolean),
+                          ...poList.map(p => String(p.poNumber || "").trim()).filter(Boolean),
+                          ...crmPoNumbers,
+                        ])).filter(x => x.toLowerCase().includes(q)).slice(0, 8)
+                        return candidates.length ? (
+                          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                            {candidates.map((val, i) => (
+                              <button
+                                key={`${val}-${i}`}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+                                onClick={() => { setNewOrder({...newOrder, purchaseOrder: val}); setShowPoSuggestions(false) }}
+                              >
+                                {val}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null
+                      })()}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
                     <div className="text-sm text-gray-700">Item code</div>
                     <input value={newOrder.productNo} onChange={(e)=>setNewOrder({...newOrder, productNo:e.target.value})} placeholder="e.g. LCM-001" className="w-full border-b border-gray-300 px-2 py-1 focus:outline-none" />
                   </div>
@@ -775,7 +839,7 @@ function ManufacturingOrderPage() {
                     <button
                       className="btn-pill"
                       onClick={() => {
-                        const ref = `WH/MO/${String((orders[0]?.id||0)+1).padStart(5,'0')}`
+                        const ref = (newOrder.purchaseOrder && newOrder.purchaseOrder.trim()) ? newOrder.purchaseOrder.trim() : `WH/MO/${String((orders[0]?.id||0)+1).padStart(5,'0')}`
                         const o = {
                           id: Date.now(),
                           ref,

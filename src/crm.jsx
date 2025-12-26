@@ -123,6 +123,7 @@ function CRMPage() {
             notes: d.notes,
             createdAt: d.created_at,
             expectedClose: d.expected_close,
+            poNumber: d.po_number || "",
             activitySchedules: (d.activity_schedules || []).map(s => ({
               id: s.id,
               dueAt: s.due_at ? s.due_at.slice(0, 16) : "",
@@ -160,6 +161,7 @@ function CRMPage() {
     phone: "",
     address: "",
     taxId: "",
+    poNumber: "",
     amount: 0,
     currency: "฿",
     priority: "none",
@@ -799,15 +801,23 @@ function CRMPage() {
                         draggable
                         onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
                       >
-                        <div className="mb-2">
+                        <div className="mb-2 flex items-center gap-2 flex-wrap">
                           <span 
                             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
                             onClick={(e) => { e.stopPropagation(); openEmailModal(stageIndex, cardIndex); }}
                             title="Click to send email"
                           >
                           <svg className="w-4 h-4 text-[#2D4485]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="truncate text-xs leading-tight max-w-[280px]">{d.customer_name || d.contact || d.email || d.title}</span>
+                          <span className="truncate text-xs leading-tight max-w-[280px]">{d.customer || d.customer_name || d.contact || d.email || d.title}</span>
                         </span>
+                        {d.poNumber && (
+                          <span
+                            className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 text-[#2D4485] text-xs font-semibold border border-blue-100"
+                            title="Purchase Order"
+                          >
+                            <span className="truncate leading-tight max-w-[180px]">{d.poNumber}</span>
+                          </span>
+                        )}
                       </div>
                       <div className="flex justify-between items-start gap-2 mb-3">
                          <h4 
@@ -834,15 +844,15 @@ function CRMPage() {
                       <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
                         <div className="flex items-center gap-2 relative">
                            <div 
-                             className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-bold shadow-sm ${d.priority === 'high' ? 'bg-red-500 ring-2 ring-red-100' : d.priority === 'medium' ? 'bg-orange-400 ring-2 ring-orange-100' : 'bg-[#2D4485] ring-2 ring-blue-100'} cursor-pointer hover:scale-110 transition-transform`}
+                             className={`inline-flex items-center gap-1 px-2.5 h-6 rounded-full text-[11px] text-white font-bold shadow-sm ${d.priority === 'high' ? 'bg-red-500 ring-2 ring-red-100' : d.priority === 'medium' ? 'bg-orange-400 ring-2 ring-orange-100' : d.priority === 'low' ? 'bg-[#2D4485] ring-2 ring-blue-100' : 'bg-slate-400 ring-2 ring-slate-200'} cursor-pointer hover:scale-110 transition-transform`}
                              onClick={(e) => {
                                 e.stopPropagation();
                                 const open = openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex
                                 setOpenPriority(open ? null : { stageIndex, cardIndex })
                              }}
-                             title={`Priority: ${d.priority}`}
+                             title={`Priority: ${priorityLabel(d.priority)}`}
                            >
-                              {d.customer.charAt(0)}
+                              {priorityLabel(d.priority)}
                            </div>
                            {openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex && (
                               <div className="absolute left-0 bottom-8 bg-white border border-slate-200 rounded-lg shadow-xl z-20 w-32 py-1">
@@ -861,6 +871,13 @@ function CRMPage() {
                                   openActivity && openActivity.stageIndex===stageIndex && openActivity.cardIndex===cardIndex ? null : { stageIndex, cardIndex }
                                 )
                              }}
+                             title={(() => {
+                                const item = nextSchedule(d)
+                                if (!item) return "No upcoming activity"
+                                const txt = formatActivityPreviewText(item.text || "Activity")
+                                const dt = item.dueAt ? new Date(item.dueAt).toLocaleString() : ""
+                                return dt ? `${txt} — ${dt}` : txt
+                             })()}
                            >
                              {(() => {
                                 const item = nextSchedule(d)
@@ -988,6 +1005,7 @@ function CRMPage() {
                                 setSelectedScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i })
                                 activityModalRef.current && activityModalRef.current.focus()
                               }}
+                              title={`${formatActivityPreviewText(it.text || "Activity")}${it.dueAt ? ` — ${new Date(it.dueAt).toLocaleString()}` : ""}`}
                               draggable
                               onDragStart={(e)=>{
                                 const el = e.target
@@ -1282,6 +1300,15 @@ function CRMPage() {
                         />
                       </div>
                       <div className="grid grid-cols-[90px_1fr] items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500">PO Number</label>
+                        <input 
+                          value={newDeal.poNumber} 
+                          onChange={(e)=>setNewDeal({...newDeal, poNumber:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                          placeholder="Purchase Order Number"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
                         <label className="text-xs font-medium text-slate-500">Email</label>
                         <input 
                           value={newDeal.email} 
@@ -1391,6 +1418,7 @@ function CRMPage() {
                           customer: null,
                           amount: Number(newDeal.amount) || 0,
                           currency: newDeal.currency || "฿",
+                          po_number: newDeal.poNumber || "",
                           priority: newDeal.priority || "none",
                           contact: newDeal.contact || "",
                           email: newDeal.email || "",

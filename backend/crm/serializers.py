@@ -70,6 +70,7 @@ class DealSerializer(serializers.ModelSerializer):
             'write_customer_name',
             'amount',
             'currency',
+            'po_number',
             'priority',
             'contact',
             'email',
