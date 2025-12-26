@@ -21,8 +21,10 @@ function NotificationsPage() {
       const response = await fetch(`${API_BASE_URL}/api/notifications/`, { headers })
       if (response.ok) {
         const data = await response.json()
-        setNotifications(data)
-        return
+        if (Array.isArray(data) && data.length > 0) {
+          setNotifications(data)
+          return
+        }
       }
       const list = JSON.parse(localStorage.getItem("notifications") || "[]")
       const data = list.map(n => ({
@@ -35,6 +37,16 @@ function NotificationsPage() {
       setNotifications(data)
     } catch (error) {
       console.error("Failed to fetch notifications:", error)
+      // Fallback to local on error
+      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const data = list.map(n => ({
+        id: n.id,
+        message: n.message,
+        created_at: n.timestamp,
+        is_read: !n.unread,
+        type: n.type || "info"
+      }))
+      setNotifications(data)
     }
   }
 
@@ -56,6 +68,15 @@ function NotificationsPage() {
     // Optimistic update
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
     
+    // Always try to update local storage if item exists
+    try {
+      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      if (list.some(n => n.id === id)) {
+        const next = list.map(n => n.id === id ? { ...n, unread: false } : n)
+        localStorage.setItem("notifications", JSON.stringify(next))
+      }
+    } catch {}
+
     try {
       const token = localStorage.getItem("authToken")
       if (token) {
@@ -67,15 +88,12 @@ function NotificationsPage() {
           },
           body: JSON.stringify({ id })
         })
-      } else {
-        const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-        const next = list.map(n => n.id === id ? { ...n, unread: false } : n)
-        localStorage.setItem("notifications", JSON.stringify(next))
       }
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {
       console.error("Failed to mark as read", err)
-      fetchNotifications() // Revert on error
+      // Don't revert if local update succeeded, as it might be a local-only notification
+      // fetchNotifications() 
     }
   }
 
@@ -83,29 +101,34 @@ function NotificationsPage() {
     // Optimistic update
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
 
+    // Always update local storage
+    try {
+      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const next = list.map(n => ({ ...n, unread: false }))
+      localStorage.setItem("notifications", JSON.stringify(next))
+    } catch {}
+
     try {
       const token = localStorage.getItem("authToken")
       if (token) {
         const unread = notifications.filter(n => !n.is_read)
-        await Promise.all(unread.map(n => 
-          fetch(`${API_BASE_URL}/api/notifications/read/`, {
-              method: "POST",
-              headers: { 
-                  "Authorization": `Token ${token}`,
-                  "Content-Type": "application/json"
-              },
-              body: JSON.stringify({ id: n.id })
-          })
-        ))
-      } else {
-        const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-        const next = list.map(n => ({ ...n, unread: false }))
-        localStorage.setItem("notifications", JSON.stringify(next))
+        if (unread.length > 0) {
+            await Promise.all(unread.map(n => 
+            fetch(`${API_BASE_URL}/api/notifications/read/`, {
+                method: "POST",
+                headers: { 
+                    "Authorization": `Token ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ id: n.id })
+            })
+            ))
+        }
       }
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {
       console.error("Failed to mark all as read", err)
-      fetchNotifications()
+      // fetchNotifications()
     }
   }
 
@@ -114,6 +137,15 @@ function NotificationsPage() {
     
     // Optimistic update
     setNotifications(prev => prev.filter(n => n.id !== id))
+
+    // Always update local storage
+    try {
+      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      if (list.some(n => n.id === id)) {
+        const next = list.filter(n => n.id !== id)
+        localStorage.setItem("notifications", JSON.stringify(next))
+      }
+    } catch {}
 
     try {
       const token = localStorage.getItem("authToken")
@@ -125,12 +157,8 @@ function NotificationsPage() {
           }
         })
         if (!res.ok) {
-          console.warn("Delete might not be implemented on backend")
+          console.warn("Delete might not be implemented on backend or not found")
         }
-      } else {
-        const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-        const next = list.filter(n => n.id !== id)
-        localStorage.setItem("notifications", JSON.stringify(next))
       }
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {
@@ -142,6 +170,11 @@ function NotificationsPage() {
     setNotifications([])
     setConfirmClear(false)
     
+    // Always clear local storage
+    try {
+        localStorage.setItem("notifications", JSON.stringify([]))
+    } catch {}
+
     try {
       const token = localStorage.getItem("authToken")
       if (token) {
@@ -151,8 +184,6 @@ function NotificationsPage() {
               headers: { "Authorization": `Token ${token}` }
           })
         ))
-      } else {
-        localStorage.setItem("notifications", JSON.stringify([]))
       }
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {

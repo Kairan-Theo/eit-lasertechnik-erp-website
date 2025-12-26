@@ -143,16 +143,30 @@ export default function Navigation() {
           ...(token ? { "Authorization": `Token ${token}` } : {})
         }
         fetch(`${API_BASE_URL}/api/notifications/`, { headers })
-          .then(r => r.ok ? r.json() : [])
+          .then(r => r.ok ? r.json() : Promise.resolve([]))
           .then(list => {
-            if (Array.isArray(list)) {
+            if (Array.isArray(list) && list.length) {
               const unread = list.reduce((acc, n) => acc + (n && n.is_read === false ? 1 : 0), 0)
               setNotificationsCount(unread)
-            } else {
+              return
+            }
+            try {
+              const local = JSON.parse(localStorage.getItem("notifications") || "[]")
+              const unread = local.reduce((acc, n) => acc + (n && n.unread === true ? 1 : 0), 0)
+              setNotificationsCount(unread)
+            } catch {
               setNotificationsCount(0)
             }
           })
-          .catch(() => setNotificationsCount(0))
+          .catch(() => {
+            try {
+              const local = JSON.parse(localStorage.getItem("notifications") || "[]")
+              const unread = local.reduce((acc, n) => acc + (n && n.unread === true ? 1 : 0), 0)
+              setNotificationsCount(unread)
+            } catch {
+              setNotificationsCount(0)
+            }
+          })
       } catch {
         setDueCount(0)
         setNotificationsCount(0)
