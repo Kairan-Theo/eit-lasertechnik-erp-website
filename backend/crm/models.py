@@ -122,7 +122,7 @@ class Deal(models.Model):
     tax_id = models.CharField(max_length=50, blank=True)
     items = models.JSONField(default=list, blank=True)
     notes = models.TextField(blank=True)
-    stage = models.ForeignKey('Stage', null=True, blank=True, on_delete=models.PROTECT)
+    stage = models.CharField(max_length=50, default="New")
     created_at = models.DateTimeField(default=timezone.now)
     expected_close = models.DateField(null=True, blank=True)
     po_number = models.CharField(max_length=50, blank=True)
@@ -164,14 +164,6 @@ class Contact(models.Model):
     contact_person = models.CharField(max_length=100)
     email = models.EmailField()
     phone = models.CharField(max_length=20)
-
-class Stage(models.Model):
-    stage_name = models.CharField(max_length=50)
-    stage_order = models.IntegerField()
-    def __str__(self):
-        return self.stage_name
-    class Meta:
-        ordering = ['stage_order', 'stage_name']
 
 class Project(models.Model):
     PRIORITY_CHOICES = [

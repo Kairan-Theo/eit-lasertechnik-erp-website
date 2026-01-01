@@ -47,6 +47,34 @@ function ManufacturingOrderPage() {
   const [poList, setPoList] = React.useState([])
   const [showPoSuggestions, setShowPoSuggestions] = React.useState(false)
   const [crmPoNumbers, setCrmPoNumbers] = React.useState([])
+  const applyPoSuggestion = React.useCallback((val) => {
+    const s = String(val || "").trim()
+    let next = { ...newOrder, purchaseOrder: s }
+    const p = poList.find((x) => String(x.poNumber || "").trim() === s)
+    if (p) {
+      const cname = String((p.customer && (p.customer.company || p.customer.name)) || "").trim()
+      if (cname) next.customer = cname
+      const it = Array.isArray(p.items) && p.items.length ? p.items[0] : null
+      if (it) {
+        if (!String(next.product || "").trim()) next.product = String(it.product || it.description || "").trim()
+        const q = Number(it.qty)
+        if (!Number(next.quantity) && Number.isFinite(q) && q > 0) next.quantity = q
+      }
+    } else {
+      const o = orders.find((x) => String(x.ref || "").trim() === s)
+      if (o) {
+        if (String(o.customer || "").trim()) next.customer = o.customer
+        if (!String(next.product || "").trim() && String(o.product || "").trim()) next.product = o.product
+        if (!String(next.productNo || "").trim() && String(o.productNo || "").trim()) next.productNo = o.productNo
+        const q1 = Number(o.quantity)
+        const q2 = Number(o.totalQuantity)
+        if (!Number(next.quantity) && Number.isFinite(q1) && q1 > 0) next.quantity = q1
+        if (!Number(next.totalQuantity) && Number.isFinite(q2) && q2 > 0) next.totalQuantity = q2
+      }
+    }
+    setNewOrder(next)
+    setShowPoSuggestions(false)
+  }, [newOrder, poList, orders])
 
   const handlePrint = (o) => {
     setPrintingOrder(o)
@@ -766,7 +794,7 @@ function ManufacturingOrderPage() {
                               <button
                                 key={`${val}-${i}`}
                                 className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
-                                onClick={() => { setNewOrder({...newOrder, purchaseOrder: val}); setShowPoSuggestions(false) }}
+                                onClick={() => applyPoSuggestion(val)}
                               >
                                 {val}
                               </button>
