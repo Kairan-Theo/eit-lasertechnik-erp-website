@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import emailjs from '@emailjs/browser';
+import { Mail, Trash2 } from "lucide-react"
 import "./index.css"
 import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
@@ -92,8 +93,8 @@ function CRMPage() {
   )
   const [activeTab, setActiveTab] = React.useState("Deals")
   const [menuOpenIndex, setMenuOpenIndex] = React.useState(null)
-  const [openCardMenu, setOpenCardMenu] = React.useState(null) // { stageIndex, cardIndex }
   const [showNewForm, setShowNewForm] = React.useState(false)
+  const [deleteConfirmation, setDeleteConfirmation] = React.useState(null)
 
   React.useEffect(() => {
     fetchDeals()
@@ -120,6 +121,8 @@ function CRMPage() {
             contact: d.contact,
             email: d.email,
             phone: d.phone,
+            address: d.address,
+            taxId: d.tax_id,
             notes: d.notes,
             createdAt: d.created_at,
             expectedClose: d.expected_close,
@@ -144,12 +147,6 @@ function CRMPage() {
     }
   }
   const [openDetail, setOpenDetail] = React.useState(null) // { stageIndex, cardIndex }
-  const [detailNotes, setDetailNotes] = React.useState("")
-  const [detailContact, setDetailContact] = React.useState("")
-  const [detailEmail, setDetailEmail] = React.useState("")
-  const [detailPhone, setDetailPhone] = React.useState("")
-  const [detailAddress, setDetailAddress] = React.useState("")
-  const [detailTaxId, setDetailTaxId] = React.useState("")
   const [openPriority, setOpenPriority] = React.useState(null) // { stageIndex, cardIndex }
   const priorityClass = (p) => (p==='high' ? 'bg-red-100 text-red-700' : p==='medium' ? 'bg-orange-100 text-orange-700' : p==='low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
   const priorityLabel = (p) => (p && p!=='none' ? p.charAt(0).toUpperCase()+p.slice(1) : 'Set Priority')
@@ -168,6 +165,7 @@ function CRMPage() {
     stageIndex: 0,
   }
   const [newDeal, setNewDeal] = React.useState(defaultNewDeal)
+  const [detailDeal, setDetailDeal] = React.useState(defaultNewDeal)
   const [openActivity, setOpenActivity] = React.useState(null)
   const [scheduleDueInput, setScheduleDueInput] = React.useState("")
   const [scheduleText, setScheduleText] = React.useState("")
@@ -185,6 +183,8 @@ function CRMPage() {
   const [openEmail, setOpenEmail] = React.useState(null) // { stageIndex, cardIndex, to }
   const [emailSubject, setEmailSubject] = React.useState("")
   const [emailBody, setEmailBody] = React.useState("")
+  const [openEdit, setOpenEdit] = React.useState(null) // { stageIndex, cardIndex }
+  const [editingDeal, setEditingDeal] = React.useState(defaultNewDeal)
   const [isSending, setIsSending] = React.useState(false)
   const [emailConfig, setEmailConfig] = React.useState(() => {
     try {
@@ -440,24 +440,84 @@ function CRMPage() {
 
   const openDealDetail = (stageIndex, cardIndex) => {
     const d = stages[stageIndex].deals[cardIndex]
-    setDetailNotes(d.notes || "")
-    setDetailContact(d.contact || "")
-    setDetailEmail(d.email || "")
-    setDetailPhone(d.phone || "")
-    setDetailAddress(d.address || "")
-    setDetailTaxId(d.taxId || "")
+    setDetailDeal({
+        company: d.customer || d.customer_name || "",
+        contact: d.contact || "",
+        opportunity: d.title || "",
+        email: d.email || "",
+        phone: d.phone || "",
+        address: d.address || "",
+        taxId: d.taxId || "",
+        poNumber: d.poNumber || "",
+        amount: d.amount || 0,
+        currency: d.currency || "฿",
+        priority: d.priority || "none",
+        stageIndex: stageIndex,
+        notes: d.notes || ""
+    })
     setOpenDetail({ stageIndex, cardIndex })
   }
 
   const saveDetail = async () => {
     if (!openDetail) return
     const { stageIndex, cardIndex } = openDetail
+    const dealId = stages[stageIndex].deals[cardIndex].id
+
+    // Optimistic Update
     setStages((prev) => prev.map((s, i) => {
       if (i !== stageIndex) return s
-      const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, notes: detailNotes, contact: detailContact, email: detailEmail, phone: detailPhone, address: detailAddress, taxId: detailTaxId } : d))
+      const deals = s.deals.map((d, j) => (j === cardIndex ? { 
+          ...d, 
+          customer: detailDeal.company,
+          customer_name: detailDeal.company,
+          title: detailDeal.opportunity,
+          amount: detailDeal.amount,
+          currency: detailDeal.currency,
+          priority: detailDeal.priority,
+          contact: detailDeal.contact, 
+          email: detailDeal.email, 
+          phone: detailDeal.phone, 
+          address: detailDeal.address, 
+          taxId: detailDeal.taxId,
+          poNumber: detailDeal.poNumber,
+          notes: detailDeal.notes
+      } : d))
       return { ...s, deals }
     }))
     setOpenDetail(null)
+
+    // API Update
+    try {
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { "Authorization": `Token ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" }
+        
+        const stageName = stages[stageIndex].name
+        
+        const apiBody = {
+            title: detailDeal.opportunity,
+            customer_name: detailDeal.company,
+            amount: detailDeal.amount,
+            currency: detailDeal.currency,
+            priority: detailDeal.priority,
+            contact: detailDeal.contact,
+            email: detailDeal.email,
+            phone: detailDeal.phone,
+            address: detailDeal.address,
+            tax_id: detailDeal.taxId,
+            po_number: detailDeal.poNumber,
+            notes: detailDeal.notes,
+            stage: stageName
+        }
+
+        await fetch(`${API_BASE}/deals/${dealId}/`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify(apiBody)
+        })
+    } catch (err) {
+        console.error("Failed to update deal details", err)
+        showNotification("Failed to update deal details")
+    }
   }
 
   const openEmailModal = (stageIndex, cardIndex) => {
@@ -565,7 +625,6 @@ function CRMPage() {
       const deals = s.deals.map((d, j) => (j === cardIndex ? { ...d, priority } : d))
       return { ...s, deals }
     }))
-    setOpenCardMenu(null)
     setOpenPriority(null)
 
     // API Update
@@ -586,49 +645,114 @@ function CRMPage() {
     }
   }
 
-  const editCard = async (stageIndex, cardIndex) => {
+  const editCard = (stageIndex, cardIndex) => {
     const s = stages[stageIndex]
     const d = s.deals[cardIndex]
-    const title = window.prompt("Edit opportunity title", d.title)
-    if (title === null) return
-    const customer = window.prompt("Edit customer", d.customer)
-    if (customer === null) return
-    const amountStr = window.prompt("Edit amount (number)", String(d.amount ?? 0))
-    if (amountStr === null) return
-    const amount = amountStr.trim() === "" ? d.amount : Number(amountStr)
-    if (!Number.isFinite(amount)) {
-      alert("Amount must be a number")
-      return
+    setEditingDeal({
+        company: d.customer || "",
+        contact: d.contact || "",
+        opportunity: d.title || "",
+        email: d.email || "",
+        phone: d.phone || "",
+        address: d.address || "",
+        taxId: d.taxId || "",
+        poNumber: d.poNumber || "",
+        amount: d.amount || 0,
+        currency: d.currency || "฿",
+        priority: d.priority || "none",
+        stageIndex: stageIndex,
+    })
+    setOpenEdit({ stageIndex, cardIndex })
+  }
+  const saveEditCard = async () => {
+    if (!openEdit) return
+    const { stageIndex, cardIndex } = openEdit
+    const newStageIndex = editingDeal.stageIndex
+    
+    const dealId = stages[stageIndex].deals[cardIndex].id
+    
+    const updatedFields = {
+        title: editingDeal.opportunity || editingDeal.company || "Untitled",
+        customer: editingDeal.company || "",
+        amount: Number(editingDeal.amount) || 0,
+        currency: editingDeal.currency || "฿",
+        priority: editingDeal.priority || "none",
+        contact: editingDeal.contact || "",
+        email: editingDeal.email || "",
+        phone: editingDeal.phone || "",
+        address: editingDeal.address || "",
+        taxId: editingDeal.taxId || "",
+        poNumber: editingDeal.poNumber || "",
     }
 
-    // Optimistic update
-    setStages((prev) => prev.map((stage, i) => {
-      if (i !== stageIndex) return stage
-      const deals = stage.deals.map((deal, j) => (j === cardIndex ? { ...deal, title, customer, amount } : deal))
-      return { ...stage, deals }
-    }))
-    setOpenCardMenu(null)
-
-    // API Update
+    setStages((prev) => {
+        if (stageIndex !== newStageIndex) {
+            const oldStage = prev[stageIndex]
+            const deal = oldStage.deals[cardIndex]
+            const newStages = [...prev]
+            newStages[stageIndex] = {
+                ...oldStage,
+                deals: oldStage.deals.filter((_, i) => i !== cardIndex)
+            }
+            const updatedDeal = { ...deal, ...updatedFields }
+            newStages[newStageIndex] = {
+                ...newStages[newStageIndex],
+                deals: [...newStages[newStageIndex].deals, updatedDeal]
+            }
+            return newStages
+        } else {
+            return prev.map((stage, i) => {
+                if (i !== stageIndex) return stage
+                const deals = stage.deals.map((deal, j) => (j === cardIndex ? { ...deal, ...updatedFields } : deal))
+                return { ...stage, deals }
+            })
+        }
+    })
+    
+    setOpenEdit(null)
+    
     try {
-      const token = localStorage.getItem("authToken")
-      const headers = {
-        "Content-Type": "application/json",
-        ...(token ? { "Authorization": `Token ${token}` } : {})
-      }
-      await fetch(`${API_BASE}/deals/${d.id}/`, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({ title, amount })
-      })
+        const token = localStorage.getItem("authToken")
+        const headers = {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Token ${token}` } : {})
+        }
+        
+        const stageName = stages[newStageIndex].name
+        
+        const apiBody = {
+            title: updatedFields.title,
+            customer_name: updatedFields.customer,
+            amount: updatedFields.amount,
+            currency: updatedFields.currency,
+            priority: updatedFields.priority,
+            contact: updatedFields.contact,
+            email: updatedFields.email,
+            phone: updatedFields.phone,
+            address: updatedFields.address,
+            tax_id: updatedFields.taxId,
+            po_number: updatedFields.poNumber,
+            stage: stageName
+        }
+
+        await fetch(`${API_BASE}/deals/${dealId}/`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify(apiBody)
+        })
     } catch (err) {
-      console.error("Failed to update deal", err)
+        console.error("Failed to update deal", err)
+        showNotification("Failed to update deal")
     }
   }
 
-  const deleteCard = async (stageIndex, cardIndex) => {
-    const ok = window.confirm("Delete this opportunity?")
-    if (!ok) return
+  const deleteCard = (stageIndex, cardIndex) => {
+    setDeleteConfirmation({ stageIndex, cardIndex })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmation) return
+    const { stageIndex, cardIndex } = deleteConfirmation
     
     const dealId = stages[stageIndex].deals[cardIndex].id
 
@@ -638,7 +762,8 @@ function CRMPage() {
       const deals = stage.deals.filter((_, j) => j !== cardIndex)
       return { ...stage, deals }
     }))
-    setOpenCardMenu(null)
+
+    setDeleteConfirmation(null)
 
     // API Update
     try {
@@ -801,38 +926,57 @@ function CRMPage() {
                         draggable
                         onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
                       >
-                        <div className="mb-2 flex items-center gap-2 flex-wrap">
-                          <span 
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
-                            onClick={(e) => { e.stopPropagation(); openEmailModal(stageIndex, cardIndex); }}
-                            title="Click to send email"
-                          >
-                          <svg className="w-4 h-4 text-[#2D4485]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="truncate text-xs leading-tight max-w-[280px]">{d.customer || d.customer_name || d.contact || d.email || d.title}</span>
-                        </span>
-                        {d.poNumber && (
-                          <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 text-[#2D4485] text-xs font-semibold border border-blue-100"
-                            title="Purchase Order"
-                          >
-                            <span className="truncate leading-tight max-w-[180px]">{d.poNumber}</span>
-                          </span>
-                        )}
-                      </div>
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0 flex flex-col items-start gap-1.5">
+                            <span 
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors max-w-full"
+                              onClick={(e) => { e.stopPropagation(); openDealDetail(stageIndex, cardIndex); }}
+                              title="View company details"
+                            >
+                              <span className="truncate text-xs leading-tight">{d.customer || d.customer_name || d.contact || d.email || d.title}</span>
+                            </span>
+                            {d.poNumber && (
+                              <span
+                                className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200"
+                                title="PO Number"
+                              >
+                                <span className="truncate leading-tight max-w-[180px]">PO: {String(d.poNumber || "").trim()}</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-blue-100 bg-blue-50 text-[#2D4485] hover:bg-blue-100 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); openEmailModal(stageIndex, cardIndex); }}
+                              title="Send email"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                                <rect width="20" height="16" x="2" y="4" rx="2" />
+                                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                              </svg>
+                            </button>
+                            <button
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-red-100 bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); deleteCard(stageIndex, cardIndex); }}
+                              title="Delete deal"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                <line x1="10" x2="10" y1="11" y2="17" />
+                                <line x1="14" x2="14" y1="11" y2="17" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
                       <div className="flex justify-between items-start gap-2 mb-3">
                          <h4 
-                           className="font-semibold text-slate-800 text-sm leading-snug hover:text-[#2D4485] cursor-pointer transition-colors"
-                           onClick={() => openDealDetail(stageIndex, cardIndex)}
+                           className="font-semibold text-slate-800 text-sm leading-snug"
                          >
                            {d.title}
                          </h4>
-                         <button 
-                            className="text-slate-300 hover:text-slate-500 opacity-0 group-hover/card:opacity-100 transition-opacity p-1 hover:bg-slate-50 rounded"
-                            onClick={(e) => { e.stopPropagation(); setOpenCardMenu({ stageIndex, cardIndex }); }}
-                         >
-                           ⋯
-                         </button>
-                      </div>
+                       </div>
                       
                       <div className="space-y-2 mb-3">
                         <div className="flex items-center gap-1.5 text-slate-900 font-bold text-sm">
@@ -895,15 +1039,6 @@ function CRMPage() {
                            </div>
                         </div>
                       </div>
-
-                      {/* Card Menu Dropdown */}
-                      {openCardMenu && openCardMenu.stageIndex === stageIndex && openCardMenu.cardIndex === cardIndex && (
-                         <div className="absolute right-2 top-8 z-10 w-32 bg-white rounded-lg shadow-xl border border-slate-200 py-1">
-                            <button className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => editCard(stageIndex, cardIndex)}>Edit</button>
-                            <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-slate-50" onClick={() => deleteCard(stageIndex, cardIndex)}>Delete</button>
-                            <button className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setOpenCardMenu(null)}>Close</button>
-                         </div>
-                      )}
                     </div>
                   ))}
                   
@@ -1143,73 +1278,408 @@ function CRMPage() {
               </div>
             </div>
           )}
+          {openEdit && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setOpenEdit(null)}>
+              <div className="absolute left-1/2 top-16 -translate-x-1/2 w-[640px] z-50 transition-all" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 text-lg">Edit Deal</h3>
+                    <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setOpenEdit(null)}>✕</button>
+                  </div>
+                  <div className="p-4 max-h-[60vh] overflow-y-auto">
+                    <div className="space-y-6">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
+                            <div className="relative">
+                              <input 
+                                value={editingDeal.company} 
+                                onChange={(e)=> {
+                                  setEditingDeal({...editingDeal, company:e.target.value})
+                                  setShowCompanySuggestions(true)
+                                }}
+                                onFocus={() => setShowCompanySuggestions(true)}
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                                placeholder="Search or enter company name..."
+                              />
+                              {showCompanySuggestions && editingDeal.company && (
+                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+                                  {thaiCompanies.filter(c => c.name.toLowerCase().includes(editingDeal.company.toLowerCase())).map((c, i) => (
+                                    <button
+                                      key={i}
+                                      className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                                      onClick={() => {
+                                        setEditingDeal({...editingDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || "", taxId: c.taxId || ""})
+                                        setShowCompanySuggestions(false)
+                                      }}
+                                    >
+                                      <div className="font-medium">{c.name}</div>
+                                      <div className="text-xs text-slate-500">Contact: {c.contact}</div>
+                                    </button>
+                                  ))}
+                                  {editingDeal.company && !thaiCompanies.some(c => c.name.toLowerCase() === editingDeal.company.toLowerCase()) && (
+                                    <button
+                                      className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
+                                      onClick={() => {
+                                        setShowCompanySuggestions(false)
+                                      }}
+                                    >
+                                      + Add "{editingDeal.company}"
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Opportunity</label>
+                            <input 
+                              value={editingDeal.opportunity} 
+                              onChange={(e)=>setEditingDeal({...editingDeal, opportunity:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Deal opportunity name"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                            <input 
+                              value={editingDeal.email} 
+                              onChange={(e)=>setEditingDeal({...editingDeal, email:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Email address"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+                            <input 
+                              value={editingDeal.phone} 
+                              onChange={(e)=>setEditingDeal({...editingDeal, phone:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Phone number"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
+                            <input 
+                              value={editingDeal.address} 
+                              onChange={(e)=>setEditingDeal({...editingDeal, address:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Company address"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
+                            <input 
+                              value={editingDeal.contact} 
+                              onChange={(e)=>setEditingDeal({...editingDeal, contact:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Contact person"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Codes</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Tax ID</label>
+                            <input 
+                              value={editingDeal.taxId} 
+                              onChange={(e)=>setEditingDeal({...editingDeal, taxId:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Tax ID"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">PO Number</label>
+                            <input 
+                              value={editingDeal.poNumber} 
+                              onChange={(e)=>setEditingDeal({...editingDeal, poNumber:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Purchase Order Number"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Amount</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-1">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{editingDeal.currency}</span>
+                              <input 
+                                type="number" 
+                                value={editingDeal.amount} 
+                                onChange={(e)=>setEditingDeal({...editingDeal, amount:Number(e.target.value)})} 
+                                className="w-full pl-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              />
+                            </div>
+                          </div>
+                          <div className="sm:col-span-1">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Currency</label>
+                            <input 
+                              value={editingDeal.currency} 
+                              onChange={(e)=>setEditingDeal({...editingDeal, currency:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all text-center uppercase" 
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Priority</div>
+                        <div className="flex items-center gap-3">
+                          {[1,2,3].map(n => {
+                            const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
+                            const title = n===1 ? 'Low' : n===2 ? 'Medium' : 'High'
+                            const active = editingDeal.priority===p
+                            const colorClass = n===1 ? 'bg-[#2D4485]' : n===2 ? 'bg-orange-400' : 'bg-red-500'
+                            return (
+                              <button
+                                key={n}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${active ? `${colorClass} text-white border-transparent shadow-md transform scale-105` : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                onClick={()=>setEditingDeal({...editingDeal, priority: active ? 'none' : p})}
+                              >
+                                {title} Priority
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Stage</div>
+                        <select 
+                          value={editingDeal.stageIndex} 
+                          onChange={(e)=>setEditingDeal({...editingDeal, stageIndex:Number(e.target.value)})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                        >
+                          {stages.map((s, i) => (
+                            <option key={s.id} value={i}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+                    <button 
+                      className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm" 
+                      onClick={() => setOpenEdit(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="px-5 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
+                      onClick={saveEditCard}
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {openDetail && (
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setOpenDetail(null)}>
-              <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[520px] transition-all" onClick={(e) => e.stopPropagation()}>
+              <div className="absolute left-1/2 top-16 -translate-x-1/2 w-[640px] transition-all" onClick={(e) => e.stopPropagation()}>
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <h3 className="font-bold text-slate-800 text-lg">Company Details</h3>
                     <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setOpenDetail(null)}>✕</button>
                   </div>
-                  <div className="p-6">
-                    {(() => { const d = stages[openDetail.stageIndex].deals[openDetail.cardIndex]; return (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                          <label className="text-sm font-medium text-slate-500">Contact</label>
-                          <input 
-                            value={detailContact} 
-                            onChange={(e)=>setDetailContact(e.target.value)} 
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                            placeholder="Contact person"
-                          />
-                        </div>
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                          <label className="text-sm font-medium text-slate-500">Email</label>
-                          <input 
-                            value={detailEmail} 
-                            onChange={(e)=>setDetailEmail(e.target.value)} 
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                            placeholder="Email address"
-                          />
-                        </div>
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                          <label className="text-sm font-medium text-slate-500">Phone</label>
-                          <input 
-                            value={detailPhone} 
-                            onChange={(e)=>setDetailPhone(e.target.value)} 
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                            placeholder="Phone number"
-                          />
-                        </div>
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                          <label className="text-sm font-medium text-slate-500">Address</label>
-                          <input 
-                            value={detailAddress} 
-                            onChange={(e)=>setDetailAddress(e.target.value)} 
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                            placeholder="Company address"
-                          />
-                        </div>
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                          <label className="text-sm font-medium text-slate-500">Tax ID</label>
-                          <input 
-                            value={detailTaxId} 
-                            onChange={(e)=>setDetailTaxId(e.target.value)} 
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                            placeholder="Tax ID"
-                          />
-                        </div>
-                        <div className="pt-2">
-                          <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
-                          <textarea 
-                            value={detailNotes} 
-                            onChange={(e)=>setDetailNotes(e.target.value)} 
-                            className="w-full min-h-[120px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all resize-y" 
-                            placeholder="Add notes about this deal..." 
-                          />
+                  <div className="p-6 max-h-[70vh] overflow-y-auto">
+                    <div className="space-y-6">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
+                            <div className="relative">
+                              <input 
+                                value={detailDeal.company} 
+                                onChange={(e)=> {
+                                  setDetailDeal({...detailDeal, company:e.target.value})
+                                  setShowCompanySuggestions(true)
+                                }}
+                                onFocus={() => setShowCompanySuggestions(true)}
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                                placeholder="Search or enter company name..."
+                              />
+                              {showCompanySuggestions && detailDeal.company && (
+                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+                                  {thaiCompanies.filter(c => c.name.toLowerCase().includes(detailDeal.company.toLowerCase())).map((c, i) => (
+                                    <button
+                                      key={i}
+                                      className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                                      onClick={() => {
+                                        setDetailDeal({...detailDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || "", taxId: c.taxId || ""})
+                                        setShowCompanySuggestions(false)
+                                      }}
+                                    >
+                                      <div className="font-medium">{c.name}</div>
+                                      <div className="text-xs text-slate-500">Contact: {c.contact}</div>
+                                    </button>
+                                  ))}
+                                  {detailDeal.company && !thaiCompanies.some(c => c.name.toLowerCase() === detailDeal.company.toLowerCase()) && (
+                                    <button
+                                      className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
+                                      onClick={() => {
+                                        setShowCompanySuggestions(false)
+                                      }}
+                                    >
+                                      + Add "{detailDeal.company}"
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Opportunity</label>
+                            <input 
+                              value={detailDeal.opportunity} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, opportunity:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Deal opportunity name"
+                            />
+                          </div>
                         </div>
                       </div>
-                    )})()}
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                            <input 
+                              value={detailDeal.email} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, email:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Email address"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+                            <input 
+                              value={detailDeal.phone} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, phone:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Phone number"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
+                            <input 
+                              value={detailDeal.address} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, address:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Company address"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
+                            <input 
+                              value={detailDeal.contact} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, contact:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Contact person"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Codes</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Tax ID</label>
+                            <input 
+                              value={detailDeal.taxId} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, taxId:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Tax ID"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">PO Number</label>
+                            <input 
+                              value={detailDeal.poNumber} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, poNumber:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Purchase Order Number"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Amount</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-1">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{detailDeal.currency}</span>
+                              <input 
+                                type="number" 
+                                value={detailDeal.amount} 
+                                onChange={(e)=>setDetailDeal({...detailDeal, amount:Number(e.target.value)})} 
+                                className="w-full pl-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              />
+                            </div>
+                          </div>
+                          <div className="sm:col-span-1">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Currency</label>
+                            <input 
+                              value={detailDeal.currency} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, currency:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all text-center uppercase" 
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Priority</div>
+                        <div className="flex items-center gap-3">
+                          {[1,2,3].map(n => {
+                            const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
+                            const title = n===1 ? 'Low' : n===2 ? 'Medium' : 'High'
+                            const active = detailDeal.priority===p
+                            const colorClass = n===1 ? 'bg-[#2D4485]' : n===2 ? 'bg-orange-400' : 'bg-red-500'
+                            return (
+                              <button
+                                key={n}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${active ? `${colorClass} text-white border-transparent shadow-md transform scale-105` : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                onClick={()=>setDetailDeal({...detailDeal, priority: active ? 'none' : p})}
+                              >
+                                {title} Priority
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Notes</div>
+                        <textarea 
+                          value={detailDeal.notes} 
+                          onChange={(e)=>setDetailDeal({...detailDeal, notes:e.target.value})} 
+                          className="w-full min-h-[120px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all resize-y" 
+                          placeholder="Add notes about this deal..." 
+                        />
+                      </div>
+                    </div>
                   </div>
                   <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
                     <button 
@@ -1231,140 +1701,165 @@ function CRMPage() {
           )}
           {showNewForm && (
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 transition-opacity" onClick={() => setShowNewForm(false)}>
-              <div className="absolute left-1/2 top-16 -translate-x-1/2 w-[420px] z-50 transition-all" onClick={(e) => e.stopPropagation()}>
+              <div className="absolute left-1/2 top-16 -translate-x-1/2 w-[640px] z-50 transition-all" onClick={(e) => e.stopPropagation()}>
                     <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
                       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <h3 className="font-bold text-slate-800 text-lg">New Deal</h3>
                     <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowNewForm(false)}>✕</button>
                   </div>
                   <div className="p-4 max-h-[60vh] overflow-y-auto">
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Company</label>
-                        <div className="relative">
-                          <input 
-                            value={newDeal.company} 
-                            onChange={(e)=> {
-                              setNewDeal({...newDeal, company:e.target.value})
-                              setShowCompanySuggestions(true)
-                            }}
-                            onFocus={() => setShowCompanySuggestions(true)}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                            placeholder="Search or enter company name..."
-                          />
-                          {showCompanySuggestions && newDeal.company && (
-                            <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-                              {thaiCompanies.filter(c => c.name.toLowerCase().includes(newDeal.company.toLowerCase())).map((c, i) => (
-                                <button
-                                  key={i}
-                                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
-                                  onClick={() => {
-                                    setNewDeal({...newDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || "", taxId: c.taxId || ""})
-                                    setShowCompanySuggestions(false)
-                                  }}
-                                >
-                                  <div className="font-medium">{c.name}</div>
-                                  <div className="text-xs text-slate-500">Contact: {c.contact}</div>
-                                </button>
-                              ))}
-                              {newDeal.company && !thaiCompanies.some(c => c.name.toLowerCase() === newDeal.company.toLowerCase()) && (
-                                <button
-                                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
-                                  onClick={() => {
-                                    setShowCompanySuggestions(false)
-                                  }}
-                                >
-                                  + Add "{newDeal.company}"
-                                </button>
+                    <div className="space-y-6">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
+                            <div className="relative">
+                              <input 
+                                value={newDeal.company} 
+                                onChange={(e)=> {
+                                  setNewDeal({...newDeal, company:e.target.value})
+                                  setShowCompanySuggestions(true)
+                                }}
+                                onFocus={() => setShowCompanySuggestions(true)}
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                                placeholder="Search or enter company name..."
+                              />
+                              {showCompanySuggestions && newDeal.company && (
+                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+                                  {thaiCompanies.filter(c => c.name.toLowerCase().includes(newDeal.company.toLowerCase())).map((c, i) => (
+                                    <button
+                                      key={i}
+                                      className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                                      onClick={() => {
+                                        setNewDeal({...newDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || "", taxId: c.taxId || ""})
+                                        setShowCompanySuggestions(false)
+                                      }}
+                                    >
+                                      <div className="font-medium">{c.name}</div>
+                                      <div className="text-xs text-slate-500">Contact: {c.contact}</div>
+                                    </button>
+                                  ))}
+                                  {newDeal.company && !thaiCompanies.some(c => c.name.toLowerCase() === newDeal.company.toLowerCase()) && (
+                                    <button
+                                      className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
+                                      onClick={() => {
+                                        setShowCompanySuggestions(false)
+                                      }}
+                                    >
+                                      + Add "{newDeal.company}"
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Contact</label>
-                        <input 
-                          value={newDeal.contact} 
-                          onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} 
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                          placeholder="Contact person"
-                        />
-                      </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Opportunity</label>
-                        <input 
-                          value={newDeal.opportunity} 
-                          onChange={(e)=>setNewDeal({...newDeal, opportunity:e.target.value})} 
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                          placeholder="Deal opportunity name"
-                        />
-                      </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">PO Number</label>
-                        <input 
-                          value={newDeal.poNumber} 
-                          onChange={(e)=>setNewDeal({...newDeal, poNumber:e.target.value})} 
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                          placeholder="Purchase Order Number"
-                        />
-                      </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Email</label>
-                        <input 
-                          value={newDeal.email} 
-                          onChange={(e)=>setNewDeal({...newDeal, email:e.target.value})} 
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                          placeholder="Email address"
-                        />
-                      </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Phone</label>
-                        <input 
-                          value={newDeal.phone} 
-                          onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} 
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                          placeholder="Phone number"
-                        />
-                      </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Address</label>
-                        <input 
-                          value={newDeal.address} 
-                          onChange={(e)=>setNewDeal({...newDeal, address:e.target.value})} 
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                          placeholder="Company address"
-                        />
-                      </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Tax ID</label>
-                        <input 
-                          value={newDeal.taxId} 
-                          onChange={(e)=>setNewDeal({...newDeal, taxId:e.target.value})} 
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                          placeholder="Tax ID"
-                        />
-                      </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Amount</label>
-                        <div className="flex items-center gap-3 w-full">
-                          <div className="relative flex-1">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{newDeal.currency}</span>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Opportunity</label>
                             <input 
-                              type="number" 
-                              value={newDeal.amount} 
-                              onChange={(e)=>setNewDeal({...newDeal, amount:Number(e.target.value)})} 
-                              className="w-full pl-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              value={newDeal.opportunity} 
+                              onChange={(e)=>setNewDeal({...newDeal, opportunity:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Deal opportunity name"
                             />
                           </div>
-                          <input 
-                            value={newDeal.currency} 
-                            onChange={(e)=>setNewDeal({...newDeal, currency:e.target.value})} 
-                            className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all text-center uppercase" 
-                          />
                         </div>
                       </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Priority</label>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                            <input 
+                              value={newDeal.email} 
+                              onChange={(e)=>setNewDeal({...newDeal, email:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Email address"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+                            <input 
+                              value={newDeal.phone} 
+                              onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Phone number"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
+                            <input 
+                              value={newDeal.address} 
+                              onChange={(e)=>setNewDeal({...newDeal, address:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Company address"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
+                            <input 
+                              value={newDeal.contact} 
+                              onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Contact person"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Codes</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Tax ID</label>
+                            <input 
+                              value={newDeal.taxId} 
+                              onChange={(e)=>setNewDeal({...newDeal, taxId:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Tax ID"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">PO Number</label>
+                            <input 
+                              value={newDeal.poNumber} 
+                              onChange={(e)=>setNewDeal({...newDeal, poNumber:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Purchase Order Number"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Amount</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-1">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{newDeal.currency}</span>
+                              <input 
+                                type="number" 
+                                value={newDeal.amount} 
+                                onChange={(e)=>setNewDeal({...newDeal, amount:Number(e.target.value)})} 
+                                className="w-full pl-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              />
+                            </div>
+                          </div>
+                          <div className="sm:col-span-1">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Currency</label>
+                            <input 
+                              value={newDeal.currency} 
+                              onChange={(e)=>setNewDeal({...newDeal, currency:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all text-center uppercase" 
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Priority</div>
                         <div className="flex items-center gap-3">
                           {[1,2,3].map(n => {
                             const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
@@ -1383,8 +1878,9 @@ function CRMPage() {
                           })}
                         </div>
                       </div>
-                      <div className="grid grid-cols-[90px_1fr] items-center gap-3">
-                        <label className="text-xs font-medium text-slate-500">Stage</label>
+
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Stage</div>
                         <select 
                           value={newDeal.stageIndex} 
                           onChange={(e)=>setNewDeal({...newDeal, stageIndex:Number(e.target.value)})} 
@@ -1670,6 +2166,30 @@ function CRMPage() {
         </div>
       ) : (
         <div className="p-6 text-slate-600">Coming soon</div>
+      )}
+      
+      {deleteConfirmation && (
+        <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setDeleteConfirmation(null)}>
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border-2 border-white">
+              <div className="px-4 py-3 border-b-2 border-white">
+                <h3 className="font-semibold text-gray-900">Confirm Delete</h3>
+              </div>
+              <div className="p-4">
+                <div className="text-sm text-gray-800">Delete this opportunity?</div>
+              </div>
+              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+                <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setDeleteConfirmation(null)}>Cancel</button>
+                <button
+                  className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
+                  onClick={confirmDelete}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   )
