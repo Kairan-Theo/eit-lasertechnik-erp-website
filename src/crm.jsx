@@ -95,9 +95,28 @@ function CRMPage() {
   const [menuOpenIndex, setMenuOpenIndex] = React.useState(null)
   const [showNewForm, setShowNewForm] = React.useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = React.useState(null)
+  const [users, setUsers] = React.useState([])
+
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = { 
+        "Authorization": `Token ${token}`,
+        "Content-Type": "application/json"
+      }
+      const res = await fetch(`${API_BASE}/users/`, { headers })
+      if (res.ok) {
+        const data = await res.json()
+        setUsers(data)
+      }
+    } catch (err) {
+      console.error("Error fetching users:", err)
+    }
+  }
 
   React.useEffect(() => {
     fetchDeals()
+    fetchUsers()
   }, [])
 
   const fetchDeals = async () => {
@@ -127,6 +146,8 @@ function CRMPage() {
             createdAt: d.created_at,
             expectedClose: d.expected_close,
             poNumber: d.po_number || "",
+            salesperson: d.salesperson || "",
+            salespersonName: d.salesperson_name || "",
             activitySchedules: (d.activity_schedules || []).map(s => ({
               id: s.id,
               dueAt: s.due_at ? s.due_at.slice(0, 16) : "",
@@ -163,6 +184,7 @@ function CRMPage() {
     currency: "฿",
     priority: "none",
     stageIndex: 0,
+    salesperson: "",
   }
   const [newDeal, setNewDeal] = React.useState(defaultNewDeal)
   const [detailDeal, setDetailDeal] = React.useState(defaultNewDeal)
@@ -453,7 +475,8 @@ function CRMPage() {
         currency: d.currency || "฿",
         priority: d.priority || "none",
         stageIndex: stageIndex,
-        notes: d.notes || ""
+        notes: d.notes || "",
+        salesperson: d.salesperson || d.salespersonName || ""
     })
     setOpenDetail({ stageIndex, cardIndex })
   }
@@ -480,7 +503,9 @@ function CRMPage() {
           address: detailDeal.address, 
           taxId: detailDeal.taxId,
           poNumber: detailDeal.poNumber,
-          notes: detailDeal.notes
+          notes: detailDeal.notes,
+          salesperson: detailDeal.salesperson,
+          salespersonName: detailDeal.salesperson
       } : d))
       return { ...s, deals }
     }))
@@ -506,7 +531,8 @@ function CRMPage() {
             tax_id: detailDeal.taxId,
             po_number: detailDeal.poNumber,
             notes: detailDeal.notes,
-            stage: stageName
+            stage: stageName,
+            salesperson: detailDeal.salesperson
         }
 
         await fetch(`${API_BASE}/deals/${dealId}/`, {
@@ -661,6 +687,7 @@ function CRMPage() {
         currency: d.currency || "฿",
         priority: d.priority || "none",
         stageIndex: stageIndex,
+        salesperson: d.salesperson || "",
     })
     setOpenEdit({ stageIndex, cardIndex })
   }
@@ -683,6 +710,7 @@ function CRMPage() {
         address: editingDeal.address || "",
         taxId: editingDeal.taxId || "",
         poNumber: editingDeal.poNumber || "",
+        salesperson: editingDeal.salesperson || "",
     }
 
     setStages((prev) => {
@@ -732,7 +760,8 @@ function CRMPage() {
             address: updatedFields.address,
             tax_id: updatedFields.taxId,
             po_number: updatedFields.poNumber,
-            stage: stageName
+            stage: stageName,
+            salesperson: updatedFields.salesperson
         }
 
         await fetch(`${API_BASE}/deals/${dealId}/`, {
@@ -799,7 +828,7 @@ function CRMPage() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-6">
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 cursor-pointer">
-              {activeTab}
+              CRM
             </h1>
             <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
             <div className="flex items-center gap-2">
@@ -813,7 +842,7 @@ function CRMPage() {
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
-                  {tab}
+                  {tab === "Deals" ? "Sales Pipeline" : tab}
                 </button>
               ))}
             </div>
@@ -935,6 +964,7 @@ function CRMPage() {
                             >
                               <span className="truncate text-xs leading-tight">{d.customer || d.customer_name || d.contact || d.email || d.title}</span>
                             </span>
+
                             {d.poNumber && (
                               <span
                                 className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200"
@@ -979,9 +1009,22 @@ function CRMPage() {
                        </div>
                       
                       <div className="space-y-2 mb-3">
-                        <div className="flex items-center gap-1.5 text-slate-900 font-bold text-sm">
-                          <span className="text-xs font-normal text-slate-400">{d.currency}</span>
-                          {d.amount.toLocaleString()}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-slate-900 font-bold text-sm">
+                            <span className="text-xs font-normal text-slate-400">{d.currency}</span>
+                            {d.amount.toLocaleString()}
+                          </div>
+                          {(d.salesperson || d.salespersonName) && (
+                            <span 
+                              className="text-xs text-slate-600 font-medium px-1 flex items-center gap-1.5"
+                              title={`Salesperson: ${d.salesperson || d.salespersonName}`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                              </svg>
+                              {d.salesperson || d.salespersonName}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -1289,6 +1332,17 @@ function CRMPage() {
                   <div className="p-4 max-h-[60vh] overflow-y-auto">
                     <div className="space-y-6">
                       <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Sales Person</div>
+                        <input 
+                          type="text"
+                          value={editingDeal.salesperson} 
+                          onChange={(e)=>setEditingDeal({...editingDeal, salesperson:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                          placeholder="Enter sales person name"
+                        />
+                      </div>
+
+                      <div>
                         <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-2">
@@ -1501,6 +1555,17 @@ function CRMPage() {
                   <div className="p-6 max-h-[70vh] overflow-y-auto">
                     <div className="space-y-6">
                       <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Sales Person</div>
+                        <input 
+                          type="text"
+                          value={detailDeal.salesperson} 
+                          onChange={(e)=>setDetailDeal({...detailDeal, salesperson:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                          placeholder="Enter sales person name"
+                        />
+                      </div>
+
+                      <div>
                         <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-2">
@@ -1709,6 +1774,17 @@ function CRMPage() {
                   </div>
                   <div className="p-4 max-h-[60vh] overflow-y-auto">
                     <div className="space-y-6">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Sales Person</div>
+                        <input 
+                          type="text"
+                          value={newDeal.salesperson} 
+                          onChange={(e)=>setNewDeal({...newDeal, salesperson:e.target.value})} 
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                          placeholder="Enter sales person name"
+                        />
+                      </div>
+
                       <div>
                         <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1923,7 +1999,8 @@ function CRMPage() {
                           tax_id: newDeal.taxId || "",
                           notes: "",
                           stage: stageName,
-                          write_customer_name: newDeal.company || ""
+                          write_customer_name: newDeal.company || "",
+                          salesperson: newDeal.salesperson || null
                         }
                         if ((newDeal.company || "").trim()) {
                           dealData.write_customer_name = newDeal.company.trim()
