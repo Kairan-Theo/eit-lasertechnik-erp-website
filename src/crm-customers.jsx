@@ -1,199 +1,197 @@
-import React, { useState, useEffect } from "react"
-import { API_BASE_URL } from "./config"
+import React, { useState } from "react"
 
-export default function CRMCustomers() {
-  const [customers, setCustomers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [formData, setFormData] = useState({
-    company_name: "",
-    email: "",
-    phone: "",
-    industry: "",
-    address: "",
-    tax_id: ""
+export default function CRMCustomers({ deals = [] }) {
+  const [searchTerm, setSearchTerm] = useState("")
+  const [columnModes, setColumnModes] = useState({}) // { [key]: 'folded' | 'expanded' | undefined }
+
+  const filteredDeals = deals.filter(deal => {
+    const term = searchTerm.toLowerCase()
+    const company = (deal.customer || deal.company || "").toLowerCase()
+    const salesperson = (deal.salesperson || deal.salespersonName || "").toLowerCase()
+    return company.includes(term) || salesperson.includes(term)
   })
 
-  useEffect(() => {
-    fetchCustomers()
-  }, [])
+  const columns = [
+    { id: 'index', label: 'Index', width: 'w-16' },
+    { id: 'company', label: 'Company Name' },
+    { id: 'email', label: 'Email' },
+    { id: 'phone', label: 'Phone' },
+    { id: 'address', label: 'Address', defaultClass: 'max-w-xs truncate' },
+    { id: 'contact', label: 'Contact Person' },
+    { id: 'taxId', label: 'Tax ID', defaultClass: 'font-mono text-sm' },
+    { id: 'poNumber', label: 'PO Number' },
+    { id: 'title', label: 'Opportunity Name', defaultClass: 'font-medium' },
+    { id: 'salesperson', label: 'Sales Person' },
+    { id: 'amount', label: 'Amount', defaultClass: 'font-mono' },
+  ]
 
-  const fetchCustomers = async () => {
-    try {
-      const token = localStorage.getItem("authToken")
-      const res = await fetch(`${API_BASE_URL}/api/customers/`, {
-        headers: token ? { "Authorization": `Token ${token}` } : {}
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setCustomers(data)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
+  const toggleMode = (id, mode) => {
+    setColumnModes(prev => ({
+      ...prev,
+      [id]: prev[id] === mode ? undefined : mode
+    }))
+  }
+
+  const renderCellContent = (col, deal, index) => {
+    if (columnModes[col.id] === 'folded') return <span className="text-gray-300">•</span>;
+
+    switch (col.id) {
+      case 'index': return <span className="font-medium text-gray-800">{index + 1}</span>;
+      case 'company': return <span className="font-medium text-gray-800">{deal.customer || deal.company || "-"}</span>;
+      case 'salesperson': 
+        const name = deal.salesperson || deal.salespersonName;
+        return name ? (
+          <div className="flex items-center gap-1.5" title={name}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+            </svg>
+            {name}
+          </div>
+        ) : "-";
+      case 'amount':
+        return deal.amount ? `${deal.amount.toLocaleString()} ${deal.currency || '฿'}` : "-";
+      case 'address': return deal.address || "-";
+      case 'email': return deal.email || "-";
+      case 'phone': return deal.phone || "-";
+      case 'contact': return deal.contact || "-";
+      case 'taxId': return deal.taxId || "-";
+      case 'poNumber': return deal.poNumber || "-";
+      case 'title': return deal.title || "-";
+      default: return "-";
     }
   }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    try {
-      const token = localStorage.getItem("authToken")
-      const url = editing 
-        ? `${API_BASE_URL}/api/customers/${editing.id}/`
-        : `${API_BASE_URL}/api/customers/`
-      const method = editing ? "PUT" : "POST"
-      
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Token ${token}` } : {})
-        },
-        body: JSON.stringify(formData)
-      })
-      
-      if (res.ok) {
-        setShowModal(false)
-        setEditing(null)
-        setFormData({ company_name: "", email: "", phone: "", industry: "", address: "", tax_id: "" })
-        fetchCustomers()
-      } else {
-        alert("Failed to save customer")
-      }
-    } catch (err) {
-      alert("Error: " + err.message)
-    }
-  }
-
-  const handleEdit = (c) => {
-    setEditing(c)
-    setFormData({
-      company_name: c.company_name,
-      email: c.email || "",
-      phone: c.phone || "",
-      industry: c.industry || "",
-      address: c.address || "",
-      tax_id: c.tax_id || ""
-    })
-    setShowModal(true)
-  }
-
-  const handleDelete = async (id) => {
-    if (!confirm("Are you sure?")) return
-    try {
-      const token = localStorage.getItem("authToken")
-      await fetch(`${API_BASE_URL}/api/customers/${id}/`, {
-        method: "DELETE",
-        headers: token ? { "Authorization": `Token ${token}` } : {}
-      })
-      fetchCustomers()
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  if (loading) return <div className="p-8 text-center text-gray-500">Loading customers...</div>
 
   return (
     <div className="p-6 bg-gray-50 min-h-full">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Customers</h2>
-        <button 
-          onClick={() => { setEditing(null); setFormData({ company_name: "", email: "", phone: "", industry: "", address: "", tax_id: "" }); setShowModal(true) }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          + Add Customer
-        </button>
+        <h2 className="text-2xl font-bold text-gray-800">Customers (Pipeline Data)</h2>
+        <div className="flex items-center gap-6">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search by Company or Salesperson..."
+              className="pl-10 pr-10 py-2 border border-slate-300 rounded-lg text-sm w-80 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                title="Clear Search"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
+          </div>
+          <div className="text-slate-500 font-medium text-sm">
+            {searchTerm ? (
+              <span>Showing <span className="text-slate-900 font-bold">{filteredDeals.length}</span> of <span className="text-slate-900 font-bold">{deals.length}</span> customers</span>
+            ) : (
+              <span>Total: <span className="text-slate-900 font-bold">{deals.length}</span> customers</span>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
             <tr>
-              <th className="p-4 border-b">Company</th>
-              <th className="p-4 border-b">Contact Info</th>
-              <th className="p-4 border-b">Industry</th>
-              <th className="p-4 border-b">Tax ID</th>
-              <th className="p-4 border-b text-right">Actions</th>
+              {columns.map(col => {
+                const mode = columnModes[col.id]
+                return (
+                  <th 
+                    key={col.id} 
+                    className={`p-4 border-b transition-all duration-300 group relative align-top ${
+                      mode === 'folded' ? 'w-12 max-w-[3rem]' : mode === 'expanded' ? 'min-w-[300px]' : 'whitespace-nowrap'
+                    }`}
+                  >
+                    <div className={`flex items-center justify-between gap-2 ${mode === 'folded' ? 'justify-center' : ''}`}>
+                      {mode !== 'folded' && <span>{col.label}</span>}
+                      
+                      <div className={`flex items-center gap-1 bg-white rounded-md shadow-md border border-gray-300 opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                        mode === 'folded' ? 'opacity-100 absolute left-1/2 -translate-x-1/2 top-2' : ''
+                      }`}>
+                        {mode !== 'folded' && (
+                          <button 
+                            onClick={() => toggleMode(col.id, 'folded')}
+                            className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
+                            title="Fold Column"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        )}
+                        
+                        {mode !== 'expanded' ? (
+                          <button 
+                            onClick={() => toggleMode(col.id, 'expanded')}
+                            className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
+                            title="Fully Expand"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12a1 1 0 01-1-1z" clipRule="evenodd" />
+                              <path fillRule="evenodd" d="M16 16a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L13.586 13.586V12a1 1 0 012 0v4zM4 12a1 1 0 011 1v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 13.586H8a1 1 0 010 2H4a1 1 0 01-1-1v-4a1 1 0 011-1z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => toggleMode(col.id, undefined)}
+                            className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
+                            title="Reset to Default"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {customers.map(c => (
-              <tr key={c.id} className="hover:bg-gray-50 transition">
-                <td className="p-4 font-medium text-gray-800">{c.company_name}</td>
-                <td className="p-4 text-gray-600">
-                  <div className="text-sm">{c.email}</div>
-                  <div className="text-xs text-gray-400">{c.phone}</div>
-                </td>
-                <td className="p-4 text-gray-600">{c.industry || "-"}</td>
-                <td className="p-4 text-gray-600 font-mono text-sm">{c.tax_id || "-"}</td>
-                <td className="p-4 text-right">
-                  <button onClick={() => handleEdit(c)} className="text-blue-600 hover:text-blue-800 mr-3 text-sm font-medium">Edit</button>
-                  <button onClick={() => handleDelete(c.id)} className="text-red-600 hover:text-red-800 text-sm font-medium">Delete</button>
-                </td>
+            {filteredDeals.map((deal, index) => (
+              <tr key={deal.id || index} className="hover:bg-gray-50 transition">
+                {columns.map(col => {
+                  const mode = columnModes[col.id]
+                  return (
+                    <td 
+                      key={col.id} 
+                      className={`p-4 border-b transition-all duration-300 align-top ${
+                        mode === 'folded' 
+                          ? 'w-12 max-w-[3rem] text-center overflow-hidden p-2' 
+                          : mode === 'expanded'
+                            ? 'min-w-[300px] whitespace-normal break-words text-gray-600'
+                            : `whitespace-nowrap text-gray-600 ${col.defaultClass || ''}`
+                      }`}
+                    >
+                      {renderCellContent(col, deal, index)}
+                    </td>
+                  )
+                })}
               </tr>
             ))}
-            {customers.length === 0 && (
+            {filteredDeals.length === 0 && (
               <tr>
-                <td colSpan="5" className="p-8 text-center text-gray-400">No customers found.</td>
+                <td colSpan={columns.length} className="p-8 text-center text-gray-400">
+                  {searchTerm ? "No matching customers found." : "No data found in Sales Pipeline."}
+                </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-lg text-gray-800">{editing ? "Edit Customer" : "New Customer"}</h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-                <input required type="text" className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                  value={formData.company_name} onChange={e => setFormData({...formData, company_name: e.target.value})} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input type="email" className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                    value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input type="text" className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                    value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
-                  <input type="text" className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                    value={formData.industry} onChange={e => setFormData({...formData, industry: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
-                  <input type="text" className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                    value={formData.tax_id} onChange={e => setFormData({...formData, tax_id: e.target.value})} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                <textarea rows="3" className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                  value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}></textarea>
-              </div>
-              <div className="pt-4 flex justify-end gap-2">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Save Customer</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
