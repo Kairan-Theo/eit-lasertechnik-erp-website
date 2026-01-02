@@ -82,6 +82,7 @@ class DealSerializer(serializers.ModelSerializer):
             'expected_close',
             'stage',
             'activity_schedules',
+            'salesperson',
         ]
         read_only_fields = ['created_at', 'customer_name', 'activity_schedules']
 

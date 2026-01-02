@@ -126,6 +126,7 @@ class Deal(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     expected_close = models.DateField(null=True, blank=True)
     po_number = models.CharField(max_length=50, blank=True)
+    salesperson = models.CharField(max_length=255, blank=True, default="")
 
     def __str__(self):
         return f"{self.title} - {self.amount}"
