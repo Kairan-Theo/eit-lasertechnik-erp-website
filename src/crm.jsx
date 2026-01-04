@@ -8,9 +8,11 @@ import { Mail, Trash2 } from "lucide-react"
 import "./index.css"
 import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
+import CRMActivities from "./crm-activities.jsx"
 import CRMTickets from "./crm-tickets.jsx"
 import CRMLeads from "./crm-leads.jsx"
 import CRMAnalytics from "./crm-analytics.jsx"
+import { Toaster } from "../components/ui/toaster"
 
 const initialPipeline = {
   "Appointment Schedule": [
@@ -151,7 +153,9 @@ function CRMPage() {
             activitySchedules: (d.activity_schedules || []).map(s => ({
               id: s.id,
               dueAt: s.due_at ? s.due_at.slice(0, 16) : "",
-              text: s.text
+              activityName: s.activity_name || "",
+              salesperson: s.salesperson || "",
+              customer: s.customer || ""
             }))
           }
           const stageIndex = newStages.findIndex(s => s.name === d.stage)
@@ -191,6 +195,8 @@ function CRMPage() {
   const [openActivity, setOpenActivity] = React.useState(null)
   const [scheduleDueInput, setScheduleDueInput] = React.useState("")
   const [scheduleText, setScheduleText] = React.useState("")
+  const [scheduleSalesperson, setScheduleSalesperson] = React.useState("")
+  const [scheduleCustomer, setScheduleCustomer] = React.useState("")
   const [selectedScheduleKey, setSelectedScheduleKey] = React.useState(null)
   const [draggingScheduleKey, setDraggingScheduleKey] = React.useState(null)
   const [dragOverIdx, setDragOverIdx] = React.useState(null)
@@ -325,10 +331,19 @@ function CRMPage() {
     }))
   }
 
-  const addSchedule = async (stageIndex, cardIndex, dueAt, text) => {
+  const addSchedule = async (stageIndex, cardIndex, dueAt, text, sp, cust) => {
     const deal = stages[stageIndex].deals[cardIndex]
     const tempId = Date.now()
-    const newSchedule = { id: tempId, dueAt, text }
+    const finalSp = sp || deal.salesperson || deal.salespersonName || ""
+    const finalCust = cust || deal.customer || deal.customer_name || ""
+
+    const newSchedule = { 
+        id: tempId, 
+        dueAt, 
+        activityName: text, 
+        salesperson: finalSp,
+        customer: finalCust 
+    }
     
     setStages(prev => prev.map((s, i) => {
       if (i !== stageIndex) return s
@@ -342,29 +357,52 @@ function CRMPage() {
         "Content-Type": "application/json",
         ...(token ? { "Authorization": `Token ${token}` } : {})
       }
-      const res = await fetch(`${API_BASE}/activity_schedules/`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
+      const body = JSON.stringify({
           deal: deal.id,
           due_at: dueAt,
-          text: text
-        })
+          activity_name: text,
+          salesperson: finalSp,
+          customer: finalCust
       })
-      if (!res.ok) throw new Error("Failed to add schedule")
+
+      let res = await fetch(`${API_BASE}/activity_schedules/`, {
+        method: "POST",
+        headers,
+        body
+      })
+
+      // Retry without token if 401 Unauthorized (in case token is invalid but endpoint is public)
+      if (res.status === 401 && token) {
+         res = await fetch(`${API_BASE}/activity_schedules/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body
+         })
+      }
+
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(`Server error ${res.status}: ${errText}`)
+      }
       const saved = await res.json()
       
       setStages(prev => prev.map((s, i) => {
         if (i !== stageIndex) return s
         const deals = s.deals.map((d, j) => {
           if (j !== cardIndex) return d
-          const activitySchedules = (d.activitySchedules || []).map(sch => sch.id === tempId ? { ...sch, id: saved.id } : sch)
+          const activitySchedules = (d.activitySchedules || []).map(sch => sch.id === tempId ? { 
+              ...sch, 
+              id: saved.id,
+              salesperson: saved.salesperson || sch.salesperson,
+              customer: saved.customer || sch.customer
+          } : sch)
           return { ...d, activitySchedules }
         })
         return { ...s, deals }
       }))
     } catch (err) {
       console.error("Failed to add schedule", err)
+      alert(`Failed to save schedule: ${err.message}`)
     }
   }
 
@@ -391,13 +429,21 @@ function CRMPage() {
       }
       const body = {}
       if (updates.dueAt !== undefined) body.due_at = updates.dueAt
-      if (updates.text !== undefined) body.text = updates.text
+      if (updates.activityName !== undefined) body.activity_name = updates.activityName
 
-      await fetch(`${API_BASE}/activity_schedules/${schedule.id}/`, {
+      let res = await fetch(`${API_BASE}/activity_schedules/${schedule.id}/`, {
         method: "PATCH",
         headers,
         body: JSON.stringify(body)
       })
+
+      if (res.status === 401 && token) {
+        res = await fetch(`${API_BASE}/activity_schedules/${schedule.id}/`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        })
+      }
     } catch (err) {
       console.error("Failed to update schedule", err)
     }
@@ -420,14 +466,57 @@ function CRMPage() {
 
     try {
       const token = localStorage.getItem("authToken")
-      const headers = token ? { "Authorization": `Token ${token}` } : {}
-      await fetch(`${API_BASE}/activity_schedules/${schedule.id}/`, {
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      
+      console.log(`Attempting to delete schedule ${schedule.id} at ${API_BASE}/activity_schedules/${schedule.id}/`)
+
+      let res = await fetch(`${API_BASE}/activity_schedules/${schedule.id}/`, {
         method: "DELETE",
         headers
       })
+
+      if (res.status === 401 && token) {
+        res = await fetch(`${API_BASE}/activity_schedules/${schedule.id}/`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" }
+        })
+      }
+
+      if (res.status === 404) {
+        console.warn("Schedule not found on server, considering deleted.")
+        return // Treat as success
+      }
+
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(`Server returned ${res.status}: ${errText}`)
+      }
     } catch (err) {
       console.error("Failed to delete schedule", err)
+      alert(`Failed to delete schedule: ${err.message}`)
+      fetchDeals() // Revert changes by reloading
     }
+  }
+
+  const handleDeleteActivityFromTable = (dealId, scheduleId) => {
+    for (let sIdx = 0; sIdx < stages.length; sIdx++) {
+      const stage = stages[sIdx]
+      const dIdx = stage.deals.findIndex(d => d.id === dealId)
+      if (dIdx !== -1) {
+        const deal = stage.deals[dIdx]
+        const schIdx = (deal.activitySchedules || []).findIndex(s => s.id === scheduleId)
+        if (schIdx !== -1) {
+            if (window.confirm("Delete this activity schedule?")) {
+                deleteSchedule(sIdx, dIdx, schIdx)
+            }
+            return
+        }
+      }
+    }
+    console.warn("Could not find activity to delete", dealId, scheduleId)
   }
  
   const reorderSchedule = (stageIndex, cardIndex, fromIdx, toIdx) => {
@@ -779,31 +868,58 @@ function CRMPage() {
     setDeleteConfirmation({ stageIndex, cardIndex })
   }
 
+  const handleDeleteDeals = (ids) => {
+    setDeleteConfirmation({ ids })
+  }
+
   const confirmDelete = async () => {
     if (!deleteConfirmation) return
-    const { stageIndex, cardIndex } = deleteConfirmation
+
+    if (deleteConfirmation.type === 'schedule') {
+        const { stageIndex, cardIndex, scheduleIdx } = deleteConfirmation
+        deleteSchedule(stageIndex, cardIndex, scheduleIdx)
+        setDeleteConfirmation(null)
+        return
+    }
     
-    const dealId = stages[stageIndex].deals[cardIndex].id
+    let idsToDelete = []
+    
+    if (deleteConfirmation.ids) {
+        idsToDelete = deleteConfirmation.ids
+    } else if (deleteConfirmation.stageIndex !== undefined) {
+        const { stageIndex, cardIndex } = deleteConfirmation
+        // Safety check
+        if (stages[stageIndex] && stages[stageIndex].deals[cardIndex]) {
+            idsToDelete = [stages[stageIndex].deals[cardIndex].id]
+        }
+    }
+
+    if (idsToDelete.length === 0) {
+        setDeleteConfirmation(null)
+        return
+    }
 
     // Optimistic update
-    setStages((prev) => prev.map((stage, i) => {
-      if (i !== stageIndex) return stage
-      const deals = stage.deals.filter((_, j) => j !== cardIndex)
-      return { ...stage, deals }
-    }))
+    setStages((prev) => prev.map((stage) => ({
+      ...stage,
+      deals: stage.deals.filter(d => !idsToDelete.includes(d.id))
+    })))
 
     setDeleteConfirmation(null)
 
     // API Update
-    try {
-      const token = localStorage.getItem("authToken")
-      const headers = token ? { "Authorization": `Token ${token}` } : {}
-      await fetch(`${API_BASE}/deals/${dealId}/`, {
-        method: "DELETE",
-        headers
-      })
-    } catch (err) {
-      console.error("Failed to delete deal", err)
+    const token = localStorage.getItem("authToken")
+    const headers = token ? { "Authorization": `Token ${token}` } : {}
+
+    for (const dealId of idsToDelete) {
+        try {
+          await fetch(`${API_BASE}/deals/${dealId}/`, {
+            method: "DELETE",
+            headers
+          })
+        } catch (err) {
+          console.error("Failed to delete deal", dealId, err)
+        }
     }
   }
 
@@ -832,7 +948,7 @@ function CRMPage() {
             </h1>
             <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
             <div className="flex items-center gap-2">
-              {["Deals", "Customers", "Tickets", "Leads", "Analytics"].map((tab) => (
+              {["Deals", "Customers", "Activities", "Tickets", "Leads", "Analytics"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -1033,7 +1149,7 @@ function CRMPage() {
                                 const item = nextSchedule(d)
                                 return item ? (
                                    <>
-                                     <div className={`w-2 h-2 rounded-full ${isThisWeek(item.dueAt) ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+                                     <div className="w-2 h-2 rounded-full bg-green-500"></div>
                                      <span className="text-[10px] text-slate-500 font-medium truncate max-w-[80px]">{formatActivityPreviewText(item.text || "Activity")}</span>
                                    </>
                                 ) : (
@@ -1080,10 +1196,10 @@ function CRMPage() {
           </div>
           </div>
           {openActivity && (
-            <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenActivity(null)}>
-              <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[560px]" onClick={(e) => e.stopPropagation()}>
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setOpenActivity(null)}>
+              <div className="absolute left-1/2 top-24 -translate-x-1/2 w-full max-w-3xl px-4" onClick={(e) => e.stopPropagation()}>
                 <div
-                  className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl mx-4"
+                  className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full overflow-hidden"
                   tabIndex={0}
                   ref={(el)=>{ if (el) { activityModalRef.current = el } }}
                   onKeyDown={(e)=>{
@@ -1123,7 +1239,14 @@ function CRMPage() {
                     <div className="flex items-center gap-2">
                       <button
                         className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
-                        onClick={()=>{ setOpenScheduleFor(true); setScheduleDueInput(""); setScheduleText(""); }}
+                        onClick={()=>{ 
+                           const d = stages[openActivity.stageIndex].deals[openActivity.cardIndex]
+                           setOpenScheduleFor(true); 
+                           setScheduleDueInput(""); 
+                           setScheduleText(""); 
+                           setScheduleSalesperson(""); 
+                           setScheduleCustomer(d.customer || d.customer_name || ""); 
+                        }}
                         title="Add schedule"
                       >
                         +
@@ -1146,7 +1269,7 @@ function CRMPage() {
                                 setSelectedScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i })
                                 activityModalRef.current && activityModalRef.current.focus()
                               }}
-                              title={`${formatActivityPreviewText(it.text || "Activity")}${it.dueAt ? ` — ${new Date(it.dueAt).toLocaleString()}` : ""}`}
+                              title={`${formatActivityPreviewText(it.activityName || "Activity")}${it.dueAt ? ` — ${new Date(it.dueAt).toLocaleString()}` : ""}`}
                               draggable
                               onDragStart={(e)=>{
                                 const el = e.target
@@ -1178,17 +1301,28 @@ function CRMPage() {
                                         }))
                                       }}
                                       disabled={!isEditing}
-                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[170px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <input
                                       type="text"
-                                      value={it.text || ""}
+                                      value={it.activityName || ""}
                                       onChange={(e)=>{
                                         const { stageIndex, cardIndex } = openActivity
-                                        updateSchedule(stageIndex, cardIndex, i, { text: e.target.value })
+                                        updateSchedule(stageIndex, cardIndex, i, { activityName: e.target.value })
                                       }}
                                       placeholder="Details"
-                                      className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      className="flex-1 min-w-[120px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={it.salesperson || ""}
+                                      onChange={(e)=>{
+                                        const { stageIndex, cardIndex } = openActivity
+                                        updateSchedule(stageIndex, cardIndex, i, { salesperson: e.target.value })
+                                      }}
+                                      disabled={!isEditing}
+                                      placeholder="Salesperson"
+                                      className="w-[110px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <div className="relative">
                                       <button
@@ -1213,14 +1347,13 @@ function CRMPage() {
                                             className="block w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600 transition-colors"
                                             onClick={()=>{
                                               const { stageIndex, cardIndex } = openActivity
-                                              updateDeal(stageIndex, cardIndex, (prev)=>({
-                                                ...prev,
-                                                activitySchedules: (prev.activitySchedules||[]).filter((_, idx)=> idx!==i)
-                                              }))
+                                              setDeleteConfirmation({ 
+                                                  type: 'schedule', 
+                                                  stageIndex, 
+                                                  cardIndex, 
+                                                  scheduleIdx: i 
+                                              })
                                               setOpenScheduleMenuKey(null)
-                                              if (editingScheduleKey && editingScheduleKey.stageIndex===stageIndex && editingScheduleKey.cardIndex===cardIndex && editingScheduleKey.idx===i) {
-                                                setEditingScheduleKey(null)
-                                              }
                                             }}
                                           >
                                             Delete
@@ -1241,7 +1374,7 @@ function CRMPage() {
                                   type="datetime-local"
                                   value={scheduleDueInput}
                                   onChange={(e)=>setScheduleDueInput(e.target.value)}
-                                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[200px] text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[170px] text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                                 />
                                 <input
                                   type="text"
@@ -1249,13 +1382,27 @@ function CRMPage() {
                                   onChange={(e)=>setScheduleText(e.target.value)}
                                   placeholder="Scheduled activity details"
                                   autoFocus
-                                  className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                                  className="flex-1 min-w-[120px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                                />
+                                <input
+                                  type="text"
+                                  value={scheduleSalesperson}
+                                  onChange={(e)=>setScheduleSalesperson(e.target.value)}
+                                  placeholder="Salesperson"
+                                  className="w-[110px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                                />
+                                <input
+                                  type="text"
+                                  value={scheduleCustomer}
+                                  readOnly
+                                  title="Customer is automatically set from the deal"
+                                  className="w-[110px] rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-500 cursor-not-allowed outline-none"
                                 />
                               </div>
                               <div className="flex items-center justify-end gap-3 mt-3">
                                 <button
                                   className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm"
-                                  onClick={()=>{ setOpenScheduleFor(false); setScheduleDueInput(""); setScheduleText(""); }}
+                                  onClick={()=>{ setOpenScheduleFor(false); setScheduleDueInput(""); setScheduleText(""); setScheduleSalesperson(""); setScheduleCustomer(""); }}
                                 >
                                   Cancel
                                 </button>
@@ -1265,10 +1412,12 @@ function CRMPage() {
                                     const dueAt = scheduleDueInput
                                     if (!dueAt) return
                                     const { stageIndex, cardIndex } = openActivity
-                                    addSchedule(stageIndex, cardIndex, dueAt, scheduleText || "")
+                                    addSchedule(stageIndex, cardIndex, dueAt, scheduleText || "", scheduleSalesperson, scheduleCustomer)
                                     setOpenScheduleFor(false)
                                     setScheduleDueInput("")
                                     setScheduleText("")
+                                    setScheduleSalesperson("")
+                                    setScheduleCustomer("")
                                   }}
                                 >
                                   Add Schedule
@@ -2190,7 +2339,17 @@ function CRMPage() {
       </section>
       ) : activeTab === "Customers" ? (
         <div className="min-h-screen bg-white">
-          <CRMCustomers deals={stages.flatMap(s => s.deals).sort((a, b) => (a.createdAt ? new Date(a.createdAt).getTime() : 0) - (b.createdAt ? new Date(b.createdAt).getTime() : 0))} />
+          <CRMCustomers 
+            deals={stages.flatMap(s => s.deals).sort((a, b) => (a.createdAt ? new Date(a.createdAt).getTime() : 0) - (b.createdAt ? new Date(b.createdAt).getTime() : 0))} 
+            onDeleteDeals={handleDeleteDeals}
+          />
+        </div>
+      ) : activeTab === "Activities" ? (
+        <div className="min-h-screen bg-white">
+          <CRMActivities 
+            deals={stages.flatMap(s => s.deals)} 
+            onDeleteActivity={handleDeleteActivityFromTable}
+          />
         </div>
       ) : activeTab === "Tickets" ? (
         <div className="min-h-screen bg-white">
@@ -2216,7 +2375,13 @@ function CRMPage() {
                 <h3 className="font-semibold text-gray-900">Confirm Delete</h3>
               </div>
               <div className="p-4">
-                <div className="text-sm text-gray-800">Delete this opportunity?</div>
+                <div className="text-sm text-gray-800">
+                    {deleteConfirmation.type === 'schedule'
+                        ? "Delete this activity schedule?"
+                        : deleteConfirmation?.ids?.length > 1 
+                        ? `Delete ${deleteConfirmation.ids.length} opportunities?` 
+                        : "Delete this opportunity?"}
+                </div>
               </div>
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setDeleteConfirmation(null)}>Cancel</button>
@@ -2231,6 +2396,7 @@ function CRMPage() {
           </div>
         </div>
       )}
+      <Toaster />
     </main>
   )
 }

@@ -135,11 +135,15 @@ class ActivitySchedule(models.Model):
     deal = models.ForeignKey(Deal, related_name='activity_schedules', on_delete=models.CASCADE)
     start_at = models.DateTimeField(null=True, blank=True)
     due_at = models.DateTimeField(null=True, blank=True)
-    text = models.TextField(blank=True)
-    assignee = models.CharField(max_length=100, blank=True)
+    activity_name = models.TextField(blank=True)
+    salesperson = models.CharField(max_length=100, blank=True)
+    customer = models.CharField(max_length=200, blank=True)
+    reminder_sent = models.BooleanField(default=False)
+    reminder_day_sent = models.BooleanField(default=False)
+    reminder_week_sent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self):
-        return f"{self.deal.customer} - {self.text}"
+        return f"{self.customer} - {self.activity_name}"
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
