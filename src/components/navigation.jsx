@@ -13,8 +13,12 @@ import {
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Button } from "../../components/ui/button"
+import { useToast } from "../../components/ui/use-toast"
 
 export default function Navigation() {
+  const { toast } = useToast()
+  const lastNotifIdRef = React.useRef(null)
+  const initialToastShownRef = React.useRef(false)
   const handleLogoClick = () => {
     window.location.href = "/"
   }
@@ -146,6 +150,34 @@ export default function Navigation() {
           .then(r => r.ok ? r.json() : Promise.resolve([]))
           .then(list => {
             if (Array.isArray(list) && list.length) {
+              // Toast Logic for new alerts
+              const newestId = Math.max(...list.map(n => n.id))
+              if (lastNotifIdRef.current !== null) {
+                const newNotifs = list.filter(n => n.id > lastNotifIdRef.current)
+                newNotifs.forEach(n => {
+                  if (n.type === 'alert') {
+                    toast({
+                      title: "Reminder",
+                      description: n.message,
+                    })
+                  }
+                })
+              } else if (!initialToastShownRef.current) {
+                const freshAlerts = list.filter(n => {
+                  if (n.type !== 'alert') return false
+                  const t = new Date(n.created_at).getTime()
+                  return Date.now() - t < 2 * 60 * 1000
+                })
+                freshAlerts.forEach(n => {
+                  toast({
+                    title: "Reminder",
+                    description: n.message,
+                  })
+                })
+                initialToastShownRef.current = true
+              }
+              lastNotifIdRef.current = newestId
+
               const unread = list.reduce((acc, n) => acc + (n && n.is_read === false ? 1 : 0), 0)
               setNotificationsCount(unread)
               return

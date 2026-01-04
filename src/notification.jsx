@@ -5,6 +5,7 @@ import { LanguageProvider } from "./components/language-context"
 import { Trash, CheckCheck } from "lucide-react"
 import "./index.css"
 import { API_BASE_URL } from "./config"
+import { Toaster } from "../components/ui/toaster"
 
 function NotificationsPage() {
   const [notifications, setNotifications] = React.useState([])
@@ -206,6 +207,7 @@ function NotificationsPage() {
     <LanguageProvider>
       <div className="min-h-screen bg-slate-50">
         <Navigation />
+        <Toaster />
         <div className="max-w-5xl mx-auto p-6 space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>

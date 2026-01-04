@@ -57,9 +57,9 @@ class DealAdmin(admin.ModelAdmin):
 
 @admin.register(ActivitySchedule)
 class ActivityScheduleAdmin(admin.ModelAdmin):
-    list_display = ("deal", "due_at", "text", "created_at")
+    list_display = ("deal", "due_at", "activity_name", "salesperson", "customer", "created_at")
     list_filter = ("due_at",)
-    search_fields = ("deal__customer__company_name", "text")
+    search_fields = ("deal__customer__company_name", "activity_name", "salesperson", "customer")
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
