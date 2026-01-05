@@ -1,637 +1,401 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
-import Navigation from "./components/navigation.jsx"
-import { LanguageProvider } from "./components/language-context"
 import "./index.css"
-import { API_BASE_URL } from "./config"
-import { 
-  startOfMonth, 
-  endOfMonth, 
-  startOfWeek, 
-  endOfWeek, 
-  eachDayOfInterval, 
-  eachMonthOfInterval, 
-  eachWeekOfInterval, 
-  format, 
-  addMonths, 
-  differenceInDays, 
-  addDays, 
-  isSameMonth,
-  startOfDay,
-  isValid
+import {
+  startOfMonth,
+  endOfMonth,
+  format,
+  differenceInDays,
+  addMonths,
+  startOfWeek,
+  endOfWeek,
+  addWeeks,
+  addDays
 } from "date-fns"
 
-function ProjectPage() {
-  const [projects, setProjects] = React.useState([])
-  const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState("")
-  
-  // Default range: current month to +3 months
-  const [range, setRange] = React.useState(() => {
-    const now = new Date()
-    const start = startOfMonth(now)
-    const end = endOfMonth(addMonths(now, 3))
-    return { start, end }
-  })
-
-  const [editingTask, setEditingTask] = React.useState(null)
-  const [isModalOpen, setIsModalOpen] = React.useState(false)
-  const [isProjectModalOpen, setIsProjectModalOpen] = React.useState(false)
-  const [newProject, setNewProject] = React.useState({
-    title: "",
-    customer: "",
-    amount: 0,
-    stage: "Appointment Schedule"
-  })
-
-  // Dimensions
-  const dayWidth = 40 // pixels per day
-  const headerHeight = 60
-  const rowHeight = 40 // Height for task row
-  const groupHeaderHeight = 40 // Height for deal title row (optional, or just first row)
-
-  React.useEffect(() => {
-    fetchProjects()
-  }, [])
-
-  const fetchProjects = async () => {
-    setLoading(true)
-    try {
-      const token = localStorage.getItem("authToken")
-      const res = await fetch(`${API_BASE_URL}/api/projects/`, {
-        headers: token ? { "Authorization": `Token ${token}` } : {}
-      })
-      if (!res.ok) throw new Error("Failed to fetch projects")
-      const data = await res.json()
-      setProjects(Array.isArray(data) ? data : [])
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleAddTask = (projectId) => {
-    setEditingTask({
-      project: projectId,
-      title: "New Task",
-      start: new Date(),
-      end: addDays(new Date(), 5),
-      assignee: ""
-    })
-    setIsModalOpen(true)
-  }
-
-  const handleTaskClick = (task) => {
-    setEditingTask({ ...task })
-    setIsModalOpen(true)
-  }
-
-  const handleSaveTask = async (e) => {
-    e.preventDefault()
-    if (!editingTask) return
-    if (!isValid(editingTask.start) || !isValid(editingTask.end)) {
-      alert("Please select valid start and end dates")
-      return
-    }
-    if (editingTask.end < editingTask.start) {
-      alert("End date cannot be before start date")
-      return
-    }
-    try {
-      const token = localStorage.getItem("authToken")
-      const payload = {
-        title: editingTask.title,
-        start_date: editingTask.start.toISOString().slice(0, 10),
-        due_date: editingTask.end.toISOString().slice(0, 10),
-        assignee: editingTask.assignee
-      }
-
-      const isNew = !editingTask.id
-
-      if (isNew) {
-        payload.project = editingTask.project
-      }
-
-      const url = isNew 
-        ? `${API_BASE_URL}/api/tasks/` 
-        : `${API_BASE_URL}/api/tasks/${editingTask.id}/`
-      
-      const method = isNew ? "POST" : "PATCH"
-
-      const res = await fetch(url, {
-        method: method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Token ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
-      })
-
-      if (!res.ok) throw new Error("Failed to save task")
-      
-      setIsModalOpen(false)
-      fetchProjects()
-    } catch (err) {
-      alert("Error saving task: " + err.message)
-    }
-  }
-
-  const handleDeleteTask = async () => {
-    if (!editingTask || !window.confirm("Delete this task?")) return
-    
-    try {
-      const token = localStorage.getItem("authToken")
-      const res = await fetch(`${API_BASE_URL}/api/tasks/${editingTask.id}/`, {
-        method: "DELETE",
-        headers: token ? { "Authorization": `Token ${token}` } : {}
-      })
-      
-      if (!res.ok) throw new Error("Failed to delete task")
-      
-      setIsModalOpen(false)
-      fetchProjects()
-    } catch (err) {
-      alert("Error deleting task: " + err.message)
-    }
-  }
-
-  const handleSaveProject = async (e) => {
-    e.preventDefault()
-    try {
-      const token = localStorage.getItem("authToken")
-      if (!token) {
-        alert("You must be logged in to create a project")
-        return
-      }
-      const title = (newProject.title || "").trim()
-      const customer = (newProject.customer || "").trim()
-      if (!title || !customer) {
-        alert("Please provide both title and customer")
-        return
-      }
-      const stage = newProject.stage
-      let status = "planned"
-      if (stage === "Closed Won") status = "completed"
-      else if (stage === "Contract Sent" || stage === "Presentation Scheduled" || stage === "Decision Maker Bought-In" || stage === "Qualified to Buy") status = "in_progress"
-      const payload = { name: title, write_customer_name: customer, status }
-      const res = await fetch(`${API_BASE_URL}/api/projects/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Token ${token}`
-        },
-        body: JSON.stringify(payload)
-      })
-
-      if (!res.ok) {
-        const errorText = await res.text()
-        throw new Error(`Failed to create project: ${res.status} ${res.statusText} - ${errorText}`)
-      }
-      
-      setIsProjectModalOpen(false)
-      setNewProject({
-        title: "",
-        customer: "",
-        stage: "Appointment Schedule"
-      })
-      fetchProjects()
-    } catch (err) {
-      alert("Error creating project: " + err.message)
-    }
-  }
-
-  // Process data into rows
-  // Hierarchy: Deal (Phase) -> Tasks
-  const rows = React.useMemo(() => {
-    // Colors for different phases/deals
-    const colors = [
-      { bar: "bg-amber-400", border: "border-amber-500", text: "text-amber-900" }, // Yellow (Planning)
-      { bar: "bg-lime-400", border: "border-lime-500", text: "text-lime-900" },   // Green (Packaging)
-      { bar: "bg-orange-400", border: "border-orange-500", text: "text-orange-900" }, // Orange (Marketing)
-      { bar: "bg-sky-400", border: "border-sky-500", text: "text-sky-900" },     // Blue (Sales)
-      { bar: "bg-rose-400", border: "border-rose-500", text: "text-rose-900" },   // Red (Stats)
+/* ---------------- SAMPLE DATA ---------------- */
+const sampleProjects = [
+  {
+    id: 1,
+    name: "Phase 1 - Website Redesign",
+    color: "bg-emerald-500",
+    tasks: [
+      { id: 11, title: "Home Page Design", start: "2026-01-05", end: "2026-01-12", type: "Design" },
+      { id: 12, title: "Home Page Development", start: "2026-01-10", end: "2026-01-25", type: "Development" }
     ]
-
-    return projects.map((project, index) => {
-      const color = colors[index % colors.length]
-      const tsks = project.tasks || []
-      
-      const tasks = tsks.map(s => {
-        const startDate = s.start_date ? new Date(s.start_date) : new Date()
-        const endDate = s.due_date ? new Date(s.due_date) : addDays(startDate, 5)
-        
-        return {
-          id: s.id,
-          text: s.title || "Untitled Task",
-          start: startDate,
-          end: endDate,
-          assignee: s.assignee || "Unassigned"
-        }
-      })
-
-      return {
-        id: project.id,
-        title: project.name,
-        tasks: tasks,
-        color
-      }
-    })
-  }, [projects])
-
-  // Timeline Headers
-  const timeline = React.useMemo(() => {
-    const months = eachMonthOfInterval({ start: range.start, end: range.end })
-    const monthData = months.map(m => {
-      const start = startOfMonth(m) < range.start ? range.start : startOfMonth(m)
-      const end = endOfMonth(m) > range.end ? range.end : endOfMonth(m)
-      const days = differenceInDays(end, start) + 1
-      
-      // Calculate weeks in this month fragment
-      // This is tricky because weeks can cross months.
-      // Simplification: Just show W1, W2, W3, W4 based on day of month approx?
-      // Or actual weeks.
-      
-      // Let's generate actual weeks for the sub-header
-      // We'll iterate days and group by week.
-      
-      return {
-        date: m,
-        label: format(m, "MMMM"),
-        width: days * dayWidth
-      }
-    })
-
-    // Generate weeks for the entire range
-    const weeks = []
-    let current = startOfWeek(range.start, { weekStartsOn: 1 })
-    while (current <= range.end) {
-      const end = endOfWeek(current, { weekStartsOn: 1 })
-      // intersection with range
-      const visibleStart = current < range.start ? range.start : current
-      const visibleEnd = end > range.end ? range.end : end
-      
-      if (visibleStart <= visibleEnd) {
-        const days = differenceInDays(visibleEnd, visibleStart) + 1
-        weeks.push({
-          start: visibleStart,
-          end: visibleEnd,
-          label: `W${format(current, "w")}`, // Week number
-          width: days * dayWidth
-        })
-      }
-      current = addDays(current, 7)
-    }
-
-    return { months: monthData, weeks }
-  }, [range])
-
-  const totalWidth = differenceInDays(range.end, range.start) * dayWidth
-
-  const getX = (date) => {
-    const d = new Date(date)
-    if (d < range.start) return 0
-    const diff = differenceInDays(d, range.start)
-    return diff * dayWidth
+  },
+  {
+    id: 2,
+    name: "Phase 2 - ERP System",
+    color: "bg-sky-500",
+    tasks: [
+      { id: 21, title: "Blog Design", start: "2026-01-22", end: "2026-02-05", type: "Design" },
+      { id: 22, title: "Blog Development", start: "2026-02-01", end: "2026-02-20", type: "Development" }
+    ]
+  },
+  {
+    id: 3,
+    name: "Phase 3 - Marketing",
+    color: "bg-purple-500",
+    tasks: [
+      { id: 31, title: "Tracking Plan", start: "2026-02-10", end: "2026-02-28", type: "Marketing" }
+    ]
   }
+]
 
-  const getWidth = (start, end) => {
-    const s = new Date(start) < range.start ? range.start : new Date(start)
-    const e = new Date(end)
-    const days = differenceInDays(e, s)
-    return Math.max(dayWidth, days * dayWidth) // Minimum 1 day width
+ 
+
+/* ---------------- COMPONENT ---------------- */
+function GanttChart() {
+  const dayWidth = 26
+  const weekWidth = dayWidth * 7
+  const [projects, setProjects] = React.useState(sampleProjects)
+  const [showNewProject, setShowNewProject] = React.useState(false)
+  const [newProject, setNewProject] = React.useState({ name: "", title: "", start: "", end: "", color: "bg-emerald-500" })
+  const [editing, setEditing] = React.useState(null)
+  const now = new Date()
+  const rangeStart = startOfMonth(now)
+  const rangeEnd = endOfMonth(rangeStart)
+
+  const weeksToShow = 12
+  const weeks = (() => {
+    const start = startOfWeek(rangeStart, { weekStartsOn: 1 })
+    return Array.from({ length: weeksToShow }).map((_, i) => addWeeks(start, i))
+  })()
+
+  const totalWidth = weeks.length * weekWidth
+  const months = (() => {
+    const out = []
+    if (weeks.length === 0) return out
+    let cursor = startOfMonth(weeks[0])
+    const lastMonthEnd = endOfMonth(addWeeks(weeks[0], weeks.length - 1))
+    while (cursor <= lastMonthEnd) {
+      const mStart = startOfMonth(cursor)
+      const mEnd = endOfMonth(cursor)
+      const wkCount = weeks.filter(w => (w <= mEnd && addDays(w, 6) >= mStart)).length
+      out.push({ label: format(mStart, "MMMM yyyy"), weeks: wkCount })
+      cursor = addMonths(cursor, 1)
+    }
+    return out
+  })()
+
+  const todayLeft = (differenceInDays(new Date(), weeks[0]) / 7) * weekWidth
+
+  const getLeft = (date) =>
+    (differenceInDays(new Date(date), weeks[0]) / 7) * weekWidth
+
+  const getWidth = (start, end) =>
+    Math.max(weekWidth / 2, Math.ceil((differenceInDays(new Date(end), new Date(start)) + 1) / 7) * weekWidth)
+
+  const colorHex = (c) => {
+    if (c === "bg-emerald-500") return "#10b981"
+    if (c === "bg-sky-500") return "#0ea5e9"
+    if (c === "bg-purple-500") return "#a855f7"
+    if (c === "bg-slate-500") return "#64748b"
+    return "#64748b"
+  }
+  const taskProgressPct = (task) => {
+    const start = new Date(task.start)
+    const end = new Date(task.end)
+    const total = Math.max(1, differenceInDays(end, start) + 1)
+    const done = Math.min(total, Math.max(0, differenceInDays(now, start) + 1))
+    return Math.max(0, Math.min(100, Math.round((done / total) * 100)))
   }
 
   return (
-    <LanguageProvider>
-      <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans">
-        <Navigation className="bg-white border-b border-slate-200" />
-        
-        {/* Toolbar */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">PROJECT MANAGEMENT</h1>
-            <p className="text-slate-500 text-sm">Gantt Chart View</p>
+    <div className="min-h-screen bg-white text-slate-900 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold">Projects Timeline</h1>
+          <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700">
+            {format(weeks[0], "MMM d")} – {format(addDays(weeks[weeks.length - 1], 6), "MMM d, yyyy")}
+          </span>
+        </div>
+        <button
+          className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          onClick={() => setShowNewProject(true)}
+        >
+          + Add Project
+        </button>
+      </div>
+
+      <div className="flex overflow-hidden border rounded-lg">
+        <div className="w-64 border-r bg-slate-50">
+          <div className="p-3 border-b">
+            <div className="text-sm font-semibold">Phase / Task</div>
           </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setIsProjectModalOpen(true)}
-              className="px-3 py-1.5 text-sm bg-slate-900 text-white hover:bg-slate-800 rounded font-medium shadow-sm"
-            >
-              + New Project
-            </button>
-            <button 
-              onClick={() => setRange(prev => ({ start: addMonths(prev.start, -1), end: addMonths(prev.end, -1) }))}
-              className="px-3 py-1.5 text-sm bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
-            >
-              Previous Month
-            </button>
-            <button 
-              onClick={() => setRange(prev => ({ start: addMonths(prev.start, 1), end: addMonths(prev.end, 1) }))}
-              className="px-3 py-1.5 text-sm bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
-            >
-              Next Month
-            </button>
-          </div>
+          {projects.map(project => (
+            <div key={project.id}>
+              {editing?.id === project.id ? (
+                <div className="px-4 py-3 border-b flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: colorHex(project.color) }} />
+                    <input
+                      autoFocus
+                      value={editing.name}
+                      onChange={(e) => setEditing(prev => ({ ...prev, name: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const v = editing.name.trim()
+                          if (v) {
+                            setProjects(prev => prev.map(p => p.id === project.id ? { ...p, name: v } : p))
+                            setEditing(null)
+                          }
+                        } else if (e.key === "Escape") {
+                          setEditing(null)
+                        }
+                      }}
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      placeholder="Project name"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="px-2 py-1 rounded-md bg-slate-900 text-white text-xs"
+                      onClick={() => {
+                        const v = editing.name.trim()
+                        if (v) {
+                          setProjects(prev => prev.map(p => p.id === project.id ? { ...p, name: v } : p))
+                          setEditing(null)
+                        }
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      className="px-2 py-1 rounded-md border border-slate-300 text-slate-700 text-xs"
+                      onClick={() => setEditing(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 py-3 font-semibold text-sm border-b flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: colorHex(project.color) }} />
+                    {project.name}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-500">{project.tasks.length} tasks</span>
+                    <button
+                      className="text-xs text-slate-600 hover:underline"
+                      onClick={() => setEditing({ id: project.id, name: project.name })}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              )}
+              {project.tasks.map(t => (
+                <div key={t.id} className="px-4 py-2 text-sm text-slate-600 border-b truncate">{t.title}</div>
+              ))}
+            </div>
+          ))}
         </div>
 
-        {/* Main Chart Area */}
-        <div className="flex-1 overflow-hidden flex flex-col relative">
-          {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80">Loading...</div>}
-          
-          <div className="flex flex-1 overflow-hidden">
-            {/* Sidebar (Deal Titles) */}
-            <div className="w-64 flex-shrink-0 bg-white border-r border-slate-200 z-10 flex flex-col">
-              {/* Header spacer */}
-              <div className="h-[60px] border-b border-slate-200 bg-white box-border"></div> 
-              
-              {/* Rows */}
-              <div className="overflow-hidden">
-                {rows.map(row => (
-                  <div key={row.id}>
-                    {/* Deal Header */}
-                    <div className="h-10 flex items-center justify-between px-4 font-semibold text-slate-700 bg-slate-50 border-b border-slate-200">
-                      <span className="truncate mr-2">{row.title}</span>
-                      <button 
-                        onClick={() => handleAddTask(row.id)}
-                        className="flex-shrink-0 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-900 transition-colors shadow-sm"
-                        title="Add Task to this Project"
-                      >
-                        + Add Task
-                      </button>
-                    </div>
-                    {/* Task Rows Placeholder */}
-                    {row.tasks.map(task => (
-                      <div 
-                        key={task.id} 
-                        onClick={() => handleTaskClick(task)}
-                        className="h-14 flex flex-col justify-center px-8 border-b border-slate-100 text-sm text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer group"
-                      >
-                        <span className="truncate group-hover:text-slate-900">{task.text}</span>
-                      </div>
-                    ))}
+        <div className="flex-1 overflow-auto relative bg-white">
+          <div style={{ width: totalWidth }} className="relative">
+
+            <div className="sticky top-0 bg-white z-20">
+              <div className="flex border-b">
+                {months.map((m) => (
+                  <div key={m.label} style={{ width: m.weeks * weekWidth }} className="text-sm font-medium text-slate-700 px-2 py-2 border-r">
+                    {m.label}
+                  </div>
+                ))}
+              </div>
+              <div className="flex h-10 border-b bg-slate-50/60">
+                {weeks.map((w, idx) => (
+                  <div
+                    key={w}
+                    title={`${format(w, "MMM d")} – ${format(addDays(w, 6), "MMM d")}`}
+                    className={`border-r text-slate-600`}
+                    style={{ width: weekWidth, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <div className="text-xs">Week {idx + 1}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Gantt Grid */}
-            <div className="flex-1 overflow-auto bg-white relative">
-              <div style={{ width: `${totalWidth}px`, minWidth: '100%' }}>
-                
-                {/* Timeline Header */}
-                <div className="sticky top-0 z-20 bg-white">
-                  {/* Months */}
-                  <div className="flex h-8 border-b border-slate-200">
-                    {timeline.months.map((m, i) => (
-                      <div 
-                        key={i} 
-                        className="flex items-center justify-center text-sm font-medium text-slate-600 border-r border-slate-200 bg-slate-50"
-                        style={{ width: `${m.width}px` }}
+            <div className="absolute inset-0 pointer-events-none">
+              {weeks.map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute top-0 bottom-0 border-r border-slate-100"
+                  style={{ left: i * weekWidth, width: 1 }}
+                />
+              ))}
+              <div
+                className="absolute top-0 bottom-0 w-[2px] bg-rose-500/70"
+                style={{ left: todayLeft }}
+              />
+            </div>
+
+            <div className="relative">
+              {projects.map((project, pi) => (
+                <div key={project.id} className="border-b" style={{ minHeight: (project.tasks.length * 44) + 40 }}>
+                  {(() => {
+                    const starts = project.tasks.map(t => new Date(t.start).getTime())
+                    const ends = project.tasks.map(t => new Date(t.end).getTime())
+                    const s = new Date(Math.min(...starts))
+                    const e = new Date(Math.max(...ends))
+                    return (
+                      <div
+                        className="relative h-8"
                       >
-                        {m.label}
+                        <div
+                          className="absolute top-1 h-6 rounded-md px-3 flex items-center text-xs font-medium text-slate-800 shadow-sm"
+                          style={{ left: getLeft(s), width: getWidth(s, e) }}
+                        >
+                          {project.name}
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                  {/* Weeks */}
-                  <div className="flex h-[28px] border-b border-slate-200">
-                    {timeline.weeks.map((w, i) => (
-                      <div 
-                        key={i} 
-                        className="flex items-center justify-center text-xs text-slate-500 border-r border-slate-200"
-                        style={{ width: `${w.width}px` }}
-                      >
-                        W{format(w.start, "w")}
+                    )
+                  })()}
+
+                  {/* Tasks */}
+                  <div className="pl-0 pt-8">
+                    {project.tasks.map((task, ti) => {
+                      const w = getWidth(task.start, task.end)
+                      const durDays = (differenceInDays(new Date(task.end), new Date(task.start)) + 1)
+                      return (
+                      <div key={task.id} className="relative h-12">
+                        <div
+                          title={`${task.title} • ${format(new Date(task.start), "MMM d")} – ${format(new Date(task.end), "MMM d")}`}
+                          className="absolute top-2 h-8 text-slate-800 text-xs rounded-md pl-4 px-3 flex items-center bg-white border"
+                          style={{
+                            left: getLeft(task.start),
+                            width: w,
+                            minWidth: 56,
+                            borderColor: colorHex(project.color)
+                          }}
+                        >
+                          <span
+                            className="absolute left-0 top-0 bottom-0 w-2 rounded-l-md"
+                            style={{ background: colorHex(project.color) }}
+                          />
+                          {task.title}
+                          {w > 100 ? (
+                            <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border">
+                              {durDays}d
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
+              ))}
+            </div>
 
-                {/* Grid Lines (Vertical) */}
-                <div className="absolute inset-0 top-[60px] pointer-events-none">
-                   {timeline.weeks.map((w, i) => (
-                      <div 
-                        key={i} 
-                        className="absolute top-0 bottom-0 border-r border-slate-100"
-                        style={{ left: `${getX(w.start) + w.width}px` }}
-                      />
-                    ))}
-                </div>
+          </div>
+        </div>
+      </div>
 
-                {/* Task Bars */}
-                <div className="relative pt-0">
-                  {rows.map(row => (
-                    <div key={row.id}>
-                      {/* Deal Spacer (Matches Sidebar) */}
-                      <div className="h-10 border-b border-slate-100 bg-slate-50"></div>
-                      
-                      {/* Tasks */}
-                      {row.tasks.map(task => {
-                        const x = getX(task.start)
-                        const w = getWidth(task.start, task.end)
-                        return (
-                          <div key={task.id} className="h-14 relative border-b border-slate-100 group">
-                            {/* Bar */}
-                            <div 
-                              onClick={() => handleTaskClick(task)}
-                              className={`absolute h-4 rounded-full shadow-sm ${row.color.bar} top-6 cursor-pointer hover:opacity-80 transition-opacity`}
-                              style={{ left: `${x}px`, width: `${w}px` }}
-                            >
-                              {/* Assignee Label */}
-                              <div className="absolute -top-5 left-0 text-xs text-slate-500 whitespace-nowrap group-hover:text-slate-800">
-                                {task.assignee}
-                              </div>
-                            </div>
-                            
-                            {/* Optional: Dependency Line Connector Logic could go here */}
-                          </div>
-                        )
-                      })}
-                    </div>
+      {showNewProject && (
+        <div className="fixed inset-0 bg-white/70 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowNewProject(false)}>
+          <div className="bg-white rounded-xl shadow-xl ring-1 ring-slate-200 w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="text-lg font-semibold mb-4 text-slate-900">New Project</div>
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs font-medium text-slate-600 mb-1">Project Name</div>
+                <input
+                  value={newProject.name}
+                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-slate-200 focus:border-slate-400 outline-none"
+                  placeholder="e.g., Phase 4 – Launch"
+                />
+              </div>
+              <div>
+                <div className="text-xs font-medium text-slate-600 mb-1">Accent Color</div>
+                <div className="flex gap-2">
+                  {["bg-emerald-500","bg-sky-500","bg-purple-500","bg-slate-500"].map(c => (
+                    <button
+                      key={c}
+                      className={`w-6 h-6 rounded-full ring-2 ${newProject.color===c ? "ring-slate-900" : "ring-transparent"}`}
+                      style={{ background: toGradient(c) }}
+                      onClick={() => setNewProject(prev => ({ ...prev, color: c }))}
+                      aria-label={`choose ${c}`}
+                    />
                   ))}
                 </div>
-
               </div>
+              <div className="text-xs font-medium text-slate-600">First Task</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                <input
+                  value={newProject.title}
+                  onChange={(e) => setNewProject(prev => ({ ...prev, title: e.target.value }))}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="Task title"
+                />
+                <input
+                  type="date"
+                  value={newProject.start}
+                  onChange={(e) => setNewProject(prev => ({ ...prev, start: e.target.value }))}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+                <input
+                  type="date"
+                  value={newProject.end}
+                  onChange={(e) => setNewProject(prev => ({ ...prev, end: e.target.value }))}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+                onClick={() => setShowNewProject(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-700 text-sm"
+                onClick={() => {
+                  if (!newProject.name.trim()) return
+                  if (!(newProject.title && newProject.start && newProject.end)) return
+                  const nextId = (projects.reduce((m,p)=>Math.max(m,p.id),0) || 0) + 1
+                  const proj = {
+                    id: nextId,
+                    name: newProject.name.trim(),
+                    color: newProject.color,
+                    tasks: [{
+                      id: Date.now(),
+                      title: newProject.title.trim(),
+                      start: newProject.start,
+                      end: newProject.end
+                    }]
+                  }
+                  setProjects(prev => [...prev, proj])
+                  setShowNewProject(false)
+                  setNewProject({ name: "", title: "", start: "", end: "", color: "bg-emerald-500" })
+                }}
+              >
+                Save Project
+              </button>
             </div>
           </div>
         </div>
-        {/* Project Modal */}
-        {isProjectModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 border border-slate-200">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-slate-900">New Project</h3>
-                <button onClick={() => setIsProjectModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                  ✕
-                </button>
-              </div>
-              
-              <form onSubmit={handleSaveProject} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Project Title</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={newProject.title}
-                    onChange={e => setNewProject({...newProject, title: e.target.value})}
-                    placeholder="e.g. Website Redesign"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Customer / Client</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={newProject.customer}
-                    onChange={e => setNewProject({...newProject, customer: e.target.value})}
-                    placeholder="e.g. Acme Corp"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Amount</label>
-                  <input 
-                    type="number" 
-                    value={newProject.amount}
-                    onChange={e => setNewProject({...newProject, amount: parseFloat(e.target.value) || 0})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Stage</label>
-                  <select 
-                    value={newProject.stage}
-                    onChange={e => setNewProject({...newProject, stage: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                  >
-                    <option value="Appointment Schedule">Appointment Schedule</option>
-                    <option value="Qualified to Buy">Qualified to Buy</option>
-                    <option value="Presentation Scheduled">Presentation Scheduled</option>
-                    <option value="Decision Maker Bought-In">Decision Maker Bought-In</option>
-                    <option value="Contract Sent">Contract Sent</option>
-                    <option value="Closed Won">Closed Won</option>
-                    <option value="Closed Lost">Closed Lost</option>
-                  </select>
-                </div>
-                
-                <div className="flex justify-end gap-2 pt-4">
-                  <button 
-                    type="button" 
-                    onClick={() => setIsProjectModalOpen(false)}
-                    className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="px-4 py-2 text-sm text-white bg-slate-900 hover:bg-slate-800 rounded-md"
-                  >
-                    Create Project
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+      )}
 
-        {/* Modal */}
-        {isModalOpen && editingTask && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 border border-slate-200">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-slate-900">
-                  {editingTask.id ? "Edit Task" : "Add New Task"}
-                </h3>
-                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                  ✕
-                </button>
-              </div>
-              
-              <form onSubmit={handleSaveTask} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Task Name</label>
-                  <input 
-                    type="text" 
-                    value={editingTask.text}
-                    onChange={e => setEditingTask({...editingTask, text: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
-                    <input 
-                      type="date" 
-                      value={isValid(editingTask.start) ? format(editingTask.start, "yyyy-MM-dd") : ""}
-                      onChange={e => {
-                        const date = e.target.value ? new Date(e.target.value) : new Date()
-                        setEditingTask({ ...editingTask, start: date })
-                      }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
-                    <input 
-                      type="date" 
-                      value={isValid(editingTask.end) ? format(editingTask.end, "yyyy-MM-dd") : ""}
-                      onChange={e => {
-                        const date = e.target.value ? new Date(e.target.value) : new Date()
-                        setEditingTask({ ...editingTask, end: date })
-                      }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
-                  <input 
-                    type="text" 
-                    value={editingTask.assignee}
-                    onChange={e => setEditingTask({...editingTask, assignee: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                  />
-                </div>
-
-                <div className="flex justify-between pt-4">
-                  {editingTask.id && (
-                    <button 
-                      type="button" 
-                      onClick={handleDeleteTask}
-                      className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md"
-                    >
-                      Delete
-                    </button>
-                  )}
-                  <div className={`flex gap-2 ${!editingTask.id ? 'w-full justify-end' : ''}`}>
-                    <button 
-                      type="button" 
-                      onClick={() => setIsModalOpen(false)}
-                      className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      type="submit" 
-                      className="px-4 py-2 text-sm text-white bg-slate-900 hover:bg-slate-800 rounded-md"
-                    >
-                      {editingTask.id ? "Save Changes" : "Create Task"}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+      {/* Fixed, subtle Back button (smaller, lighter) */}
+      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40">
+        <button
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white text-slate-700 border border-slate-200 text-sm shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rose-300"
+          onClick={() => window.history.back()}
+          aria-label="Go back"
+        >
+          ← Back
+        </button>
       </div>
-    </LanguageProvider>
+
+    </div>
   )
 }
 
-export default ProjectPage
-
+/* ---------------- RENDER ---------------- */
 const root = ReactDOM.createRoot(document.getElementById("root"))
-root.render(<ProjectPage />)
+root.render(<GanttChart />)
