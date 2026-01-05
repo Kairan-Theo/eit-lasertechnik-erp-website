@@ -1300,8 +1300,8 @@ function CRMPage() {
                                           activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, dueAt: e.target.value } : s)
                                         }))
                                       }}
-                                      disabled={!isEditing}
-                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[170px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      readOnly={!isEditing}
+                                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 w-[220px] text-sm text-slate-900 font-mono focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <input
                                       type="text"
@@ -1320,9 +1320,9 @@ function CRMPage() {
                                         const { stageIndex, cardIndex } = openActivity
                                         updateSchedule(stageIndex, cardIndex, i, { salesperson: e.target.value })
                                       }}
-                                      disabled={!isEditing}
+                                      readOnly={!isEditing}
                                       placeholder="Salesperson"
-                                      className="w-[110px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      className="w-[140px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <div className="relative">
                                       <button
@@ -1336,7 +1336,7 @@ function CRMPage() {
                                         ⋮
                                       </button>
                                       {openScheduleMenuKey && openScheduleMenuKey.stageIndex===openActivity.stageIndex && openScheduleMenuKey.cardIndex===openActivity.cardIndex && openScheduleMenuKey.idx===i && (
-                                        <div className="absolute right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-10 overflow-hidden w-32">
+                                        <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-2xl z-50 w-36">
                                           <button
                                             className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                                             onClick={()=>{ setEditingScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i }); setOpenScheduleMenuKey(null) }}
@@ -1344,7 +1344,7 @@ function CRMPage() {
                                             Edit
                                           </button>
                                           <button
-                                            className="block w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600 transition-colors"
+                                            className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                                             onClick={()=>{
                                               const { stageIndex, cardIndex } = openActivity
                                               setDeleteConfirmation({ 

@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer
 from datetime import date, timedelta
 
 
@@ -262,6 +262,38 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             self.kwargs['pk'] = instance.pk
         else:
             serializer.save(created_by=self.request.user)
+class ManufacturingOrderViewSet(viewsets.ModelViewSet):
+    queryset = ManufacturingOrder.objects.all().order_by('-updated_at')
+    serializer_class = ManufacturingOrderSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        # Resolve Customer by id or by name string
+        cid = data.get('customer_id')
+        write_name = (data.get('write_customer_name') or '').strip()
+        if cid and not data.get('customer'):
+            try:
+                data['customer'] = Customer.objects.get(id=cid).id
+            except Customer.DoesNotExist:
+                return Response({'error': 'customer_id not found'}, status=status.HTTP_400_BAD_REQUEST)
+        elif write_name and not data.get('customer'):
+            cust, _ = Customer.objects.get_or_create(company_name=write_name)
+            data['customer'] = cust.id
+        # Resolve PurchaseOrder by id or number
+        po_number = (data.get('po_number') or '').strip()
+        if po_number and not data.get('po'):
+            try:
+                po = PurchaseOrder.objects.get(number=po_number)
+                data['po'] = po.id
+            except PurchaseOrder.DoesNotExist:
+                pass
+        serializer = self.get_serializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        instance = serializer.save()
+        headers = {'Location': f"{request.build_absolute_uri('/api/manufacturing_orders/')}{instance.id}/"}
+        return Response(self.get_serializer(instance).data, status=status.HTTP_201_CREATED, headers=headers)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup(request):

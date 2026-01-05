@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead
+from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder
 
 class LeadSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
@@ -160,3 +160,46 @@ class ProjectSerializer(serializers.ModelSerializer):
                 cust, _ = Customer.objects.get_or_create(company_name=name)
                 validated_data['customer'] = cust
         return super().create(validated_data)
+
+class ManufacturingOrderSerializer(serializers.ModelSerializer):
+    customer_name = serializers.SerializerMethodField()
+    customer_id = serializers.PrimaryKeyRelatedField(source='customer', queryset=Customer.objects.all(), write_only=True, required=False)
+    po_id = serializers.PrimaryKeyRelatedField(source='po', queryset=PurchaseOrder.objects.all(), write_only=True, required=False)
+    po_number = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ManufacturingOrder
+        fields = [
+            'id',
+            'job_order_code',
+            'po',
+            'po_id',
+            'po_number',
+            'customer',
+            'customer_id',
+            'customer_name',
+            'product',
+            'product_no',
+            'quantity',
+            'start_date',
+            'complete_date',
+            'production_time',
+            'sales_department',
+            'production_department',
+            'supplier',
+            'supplier_date',
+            'recipient',
+            'recipient_date',
+            'component_status',
+            'state',
+            'items',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'po_number', 'customer_name']
+
+    def get_po_number(self, obj):
+        return obj.po.number if obj.po else ""
+
+    def get_customer_name(self, obj):
+        return obj.customer.company_name if obj.customer else ""

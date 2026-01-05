@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -122,3 +122,9 @@ class SupportTicketAdmin(admin.ModelAdmin):
     list_filter = ("status", "priority", "assigned_to")
     search_fields = ("ticket_id", "title", "customer__company_name", "description")
     ordering = ("-updated_at",)
+
+@admin.register(ManufacturingOrder)
+class ManufacturingOrderAdmin(admin.ModelAdmin):
+    list_display = ("job_order_code", "po", "customer", "product", "quantity", "start_date", "complete_date", "updated_at")
+    search_fields = ("job_order_code", "product", "customer__company_name", "po__number")
+    list_filter = ("start_date", "complete_date", "state", "component_status")
