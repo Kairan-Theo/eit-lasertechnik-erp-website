@@ -54,8 +54,15 @@ function GanttChart() {
   const [newProject, setNewProject] = React.useState({ name: "", title: "", start: "", end: "", color: "bg-emerald-500" })
   const [editing, setEditing] = React.useState(null)
   const now = new Date()
-  const rangeStart = startOfMonth(now)
-  const rangeEnd = endOfMonth(rangeStart)
+  const allWindows = projects
+    .flatMap(p => p.tasks.map(t => ({ start: new Date(t.start), end: new Date(t.end) })))
+    .filter(w => !isNaN(w.start) && !isNaN(w.end))
+  const minStart = allWindows.length ? new Date(Math.min(...allWindows.map(w => w.start.getTime()))) : startOfMonth(now)
+  const maxEnd = allWindows.length ? new Date(Math.max(...allWindows.map(w => w.end.getTime()))) : endOfMonth(now)
+  const baseStart = startOfWeek(minStart, { weekStartsOn: 1 })
+  const baseEnd = endOfWeek(maxEnd, { weekStartsOn: 1 })
+  const rangeStart = addWeeks(baseStart, -1)
+  const rangeEnd = addWeeks(baseEnd, 1)
 
   const weeksToShow = 12
   const weeks = (() => {

@@ -94,7 +94,16 @@ class DealSerializer(serializers.ModelSerializer):
         if write_name and not validated_data.get('customer'):
             name = write_name.strip()
             if name:
-                cust, _ = Customer.objects.get_or_create(company_name=name)
+                cust, _ = Customer.objects.get_or_create(
+                    company_name=name,
+                    defaults={
+                        'contact_name': '',
+                        'email': '',
+                        'phone': '',
+                        'industry': '',
+                        'address': ''
+                    }
+                )
                 validated_data['customer'] = cust
         validated_data.pop('write_customer_name', None)
         if not validated_data.get('currency'):
@@ -157,6 +166,15 @@ class ProjectSerializer(serializers.ModelSerializer):
         if write_name and not validated_data.get('customer'):
             name = write_name.strip()
             if name:
-                cust, _ = Customer.objects.get_or_create(company_name=name)
+                cust, _ = Customer.objects.get_or_create(
+                    company_name=name,
+                    defaults={
+                        'contact_name': '',
+                        'email': '',
+                        'phone': '',
+                        'industry': '',
+                        'address': ''
+                    }
+                )
                 validated_data['customer'] = cust
         return super().create(validated_data)
