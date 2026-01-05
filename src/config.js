@@ -22,3 +22,4 @@ if (envUrl && typeof envUrl === "string" && envUrl.trim().length > 0) {
 export const API_BASE_URL = resolved;
 
 console.log("🔌 Connected to Backend at:", API_BASE_URL);
+

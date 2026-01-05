@@ -35,6 +35,9 @@ function ManufacturingOrderPage() {
   const [sortKey, setSortKey] = React.useState("default")
   const [editingStartId, setEditingStartId] = React.useState(null)
   const [editingStartValue, setEditingStartValue] = React.useState("")
+  const [searchTerm, setSearchTerm] = React.useState("")
+  const [columnModes, setColumnModes] = React.useState({})
+  const [selectedRows, setSelectedRows] = React.useState([])
   const [openScheduleMenuKey, setOpenScheduleMenuKey] = React.useState(null)
   const [editingScheduleKey, setEditingScheduleKey] = React.useState(null)
   const [selectedScheduleKey, setSelectedScheduleKey] = React.useState(null)
@@ -262,472 +265,377 @@ function ManufacturingOrderPage() {
     const d = new Date(ms)
     return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
   }
+  const filteredOrders = orders.filter(o => {
+    const term = searchTerm.toLowerCase()
+    return [
+      o.product,
+      o.customer,
+      o.jobOrderCode,
+      o.ref,
+      o.purchaseOrder
+    ].some(v => String(v || "").toLowerCase().includes(term))
+  })
+  const displayOrders = React.useMemo(() => {
+    const arr = [...filteredOrders]
+    switch (sortKey) {
+      case "start_asc":
+        return arr.sort((a,b)=> new Date(a.start||0) - new Date(b.start||0))
+      case "start_desc":
+        return arr.sort((a,b)=> new Date(b.start||0) - new Date(a.start||0))
+      case "quantity_asc":
+        return arr.sort((a,b)=> (parseInt(a.quantity,10)||0) - (parseInt(b.quantity,10)||0))
+      case "quantity_desc":
+        return arr.sort((a,b)=> (parseInt(b.quantity,10)||0) - (parseInt(a.quantity,10)||0))
+      case "product_az":
+        return arr.sort((a,b)=> String(a.product||"").localeCompare(String(b.product||"")))
+      case "product_za":
+        return arr.sort((a,b)=> String(b.product||"").localeCompare(String(a.product||"")))
+      default:
+        return arr
+    }
+  }, [filteredOrders, sortKey])
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedRows(filteredOrders.map(d => d.id))
+    } else {
+      setSelectedRows([])
+    }
+  }
+  const handleSelectRow = (id) => {
+    setSelectedRows(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  const handleBulkDelete = () => {
+    if (!selectedRows.length) return
+    const next = orders.filter(o => !selectedRows.includes(o.id))
+    setAndPersist(next)
+    setSelectedRows([])
+  }
+  const columns = [
+    { id: 'index', label: 'Index', width: 'w-16' },
+    { id: 'ref', label: 'Job Order' },
+    { id: 'jobOrderCode', label: 'PO Number' },
+    { id: 'product', label: 'Product', defaultClass: 'max-w-xs truncate' },
+    { id: 'quantity', label: 'Quantity', defaultClass: 'font-mono text-sm' },
+    { id: 'start', label: 'Start' },
+    { id: 'completedDate', label: 'Completed Date' },
+    { id: 'productionTime', label: 'Production Time' },
+    { id: 'responsible', label: 'Responsible' },
+    { id: 'customer', label: 'Customer' },
+    { id: 'componentStatus', label: 'Component Status' },
+    { id: 'state', label: 'State' },
+  ]
+  const toggleMode = (id, mode) => {
+    setColumnModes(prev => ({
+      ...prev,
+      [id]: prev[id] === mode ? undefined : mode
+    }))
+  }
+  const renderCellContent = (col, o, index) => {
+    if (columnModes[col.id] === 'folded') return <span className="text-gray-300">•</span>
+    switch (col.id) {
+      case 'index': return <span className="font-medium text-gray-800">{index + 1}</span>
+      case 'ref': return <span className="text-[#3D56A6] hover:underline font-medium">{o.jobOrderCode || "-"}</span>
+      case 'jobOrderCode': return <span className="text-gray-800">{o.purchaseOrder || "-"}</span>
+      case 'product': return <span className="text-gray-800">{o.product || "-"}</span>
+      case 'quantity': return <span className="text-gray-800">{String(parseInt(o.quantity, 10) || 0)}</span>
+      case 'start': return <span className="text-gray-700">{o.start ? fmtFullDate(new Date(o.start).getTime()) : "-"}</span>
+      case 'completedDate': return <span className="text-gray-700">{o.completedDate ? fmtFullDate(new Date(o.completedDate).getTime()) : "-"}</span>
+      case 'productionTime': return <span className="text-gray-700">{o.productionTime || "-"}</span>
+      case 'responsible': return <span className="text-gray-700">{o.responsible || "-"}</span>
+      case 'customer': return <span className="text-gray-800">{o.customer || "-"}</span>
+      case 'componentStatus':
+        return (
+          <div className="relative inline-block">
+            <button
+              className={`${componentStatusClass(o.componentStatus)} px-2 py-1 rounded-full text-xs`}
+              onClick={()=>setOpenStatusId(openStatusId===o.id?null:o.id)}
+              title="Change component status"
+            >
+              {o.componentStatus || 'Set Status'}
+            </button>
+            {openStatusId===o.id && (
+              <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-md shadow-md">
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
+                  onClick={()=>{setOpenStatusId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, componentStatus:'Available'}:x))}}
+                >
+                  Available
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
+                  onClick={()=>{setOpenStatusId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, componentStatus:'Not Available'}:x))}}
+                >
+                  Not Available
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                  onClick={()=>{setOpenStatusId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, componentStatus:''}:x))}}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      case 'state':
+        return (
+          <div className="relative inline-block">
+            <button
+              className={`${stateClass(o.state)} px-2 py-1 rounded-full text-xs`}
+              onClick={()=>setOpenStateId(openStateId===o.id?null:o.id)}
+              title="Change state"
+            >
+              {o.state || 'Set State'}
+            </button>
+            {openStateId===o.id && (
+              <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-md shadow-md">
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                  onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:'Processing'}:x)) }}
+                >
+                  Processing
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
+                  onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:'Finished'}:x)) }}
+                >
+                  Finished
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
+                  onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:'Cancelled'}:x)) }}
+                >
+                  Cancelled
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                  onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:''}:x)) }}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      default: return <span>-</span>
+    }
+  }
+
+  const nextJobOrderCode = () => {
+    const nums = orders
+      .map(o => String(o.jobOrderCode || ""))
+      .map(s => {
+        const m = s.match(/^JO[-/ ]?(\d{1,5})$/i)
+        return m ? parseInt(m[1], 10) : null
+      })
+      .filter(n => Number.isFinite(n))
+    const next = (nums.length ? Math.max(...nums) + 1 : 1)
+    return `JO-${String(next).padStart(3, "0")}`
+  }
 
   return (
     <main className="min-h-screen bg-white">
       <Navigation />
-      <section className="w-full py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-6 flex items-center justify-between">
+      <section className="w-full bg-gray-50">
+        <div className="w-full mx-auto p-6 min-h-full">
+          <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Manufacturing Order</h1>
+              <h2 className="text-2xl font-bold text-gray-800">Manufacturing Orders</h2>
               <button
-                className="inline-flex items-center justify-center min-w-[150px] btn-pill"
+                className="inline-flex items-center justify-center px-3 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                 title="New MO"
-                onClick={() => setShowNew(true)}
+                onClick={() => { window.location.href = "/new-mo.html" }}
               >
                 New MO
               </button>
               <div className="relative">
                 <button
-                  className="btn-pill shadow-sm"
-                  title="Sort and group"
-                  onClick={()=>setOpenSortMenu((v)=>!v)}
+                  onClick={() => setOpenSortMenu(v => !v)}
+                  className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  title="Sort"
                 >
-                  Sort ▾
+                  Sort
                 </button>
                 {openSortMenu && (
-                  <div className="absolute z-20 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-                    <button
-                      className={`block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${sortKey==='default'?'text-[#3D56A6] font-semibold':''}`}
-                      onClick={()=>{ setSortKey("default"); setOpenSortMenu(false) }}
-                    >
-                      Default
-                    </button>
-                    <button
-                      className={`block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${sortKey==='priority'?'text-[#3D56A6] font-semibold':''}`}
-                      onClick={()=>{ setSortKey("priority"); setOpenSortMenu(false) }}
-                    >
-                      By Priority
-                    </button>
+                  <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-md z-20 w-44">
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("default"); setOpenSortMenu(false)}}>Default</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("start_asc"); setOpenSortMenu(false)}}>Start Date ↑</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("start_desc"); setOpenSortMenu(false)}}>Start Date ↓</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("quantity_asc"); setOpenSortMenu(false)}}>Quantity ↑</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("quantity_desc"); setOpenSortMenu(false)}}>Quantity ↓</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("product_az"); setOpenSortMenu(false)}}>Product A–Z</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("product_za"); setOpenSortMenu(false)}}>Product Z–A</button>
                   </div>
                 )}
               </div>
               <button
-                className="btn-pill"
-                title="Component"
-                onClick={() => window.location.href = "/products.html"}
-              >
-                Component
-              </button>
-              <button
-                className="btn-pill"
-                title="Bill of Materials"
+                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                title="Bills of Materials"
                 onClick={() => window.location.href = "/bom.html"}
               >
-                Bill of Materials
+                Bills of Materials
               </button>
+              <button
+                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                title="Components"
+                onClick={() => window.location.href = "/products.html"}
+              >
+                Components
+              </button>
+            </div>
+            <div className="flex items-center gap-6">
+              {selectedRows.length > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span className="font-medium">Delete ({selectedRows.length})</span>
+                </button>
+              )}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search by Product, Customer, JO or MO..."
+                  className="pl-10 pr-10 py-2 border border-slate-300 rounded-lg text-sm w-80 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                    title="Clear Search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <div className="text-slate-500 font-medium text-sm">
+                {searchTerm ? (
+                  <span>Showing <span className="text-slate-900 font-bold">{filteredOrders.length}</span> of <span className="text-slate-900 font-bold">{orders.length}</span> orders</span>
+                ) : (
+                  <span>Total: <span className="text-slate-900 font-bold">{orders.length}</span> orders</span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-gray-700 bg-gray-50">
-                  <th className="p-3 w-8"></th>
-                  <th className="p-3 text-left font-medium">Priority</th>
-                  <th className="p-3 text-left font-medium">Job Order</th>
-                  <th className="p-3 text-left font-medium">Purchase Order</th>
-                  <th className="p-3 text-left font-medium">Item code</th>
-                  <th className="p-3 text-left font-medium">Product</th>
-                  <th className="p-3 text-left font-medium">Unit</th>
-                  <th className="p-3 text-right font-medium">Quantity</th>
-                  <th className="p-3 text-right font-medium">Total Quantity</th>
-                  <th className="p-3 text-left font-medium">Start</th>
-                  <th className="p-3 text-left font-medium">Completed Date</th>
-                  <th className="p-3 text-left font-medium">Production Time</th>
-                  <th className="p-3 text-left font-medium">Responsible</th>
-                  <th className="p-3 text-left font-medium">Customer</th>
-                  <th className="p-3 text-left font-medium">Component Status</th>
-                  <th className="p-3 text-left font-medium">State</th>
-                  <th className="p-3 w-8"></th>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
+                <tr>
+                  <th className="p-4 border-b w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                      onChange={handleSelectAll}
+                      checked={filteredOrders.length > 0 && selectedRows.length === filteredOrders.length}
+                      ref={input => {
+                        if (input) input.indeterminate = selectedRows.length > 0 && selectedRows.length < filteredOrders.length
+                      }}
+                    />
+                  </th>
+                  {columns.map(col => {
+                    const mode = columnModes[col.id]
+                    return (
+                      <th 
+                        key={col.id} 
+                        className={`p-4 border-b transition-all duration-300 group relative align-top ${
+                          mode === 'folded' ? 'w-12 max-w-[3rem]' : mode === 'expanded' ? 'min-w-[300px]' : 'whitespace-nowrap'
+                        }`}
+                      >
+                        <div className={`flex items-center justify-between gap-2 ${mode === 'folded' ? 'justify-center' : ''}`}>
+                          {mode !== 'folded' && <span>{col.label}</span>}
+                          <div className={`flex items-center gap-1 bg-white rounded-md shadow-md border border-gray-300 opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                            mode === 'folded' ? 'opacity-100 absolute left-1/2 -translate-x-1/2 top-2' : ''
+                          }`}>
+                            {mode !== 'folded' && (
+                              <button 
+                                onClick={() => toggleMode(col.id, 'folded')}
+                                className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
+                                title="Fold Column"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            )}
+                            {mode !== 'expanded' ? (
+                              <button 
+                                onClick={() => toggleMode(col.id, 'expanded')}
+                                className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
+                                title="Fully Expand"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12a1 1 0 01-1-1z" clipRule="evenodd" />
+                                  <path fillRule="evenodd" d="M16 16a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L13.586 13.586V12a1 1 0 012 0v4zM4 12a1 1 0 011 1v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 13.586H8a1 1 0 010 2H4a1 1 0 01-1-1v-4a1 1 0 011-1z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => toggleMode(col.id, undefined)}
+                                className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
+                                title="Reset to Default"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
-              <tbody>
-                {[...orders].sort((a,b)=>{
-                  if (sortKey==="priority") {
-                    const ra = priorityRank(a.priority)
-                    const rb = priorityRank(b.priority)
-                    return rb - ra || String(a.ref).localeCompare(String(b.ref))
-                  }
-                  return String(a.ref).localeCompare(String(b.ref))
-                }).map((o)=> (
-                  <tr key={o.id} className="border-t hover:bg-gray-50">
-                    <td className="p-3 text-center">
-                      <input type="checkbox" checked={o.selected} onChange={()=>toggleSelected(o.id)} />
+              <tbody className="divide-y divide-gray-100">
+                {displayOrders.map((o, index) => (
+                  <tr key={o.id} className={`transition border-b border-gray-100 ${selectedRows.includes(o.id) ? 'bg-blue-200 hover:bg-blue-300' : 'hover:bg-gray-50'}`}>
+                    <td className="p-4">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                        onChange={() => handleSelectRow(o.id)}
+                        checked={selectedRows.includes(o.id)}
+                      />
                     </td>
-                    <td className="p-3">
-                      <div className="relative inline-block">
-                        <button
-                          className={`${priorityClass(o.priority)} px-2 py-1 rounded-full text-xs`}
-                          onClick={()=>setOpenPriorityId(openPriorityId===o.id?null:o.id)}
-                          title="Change priority"
+                    {columns.map(col => {
+                      const mode = columnModes[col.id]
+                      return (
+                        <td 
+                          key={col.id} 
+                          className={`p-4 transition-all duration-300 align-top ${
+                            mode === 'folded' 
+                              ? 'w-12 max-w-[3rem] text-center overflow-hidden p-2' 
+                              : mode === 'expanded'
+                                ? 'min-w-[300px] whitespace-normal break-words text-gray-600'
+                                : `whitespace-nowrap text-gray-600 ${col.defaultClass || ''}`
+                          }`}
                         >
-                          {o.priority && o.priority!=='None' ? o.priority : 'Set Priority'}
-                        </button>
-                        {openPriorityId===o.id && (
-                          <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-md shadow-md">
-                            <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-yellow-700" onClick={()=>{setOpenPriorityId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, priority:'Low'}:x))}}>Low</button>
-                            <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-orange-700" onClick={()=>{setOpenPriorityId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, priority:'Medium'}:x))}}>Medium</button>
-                            <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-700" onClick={()=>{setOpenPriorityId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, priority:'High'}:x))}}>High</button>
-                            <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setOpenPriorityId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, priority:'None'}:x))}}>Clear</button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      {editingJobOrderCodeId===o.id ? (
-                        <input
-                          autoFocus
-                          value={editingJobOrderCodeValue}
-                          onChange={(e)=>setEditingJobOrderCodeValue(e.target.value)}
-                          onBlur={()=>{
-                            const v = editingJobOrderCodeValue.trim()
-                            const next = orders.map(x=>x.id===o.id?{...x, jobOrderCode:v}:x)
-                            setAndPersist(next)
-                            setEditingJobOrderCodeId(null)
-                            setEditingJobOrderCodeValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const v = editingJobOrderCodeValue.trim()
-                              const next = orders.map(x=>x.id===o.id?{...x, jobOrderCode:v}:x)
-                              setAndPersist(next)
-                              setEditingJobOrderCodeId(null)
-                              setEditingJobOrderCodeValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingJobOrderCodeId(null)
-                              setEditingJobOrderCodeValue("")
-                            }
-                          }}
-                          className="w-32 rounded-md border border-gray-300 px-2 py-1"
-                        />
-                      ) : (
-                        <button
-                          className="text-[#3D56A6] hover:underline"
-                          onClick={()=>{ setEditingJobOrderCodeId(o.id); setEditingJobOrderCodeValue(o.jobOrderCode || "") }}
-                          title="Edit Job Order"
-                        >
-                          {o.jobOrderCode || '-'}
-                        </button>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <a className="text-[#3D56A6] hover:underline font-medium" href="#">{o.ref}</a>
-                    </td>
-                    <td className="p-3 text-gray-700">{o.productNo || '-'}</td>
-                    <td className="p-3">
-                      {editingProductId===o.id ? (
-                        <input
-                          autoFocus
-                          value={editingProductValue}
-                          onChange={(e)=>setEditingProductValue(e.target.value)}
-                          onBlur={()=>{
-                            const v = editingProductValue.trim()
-                            const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
-                            setAndPersist(next)
-                            setEditingProductId(null)
-                            setEditingProductValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const v = editingProductValue.trim()
-                              const next = orders.map(x=>x.id===o.id?{...x, product:v || "Untitled"}:x)
-                              setAndPersist(next)
-                              setEditingProductId(null)
-                              setEditingProductValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingProductId(null)
-                              setEditingProductValue("")
-                            }
-                          }}
-                          className="w-72 rounded-md border border-gray-300 px-2 py-1"
-                          placeholder="Add product"
-                        />
-                      ) : (
-                        <button
-                          className="text-[#3D56A6] hover:underline"
-                          onClick={()=>{ setEditingProductId(o.id); setEditingProductValue(o.product || "") }}
-                          title="Edit product"
-                        >
-                          {o.product || 'Add product'}
-                        </button>
-                      )}
-                    </td>
-                    <td className="p-3 text-right">
-                      {editingQtyId===o.id ? (
-                        <input
-                          autoFocus
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={editingQtyValue}
-                          onChange={(e)=>setEditingQtyValue(e.target.value)}
-                          onBlur={()=>{ 
-                            const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
-                            const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
-                            setAndPersist(next)
-                            setEditingQtyId(null)
-                            setEditingQtyValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const v = Math.max(0, Math.floor(Number(editingQtyValue||0)))
-                              const next = orders.map(x=>x.id===o.id?{...x, quantity:v}:x)
-                              setAndPersist(next)
-                              setEditingQtyId(null)
-                              setEditingQtyValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingQtyId(null)
-                              setEditingQtyValue("")
-                            }
-                          }}
-                          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-right bg-white"
-                          placeholder="0"
-                        />
-                      ) : (
-                        <button
-                          className="text-[#3D56A6] font-medium hover:underline"
-                          onClick={()=>{ setEditingQtyId(o.id); setEditingQtyValue(String(parseInt(o.quantity,10)||0)) }}
-                          title="Edit quantity"
-                        >
-                          {String(parseInt(o.quantity,10)||0)}
-                        </button>
-                      )}
-                    </td>
-                    <td className="p-3 text-gray-700">{o.unit || 'Unit'}</td>
-                    <td className="p-3 text-right">
-                      {editingTotalQtyId===o.id ? (
-                        <input
-                          autoFocus
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={editingTotalQtyValue}
-                          onChange={(e)=>setEditingTotalQtyValue(e.target.value)}
-                          onBlur={()=>{
-                            const v = Math.max(0, Math.floor(Number(editingTotalQtyValue||0)))
-                            const next = orders.map(x=>x.id===o.id?{...x, totalQuantity:v}:x)
-                            setAndPersist(next)
-                            setEditingTotalQtyId(null)
-                            setEditingTotalQtyValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const v = Math.max(0, Math.floor(Number(editingTotalQtyValue||0)))
-                              const next = orders.map(x=>x.id===o.id?{...x, totalQuantity:v}:x)
-                              setAndPersist(next)
-                              setEditingTotalQtyId(null)
-                              setEditingTotalQtyValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingTotalQtyId(null)
-                              setEditingTotalQtyValue("")
-                            }
-                          }}
-                          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-right bg-white"
-                          placeholder="0"
-                        />
-                      ) : (
-                        <button
-                          className="text-[#3D56A6] font-medium hover:underline"
-                          onClick={()=>{ setEditingTotalQtyId(o.id); setEditingTotalQtyValue(String(parseInt(o.totalQuantity,10)||0)) }}
-                          title="Edit total quantity"
-                        >
-                          {String(parseInt(o.totalQuantity,10)||0)}
-                        </button>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      {editingStartId===o.id ? (
-                        <input
-                          autoFocus
-                          type="datetime-local"
-                          value={editingStartValue}
-                          onChange={(e)=>setEditingStartValue(e.target.value)}
-                          onBlur={()=>{
-                            const iso = editingStartValue ? new Date(editingStartValue).toISOString() : o.start
-                            const next = orders.map(x=>x.id===o.id?{...x, start: iso}:x)
-                            setAndPersist(next)
-                            setEditingStartId(null)
-                            setEditingStartValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const iso = editingStartValue ? new Date(editingStartValue).toISOString() : o.start
-                              const next = orders.map(x=>x.id===o.id?{...x, start: iso}:x)
-                              setAndPersist(next)
-                              setEditingStartId(null)
-                              setEditingStartValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingStartId(null)
-                              setEditingStartValue("")
-                            }
-                          }}
-                          className="w-56 rounded-md border border-gray-300 px-2 py-1"
-                        />
-                      ) : (
-                        <button
-                          className="text-gray-700 hover:underline"
-                          onClick={()=>{
-                            const v = (o.start || "").slice(0,16)
-                            setEditingStartId(o.id)
-                            setEditingStartValue(v)
-                          }}
-                          title="Edit start"
-                        >
-                          {o.start ? fmtFullDate(new Date(o.start).getTime()) : (relStart(o.start))}
-                        </button>
-                      )}
-                    </td>
-                    <td className="p-3 text-gray-700">{o.completedDate ? fmtFullDate(new Date(o.completedDate).getTime()) : '-'}</td>
-                    <td className="p-3 text-gray-700">{o.productionTime || '-'}</td>
-                    <td className="p-3 text-gray-700">{o.responsible || '-'}</td>
-                    <td className="p-3">
-                      {editingCustomerId===o.id ? (
-                        <input
-                          autoFocus
-                          value={editingCustomerValue}
-                          onChange={(e)=>setEditingCustomerValue(e.target.value)}
-                          onBlur={()=>{
-                            const v = editingCustomerValue.trim()
-                            const next = orders.map(x=>x.id===o.id?{...x, customer:v}:x)
-                            setAndPersist(next)
-                            setEditingCustomerId(null)
-                            setEditingCustomerValue("")
-                          }}
-                          onKeyDown={(e)=>{
-                            if (e.key==='Enter') {
-                              e.preventDefault()
-                              const v = editingCustomerValue.trim()
-                              const next = orders.map(x=>x.id===o.id?{...x, customer:v}:x)
-                              setAndPersist(next)
-                              setEditingCustomerId(null)
-                              setEditingCustomerValue("")
-                            } else if (e.key==='Escape') {
-                              setEditingCustomerId(null)
-                              setEditingCustomerValue("")
-                            }
-                          }}
-                          className="w-72 rounded-md border border-gray-300 px-2 py-1"
-                          placeholder="Add customer"
-                        />
-                      ) : (
-                        <button
-                          className={`text-left ${o.customer ? 'text-gray-800' : 'text-gray-400'} hover:underline`}
-                          onClick={()=>{ setEditingCustomerId(o.id); setEditingCustomerValue(o.customer || "") }}
-                          title="Edit customer"
-                        >
-                          {o.customer || 'Add customer'}
-                        </button>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <div className="relative inline-block">
-                        <button
-                          className={`${componentStatusClass(o.componentStatus)} px-2 py-1 rounded-full text-xs`}
-                          onClick={()=>setOpenStatusId(openStatusId===o.id?null:o.id)}
-                          title="Change component status"
-                        >
-                          {o.componentStatus || 'Set Status'}
-                        </button>
-                        {openStatusId===o.id && (
-                          <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-md shadow-md">
-                            <button
-                              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
-                              onClick={()=>{setOpenStatusId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, componentStatus:'Available'}:x))}}
-                            >
-                              Available
-                            </button>
-                            <button
-                              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
-                              onClick={()=>{setOpenStatusId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, componentStatus:'Not Available'}:x))}}
-                            >
-                              Not Available
-                            </button>
-                            <button
-                              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                              onClick={()=>{setOpenStatusId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, componentStatus:''}:x))}}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <div className="relative inline-block">
-                        <button
-                          className={`${stateClass(o.state)} px-2 py-1 rounded-full text-xs`}
-                          onClick={()=>setOpenStateId(openStateId===o.id?null:o.id)}
-                          title="Change state"
-                        >
-                          {o.state || 'Set State'}
-                        </button>
-                        {openStateId===o.id && (
-                          <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-md shadow-md">
-                            <button
-                              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                              onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:'Processing'}:x)) }}
-                            >
-                              Processing
-                            </button>
-                            <button
-                              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
-                              onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:'Finished'}:x)) }}
-                            >
-                              Finished
-                            </button>
-                            <button
-                              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
-                              onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:'Cancelled'}:x)) }}
-                            >
-                              Cancelled
-                            </button>
-                            <button
-                              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                              onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:''}:x)) }}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3 text-center">
-                      <div className="relative inline-block">
-                        <button
-                          aria-label="Delete order"
-                          className="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-900 hover:bg-gray-900 hover:text-white shadow-sm"
-                          onClick={()=>setOpenDeleteId(openDeleteId===o.id?null:o.id)}
-                          title="Delete order"
-                        >
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-                            <path d="M10 11v6"></path>
-                            <path d="M14 11v6"></path>
-                            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
+                          {renderCellContent(col, o, index)}
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))}
+                {filteredOrders.length === 0 && (
+                  <tr>
+                    <td colSpan={columns.length + 1} className="p-8 text-center text-gray-400">
+                      {searchTerm ? "No matching orders found." : "No manufacturing orders."}
+                    </td>
+                  </tr>
+                )}
               </tbody>
-              <tfoot>
-                <tr className="border-t">
-                  <td className="p-3" colSpan={7}></td>
-                  <td className="p-3 text-right font-bold text-gray-900">{String(parseInt(totalQty,10)||0)}</td>
-                  <td className="p-3"></td>
-                  <td className="p-3 text-right font-bold text-gray-900">{String(parseInt(totalTotalQty,10)||0)}</td>
-                  <td className="p-3" colSpan={8}></td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>

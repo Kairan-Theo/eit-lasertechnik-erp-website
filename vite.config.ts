@@ -31,6 +31,7 @@ export default defineConfig({
         notification: path.resolve(__dirname, 'notification.html'),
         admin: path.resolve(__dirname, 'admin.html'),
         project: path.resolve(__dirname, 'project.html'),
+        newmo: path.resolve(__dirname, 'new-mo.html'),
       },
     },
   },
