@@ -118,7 +118,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
             except Customer.DoesNotExist:
                 return Response({'error': 'customer_id not found'}, status=status.HTTP_400_BAD_REQUEST)
         elif write_name:
-            customer, _ = Customer.objects.get_or_create(company_name=write_name)
+            customer, _ = Customer.objects.get_or_create(
+                company_name=write_name,
+                defaults={
+                    'contact_name': '',
+                    'email': '',
+                    'phone': '',
+                    'industry': '',
+                    'address': ''
+                }
+            )
         # Dates
         start_date = data.get('start_date')
         end_date = data.get('end_date')

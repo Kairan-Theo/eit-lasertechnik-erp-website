@@ -1,0 +1,1 @@
+import{r as t,j as s}from"./index-BY_FY2h5.js";const u=t.createContext();function x({children:e}){const[a,n]=t.useState("en"),r={language:a,setLanguage:n,t:o=>o};return s.jsx(u.Provider,{value:r,children:e})}export{x as L};

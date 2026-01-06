@@ -15,7 +15,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
-load_dotenv(dotenv_path, override=True)
+load_dotenv(dotenv_path, override=False)
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -99,6 +99,13 @@ DATABASES = {
         'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 
 
 

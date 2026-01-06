@@ -9,8 +9,6 @@ import "./index.css"
 import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
 import CRMActivities from "./crm-activities.jsx"
-import CRMTickets from "./crm-tickets.jsx"
-import CRMLeads from "./crm-leads.jsx"
 import CRMAnalytics from "./crm-analytics.jsx"
 import { Toaster } from "../components/ui/toaster"
 
@@ -948,7 +946,7 @@ function CRMPage() {
             </h1>
             <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
             <div className="flex items-center gap-2">
-              {["Deals", "Customers", "Activities", "Tickets", "Leads", "Analytics"].map((tab) => (
+              {["Deals", "Customers", "Activities", "Analytics"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -2112,7 +2110,7 @@ function CRMPage() {
                           notes: "",
                           stage: stageName,
                           write_customer_name: newDeal.company || "",
-                          salesperson: newDeal.salesperson || null
+                          salesperson: newDeal.salesperson || ""
                         }
                         if ((newDeal.company || "").trim()) {
                           dealData.write_customer_name = newDeal.company.trim()
@@ -2350,14 +2348,6 @@ function CRMPage() {
             deals={stages.flatMap(s => s.deals)} 
             onDeleteActivity={handleDeleteActivityFromTable}
           />
-        </div>
-      ) : activeTab === "Tickets" ? (
-        <div className="min-h-screen bg-white">
-          <CRMTickets />
-        </div>
-      ) : activeTab === "Leads" ? (
-        <div className="min-h-screen bg-white">
-          <CRMLeads />
         </div>
       ) : activeTab === "Analytics" ? (
         <div className="min-h-screen bg-white">

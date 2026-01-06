@@ -1,1 +1,0 @@
-import{b as t,j as s}from"./index-BS0Ij8SW.js";const u=t.createContext();function x({children:e}){const[a,n]=t.useState("en"),o={language:a,setLanguage:n,t:r=>r};return s.jsx(u.Provider,{value:o,children:e})}export{x as L};
