@@ -35,9 +35,14 @@ function ManufacturingOrderPage() {
   const [sortKey, setSortKey] = React.useState("default")
   const [editingStartId, setEditingStartId] = React.useState(null)
   const [editingStartValue, setEditingStartValue] = React.useState("")
+  const [remoteLoaded, setRemoteLoaded] = React.useState(false)
+  const [openJobFormId, setOpenJobFormId] = React.useState(null)
+  const [jobForm, setJobForm] = React.useState(null)
+  const [jobFormItems, setJobFormItems] = React.useState([])
   const [searchTerm, setSearchTerm] = React.useState("")
   const [columnModes, setColumnModes] = React.useState({})
   const [selectedRows, setSelectedRows] = React.useState([])
+  const [openBulkDelete, setOpenBulkDelete] = React.useState(false)
   const [openScheduleMenuKey, setOpenScheduleMenuKey] = React.useState(null)
   const [editingScheduleKey, setEditingScheduleKey] = React.useState(null)
   const [selectedScheduleKey, setSelectedScheduleKey] = React.useState(null)
@@ -114,9 +119,79 @@ function ManufacturingOrderPage() {
       } catch {}
     })()
   }, [])
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`)
+        if (!res.ok) return
+        const data = await res.json()
+        const mapped = (Array.isArray(data) ? data : []).map((m) => ({
+          id: m.id,
+          ref: m.job_order_code,
+          jobOrderCode: m.job_order_code || "",
+          purchaseOrder: m.po_number || "",
+          productNo: m.product_no || "",
+          product: m.product || "",
+          quantity: Number(m.quantity) || 1,
+          totalQuantity: Number(m.quantity) || Number(m.totalQuantity) || Number(m.quantity) || 1,
+          start: m.start_date || "",
+          completedDate: m.complete_date || "",
+          productionTime: m.production_time || "",
+          responsible: "",
+          customer: m.customer_name || "",
+          componentStatus: m.component_status || "",
+          state: m.state || "",
+          favorite: false,
+          selected: false,
+          activitySchedules: [],
+          items: Array.isArray(m.items) ? m.items : [],
+        }))
+        setOrders(mapped)
+        setRemoteLoaded(true)
+      } catch {}
+    })()
+  }, [])
+  React.useEffect(() => {
+    if (!openJobFormId) return
+    ;(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${openJobFormId}/`)
+        if (!res.ok) return
+        const m = await res.json()
+        setJobForm({
+          id: m.id,
+          job_order_code: m.job_order_code || "",
+          po_number: m.po_number || "",
+          customer_name: m.customer_name || "",
+          product_no: m.product_no || "",
+          quantity: Number(m.quantity) || 1,
+          start_date: m.start_date || "",
+          complete_date: m.complete_date || "",
+          production_time: m.production_time || "",
+          sales_department: m.sales_department || "",
+          production_department: m.production_department || "",
+          supplier: m.supplier || "",
+          supplier_date: m.supplier_date || "",
+          recipient: m.recipient || "",
+          recipient_date: m.recipient_date || "",
+        })
+        setJobFormItems(Array.isArray(m.items) ? m.items.map(x => ({ itemCode: x.itemCode || "", description: x.description || "", qty: String(x.qty || ""), unit: x.unit || "Unit" })) : [])
+      } catch {}
+    })()
+  }, [openJobFormId])
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const mfgId = params.get('mfgId')
+      if (mfgId) {
+        const idNum = Number(mfgId)
+        setOpenJobFormId(Number.isFinite(idNum) ? idNum : mfgId)
+      }
+    } catch {}
+  }, [])
 
   React.useEffect(() => {
-    if (!orders.length) {
+    if (!orders.length && !remoteLoaded) {
       const seed = [
         { id: 1, ref: "WH/MO/00001", jobOrderCode: "JO-001", start: new Date(Date.now() - 2*24*60*60*1000).toISOString(), product: "Laser Cladding Machine", nextActivity: "", customer: "Big C Supercenter PLC", componentStatus: "", quantity: 1, totalQuantity: 1, state: "", favorite: false, selected: false },
         { id: 2, ref: "WH/MO/00002", jobOrderCode: "JO-002", start: new Date(Date.now() - 1*24*60*60*1000).toISOString(), product: "Laser Welding Machine", nextActivity: "", customer: "SIANGHAI EITING TRADING COMPANY", componentStatus: "", quantity: 1, totalQuantity: 1, state: "", favorite: true, selected: false },
@@ -126,7 +201,7 @@ function ManufacturingOrderPage() {
       setOrders(seed)
       localStorage.setItem("mfgOrders", JSON.stringify(seed))
     }
-  }, [])
+  }, [remoteLoaded, orders.length])
   React.useEffect(() => {
     try {
       const pf = JSON.parse(localStorage.getItem("mfgPreFill") || "null")
@@ -304,17 +379,27 @@ function ManufacturingOrderPage() {
   const handleSelectRow = (id) => {
     setSelectedRows(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (!selectedRows.length) return
-    const next = orders.filter(o => !selectedRows.includes(o.id))
-    setAndPersist(next)
-    setSelectedRows([])
+    const ids = [...selectedRows]
+    try {
+      await Promise.all(ids.map(async (id) => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${id}/`, { method: "DELETE" })
+          if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
+        } catch {}
+      }))
+    } finally {
+      const next = orders.filter(o => !ids.includes(o.id))
+      setAndPersist(next)
+      setSelectedRows([])
+    }
   }
   const columns = [
     { id: 'index', label: 'Index', width: 'w-16' },
     { id: 'ref', label: 'Job Order' },
     { id: 'jobOrderCode', label: 'PO Number' },
-    { id: 'product', label: 'Product', defaultClass: 'max-w-xs truncate' },
+    { id: 'productNo', label: 'Product No', defaultClass: 'max-w-xs truncate' },
     { id: 'quantity', label: 'Quantity', defaultClass: 'font-mono text-sm' },
     { id: 'start', label: 'Start' },
     { id: 'completedDate', label: 'Completed Date' },
@@ -323,6 +408,7 @@ function ManufacturingOrderPage() {
     { id: 'customer', label: 'Customer' },
     { id: 'componentStatus', label: 'Component Status' },
     { id: 'state', label: 'State' },
+    { id: 'actions', label: '', width: 'w-12' },
   ]
   const toggleMode = (id, mode) => {
     setColumnModes(prev => ({
@@ -334,9 +420,16 @@ function ManufacturingOrderPage() {
     if (columnModes[col.id] === 'folded') return <span className="text-gray-300">•</span>
     switch (col.id) {
       case 'index': return <span className="font-medium text-gray-800">{index + 1}</span>
-      case 'ref': return <span className="text-[#3D56A6] hover:underline font-medium">{o.jobOrderCode || "-"}</span>
+      case 'ref': return (
+        <button
+          className="text-[#3D56A6] hover:underline font-medium"
+          onClick={() => { window.location.href = `/new-mo.html?mfgId=${o.id}` }}
+        >
+          {o.jobOrderCode || "-"}
+        </button>
+      )
       case 'jobOrderCode': return <span className="text-gray-800">{o.purchaseOrder || "-"}</span>
-      case 'product': return <span className="text-gray-800">{o.product || "-"}</span>
+      case 'productNo': return <span className="text-gray-800">{o.productNo || "-"}</span>
       case 'quantity': return <span className="text-gray-800">{String(parseInt(o.quantity, 10) || 0)}</span>
       case 'start': return <span className="text-gray-700">{o.start ? fmtFullDate(new Date(o.start).getTime()) : "-"}</span>
       case 'completedDate': return <span className="text-gray-700">{o.completedDate ? fmtFullDate(new Date(o.completedDate).getTime()) : "-"}</span>
@@ -417,6 +510,20 @@ function ManufacturingOrderPage() {
             )}
           </div>
         )
+      case 'actions':
+        return (
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              onClick={() => setOpenDeleteId(o.id)}
+              className="text-red-600 hover:text-red-800"
+              title="Delete"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        )
       default: return <span>-</span>
     }
   }
@@ -486,7 +593,7 @@ function ManufacturingOrderPage() {
             <div className="flex items-center gap-6">
               {selectedRows.length > 0 && (
                 <button
-                  onClick={handleBulkDelete}
+                  onClick={() => setOpenBulkDelete(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -654,10 +761,192 @@ function ManufacturingOrderPage() {
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenDeleteId(null)}>Cancel</button>
                 <button
                   className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
-                  onClick={() => { setAndPersist(orders.filter((x)=>x.id!==openDeleteId)); setOpenDeleteId(null) }}
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${openDeleteId}/`, { method: "DELETE" })
+                      if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
+                    } catch {}
+                    setAndPersist(orders.filter((x)=>x.id!==openDeleteId))
+                    setOpenDeleteId(null)
+                  }}
                 >
                   Delete
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {openBulkDelete && (
+        <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenBulkDelete(false)}>
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border-2 border-white">
+              <div className="px-4 py-3 border-b-2 border-white">
+                <h3 className="font-semibold text-gray-900">Confirm Delete</h3>
+              </div>
+              <div className="p-4">
+                <div className="text-sm text-gray-800">Delete {selectedRows.length} orders?</div>
+              </div>
+              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+                <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenBulkDelete(false)}>Cancel</button>
+                <button
+                  className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
+                  onClick={async () => { await handleBulkDelete(); setOpenBulkDelete(false) }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {openJobFormId && jobForm && (
+        <div className="fixed inset-0 bg-black/40 z-40" onClick={() => { setOpenJobFormId(null); setJobForm(null); setJobFormItems([]) }}>
+          <div className="absolute left-1/2 top-10 -translate-x-1/2 w-[1000px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xl font-semibold text-gray-900">Job Order</h3>
+                  <span className="text-gray-500">#{jobForm.job_order_code || "-"}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    onClick={() => {
+                      const o = orders.find(x => x.id === openJobFormId)
+                      if (o) {
+                        setPrintingOrder({
+                          ...o,
+                          totalQuantity: o.totalQuantity || o.quantity || 1,
+                          productNo: o.productNo || "",
+                          completedDate: o.completedDate || "",
+                        })
+                        setTimeout(() => { window.print(); setPrintingOrder(null) }, 100)
+                      }
+                    }}
+                  >
+                    Print
+                  </button>
+                  <button className="text-gray-500 hover:text-gray-900" onClick={() => { setOpenJobFormId(null); setJobForm(null); setJobFormItems([]) }}>✕</button>
+                </div>
+              </div>
+              <div className="p-5 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 mb-1">Customer Name</div>
+                    <input value={jobForm.customer_name} onChange={(e)=>setJobForm({...jobForm, customer_name:e.target.value})} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 mb-1">Start Date</div>
+                    <input value={jobForm.start_date} onChange={(e)=>setJobForm({...jobForm, start_date:e.target.value})} placeholder="YYYY-MM-DD" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 mb-1">Order Quantity</div>
+                    <input value={jobForm.quantity} onChange={(e)=>setJobForm({...jobForm, quantity:e.target.value})} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 mb-1">Product No</div>
+                    <input value={jobForm.product_no} onChange={(e)=>setJobForm({...jobForm, product_no:e.target.value})} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 mb-1">Completed Date</div>
+                    <input value={jobForm.complete_date} onChange={(e)=>setJobForm({...jobForm, complete_date:e.target.value})} placeholder="YYYY-MM-DD" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 mb-1">Time of Production</div>
+                    <input value={jobForm.production_time} onChange={(e)=>setJobForm({...jobForm, production_time:e.target.value})} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Product Items Description</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
+                        <tr>
+                          <th className="p-3 border-b">Item Code</th>
+                          <th className="p-3 border-b">Description</th>
+                          <th className="p-3 border-b">Quantity</th>
+                          <th className="p-3 border-b">Unit</th>
+                          <th className="p-3 border-b w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {jobFormItems.map((it, i) => (
+                          <tr key={i} className="hover:bg-gray-50 transition border-b border-gray-100">
+                            <td className="p-3">
+                              <input value={it.itemCode} onChange={(e)=>setJobFormItems(prev=>prev.map((row,idx)=>idx===i?{...row,itemCode:e.target.value}:row))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Code" />
+                            </td>
+                            <td className="p-3">
+                              <input value={it.description} onChange={(e)=>setJobFormItems(prev=>prev.map((row,idx)=>idx===i?{...row,description:e.target.value}:row))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Item description" />
+                            </td>
+                            <td className="p-3">
+                              <input value={it.qty} onChange={(e)=>setJobFormItems(prev=>prev.map((row,idx)=>idx===i?{...row,qty:e.target.value}:row))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="1" />
+                            </td>
+                            <td className="p-3">
+                              <input value={it.unit} onChange={(e)=>setJobFormItems(prev=>prev.map((row,idx)=>idx===i?{...row,unit:e.target.value}:row))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Unit" />
+                            </td>
+                            <td className="p-3 text-right">
+                              <button onClick={()=>setJobFormItems(prev=>prev.filter((_,idx)=>idx!==i))} className="px-2 py-1 rounded-md text-red-600 hover:bg-red-50">Delete</button>
+                            </td>
+                          </tr>
+                        ))}
+                        {jobFormItems.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="p-6 text-center text-gray-400">No items</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-3">
+                    <button onClick={()=>setJobFormItems(prev=>[...prev,{ itemCode:"", description:"", qty:"1", unit:"Unit"}])} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Add Item</button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => { setOpenJobFormId(null); setJobForm(null); setJobFormItems([]) }}>Cancel</button>
+                  <button
+                    className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
+                    onClick={async () => {
+                      const payload = {
+                        job_order_code: String(jobForm.job_order_code || "").trim(),
+                        po_number: String(jobForm.po_number || "").trim(),
+                        write_customer_name: String(jobForm.customer_name || "").trim(),
+                        product_no: String(jobForm.product_no || "").trim(),
+                        quantity: Number(jobForm.quantity) || 1,
+                        start_date: jobForm.start_date || null,
+                        complete_date: jobForm.complete_date || null,
+                        production_time: String(jobForm.production_time || "").trim(),
+                        items: jobFormItems,
+                      }
+                      try {
+                        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${jobForm.id}/`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify(payload),
+                        })
+                        if (!res.ok) return
+                        const updated = await res.json()
+                        setOrders(prev => prev.map(x => x.id===openJobFormId ? {
+                          ...x,
+                          jobOrderCode: updated.job_order_code || x.jobOrderCode,
+                          purchaseOrder: updated.po_number || x.purchaseOrder,
+                          productNo: updated.product_no || x.productNo,
+                          quantity: Number(updated.quantity) || x.quantity,
+                          start: updated.start_date || x.start,
+                          completedDate: updated.complete_date || x.completedDate,
+                          productionTime: updated.production_time || x.productionTime,
+                          customer: updated.customer_name || x.customer,
+                          items: Array.isArray(updated.items) ? updated.items : x.items,
+                        } : x))
+                        setOpenJobFormId(null)
+                        setJobForm(null)
+                        setJobFormItems([])
+                      } catch {}
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
               </div>
             </div>
           </div>

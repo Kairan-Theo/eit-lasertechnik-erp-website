@@ -244,7 +244,7 @@ class ManufacturingOrder(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.job_order_code} - {self.product or ''}"
+        return f"{self.job_order_code} - {self.product_no or ''}"
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:

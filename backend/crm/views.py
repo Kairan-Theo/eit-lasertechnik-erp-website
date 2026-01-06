@@ -265,6 +265,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 class ManufacturingOrderViewSet(viewsets.ModelViewSet):
     queryset = ManufacturingOrder.objects.all().order_by('-updated_at')
     serializer_class = ManufacturingOrderSerializer
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def create(self, request, *args, **kwargs):

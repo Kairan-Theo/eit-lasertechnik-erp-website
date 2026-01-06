@@ -1,13 +1,24 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
+import { createPortal } from "react-dom"
 import Navigation from "./components/navigation.jsx"
 import "./index.css"
 import { API_BASE_URL } from "./config"
+import { JobOrderTemplate } from "./components/job-order-template.jsx"
 
 function NewMOPage() {
   const [orders, setOrders] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem("mfgOrders") || "[]") } catch { return [] }
   })
+  const [isEditMode, setIsEditMode] = React.useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      return !!params.get('mfgId')
+    } catch {
+      return false
+    }
+  })
+  const [remoteJobCodes, setRemoteJobCodes] = React.useState([])
   const [poList, setPoList] = React.useState([])
   const [crmPoNumbers, setCrmPoNumbers] = React.useState([])
   const [showPoSuggestions, setShowPoSuggestions] = React.useState(false)
@@ -31,22 +42,87 @@ function NewMOPage() {
     recipientDate: ""
   })
   const [items, setItems] = React.useState([{ itemCode: "", description: "", qty: "1", unit: "Unit" }])
-
-  const nextJobOrderCode = React.useCallback(() => {
-    const nums = orders
-      .map(o => String(o.jobOrderCode || ""))
-      .map(s => {
-        const m = s.match(/^JO[-/ ]?(\d{1,5})$/i)
-        return m ? parseInt(m[1], 10) : null
-      })
-      .filter(n => Number.isFinite(n))
-    const next = (nums.length ? Math.max(...nums) + 1 : 1)
-    return `JO-${String(next).padStart(3, "0")}`
-  }, [orders])
+  const [previewOrder, setPreviewOrder] = React.useState(null)
+  const [printOrder, setPrintOrder] = React.useState(null)
+  const [previewZoom, setPreviewZoom] = React.useState(0.5)
+  const [previewOrientation, setPreviewOrientation] = React.useState("portrait")
+  const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
 
   React.useEffect(() => {
-    setNewOrder(prev => ({ ...prev, jobOrderCode: nextJobOrderCode() }))
-  }, [nextJobOrderCode])
+    const handleAfterPrint = () => {
+      setPrintOrder(null)
+    }
+    window.addEventListener("afterprint", handleAfterPrint)
+    return () => {
+      window.removeEventListener("afterprint", handleAfterPrint)
+    }
+  }, [])
+  React.useEffect(() => {
+    if (printOrder) {
+      setTimeout(() => window.print(), 120)
+    }
+  }, [printOrder])
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`)
+        if (!res.ok) return
+        const data = await res.json()
+        const codes = (Array.isArray(data) ? data : []).map(d => String(d.job_order_code || "").trim()).filter(Boolean)
+        setRemoteJobCodes(codes)
+        if (!isEditMode) {
+          const nums = codes
+            .map(s => {
+              const m = s.match(/^JO[-/ ]?(\d{1,5})$/i)
+              return m ? parseInt(m[1], 10) : null
+            })
+            .filter(n => Number.isFinite(n))
+          const next = (nums.length ? Math.max(...nums) + 1 : 1)
+          const auto = `JO-${String(next).padStart(3, "0")}`
+          setNewOrder(prev => ({ ...prev, jobOrderCode: auto }))
+        }
+      } catch {
+        if (!isEditMode) {
+          const auto = `JO-${String(1).padStart(3, "0")}`
+          setNewOrder(prev => ({ ...prev, jobOrderCode: auto }))
+        }
+      }
+    })()
+  }, [isEditMode])
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const id = params.get('mfgId')
+      if (id) {
+        ;(async () => {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${id}/`)
+            if (!res.ok) return
+            const m = await res.json()
+            setNewOrder(prev => ({
+              ...prev,
+              jobOrderCode: m.job_order_code || prev.jobOrderCode,
+              purchaseOrder: m.po_number || prev.purchaseOrder,
+              customer: m.customer_name || prev.customer,
+              productNo: m.product_no || prev.productNo,
+              quantity: Number(m.quantity) || prev.quantity,
+              scheduledDate: m.start_date || prev.scheduledDate,
+              completedDate: m.complete_date || prev.completedDate,
+              productionTime: m.production_time || prev.productionTime,
+              salesDepartment: m.sales_department || prev.salesDepartment,
+              productionDepartment: m.production_department || prev.productionDepartment,
+              supplier: m.supplier || prev.supplier,
+              supplierDate: m.supplier_date || prev.supplierDate,
+              recipient: m.recipient || prev.recipient,
+              recipientDate: m.recipient_date || prev.recipientDate,
+            }))
+            const its = Array.isArray(m.items) ? m.items.map(x => ({ itemCode: x.itemCode || "", description: x.description || "", qty: String(x.qty || ""), unit: x.unit || "Unit" })) : []
+            if (its.length) setItems(its)
+          } catch {}
+        })()
+      }
+    } catch {}
+  }, [])
 
   React.useEffect(() => {
     try {
@@ -84,7 +160,7 @@ function NewMOPage() {
     setShowPoSuggestions(false)
   }, [newOrder, poList])
 
-  const saveAndExit = async () => {
+  const createOrderData = async () => {
     const token = localStorage.getItem("authToken")
     const headers = { "Content-Type": "application/json" }
     if (token) headers["Authorization"] = `Token ${token}`
@@ -120,9 +196,49 @@ function NewMOPage() {
         const err = await res.json().catch(() => ({}))
         throw new Error(typeof err === "object" && err ? JSON.stringify(err) : `HTTP ${res.status}`)
       }
-      window.location.href = "/manufacturing.html"
+      const created = await res.json().catch(() => null)
+      if (created) {
+        const its = Array.isArray(created.items) ? created.items.map(x => ({ itemCode: x.itemCode || "", description: x.description || "", qty: String(x.qty || ""), unit: x.unit || "Unit" })) : items
+        const orderData = {
+          jobOrderCode: created.job_order_code || newOrder.jobOrderCode,
+          productNo: created.product_no || newOrder.productNo,
+          customer: created.customer_name || newOrder.customer,
+          start: created.start_date || newOrder.scheduledDate,
+          completedDate: created.complete_date || newOrder.completedDate,
+          totalQuantity: Number(created.quantity) || Number(newOrder.quantity) || 1,
+          quantity: Number(created.quantity) || Number(newOrder.quantity) || 1,
+          productionTime: created.production_time || newOrder.productionTime,
+          items: its,
+        }
+        return orderData
+      } else {
+        const orderData = {
+          jobOrderCode: newOrder.jobOrderCode,
+          productNo: newOrder.productNo,
+          customer: newOrder.customer,
+          start: newOrder.scheduledDate,
+          completedDate: newOrder.completedDate,
+          totalQuantity: Number(newOrder.quantity) || 1,
+          quantity: Number(newOrder.quantity) || 1,
+          productionTime: newOrder.productionTime,
+          items,
+        }
+        return orderData
+      }
     } catch (e) {
       alert("Failed to create Manufacturing Order: " + (e?.message || "Unknown error"))
+      return null
+    }
+  }
+  const saveAndExit = async () => {
+    const orderData = await createOrderData()
+    if (orderData) setPrintOrder(orderData)
+  }
+  const saveOnly = async () => {
+    const orderData = await createOrderData()
+    if (orderData) {
+      setOpenCreateConfirm(false)
+      window.location.href = "/manufacturing.html"
     }
   }
 
@@ -140,7 +256,7 @@ function NewMOPage() {
               <h1 className="text-2xl font-semibold text-gray-900">New Manufacturing Order</h1>
               <div className="flex items-center gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => window.location.href="/manufacturing.html"}>Cancel</button>
-                <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={saveAndExit}>Create</button>
+                <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={() => setOpenCreateConfirm(true)}>Create MO Form</button>
               </div>
             </div>
           </div>
@@ -311,6 +427,113 @@ function NewMOPage() {
           </div>
         </div>
       </section>
+      {openCreateConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setOpenCreateConfirm(false)}>
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px]" onClick={(e)=>e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="px-4 py-3 border-b border-gray-200">
+                <h3 className="font-semibold text-gray-900">Create MO Form</h3>
+                <div className="text-sm text-gray-600 mt-1">Choose how you want to proceed</div>
+              </div>
+              <div className="p-4 grid gap-2">
+                <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => { setOpenCreateConfirm(false); window.location.href = "/manufacturing.html" }}>Quit without saving</button>
+                <button className="px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700" onClick={saveOnly}>Save</button>
+                <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={async () => { setOpenCreateConfirm(false); await saveAndExit() }}>Download MO Form</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {printOrder && createPortal(
+        <div className="print-portal">
+          <style>
+            {`
+              @media print {
+                body > *:not(.print-portal) { display: none !important; }
+                .print-portal {
+                  display: block !important;
+                  position: absolute;
+                  top: 0;
+                  left: 0;
+                  width: 100%;
+                  background: white;
+                  z-index: 9999;
+                }
+                @page { margin: 0; size: A4 ${previewOrientation}; }
+              }
+              .print-portal { display: none; }
+            `}
+          </style>
+          <JobOrderTemplate order={printOrder} />
+        </div>,
+        document.body
+      )}
+      {previewOrder && (
+        <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setPreviewOrder(null)}>
+          <div className="absolute inset-0 flex items-start justify-center" onClick={(e)=>e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 mt-6">
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xl font-semibold text-gray-900">Job Order Preview</h3>
+                  <span className="text-gray-500">#{previewOrder.jobOrderCode || "-"}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="px-2 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      onClick={() => setPreviewZoom(z => Math.max(0.4, Math.round((z - 0.1) * 10) / 10))}
+                    >
+                      -
+                    </button>
+                    <span className="text-sm text-gray-700 w-14 text-center">{Math.round(previewZoom * 100)}%</span>
+                    <button
+                      className="px-2 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      onClick={() => setPreviewZoom(z => Math.min(2, Math.round((z + 0.1) * 10) / 10))}
+                    >
+                      +
+                    </button>
+                    <button
+                      className="px-2 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      onClick={() => setPreviewZoom(1)}
+                    >
+                      Reset
+                    </button>
+                    <select
+                      value={previewOrientation}
+                      onChange={(e)=>setPreviewOrientation(e.target.value)}
+                      className="px-2 py-1 rounded-md border border-gray-300 text-gray-700"
+                    >
+                      <option value="portrait">Portrait</option>
+                      <option value="landscape">Landscape</option>
+                    </select>
+                  </div>
+                  <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => { setTimeout(()=>window.print(),100) }}>Print</button>
+                  <button className="text-gray-500 hover:text-gray-900" onClick={() => setPreviewOrder(null)}>✕</button>
+                </div>
+              </div>
+              <div className="p-4">
+                <style>
+                  {`@media print { @page { size: A4 ${previewOrientation}; margin: 0 } }`}
+                </style>
+                {(() => {
+                  const pageWidth = previewOrientation === "portrait" ? 794 : 1123
+                  const pageHeight = previewOrientation === "portrait" ? 1123 : 794
+                  const vh = Math.max(600, window.innerHeight - 220)
+                  const fit = Math.min(1, vh / pageHeight)
+                  const zoom = Math.max(0.4, Math.min(2, previewZoom || fit))
+                  return (
+                <div style={{ width: pageWidth * zoom, height: pageHeight * zoom, margin: "0 auto", overflow: "hidden" }}>
+                  <div style={{ width: pageWidth, height: pageHeight, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
+                    <JobOrderTemplate order={previewOrder} />
+                  </div>
+                </div>
+                  )
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

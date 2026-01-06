@@ -125,6 +125,6 @@ class SupportTicketAdmin(admin.ModelAdmin):
 
 @admin.register(ManufacturingOrder)
 class ManufacturingOrderAdmin(admin.ModelAdmin):
-    list_display = ("job_order_code", "po", "customer", "product", "quantity", "start_date", "complete_date", "updated_at")
-    search_fields = ("job_order_code", "product", "customer__company_name", "po__number")
+    list_display = ("job_order_code", "po", "customer", "product_no", "quantity", "start_date", "complete_date", "updated_at")
+    search_fields = ("job_order_code", "product_no", "customer__company_name", "po__number")
     list_filter = ("start_date", "complete_date", "state", "component_status")
