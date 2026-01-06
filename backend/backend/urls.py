@@ -21,7 +21,7 @@ from django.db import connection
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics
+from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet
 
 router = DefaultRouter()
 router.register(r'deals', DealViewSet)
@@ -31,6 +31,7 @@ router.register(r'leads', LeadViewSet)
 router.register(r'activity_schedules', ActivityScheduleViewSet)
 router.register(r'projects', ProjectViewSet)
 router.register(r'tasks', TaskViewSet)
+router.register(r'manufacturing_orders', ManufacturingOrderViewSet)
 
 def health(request):
     return JsonResponse({"status": "ok"})

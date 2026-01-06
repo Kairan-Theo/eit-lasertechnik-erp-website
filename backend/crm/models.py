@@ -220,6 +220,32 @@ class Task(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     def __str__(self):
         return self.title
+
+# Manufacturing Orders
+class ManufacturingOrder(models.Model):
+    job_order_code = models.CharField(max_length=50)  # e.g., JO-001; not unique by design
+    po = models.ForeignKey(PurchaseOrder, null=True, blank=True, on_delete=models.SET_NULL, related_name='manufacturing_orders')
+    customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='manufacturing_orders')
+    product = models.CharField(max_length=255, blank=True)
+    product_no = models.CharField(max_length=100, blank=True)
+    quantity = models.PositiveIntegerField(default=1)
+    start_date = models.DateField(null=True, blank=True)
+    complete_date = models.DateField(null=True, blank=True)
+    production_time = models.CharField(max_length=100, blank=True)
+    sales_department = models.CharField(max_length=255, blank=True)
+    production_department = models.CharField(max_length=255, blank=True)
+    supplier = models.CharField(max_length=255, blank=True)
+    supplier_date = models.DateField(null=True, blank=True)
+    recipient = models.CharField(max_length=255, blank=True)
+    recipient_date = models.DateField(null=True, blank=True)
+    component_status = models.CharField(max_length=50, blank=True)
+    state = models.CharField(max_length=50, blank=True)
+    items = models.JSONField(default=list, blank=True)  # Product Items Description rows
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.job_order_code} - {self.product or ''}"
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
