@@ -6,6 +6,104 @@ import { LanguageProvider } from "./components/language-context"
 import { JobOrderTemplate } from "./components/job-order-template.jsx"
 import "./index.css"
 import { API_BASE_URL } from "./config"
+import { format, parseISO } from "date-fns"
+import { DayPicker, getDefaultClassNames } from "react-day-picker"
+import { Calendar as CalendarIcon } from "lucide-react"
+
+  function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
+    const [open, setOpen] = React.useState(false)
+    const containerRef = React.useRef(null)
+    const defaultClassNames = getDefaultClassNames()
+    const selected = (() => {
+      try {
+        return value ? parseISO(value) : undefined
+      } catch {
+        return undefined
+    }
+  })()
+  const display = (() => {
+    try {
+      return selected ? format(selected, "dd/MM/yyyy") : ""
+    } catch {
+      return ""
+    }
+  })()
+    React.useEffect(() => {
+      if (!open) return
+      const handle = (e) => {
+        const el = containerRef.current
+        if (el && !el.contains(e.target)) setOpen(false)
+      }
+      const handleKey = (e) => {
+        if (e.key === "Escape") setOpen(false)
+      }
+      document.addEventListener("mousedown", handle)
+      document.addEventListener("touchstart", handle, { passive: true })
+      document.addEventListener("keydown", handleKey)
+      return () => {
+        document.removeEventListener("mousedown", handle)
+        document.removeEventListener("touchstart", handle)
+        document.removeEventListener("keydown", handleKey)
+      }
+    }, [open])
+    return (
+      <div ref={containerRef} className="relative inline-block w-full">
+        <input
+          type="text"
+          value={display}
+          placeholder={placeholder}
+          onClick={() => setOpen((o) => !o)}
+          readOnly
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+          aria-label="Open calendar"
+        >
+          <CalendarIcon className="size-4" aria-hidden="true" />
+        </button>
+        {open && (
+          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+8px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
+            <DayPicker
+              mode="single"
+              selected={selected}
+              onSelect={(d) => {
+                if (!d) return
+                const v = format(d, "yyyy-MM-dd")
+                onChange(v)
+                setOpen(false)
+              }}
+              captionLayout="buttons"
+              classNames={{
+                root: `w-fit ${defaultClassNames.root}`,
+                months: `flex flex-col ${defaultClassNames.months}`,
+                month: `rounded-2xl pt-8 ${defaultClassNames.month}`,
+                caption: `relative h-8 ${defaultClassNames.caption}`,
+                nav: `absolute left-3 right-3 top-0 flex items-center justify-between ${defaultClassNames.nav}`,
+                nav_button: `p-2 rounded-full hover:bg-slate-100 ${defaultClassNames.nav_button}`,
+                nav_button_previous: `${defaultClassNames.nav_button_previous}`,
+                nav_button_next: `${defaultClassNames.nav_button_next}`,
+                caption_label: `absolute left-1/2 -translate-x-1/2 top-0 h-8 leading-8 text-center font-semibold uppercase tracking-wide text-[#2D4485] ${defaultClassNames.caption_label}`,
+                table: `w-full border-collapse`,
+                weekdays: `flex justify-between border-b border-slate-200 pb-2 ${defaultClassNames.weekdays}`,
+                weekday: `text-slate-500 flex-1 text-sm text-center ${defaultClassNames.weekday}`,
+                week: `grid grid-cols-7 mt-2 ${defaultClassNames.week}`,
+                day: `mx-auto size-10 flex items-center justify-center rounded-full hover:bg-blue-50 ${defaultClassNames.day}`,
+                today: `bg-[#E7F1FF] text-[#2D4485] ${defaultClassNames.today}`,
+                outside: `text-slate-400 ${defaultClassNames.outside}`,
+                disabled: `${defaultClassNames.disabled}`,
+              }}
+              modifiersClassNames={{
+                selected: "bg-[#E7F1FF] text-[#2D4485]",
+              }}
+            />
+          </div>
+        )}
+      </div>
+    )
+}
 
 function ManufacturingOrderPage() {
   const [orders, setOrders] = React.useState(() => {
@@ -125,27 +223,39 @@ function ManufacturingOrderPage() {
         const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`)
         if (!res.ok) return
         const data = await res.json()
-        const mapped = (Array.isArray(data) ? data : []).map((m) => ({
-          id: m.id,
-          ref: m.job_order_code,
-          jobOrderCode: m.job_order_code || "",
-          purchaseOrder: m.po_number || "",
-          productNo: m.product_no || "",
-          product: m.product || "",
-          quantity: Number(m.quantity) || 1,
-          totalQuantity: Number(m.quantity) || Number(m.totalQuantity) || Number(m.quantity) || 1,
-          start: m.start_date || "",
-          completedDate: m.complete_date || "",
-          productionTime: m.production_time || "",
-          responsible: "",
-          customer: m.customer_name || "",
-          componentStatus: m.component_status || "",
-          state: m.state || "",
-          favorite: false,
-          selected: false,
-          activitySchedules: [],
-          items: Array.isArray(m.items) ? m.items : [],
-        }))
+          const mapped = (Array.isArray(data) ? data : []).map((m) => ({
+            id: m.id,
+            ref: m.job_order_code,
+            jobOrderCode: m.job_order_code || "",
+            purchaseOrder: m.po_number || "",
+            productNo: m.product_no || "",
+            product: m.product || "",
+            quantity: Number(m.quantity) || 1,
+            totalQuantity: Number(m.quantity) || Number(m.totalQuantity) || Number(m.quantity) || 1,
+            start: m.start_date || "",
+            completedDate: m.complete_date || "",
+            productionTime: m.production_time || "",
+            responsible: [
+              String(m.responsible_sales_person || "").trim(),
+              String(m.responsible_production_person || "").trim(),
+            ].filter(Boolean).join(" / "),
+            responsibleSales: String(m.responsible_sales_person || "").trim(),
+            responsibleProduction: String(m.responsible_production_person || "").trim(),
+            customer: m.customer_name || "",
+            componentStatus: m.component_status || "",
+            state: m.state || "",
+            favorite: false,
+            selected: false,
+            activitySchedules: [],
+            items: Array.isArray(m.items)
+              ? m.items.map(x => ({
+                  itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
+                  description: String((x.item_description ?? x.description ?? "")).trim(),
+                  qty: String((x.item_quantity ?? x.qty ?? "")),
+                  unit: String((x.item_unit ?? x.unit ?? "Unit")),
+                }))
+              : [],
+          }))
         setOrders(mapped)
         setRemoteLoaded(true)
       } catch {}
@@ -168,14 +278,21 @@ function ManufacturingOrderPage() {
           start_date: m.start_date || "",
           complete_date: m.complete_date || "",
           production_time: m.production_time || "",
-          sales_department: m.sales_department || "",
-          production_department: m.production_department || "",
+          sales_department: m.responsible_sales_person || m.sales_department || "",
+          production_department: m.responsible_production_person || m.production_department || "",
           supplier: m.supplier || "",
           supplier_date: m.supplier_date || "",
           recipient: m.recipient || "",
           recipient_date: m.recipient_date || "",
         })
-        setJobFormItems(Array.isArray(m.items) ? m.items.map(x => ({ itemCode: x.itemCode || "", description: x.description || "", qty: String(x.qty || ""), unit: x.unit || "Unit" })) : [])
+        setJobFormItems(Array.isArray(m.items)
+          ? m.items.map(x => ({
+              itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
+              description: String((x.item_description ?? x.description ?? "")).trim(),
+              qty: String((x.item_quantity ?? x.qty ?? "")),
+              unit: String((x.item_unit ?? x.unit ?? "Unit")),
+            }))
+          : [])
       } catch {}
     })()
   }, [openJobFormId])
@@ -306,6 +423,22 @@ function ManufacturingOrderPage() {
     const next = orders.map((x)=>x.id===orderId ? { ...x, activitySchedules: arr } : x)
     setAndPersist(next)
   }
+  const patchOrder = async (id, data) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) return
+      const m = await res.json()
+      setAndPersist(orders.map(x => x.id === id ? {
+        ...x,
+        componentStatus: m.component_status ?? x.componentStatus,
+        state: m.state ?? x.state,
+      } : x))
+    } catch {}
+  }
   const reorderSchedule = (orderId, fromIdx, toIdx) => {
     if (fromIdx===toIdx || fromIdx==null || toIdx==null) return
     const target = orders.find((x)=>x.id===orderId)
@@ -398,17 +531,16 @@ function ManufacturingOrderPage() {
   const columns = [
     { id: 'index', label: 'Index', width: 'w-16' },
     { id: 'ref', label: 'Job Order' },
-    { id: 'jobOrderCode', label: 'PO Number' },
     { id: 'productNo', label: 'Product No', defaultClass: 'max-w-xs truncate' },
     { id: 'quantity', label: 'Quantity', defaultClass: 'font-mono text-sm' },
+    { id: 'componentStatus', label: 'Component Status' },
+    { id: 'state', label: 'State' },
+    { id: 'customer', label: 'Customer' },
+    { id: 'jobOrderCode', label: 'PO Number' },
+    { id: 'responsible', label: 'Responsible' },
     { id: 'start', label: 'Start' },
     { id: 'completedDate', label: 'Completed Date' },
     { id: 'productionTime', label: 'Production Time' },
-    { id: 'responsible', label: 'Responsible' },
-    { id: 'customer', label: 'Customer' },
-    { id: 'componentStatus', label: 'Component Status' },
-    { id: 'state', label: 'State' },
-    { id: 'actions', label: '', width: 'w-12' },
   ]
   const toggleMode = (id, mode) => {
     setColumnModes(prev => ({
@@ -450,19 +582,19 @@ function ManufacturingOrderPage() {
               <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-md shadow-md">
                 <button
                   className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
-                  onClick={()=>{setOpenStatusId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, componentStatus:'Available'}:x))}}
+                  onClick={()=>{ setOpenStatusId(null); patchOrder(o.id, { component_status: 'Available' }) }}
                 >
                   Available
                 </button>
                 <button
                   className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
-                  onClick={()=>{setOpenStatusId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, componentStatus:'Not Available'}:x))}}
+                  onClick={()=>{ setOpenStatusId(null); patchOrder(o.id, { component_status: 'Not Available' }) }}
                 >
                   Not Available
                 </button>
                 <button
                   className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={()=>{setOpenStatusId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, componentStatus:''}:x))}}
+                  onClick={()=>{ setOpenStatusId(null); patchOrder(o.id, { component_status: '' }) }}
                 >
                   Clear
                 </button>
@@ -484,44 +616,30 @@ function ManufacturingOrderPage() {
               <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-md shadow-md">
                 <button
                   className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:'Processing'}:x)) }}
+                  onClick={()=>{ setOpenStateId(null); patchOrder(o.id, { state: 'Processing' }) }}
                 >
                   Processing
                 </button>
                 <button
                   className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
-                  onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:'Finished'}:x)) }}
+                  onClick={()=>{ setOpenStateId(null); patchOrder(o.id, { state: 'Finished' }) }}
                 >
                   Finished
                 </button>
                 <button
                   className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
-                  onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:'Cancelled'}:x)) }}
+                  onClick={()=>{ setOpenStateId(null); patchOrder(o.id, { state: 'Cancelled' }) }}
                 >
                   Cancelled
                 </button>
                 <button
                   className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={()=>{ setOpenStateId(null); setAndPersist(orders.map(x=>x.id===o.id?{...x, state:''}:x)) }}
+                  onClick={()=>{ setOpenStateId(null); patchOrder(o.id, { state: '' }) }}
                 >
                   Clear
                 </button>
               </div>
             )}
-          </div>
-        )
-      case 'actions':
-        return (
-          <div className="flex items-center gap-2 justify-end">
-            <button
-              onClick={() => setOpenDeleteId(o.id)}
-              className="text-red-600 hover:text-red-800"
-              title="Delete"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
           </div>
         )
       default: return <span>-</span>
@@ -838,7 +956,11 @@ function ManufacturingOrderPage() {
                   </div>
                   <div>
                     <div className="text-xs font-medium text-slate-500 mb-1">Start Date</div>
-                    <input value={jobForm.start_date} onChange={(e)=>setJobForm({...jobForm, start_date:e.target.value})} placeholder="YYYY-MM-DD" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                    <DateField
+                      value={jobForm.start_date}
+                      onChange={(v)=>setJobForm({...jobForm, start_date:v})}
+                      placeholder="DD/MM/YYYY"
+                    />
                   </div>
                   <div>
                     <div className="text-xs font-medium text-slate-500 mb-1">Order Quantity</div>
@@ -850,7 +972,27 @@ function ManufacturingOrderPage() {
                   </div>
                   <div>
                     <div className="text-xs font-medium text-slate-500 mb-1">Completed Date</div>
-                    <input value={jobForm.complete_date} onChange={(e)=>setJobForm({...jobForm, complete_date:e.target.value})} placeholder="YYYY-MM-DD" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                    <DateField
+                      value={jobForm.complete_date}
+                      onChange={(v)=>setJobForm({...jobForm, complete_date:v})}
+                      placeholder="DD/MM/YYYY"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 mb-1">Supplier Date</div>
+                    <DateField
+                      value={jobForm.supplier_date}
+                      onChange={(v)=>setJobForm({...jobForm, supplier_date:v})}
+                      placeholder="DD/MM/YYYY"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 mb-1">Recipient Date</div>
+                    <DateField
+                      value={jobForm.recipient_date}
+                      onChange={(v)=>setJobForm({...jobForm, recipient_date:v})}
+                      placeholder="DD/MM/YYYY"
+                    />
                   </div>
                   <div>
                     <div className="text-xs font-medium text-slate-500 mb-1">Time of Production</div>
@@ -858,7 +1000,7 @@ function ManufacturingOrderPage() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Product Items Description</div>
+                  <div className="text-xs font-semibold text-slate-900 uppercase tracking-wide mb-2">Product Items Description</div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
@@ -915,7 +1057,13 @@ function ManufacturingOrderPage() {
                         quantity: Number(jobForm.quantity) || 1,
                         start_date: jobForm.start_date || null,
                         complete_date: jobForm.complete_date || null,
+                        supplier: String(jobForm.supplier || "").trim(),
+                        supplier_date: jobForm.supplier_date || null,
+                        recipient: String(jobForm.recipient || "").trim(),
+                        recipient_date: jobForm.recipient_date || null,
                         production_time: String(jobForm.production_time || "").trim(),
+                        responsible_sales_person: String(jobForm.sales_department || "").trim(),
+                        responsible_production_person: String(jobForm.production_department || "").trim(),
                         items: jobFormItems,
                       }
                       try {
@@ -935,7 +1083,13 @@ function ManufacturingOrderPage() {
                           start: updated.start_date || x.start,
                           completedDate: updated.complete_date || x.completedDate,
                           productionTime: updated.production_time || x.productionTime,
+                          responsible: [
+                            String(updated.responsible_sales_person || "").trim(),
+                            String(updated.responsible_production_person || "").trim(),
+                          ].filter(Boolean).join(" / ") || x.responsible,
                           customer: updated.customer_name || x.customer,
+                          supplierDate: updated.supplier_date ?? x.supplierDate,
+                          recipientDate: updated.recipient_date ?? x.recipientDate,
                           items: Array.isArray(updated.items) ? updated.items : x.items,
                         } : x))
                         setOpenJobFormId(null)

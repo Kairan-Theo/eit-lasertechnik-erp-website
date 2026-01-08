@@ -279,7 +279,6 @@ class ManufacturingOrderViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
-        # Resolve Customer by id or by name string
         cid = data.get('customer_id')
         write_name = (data.get('write_customer_name') or '').strip()
         if cid and not data.get('customer'):
@@ -290,20 +289,49 @@ class ManufacturingOrderViewSet(viewsets.ModelViewSet):
         elif write_name and not data.get('customer'):
             cust, _ = Customer.objects.get_or_create(company_name=write_name)
             data['customer'] = cust.id
-        # Resolve PurchaseOrder by id or number
-        po_number = (data.get('po_number') or '').strip()
-        if po_number and not data.get('po'):
+        # Upsert by job_order_code to avoid duplicate rows
+        code = (data.get('job_order_code') or '').strip()
+        existing = None
+        if code:
             try:
-                po = PurchaseOrder.objects.get(number=po_number)
-                data['po'] = po.id
-            except PurchaseOrder.DoesNotExist:
-                pass
-        serializer = self.get_serializer(data=data)
+                existing = ManufacturingOrder.objects.filter(job_order_code=code).order_by('-updated_at').first()
+            except Exception:
+                existing = None
+        # Do not auto-link PO from po_number; store po_number only unless po_id provided
+        if existing:
+            serializer = self.get_serializer(existing, data=data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            instance = serializer.save()
+            return Response(self.get_serializer(instance).data, status=status.HTTP_200_OK)
+        else:
+            serializer = self.get_serializer(data=data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            instance = serializer.save()
+            headers = {'Location': f"{request.build_absolute_uri('/api/manufacturing_orders/')}{instance.id}/"}
+            return Response(self.get_serializer(instance).data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        data = request.data.copy()
+        cid = data.get('customer_id')
+        write_name = (data.get('write_customer_name') or '').strip()
+        if cid and not data.get('customer'):
+            try:
+                data['customer'] = Customer.objects.get(id=cid).id
+            except Customer.DoesNotExist:
+                return Response({'error': 'customer_id not found'}, status=status.HTTP_400_BAD_REQUEST)
+        elif write_name and not data.get('customer'):
+            cust, _ = Customer.objects.get_or_create(company_name=write_name)
+            data['customer'] = cust.id
+        # Do not auto-link PO from po_number on update; store po_number only unless po_id provided
+        serializer = self.get_serializer(instance, data=data, partial=partial)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         instance = serializer.save()
-        headers = {'Location': f"{request.build_absolute_uri('/api/manufacturing_orders/')}{instance.id}/"}
-        return Response(self.get_serializer(instance).data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(self.get_serializer(instance).data)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup(request):

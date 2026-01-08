@@ -183,7 +183,6 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     customer_id = serializers.PrimaryKeyRelatedField(source='customer', queryset=Customer.objects.all(), write_only=True, required=False)
     po_id = serializers.PrimaryKeyRelatedField(source='po', queryset=PurchaseOrder.objects.all(), write_only=True, required=False)
-    po_number = serializers.SerializerMethodField()
 
     class Meta:
         model = ManufacturingOrder
@@ -202,8 +201,8 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
             'start_date',
             'complete_date',
             'production_time',
-            'sales_department',
-            'production_department',
+            'responsible_sales_person',
+            'responsible_production_person',
             'supplier',
             'supplier_date',
             'recipient',
@@ -211,13 +210,54 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
             'component_status',
             'state',
             'items',
+            'item_description',
+            'item_quantity',
+            'item_unit',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['created_at', 'updated_at', 'po_number', 'customer_name']
-
-    def get_po_number(self, obj):
-        return obj.po.number if obj.po else ""
+        read_only_fields = ['created_at', 'updated_at', 'customer_name']
 
     def get_customer_name(self, obj):
         return obj.customer.company_name if obj.customer else ""
+
+    def _normalize_items(self, items):
+        result = []
+        for x in items or []:
+            item = str((x.get('item') or x.get('itemCode') or '')).strip()
+            item_description = str((x.get('item_description') or x.get('description') or '')).strip()
+            item_quantity = str((x.get('item_quantity') or x.get('qty') or '')).strip()
+            item_unit = str((x.get('item_unit') or x.get('unit') or 'Unit')).strip()
+            result.append({
+                'item': item,
+                'item_description': item_description,
+                'item_quantity': item_quantity,
+                'item_unit': item_unit,
+            })
+        return result
+
+    def create(self, validated_data):
+        # If explicit PO is provided, mirror its number into po_number
+        if validated_data.get('po') and not validated_data.get('po_number'):
+            validated_data['po_number'] = validated_data['po'].number
+        if 'items' in validated_data:
+            validated_data['items'] = self._normalize_items(validated_data.get('items') or [])
+            if validated_data['items']:
+                first = validated_data['items'][0]
+                validated_data.setdefault('item_description', first.get('item_description') or '')
+                validated_data.setdefault('item_quantity', first.get('item_quantity') or '')
+                validated_data.setdefault('item_unit', first.get('item_unit') or '')
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # If explicit PO is provided, mirror its number into po_number
+        if validated_data.get('po') and not validated_data.get('po_number'):
+            validated_data['po_number'] = validated_data['po'].number
+        if 'items' in validated_data:
+            validated_data['items'] = self._normalize_items(validated_data.get('items') or [])
+            if validated_data['items']:
+                first = validated_data['items'][0]
+                validated_data.setdefault('item_description', first.get('item_description') or '')
+                validated_data.setdefault('item_quantity', first.get('item_quantity') or '')
+                validated_data.setdefault('item_unit', first.get('item_unit') or '')
+        return super().update(instance, validated_data)
