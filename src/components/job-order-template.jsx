@@ -30,47 +30,81 @@ export function JobOrderTemplate({ order }) {
             {/* Row 1 */}
             <div className="flex border-b border-black">
                 <div className="w-1/2 border-r border-black p-2">
-                    <div className="text-[10px] font-bold">ชื่อลูกค้า :</div>
-                    <div className="text-xs text-gray-500 mb-1">Customer Name</div>
-                    <div className="font-semibold pl-2">{o.customer || "-"}</div>
+                    <div className="flex items-start gap-2">
+                        <div className="w-32 shrink-0">
+                            <div className="text-[10px] font-bold">ชื่อลูกค้า :</div>
+                            <div className="text-xs text-gray-500">Customer Name</div>
+                        </div>
+                        <div className="font-semibold">{o.customer || "-"}</div>
+                    </div>
                 </div>
                 <div className="w-1/4 border-r border-black p-2">
-                    <div className="text-[10px] font-bold">วันที่เริ่มทำงาน :</div>
-                    <div className="text-xs text-gray-500 mb-1">Start Date</div>
-                    <div className="font-semibold pl-2">{o.start ? new Date(o.start).toLocaleDateString() : "-"}</div>
+                    <div className="flex items-start gap-2">
+                        <div className="w-32 shrink-0">
+                            <div className="text-[10px] font-bold">วันที่เริ่มทำงาน :</div>
+                            <div className="text-xs text-gray-500">Start Date</div>
+                        </div>
+                        <div className="font-semibold">{o.start ? new Date(o.start).toLocaleDateString() : "-"}</div>
+                    </div>
                 </div>
                 <div className="w-1/4 p-2">
-                    <div className="text-[10px] font-bold">จำนวนที่ส่งทำชิ้นงาน :</div>
-                    <div className="text-xs text-gray-500 mb-1">Order Quantity</div>
-                    <div className="font-semibold pl-2">{o.totalQuantity || "-"}</div>
+                    <div className="flex items-start gap-2">
+                        <div className="w-32 shrink-0">
+                            <div className="text-[10px] font-bold">จำนวนที่ส่งทำชิ้นงาน :</div>
+                            <div className="text-xs text-gray-500">Order Quantity</div>
+                        </div>
+                        <div className="font-semibold">{o.totalQuantity || "-"}</div>
+                    </div>
                 </div>
             </div>
 
             {/* Row 2 */}
             <div className="flex border-b border-black">
                 <div className="w-1/2 border-r border-black p-2">
-                    <div className="text-[10px] font-bold">ชื่อสินค้า/ชิ้นงาน :</div>
-                    <div className="text-xs text-gray-500 mb-1">Product No.</div>
-                    <div className="font-semibold pl-2">{o.productNo || "-"}</div>
+                    <div className="flex items-start gap-2">
+                        <div className="w-32 shrink-0">
+                            <div className="text-[10px] font-bold">ชื่อสินค้า/ชิ้นงาน :</div>
+                            <div className="text-xs text-gray-500">Product No.</div>
+                        </div>
+                        <div className="font-semibold">{o.productNo || "-"}</div>
+                    </div>
                 </div>
                 <div className="w-1/2 p-2">
-                    <div className="text-[10px] font-bold">วันที่ทำชิ้นงานเสร็จ :</div>
-                    <div className="text-xs text-gray-500 mb-1">Completed Date</div>
-                    <div className="font-semibold pl-2">{o.completedDate ? new Date(o.completedDate).toLocaleDateString() : "-"}</div>
+                    <div className="flex items-start gap-2">
+                        <div className="w-32 shrink-0">
+                            <div className="text-[10px] font-bold">วันที่ทำชิ้นงานเสร็จ :</div>
+                            <div className="text-xs text-gray-500">Completed Date</div>
+                        </div>
+                        <div className="font-semibold">{o.completedDate ? new Date(o.completedDate).toLocaleDateString() : "-"}</div>
+                    </div>
                 </div>
             </div>
 
-            {/* Row 3 */}
             <div className="flex">
                 <div className="w-1/2 border-r border-black p-2">
-                    <div className="text-[10px] font-bold">ผู้รับผิดชอบ :</div>
-                    <div className="text-xs text-gray-500 mb-1">Responsible</div>
-                    <div className="font-semibold pl-2">{o.responsible || "-"}</div>
+                    <div className="text-[10px] font-bold">ผู้รับผิดชอบ</div>
+                    <div className="text-xs text-gray-500 mb-2">Responsible</div>
+                    <div className="flex gap-6">
+                        <div className="flex-1 flex items-center border-b border-dotted border-gray-400 py-1">
+                            <div className="text-sm">ฝ่ายขาย</div>
+                            <div className="flex-1"></div>
+                            <div className="text-sm font-semibold">{o.responsibleSales || "-"}</div>
+                        </div>
+                        <div className="flex-1 flex items-center border-b border-dotted border-gray-400 py-1">
+                            <div className="text-sm">ฝ่ายผลิต</div>
+                            <div className="flex-1"></div>
+                            <div className="text-sm font-semibold">{o.responsibleProduction || "-"}</div>
+                        </div>
+                    </div>
                 </div>
                 <div className="w-1/2 p-2">
-                    <div className="text-[10px] font-bold">ระยะเวลาที่ใช้ :</div>
-                    <div className="text-xs text-gray-500 mb-1">Time of Production</div>
-                    <div className="font-semibold pl-2">{o.productionTime || "-"}</div>
+                    <div className="flex items-start gap-2">
+                        <div className="w-32 shrink-0">
+                            <div className="text-[10px] font-bold">ระยะเวลาที่ใช้ :</div>
+                            <div className="text-xs text-gray-500">Time of Production</div>
+                        </div>
+                        <div className="font-semibold">{o.productionTime || "-"}</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -99,15 +133,15 @@ export function JobOrderTemplate({ order }) {
                     </tr>
                 </thead>
                 <tbody>
-                    {/* Main Item */}
-                    <tr className="border-b border-dashed border-gray-300">
-                        <td className="border-r border-black p-3 align-top">{o.productNo || "-"}</td>
-                        <td className="border-r border-black p-3 align-top">{o.product || "-"}</td>
-                        <td className="border-r border-black p-3 text-right align-top">{o.quantity || "-"}</td>
-                        <td className="p-3 text-center align-top">{o.unit || "-"}</td>
-                    </tr>
-                    {/* Empty rows to fill space */}
-                    {Array.from({ length: 15 }).map((_, i) => (
+                    {(Array.isArray(o.items) ? o.items : []).map((it, idx) => (
+                        <tr key={`item-${idx}`} className="border-b border-dashed border-gray-300">
+                            <td className="border-r border-black p-3 align-top">{it.itemCode || it.item || "-"}</td>
+                            <td className="border-r border-black p-3 align-top">{it.description || it.item_description || "-"}</td>
+                            <td className="border-r border-black p-3 text-right align-top">{it.qty ?? it.item_quantity ?? "-"}</td>
+                            <td className="p-3 text-center align-top">{it.unit || it.item_unit || "-"}</td>
+                        </tr>
+                    ))}
+                    {Array.from({ length: Math.max(15 - ((Array.isArray(o.items) ? o.items.length : 0)), 0) }).map((_, i) => (
                         <tr key={`empty-${i}`} className="border-b border-dashed border-gray-300 last:border-b-0">
                             <td className="border-r border-black p-3 h-8"></td>
                             <td className="border-r border-black p-3"></td>

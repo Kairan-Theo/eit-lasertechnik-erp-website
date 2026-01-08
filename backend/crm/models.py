@@ -225,6 +225,7 @@ class Task(models.Model):
 class ManufacturingOrder(models.Model):
     job_order_code = models.CharField(max_length=50)  # e.g., JO-001; not unique by design
     po = models.ForeignKey(PurchaseOrder, null=True, blank=True, on_delete=models.SET_NULL, related_name='manufacturing_orders')
+    po_number = models.CharField(max_length=100, blank=True)
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='manufacturing_orders')
     product = models.CharField(max_length=255, blank=True)
     product_no = models.CharField(max_length=100, blank=True)
@@ -232,8 +233,8 @@ class ManufacturingOrder(models.Model):
     start_date = models.DateField(null=True, blank=True)
     complete_date = models.DateField(null=True, blank=True)
     production_time = models.CharField(max_length=100, blank=True)
-    sales_department = models.CharField(max_length=255, blank=True)
-    production_department = models.CharField(max_length=255, blank=True)
+    responsible_sales_person = models.CharField(max_length=255, blank=True)
+    responsible_production_person = models.CharField(max_length=255, blank=True)
     supplier = models.CharField(max_length=255, blank=True)
     supplier_date = models.DateField(null=True, blank=True)
     recipient = models.CharField(max_length=255, blank=True)
@@ -241,6 +242,9 @@ class ManufacturingOrder(models.Model):
     component_status = models.CharField(max_length=50, blank=True)
     state = models.CharField(max_length=50, blank=True)
     items = models.JSONField(default=list, blank=True)  # Product Items Description rows
+    item_description = models.CharField(max_length=255, blank=True)
+    item_quantity = models.CharField(max_length=50, blank=True)
+    item_unit = models.CharField(max_length=50, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
