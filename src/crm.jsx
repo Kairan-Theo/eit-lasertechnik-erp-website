@@ -1665,7 +1665,7 @@ function CRMPage() {
                   <div className="p-6 max-h-[70vh] overflow-y-auto">
                     <div className="space-y-6">
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Sales Person</div>
+                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Sales Person</div>
                         <input 
                           type="text"
                           value={detailDeal.salesperson} 
@@ -1676,7 +1676,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
+                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Company</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-2">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
@@ -1733,7 +1733,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
+                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Contact</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
@@ -1775,7 +1775,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Codes</div>
+                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Codes</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Tax ID</label>
@@ -1799,7 +1799,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Amount</div>
+                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Amount</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-1">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
@@ -1825,7 +1825,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Priority</div>
+                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Priority</div>
                         <div className="flex items-center gap-3">
                           {[1,2,3].map(n => {
                             const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
@@ -1846,7 +1846,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Notes</div>
+                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Notes</div>
                         <textarea 
                           value={detailDeal.notes} 
                           onChange={(e)=>setDetailDeal({...detailDeal, notes:e.target.value})} 
@@ -1885,7 +1885,7 @@ function CRMPage() {
                   <div className="p-4 max-h-[60vh] overflow-y-auto">
                     <div className="space-y-6">
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Sales Person</div>
+                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Sales Person</div>
                         <input 
                           type="text"
                           value={newDeal.salesperson} 
@@ -1896,7 +1896,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
+                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Company</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-2">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
@@ -1953,7 +1953,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
+                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Contact</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
@@ -1995,7 +1995,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Codes</div>
+                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Codes</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Tax ID</label>
@@ -2019,7 +2019,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Amount</div>
+                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Amount</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-1">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
@@ -2045,7 +2045,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Priority</div>
+                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Priority</div>
                         <div className="flex items-center gap-3">
                           {[1,2,3].map(n => {
                             const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
@@ -2066,7 +2066,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Stage</div>
+                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Stage</div>
                         <select 
                           value={newDeal.stageIndex} 
                           onChange={(e)=>setNewDeal({...newDeal, stageIndex:Number(e.target.value)})} 
