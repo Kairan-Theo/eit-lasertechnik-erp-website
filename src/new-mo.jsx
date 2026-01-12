@@ -25,6 +25,8 @@ function NewMOPage() {
   const [poList, setPoList] = React.useState([])
   const [crmPoNumbers, setCrmPoNumbers] = React.useState([])
   const [showPoSuggestions, setShowPoSuggestions] = React.useState(false)
+  const [showBomSuggestions, setShowBomSuggestions] = React.useState(false)
+  const bomSuggestionRef = React.useRef(null)
   const [newOrder, setNewOrder] = React.useState({
     product: "",
     productNo: "",
@@ -50,6 +52,10 @@ function NewMOPage() {
   const [printOrder, setPrintOrder] = React.useState(null)
   const [previewZoom, setPreviewZoom] = React.useState(0.5)
   const [previewOrientation, setPreviewOrientation] = React.useState("portrait")
+
+  const printJobOrder = React.useCallback((orderData) => {
+    setPrintOrder(orderData)
+  }, [])
 
   const syncItemsFromBOM = React.useCallback(() => {
     const key = String(newOrder.productNo || "").trim().toLowerCase()
@@ -95,6 +101,20 @@ function NewMOPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newOrder.productNo, itemsTouched, isEditMode])
+
+  React.useEffect(() => {
+    if (!showBomSuggestions) return
+    const handleClickOutside = (event) => {
+      const el = bomSuggestionRef.current
+      if (el && !el.contains(event.target)) {
+        setShowBomSuggestions(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [showBomSuggestions])
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
 
   React.useEffect(() => {
@@ -404,6 +424,10 @@ function NewMOPage() {
           totalQuantity: Number(result.quantity) || Number(newOrder.quantity) || 1,
           quantity: Number(result.quantity) || Number(newOrder.quantity) || 1,
           productionTime: result.production_time || newOrder.productionTime,
+          supplier: result.supplier || newOrder.supplier,
+          supplierDate: result.supplier_date || newOrder.supplierDate,
+          recipient: result.recipient || newOrder.recipient,
+          recipientDate: result.recipient_date || newOrder.recipientDate,
           items: its,
           responsible: [
             String(result.responsible_sales_person || "").trim(),
@@ -423,6 +447,10 @@ function NewMOPage() {
           totalQuantity: Number(newOrder.quantity) || 1,
           quantity: Number(newOrder.quantity) || 1,
           productionTime: newOrder.productionTime,
+          supplier: newOrder.supplier,
+          supplierDate: newOrder.supplierDate,
+          recipient: newOrder.recipient,
+          recipientDate: newOrder.recipientDate,
           items: normalizedItems,
           responsible: [
             String(newOrder.salesDepartment || "").trim(),
@@ -441,7 +469,7 @@ function NewMOPage() {
   const saveAndExit = async () => {
     const orderData = await createOrderData()
     if (orderData) {
-      setPrintOrder(orderData)
+      printJobOrder(orderData)
       // Keep draft so edits remain visible after download; user can discard or save later
     }
   }
@@ -525,7 +553,54 @@ function NewMOPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Product No</label>
-                  <input value={newOrder.productNo} onChange={(e)=>setNewOrder({...newOrder, productNo:e.target.value})} placeholder="e.g. LCM-001" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                  <div className="relative" ref={bomSuggestionRef}>
+                    <input
+                      value={newOrder.productNo}
+                      onChange={(e) => {
+                        setNewOrder({ ...newOrder, productNo: e.target.value })
+                        setShowBomSuggestions(true)
+                      }}
+                      onFocus={() => setShowBomSuggestions(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setShowBomSuggestions(false)
+                      }}
+                      placeholder="e.g. LCM-001"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                    />
+                    {showBomSuggestions && String(newOrder.productNo || "").trim() && (() => {
+                      const q = String(newOrder.productNo || "").trim().toLowerCase()
+                      let bomList = []
+                      try {
+                        bomList = JSON.parse(localStorage.getItem("mfgBOMs") || "[]")
+                      } catch {}
+                      const candidates = Array.from(new Set(
+                        (Array.isArray(bomList) ? bomList : [])
+                          .map(b => String(b?.product || "").trim())
+                          .filter(Boolean)
+                      ))
+                        .filter(x => x.toLowerCase().includes(q))
+                        .slice(0, 8)
+                      return candidates.length ? (
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                          {candidates.map((val, i) => (
+                            <button
+                              key={`${val}-${i}`}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+                              onClick={() => {
+                                setNewOrder({ ...newOrder, productNo: val })
+                                setItems([])
+                                setItemsTouched(false)
+                                setShowBomSuggestions(false)
+                              }}
+                            >
+                              {val}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null
+                    })()}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Order Quantity</label>
