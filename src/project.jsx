@@ -1,30 +1,142 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import { format, startOfWeek, addDays, isSameDay, isWeekend, differenceInDays, addWeeks } from "date-fns"
-import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal, ChevronDown, CornerDownRight, Layout, List } from "lucide-react"
 import Navigation from "./components/navigation.jsx"
 import "./index.css"
 
-const STORAGE_KEY = "eit-projects-v1"
+const STORAGE_KEY = "eit-projects-v2"
 
-// Modern color palette
 const COLORS = [
-  { hex: "#6366f1", name: "Indigo" },
-  { hex: "#8b5cf6", name: "Purple" },
-  { hex: "#ec4899", name: "Pink" },
-  { hex: "#f43f5e", name: "Rose" },
-  { hex: "#f59e0b", name: "Amber" },
-  { hex: "#10b981", name: "Emerald" },
-  { hex: "#3b82f6", name: "Blue" },
-  { hex: "#64748b", name: "Slate" },
+  { hex: "#f43f5e", name: "Important" },
+  { hex: "#6366f1", name: "In Progress" },
+  { hex: "#10b981", name: "Done" },
+  { hex: "#64748b", name: "Not Started" },
+  { hex: "#f59e0b", name: "Blocked" },
 ]
+
+const getColorMeaning = (hex) => COLORS.find((c) => c.hex === hex)?.name || "In Progress"
+const DEFAULT_COLOR = "#6366f1"
 
 const initialProjects = [
-  { id: 1, name: "Website Redesign", start: "2026-01-06", end: "2026-01-20", color: "#6366f1" },
-  { id: 2, name: "Mobile App Development", start: "2026-01-15", end: "2026-02-10", color: "#8b5cf6" },
-  { id: 3, name: "Marketing Campaign", start: "2026-01-25", end: "2026-02-05", color: "#ec4899" },
-  { id: 4, name: "Database Migration", start: "2026-02-01", end: "2026-02-15", color: "#f59e0b" },
+  { 
+    id: 1, 
+    name: "Website Redesign", 
+    start: "2026-01-06", 
+    end: "2026-01-20", 
+    status: "in_progress",
+    color: "#6366f1",
+    expanded: true,
+    subtasks: [
+      { id: 101, name: "Wireframing", start: "2026-01-06", end: "2026-01-10", status: "done", color: "#10b981" },
+      { id: 102, name: "Design System", start: "2026-01-11", end: "2026-01-15", status: "in_progress", color: "#6366f1" },
+      { id: 103, name: "Implementation", start: "2026-01-16", end: "2026-01-20", status: "todo", color: "#64748b" },
+    ]
+  },
+  { id: 2, name: "Mobile App Development", start: "2026-01-15", end: "2026-02-10", status: "todo", color: "#6366f1" },
+  { id: 3, name: "Marketing Campaign", start: "2026-01-25", end: "2026-02-05", status: "review", color: "#f59e0b" },
+  { id: 4, name: "Database Migration", start: "2026-02-01", end: "2026-02-15", status: "done", color: "#10b981" },
 ]
+
+const KanbanBoard = ({ projects, setProjects }) => {
+  const [draggedItem, setDraggedItem] = React.useState(null)
+
+  const columns = [
+      { id: 'todo', title: 'To Do', color: 'bg-gray-100/50' },
+      { id: 'in_progress', title: 'In Progress', color: 'bg-blue-50/50' },
+      { id: 'review', title: 'Review', color: 'bg-amber-50/50' },
+      { id: 'done', title: 'Done', color: 'bg-emerald-50/50' }
+  ]
+
+  const handleDragStart = (e, item) => {
+      setDraggedItem(item)
+      e.dataTransfer.setData('text/plain', item.id)
+      e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e) => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = (e, status) => {
+      e.preventDefault()
+      if (!draggedItem) return
+
+      setProjects(prev => prev.map(p => {
+          if (p.id === draggedItem.id) {
+              return { ...p, status }
+          }
+          return p
+      }))
+      setDraggedItem(null)
+  }
+
+  const getProjectsByStatus = (status) => {
+      return projects.filter(p => (p.status || 'todo') === status)
+  }
+
+  return (
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-8 bg-gray-50/50">
+          <div className="flex gap-6 h-full min-w-max">
+              {columns.map(col => (
+                  <div 
+                      key={col.id} 
+                      className={`w-80 flex flex-col rounded-2xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, col.id)}
+                  >
+                      <div className="p-4 border-b border-gray-200/50 flex items-center justify-between">
+                          <h3 className="font-bold text-gray-700 text-sm tracking-wide">{col.title}</h3>
+                          <span className="text-xs font-bold bg-white px-2.5 py-1 rounded-full text-gray-500 shadow-sm border border-gray-100">
+                              {getProjectsByStatus(col.id).length}
+                          </span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+                          {getProjectsByStatus(col.id).map(project => (
+                              <div
+                                  key={project.id}
+                                  draggable
+                                  onDragStart={(e) => handleDragStart(e, project)}
+                                  className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group relative overflow-hidden"
+                              >
+                                  <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: project.color }}></div>
+                                  <div className="flex items-start justify-between mb-3 pl-2">
+                                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0" style={{ backgroundColor: project.color }}>
+                                          {project.name.charAt(0)}
+                                      </div>
+                                      <button className="text-gray-300 hover:text-gray-600 transition-colors">
+                                          <MoreHorizontal size={16} />
+                                      </button>
+                                  </div>
+                                  <h4 className="font-bold text-gray-800 text-sm mb-1.5 pl-2 leading-tight">{project.name}</h4>
+                                  <div className="text-[11px] text-gray-400 mb-3 pl-2 font-medium flex items-center gap-1.5">
+                                      <Calendar size={12} />
+                                      {format(new Date(project.start), "MMM d")} - {format(new Date(project.end), "MMM d")}
+                                  </div>
+                                  {project.subtasks && project.subtasks.length > 0 && (
+                                      <div className="ml-2 flex items-center gap-2 text-[10px] text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                              <div 
+                                                className="h-full rounded-full transition-all" 
+                                                style={{ 
+                                                  width: `${(project.subtasks.filter(s => s.status === 'done').length / project.subtasks.length) * 100}%`,
+                                                  backgroundColor: project.color 
+                                                }} 
+                                              />
+                                          </div>
+                                          <span className="font-semibold">{project.subtasks.filter(s => s.status === 'done').length}/{project.subtasks.length} done</span>
+                                      </div>
+                                  )}
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              ))}
+          </div>
+      </div>
+  )
+}
 
 function ProjectApp() {
   const [projects, setProjects] = React.useState(() => {
@@ -36,8 +148,15 @@ function ProjectApp() {
   const [startDate, setStartDate] = React.useState(startOfWeek(new Date(), { weekStartsOn: 1 }))
   const [dragging, setDragging] = React.useState(null)
   const [isModalOpen, setIsModalOpen] = React.useState(false)
-  const [draft, setDraft] = React.useState({ name: "", start: "", end: "", color: COLORS[0].hex })
+  const [draftParentId, setDraftParentId] = React.useState(null)
+  const [draft, setDraft] = React.useState({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
   const [view, setView] = React.useState("timeline") // timeline, list
+
+  const activeProjectsCount = projects.filter((p) => (p.status || "todo") !== "done").length
+  const doneProjectsCount = projects.filter((p) => (p.status || "todo") === "done").length
+  const totalProjectsCount = projects.length
+
+  // Keep existing saved colors; do not auto-overwrite based on status
 
   // Persist projects
   React.useEffect(() => {
@@ -54,28 +173,46 @@ function ProjectApp() {
 
     if (daysDiff === 0) return
 
+    const updateItem = (item) => {
+        const newStart = new Date(dragging.initialStart)
+        const newEnd = new Date(dragging.initialEnd)
+
+        if (dragging.type === 'move') {
+            newStart.setDate(newStart.getDate() + daysDiff)
+            newEnd.setDate(newEnd.getDate() + daysDiff)
+        } else if (dragging.type === 'resize-start') {
+            newStart.setDate(newStart.getDate() + daysDiff)
+            if (newStart >= newEnd) return item // Prevent inversion
+        } else if (dragging.type === 'resize-end') {
+            newEnd.setDate(newEnd.getDate() + daysDiff)
+            if (newEnd <= newStart) return item // Prevent inversion
+        }
+
+        return {
+            ...item,
+            start: format(newStart, "yyyy-MM-dd"),
+            end: format(newEnd, "yyyy-MM-dd")
+        }
+    }
+
     setProjects(prev => prev.map(p => {
-      if (p.id !== dragging.id) return p
-
-      const newStart = new Date(dragging.initialStart)
-      const newEnd = new Date(dragging.initialEnd)
-
-      if (dragging.type === 'move') {
-        newStart.setDate(newStart.getDate() + daysDiff)
-        newEnd.setDate(newEnd.getDate() + daysDiff)
-      } else if (dragging.type === 'resize-start') {
-        newStart.setDate(newStart.getDate() + daysDiff)
-        if (newStart >= newEnd) return p // Prevent inversion
-      } else if (dragging.type === 'resize-end') {
-        newEnd.setDate(newEnd.getDate() + daysDiff)
-        if (newEnd <= newStart) return p // Prevent inversion
+      // Check main project
+      if (p.id === dragging.id) {
+          return updateItem(p)
       }
 
-      return {
-        ...p,
-        start: format(newStart, "yyyy-MM-dd"),
-        end: format(newEnd, "yyyy-MM-dd")
+      // Check subtasks
+      if (p.subtasks) {
+          const updatedSubtasks = p.subtasks.map(sub => 
+              sub.id === dragging.id ? updateItem(sub) : sub
+          )
+          
+          if (updatedSubtasks.some((s, i) => s !== p.subtasks[i])) {
+              return { ...p, subtasks: updatedSubtasks }
+          }
       }
+
+      return p
     }))
   }, [dragging])
 
@@ -112,99 +249,283 @@ function ProjectApp() {
     return diff * dayWidth
   }
 
+  const handleAddSubtask = (parentId) => {
+      setDraftParentId(parentId)
+      setDraft({ name: "", start: format(new Date(), "yyyy-MM-dd"), end: format(addDays(new Date(), 5), "yyyy-MM-dd"), status: "todo", color: DEFAULT_COLOR })
+      setIsModalOpen(true)
+  }
+
   const saveProject = () => {
     if (!draft.name || !draft.start || !draft.end) return
     
-    setProjects(p => [...p, {
-      id: Date.now(),
-      ...draft
-    }])
+    if (draftParentId) {
+        setProjects(prev => prev.map(p => {
+            if (p.id === draftParentId) {
+                return {
+                    ...p,
+                    subtasks: [
+                        ...(p.subtasks || []),
+                        { id: Date.now(), ...draft }
+                    ],
+                    expanded: true
+                }
+            }
+            return p
+        }))
+    } else {
+        setProjects(p => [...p, {
+          id: Date.now(),
+          ...draft,
+          subtasks: []
+        }])
+    }
     setIsModalOpen(false)
-    setDraft({ name: "", start: "", end: "", color: COLORS[0].hex })
+    setDraft({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
+    setDraftParentId(null)
   }
 
+  const toggleProject = (id) => {
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p))
+  }
+
+  // --- UI Helper Components ---
+  
+  const ProjectRow = ({ item, isSubtask = false, onToggle }) => (
+    <div className="group flex items-center h-14 relative hover:bg-gray-50/50 transition-colors">
+                     
+        {/* Sidebar Item */}
+        <div className={`w-80 flex-none px-6 flex items-center gap-3 z-20 bg-white/80 backdrop-blur-[2px] border-r border-gray-100 group-hover:bg-white group-hover:shadow-[8px_0_30px_-10px_rgba(0,0,0,0.05)] transition-all duration-300 ${isSubtask ? 'pl-12' : ''}`}>
+        
+        {/* Expand Toggle (only for parents with subtasks) */}
+        {!isSubtask && (
+            <button 
+                onClick={() => onToggle(item.id)}
+                className={`p-1 rounded-md hover:bg-gray-100 text-gray-400 transition-colors ${item.subtasks?.length ? '' : 'invisible'}`}
+            >
+                {item.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+        )}
+        
+        {isSubtask && <CornerDownRight size={14} className="text-gray-300 mr-1" />}
+
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`} style={{ backgroundColor: item.color, transform: isSubtask ? 'scale(0.85)' : 'none' }}>
+            {item.name.charAt(0)}
+        </div>
+        
+        <div className="min-w-0 flex-1 group/info">
+            <div className="flex items-center justify-between">
+                <span className={`block text-sm ${isSubtask ? 'font-medium text-gray-600' : 'font-bold text-gray-800'} truncate`}>{item.name}</span>
+                {!isSubtask && (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); handleAddSubtask(item.id) }}
+                        className="opacity-0 group-hover/info:opacity-100 p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-indigo-600 transition-all"
+                        title="Add Subtask"
+                    >
+                        <Plus size={14} strokeWidth={2.5} />
+                    </button>
+                )}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] text-gray-400 font-medium">
+                {format(new Date(item.start), "MMM d")} - {format(new Date(item.end), "MMM d")}
+                </span>
+            </div>
+            {!isSubtask && <ProgressBar progress={65} color={item.color} />}
+        </div>
+        </div>
+
+        {/* Bar Area */}
+        <div className="absolute left-80 right-0 h-full flex items-center py-1">
+        <div
+            className={`absolute rounded-xl shadow-sm flex items-center px-3 relative group/bar transition-all duration-300 border border-white/10 hover:shadow-lg hover:-translate-y-0.5 select-none`}
+            style={{
+            height: isSubtask ? '24px' : '36px',
+            left: left(item.start),
+            width: Math.max(width(item.start, item.end), 40),
+            backgroundColor: item.color,
+            opacity: isSubtask ? 0.8 : 1,
+            boxShadow: `0 4px 6px -1px ${item.color}30`
+            }}
+        >
+            {/* Bar Texture */}
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setDragging({
+                  id: item.id,
+                  type: 'resize-start',
+                  initialMouseX: e.clientX,
+                  initialStart: item.start,
+                  initialEnd: item.end
+                })
+              }}
+              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l-xl opacity-0 group-hover/bar:opacity-100 transition-opacity"
+              style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.35), rgba(255,255,255,0))' }}
+              title="Resize start"
+            />
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setDragging({
+                  id: item.id,
+                  type: 'resize-end',
+                  initialMouseX: e.clientX,
+                  initialStart: item.start,
+                  initialEnd: item.end
+                })
+              }}
+              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r-xl opacity-0 group-hover/bar:opacity-100 transition-opacity"
+              style={{ background: 'linear-gradient(to left, rgba(255,255,255,0.35), rgba(255,255,255,0))' }}
+              title="Resize end"
+            />
+            
+            {/* Bar Content */}
+            <div className="relative flex items-center justify-between w-full overflow-hidden">
+                <span className="text-[10px] font-bold text-white truncate drop-shadow-md select-none tracking-wide px-1">
+                    {width(item.start, item.end) > 60 && item.name}
+                </span>
+                {!isSubtask && width(item.start, item.end) > 120 && (
+                   <div className="opacity-90 scale-75 origin-right">
+                      <AvatarGroup color={item.color} count={2} />
+                   </div>
+                )}
+            </div>
+        </div>
+        </div>
+    </div>
+  )
+
+  const AvatarGroup = ({ count = 3, color }) => (
+    <div className="flex -space-x-2">
+      {[...Array(count)].map((_, i) => (
+        <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-600 shadow-sm" style={{ backgroundColor: i === 0 ? color + '20' : undefined, color: i === 0 ? color : undefined }}>
+          {String.fromCharCode(65 + i)}
+        </div>
+      ))}
+      <div className="w-6 h-6 rounded-full border-2 border-white bg-gray-50 flex items-center justify-center text-[8px] font-medium text-gray-400 shadow-sm">
+        +2
+      </div>
+    </div>
+  )
+
+  const ProgressBar = ({ progress = 65, color }) => (
+    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mt-2">
+       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: color }} />
+    </div>
+  )
+
   return (
-    <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900">
+    <div className="min-h-screen bg-gray-50/50 flex flex-col font-sans text-gray-900 selection:bg-indigo-100 selection:text-indigo-900">
       <Navigation />
       
       {/* Top Bar */}
-      <div className="border-b border-gray-200 bg-white px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm/50">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
-            <Calendar size={20} strokeWidth={2.5} />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">Project Management</h1>
-            <p className="text-xs text-gray-500 font-medium mt-0.5">Track timelines and deliverables</p>
+      <div className="bg-transparent px-6 sm:px-8 py-5 flex items-center justify-between sticky top-0 z-40 transition-all duration-200">
+        <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+          <Calendar className="text-indigo-600 shrink-0" size={24} strokeWidth={2.5} />
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-[28px] font-extrabold tracking-tight text-gray-900 truncate">Project Management</h1>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15 text-xs font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {activeProjectsCount} Active
+              </span>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100/70 text-gray-700 ring-1 ring-black/10 text-xs font-bold">
+                {doneProjectsCount} Done
+              </span>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/15 text-xs font-bold">
+                {totalProjectsCount} Total
+              </span>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex bg-gray-100/80 p-1 rounded-lg border border-gray-200/50">
+        <div className="flex items-center gap-4">
+          <div className="flex bg-gray-100/50 p-1.5 rounded-xl border border-gray-200/50">
              <button 
                 onClick={() => setView("timeline")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${view === "timeline" ? "bg-white shadow-sm text-gray-900 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700"}`}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${view === "timeline" ? "bg-white shadow-sm text-indigo-600 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
              >
+                <Layout size={14} />
                 Timeline
              </button>
              <button 
-                onClick={() => setView("list")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${view === "list" ? "bg-white shadow-sm text-gray-900 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700"}`}
+                onClick={() => setView("kanban")}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${view === "kanban" ? "bg-white shadow-sm text-indigo-600 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
              >
-                List View
+                <List size={14} />
+                Kanban
              </button>
           </div>
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm active:scale-95 hover:shadow-md ring-1 ring-indigo-500/20"
+            className="flex items-center gap-2 bg-gray-900 hover:bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-gray-900/20 active:scale-95 hover:shadow-xl"
           >
-            <Plus size={16} strokeWidth={2.5} />
+            <Plus size={18} strokeWidth={3} />
             <span>New Project</span>
           </button>
         </div>
       </div>
 
       {/* Toolbar */}
-      <div className="px-6 py-3 border-b border-gray-100 flex items-center justify-between bg-white sticky top-[73px] z-20">
-         <div className="flex items-center gap-2">
-            <div className="flex items-center bg-gray-50 rounded-lg p-0.5 border border-gray-200/60">
-                <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-gray-500 transition-all">
-                   <ChevronLeft size={16} />
-                </button>
-                <button onClick={() => setStartDate(startOfWeek(new Date(), { weekStartsOn: 1 }))} className="px-3 py-1.5 text-xs font-semibold text-gray-700 hover:text-indigo-600 transition-colors">
-                   Today
-                </button>
-                <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-gray-500 transition-all">
-                   <ChevronRight size={16} />
-                </button>
-            </div>
-            <span className="text-sm font-bold text-gray-800 ml-3">
-               {format(startDate, "MMMM yyyy")}
+      <div className="px-8 py-4 flex items-center justify-between bg-transparent sticky top-[88px] z-30">
+         <div className="flex items-center gap-4">
+            {view === 'timeline' && (
+                <div className="flex items-center bg-white rounded-xl p-1 border border-gray-200 shadow-sm">
+                    <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-2 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-700 transition-all">
+                       <ChevronLeft size={18} />
+                    </button>
+                    <button onClick={() => setStartDate(startOfWeek(new Date(), { weekStartsOn: 1 }))} className="px-4 py-1.5 text-xs font-bold text-gray-700 hover:text-indigo-600 transition-colors uppercase tracking-wide">
+                       Today
+                    </button>
+                    <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-2 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-700 transition-all">
+                       <ChevronRight size={18} />
+                    </button>
+                </div>
+            )}
+            <span className="text-lg font-bold text-gray-800 tracking-tight">
+               {view === 'timeline' ? format(startDate, "MMMM yyyy") : 'Board View'}
             </span>
          </div>
          <div className="flex items-center gap-3">
             <div className="relative group">
-               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-indigo-500 transition-colors" />
+               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-indigo-500 transition-colors" />
                <input 
                   type="text" 
                   placeholder="Search projects..." 
-                  className="pl-9 pr-4 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white w-64 transition-all"
+                  className="pl-10 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-64 transition-all shadow-sm hover:border-gray-300"
                />
             </div>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
+            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
                <Filter size={14} />
-               Filter
+               Filters
             </button>
          </div>
       </div>
 
+      <div className="px-8 pt-4 bg-white/60 backdrop-blur-sm border-b border-gray-200/40">
+        <div className="flex flex-wrap items-center gap-2 pb-4">
+          <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest mr-2">Color Meaning</span>
+          {COLORS.map((c) => (
+            <div key={c.hex} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-gray-200/60 shadow-sm">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.hex }} />
+              <span className="text-[11px] font-bold text-gray-700">{c.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Gantt Area */}
-      <div className="flex-1 overflow-hidden flex flex-col relative bg-gray-50/30">
+      {view === 'timeline' ? (
+      <div className="flex-1 overflow-hidden flex flex-col relative">
         
         {/* Timeline Header */}
-        <div className="flex border-b border-gray-200 bg-white z-10 shadow-sm/[0.02]">
+        <div className="flex border-b border-gray-200 bg-white z-20 shadow-[0_4px_20px_-12px_rgba(0,0,0,0.1)]">
             {/* Sidebar Header */}
-            <div className="flex-none w-72 px-6 py-4 flex items-end bg-gray-50/50 border-r border-gray-100 backdrop-blur-sm">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Project Name</span>
+            <div className="flex-none w-80 px-8 py-5 flex items-end bg-gray-50/30 border-r border-gray-200/60">
+                <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest">Project Name & Status</span>
             </div>
             
             {/* Calendar Header */}
@@ -217,12 +538,12 @@ function ProjectApp() {
                     <div 
                       key={i} 
                       style={{ width: dayWidth }} 
-                      className={`flex-none flex flex-col justify-end pb-3 pt-4 text-center border-r border-gray-100/50 relative ${weekend ? 'bg-gray-50/80' : ''}`}
+                      className={`flex-none flex flex-col justify-end pb-4 pt-5 text-center border-r border-dashed border-gray-100 relative group ${weekend ? 'bg-gray-50/50' : 'bg-white'}`}
                     >
-                      <span className={`text-[10px] font-bold uppercase mb-1 ${isToday ? 'text-indigo-600' : 'text-gray-400'}`}>
+                      <span className={`text-[10px] font-bold uppercase mb-1.5 transition-colors ${isToday ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-600'}`}>
                         {format(d, "EEE")}
                       </span>
-                      <div className={`mx-auto w-6 h-6 flex items-center justify-center rounded-full text-sm font-medium transition-colors ${isToday ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30' : 'text-gray-700'}`}>
+                      <div className={`mx-auto w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold transition-all duration-300 ${isToday ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/40 scale-110' : 'text-gray-700 group-hover:bg-gray-100'}`}>
                         {format(d, "d")}
                       </div>
                     </div>
@@ -233,99 +554,52 @@ function ProjectApp() {
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-auto relative">
+        <div className="flex-1 overflow-auto relative bg-white">
              <div className="min-w-max">
                {/* Background Columns */}
-               <div className="absolute inset-0 flex pl-72 pointer-events-none">
+               <div className="absolute inset-0 flex pl-80 pointer-events-none">
                  {days.map((d, i) => (
                    <div 
                      key={i} 
                      style={{ width: dayWidth }}
-                     className={`flex-none border-r border-dashed border-gray-200/60 h-full ${isWeekend(d) ? 'bg-gray-50/50' : ''} ${isSameDay(d, today) ? 'bg-indigo-50/5' : ''}`}
+                     className={`flex-none border-r border-dashed border-gray-100 h-full ${isWeekend(d) ? 'bg-gray-50/40' : ''} ${isSameDay(d, today) ? 'bg-indigo-50/5' : ''}`}
                    />
                  ))}
                  {/* Today Line */}
                  <div 
-                     className="absolute top-0 bottom-0 w-px bg-indigo-500 z-10 shadow-[0_0_8px_rgba(99,102,241,0.4)]"
+                     className="absolute top-0 bottom-0 w-px bg-indigo-500/50 z-10"
                      style={{ left: left(today) + (dayWidth/2) }} 
                  >
-                    <div className="absolute top-0 -translate-x-1/2 -mt-1 w-2 h-2 bg-indigo-500 rounded-full" />
+                    <div className="absolute top-0 -translate-x-1/2 w-full h-full bg-indigo-500/5 blur-[2px]" />
                  </div>
                </div>
 
                {/* Projects List */}
-               <div className="py-4 space-y-1">
-                 {projects.map(p => (
-                   <div key={p.id} className="group flex items-center h-14 relative hover:bg-white transition-colors">
-                     
-                     {/* Sidebar Item */}
-                     <div className="w-72 flex-none px-6 flex items-center gap-3 z-10 bg-white/50 backdrop-blur-[2px] border-r border-gray-100 group-hover:bg-white group-hover:shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all">
-                       <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm" style={{ backgroundColor: p.color }}>
-                          {p.name.charAt(0)}
-                       </div>
-                       <div className="min-w-0">
-                          <span className="block text-sm font-semibold text-gray-700 truncate">{p.name}</span>
-                          <span className="block text-[10px] text-gray-400 font-medium mt-0.5">
-                             {format(new Date(p.start), "MMM d")} - {format(new Date(p.end), "MMM d")}
-                          </span>
-                       </div>
-                     </div>
-
-                     {/* Bar Area */}
-                     <div className="absolute left-72 right-0 h-full flex items-center">
-                       <div
-                         className={`absolute h-8 rounded-lg shadow-sm flex items-center px-3 cursor-grab relative group/bar transition-all border border-white/20 ${
-                           dragging?.id === p.id ? 'cursor-grabbing shadow-xl ring-2 ring-indigo-500/20 z-20 scale-[1.02]' : 'hover:shadow-md hover:-translate-y-0.5'
-                         }`}
-                         style={{
-                           left: left(p.start),
-                           width: Math.max(width(p.start, p.end), 32),
-                           backgroundColor: p.color,
-                           opacity: dragging?.id === p.id ? 0.9 : 1
-                         }}
-                         onMouseDown={(e) => {
-                           e.preventDefault()
-                           setDragging({
-                             id: p.id,
-                             initialMouseX: e.clientX,
-                             initialStart: p.start,
-                             initialEnd: p.end,
-                             type: 'move'
-                           })
-                         }}
-                       >
-                         {/* Bar Label (visible if wide enough) */}
-                         <span className="text-[11px] font-semibold text-white truncate drop-shadow-sm opacity-90 select-none">
-                            {width(p.start, p.end) > 60 && p.name}
-                         </span>
-
-                         {/* Resize Handles */}
-                         <div 
-                           className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize opacity-0 group-hover/bar:opacity-100 flex items-center justify-center"
-                           onMouseDown={(e) => {
-                             e.stopPropagation(); e.preventDefault();
-                             setDragging({ id: p.id, initialMouseX: e.clientX, initialStart: p.start, initialEnd: p.end, type: 'resize-start' })
-                           }}
-                         >
-                            <div className="w-1 h-3 bg-white/30 rounded-full" />
-                         </div>
-                         <div 
-                           className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize opacity-0 group-hover/bar:opacity-100 flex items-center justify-center"
-                           onMouseDown={(e) => {
-                             e.stopPropagation(); e.preventDefault();
-                             setDragging({ id: p.id, initialMouseX: e.clientX, initialStart: p.start, initialEnd: p.end, type: 'resize-end' })
-                           }}
-                         >
-                            <div className="w-1 h-3 bg-white/30 rounded-full" />
-                         </div>
-                       </div>
-                     </div>
+               <div className="py-6 space-y-1">
+                 {projects.map((p, idx) => (
+                   <div key={p.id}>
+                       <ProjectRow item={p} onToggle={toggleProject} />
+                       
+                       {/* Subtasks */}
+                       {p.expanded && p.subtasks && (
+                           <div className="relative">
+                               {/* Tree connector line */}
+                               <div className="absolute left-[38px] top-0 bottom-4 w-px bg-gray-200 z-0"></div>
+                               
+                               {p.subtasks.map(sub => (
+                                   <ProjectRow key={sub.id} item={sub} isSubtask={true} />
+                               ))}
+                           </div>
+                       )}
                    </div>
                  ))}
                </div>
              </div>
         </div>
       </div>
+      ) : (
+        <KanbanBoard projects={projects} setProjects={setProjects} />
+      )}
 
       {/* Modal */}
       {isModalOpen && (
@@ -368,7 +642,7 @@ function ProjectApp() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Color Label</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Color Meaning</label>
                 <div className="flex flex-wrap gap-2">
                   {COLORS.map(c => (
                     <button
@@ -379,6 +653,11 @@ function ProjectApp() {
                       title={c.name}
                     />
                   ))}
+                </div>
+                <div className="mt-3">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gray-50 text-gray-700 border border-gray-100">
+                    {getColorMeaning(draft.color)}
+                  </span>
                 </div>
               </div>
             </div>
