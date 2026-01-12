@@ -41,3 +41,8 @@ db.sqlite3
 staticfiles/
 media/
 *.sqlite3
+
+# logs
+logs
+*.log
+backend/debug_thread.log
