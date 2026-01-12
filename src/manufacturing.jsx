@@ -1217,33 +1217,75 @@ function ManufacturingOrderPage() {
                     <button className="btn-pill" onClick={() => setShowNew(false)}>Cancel</button>
                     <button
                       className="btn-pill"
-                      onClick={() => {
-                        const ref = (newOrder.purchaseOrder && newOrder.purchaseOrder.trim()) ? newOrder.purchaseOrder.trim() : `WH/MO/${String((orders[0]?.id||0)+1).padStart(5,'0')}`
-                        const o = {
-                          id: Date.now(),
-                          ref,
-                          jobOrderCode: newOrder.jobOrderCode || "",
-                          start: newOrder.scheduledDate || new Date().toISOString(),
-                          productNo: newOrder.productNo || "",
-                          product: newOrder.product || "Untitled",
-                          unit: newOrder.unit || "Unit",
-                          completedDate: newOrder.completedDate || "",
-                          productionTime: newOrder.productionTime || "",
-                          responsible: newOrder.responsible || "",
-                          nextActivity: "",
-                          customer: newOrder.customer || "",
-                          componentStatus: "",
+                      onClick={async () => {
+                        const ref = (newOrder.purchaseOrder && newOrder.purchaseOrder.trim())
+                          ? newOrder.purchaseOrder.trim()
+                          : `WH/MO/${String((orders[0]?.id || 0) + 1).padStart(5, '0')}`
+                        const jobOrderCode = String(newOrder.jobOrderCode || "").trim() || nextJobOrderCode()
+                        const payload = {
+                          job_order_code: jobOrderCode,
+                          po_number: String(newOrder.purchaseOrder || "").trim(),
+                          write_customer_name: String(newOrder.customer || "").trim(),
+                          product: String(newOrder.product || "").trim(),
+                          product_no: String(newOrder.productNo || "").trim(),
                           quantity: Number(newOrder.quantity) || 1,
-                          totalQuantity: Number(newOrder.totalQuantity) || 1,
-                          state: "",
-                          priority: newOrder.priority || "None",
-                          favorite: false,
-                          selected: false,
+                          start_date: String(newOrder.scheduledDate || "").slice(0, 10) || null,
+                          complete_date: String(newOrder.completedDate || "").slice(0, 10) || null,
+                          production_time: String(newOrder.productionTime || "").trim(),
+                          responsible_sales_person: String(newOrder.responsible || "").trim(),
                         }
-                        const next = [o, ...orders]
-                        setOrders(next)
-                        localStorage.setItem("mfgOrders", JSON.stringify(next))
-                        setShowNew(false)
+                        try {
+                          const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload),
+                          })
+                          if (!res.ok) {
+                            const t = await res.text().catch(() => "")
+                            alert(`Failed to save: ${res.status}${t ? ` — ${t}` : ""}`)
+                            return
+                          }
+                          const m = await res.json()
+                          const o = {
+                            id: m.id,
+                            ref,
+                            jobOrderCode: m.job_order_code || jobOrderCode,
+                            purchaseOrder: m.po_number || payload.po_number || "",
+                            start: m.start_date || payload.start_date || "",
+                            productNo: m.product_no || payload.product_no || "",
+                            product: m.product || payload.product || "Untitled",
+                            unit: newOrder.unit || "Unit",
+                            completedDate: m.complete_date || payload.complete_date || "",
+                            productionTime: m.production_time || payload.production_time || "",
+                            responsible: [
+                              String(m.responsible_sales_person || "").trim(),
+                              String(m.responsible_production_person || "").trim(),
+                            ].filter(Boolean).join(" / ") || payload.responsible_sales_person || "",
+                            nextActivity: "",
+                            customer: m.customer_name || payload.write_customer_name || "",
+                            componentStatus: m.component_status || "",
+                            quantity: Number(m.quantity) || payload.quantity || 1,
+                            totalQuantity: Number(m.quantity) || payload.quantity || 1,
+                            state: m.state || "",
+                            priority: newOrder.priority || "None",
+                            favorite: false,
+                            selected: false,
+                            items: Array.isArray(m.items)
+                              ? m.items.map(x => ({
+                                  itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
+                                  description: String((x.item_description ?? x.description ?? "")).trim(),
+                                  qty: String((x.item_quantity ?? x.qty ?? "")),
+                                  unit: String((x.item_unit ?? x.unit ?? "Unit")),
+                                }))
+                              : [],
+                          }
+                          const next = [o, ...orders]
+                          setAndPersist(next)
+                          setShowNew(false)
+                          setNewOrder({ product: "", productNo: "", jobOrderCode: "", purchaseOrder: "", unit: "Unit", quantity: 1, totalQuantity: 1, scheduledDate: "", completedDate: "", productionTime: "", responsible: "", priority: "None", customer: "" })
+                        } catch (e) {
+                          alert("Failed to save: " + (e?.message || "Unknown error"))
+                        }
                       }}
                     >
                       Add
