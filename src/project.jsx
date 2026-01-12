@@ -1,453 +1,401 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
+import { format, startOfWeek, addDays, isSameDay, isWeekend, differenceInDays, addWeeks } from "date-fns"
+import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal } from "lucide-react"
+import Navigation from "./components/navigation.jsx"
 import "./index.css"
-import {
-  startOfMonth,
-  endOfMonth,
-  format,
-  differenceInDays,
-  addMonths,
-  startOfWeek,
-  endOfWeek,
-  addWeeks,
-  addDays
-} from "date-fns"
 
-/* ---------------- SAMPLE DATA ---------------- */
-const sampleProjects = [
-  {
-    id: 1,
-    name: "Website Redesign",
-    color: "#3b82f6",
-    tasks: [
-      { id: 11, title: "Requirements & Planning", start: "2026-01-06", end: "2026-01-12", progress: 100 },
-      { id: 12, title: "UI/UX Design", start: "2026-01-13", end: "2026-01-26", progress: 75 },
-      { id: 13, title: "Frontend Development", start: "2026-01-20", end: "2026-02-09", progress: 45 },
-      { id: 14, title: "Design Review", start: "2026-01-26", end: "2026-01-26", progress: 100, isMilestone: true }
-    ]
-  },
-  {
-    id: 2,
-    name: "Backend Development",
-    color: "#8b5cf6",
-    tasks: [
-      { id: 21, title: "Database Design", start: "2026-01-13", end: "2026-01-26", progress: 80 },
-      { id: 22, title: "API Development", start: "2026-01-27", end: "2026-02-16", progress: 55 },
-      { id: 23, title: "Testing & QA", start: "2026-02-10", end: "2026-02-23", progress: 30 }
-    ]
-  },
-  {
-    id: 3,
-    name: "Deployment & Launch",
-    color: "#10b981",
-    tasks: [
-      { id: 31, title: "Security Audit", start: "2026-02-17", end: "2026-02-28", progress: 15 },
-      { id: 32, title: "Go Live", start: "2026-03-03", end: "2026-03-03", progress: 0, isMilestone: true }
-    ]
-  }
+const STORAGE_KEY = "eit-projects-v1"
+
+// Modern color palette
+const COLORS = [
+  { hex: "#6366f1", name: "Indigo" },
+  { hex: "#8b5cf6", name: "Purple" },
+  { hex: "#ec4899", name: "Pink" },
+  { hex: "#f43f5e", name: "Rose" },
+  { hex: "#f59e0b", name: "Amber" },
+  { hex: "#10b981", name: "Emerald" },
+  { hex: "#3b82f6", name: "Blue" },
+  { hex: "#64748b", name: "Slate" },
 ]
 
- 
+const initialProjects = [
+  { id: 1, name: "Website Redesign", start: "2026-01-06", end: "2026-01-20", color: "#6366f1" },
+  { id: 2, name: "Mobile App Development", start: "2026-01-15", end: "2026-02-10", color: "#8b5cf6" },
+  { id: 3, name: "Marketing Campaign", start: "2026-01-25", end: "2026-02-05", color: "#ec4899" },
+  { id: 4, name: "Database Migration", start: "2026-02-01", end: "2026-02-15", color: "#f59e0b" },
+]
 
-/* ---------------- COMPONENT ---------------- */
-function GanttChart() {
-  const dayWidth = 30
-  const weekWidth = dayWidth * 7
-  const [projects, setProjects] = React.useState(sampleProjects)
-  const [showNewProject, setShowNewProject] = React.useState(false)
-  const [newProject, setNewProject] = React.useState({ name: "", title: "", start: "", end: "", color: "#3b82f6" })
-  const [editing, setEditing] = React.useState(null)
-  const now = new Date()
-  const allWindows = projects
-    .flatMap(p => p.tasks.map(t => ({ start: new Date(t.start), end: new Date(t.end) })))
-    .filter(w => !isNaN(w.start) && !isNaN(w.end))
-  const minStart = allWindows.length ? new Date(Math.min(...allWindows.map(w => w.start.getTime()))) : startOfMonth(now)
-  const maxEnd = allWindows.length ? new Date(Math.max(...allWindows.map(w => w.end.getTime()))) : endOfMonth(now)
-  const baseStart = startOfWeek(minStart, { weekStartsOn: 1 })
-  const baseEnd = endOfWeek(maxEnd, { weekStartsOn: 1 })
-  const rangeStart = addWeeks(baseStart, -1)
-  const rangeEnd = addWeeks(baseEnd, 1)
-
-  const weeksToShow = 12
-  const weeks = (() => {
-    const start = startOfWeek(rangeStart, { weekStartsOn: 1 })
-    return Array.from({ length: weeksToShow }).map((_, i) => addWeeks(start, i))
-  })()
-
-  const totalWidth = weeks.length * weekWidth
-  const months = (() => {
-    const out = []
-    if (weeks.length === 0) return out
-    let cursor = startOfMonth(weeks[0])
-    const lastMonthEnd = endOfMonth(addWeeks(weeks[0], weeks.length - 1))
-    while (cursor <= lastMonthEnd) {
-      const mStart = startOfMonth(cursor)
-      const mEnd = endOfMonth(cursor)
-      const wkCount = weeks.filter(w => (w <= mEnd && addDays(w, 6) >= mStart)).length
-      out.push({ label: format(mStart, "MMMM yyyy"), weeks: wkCount })
-      cursor = addMonths(cursor, 1)
-    }
-    return out
-  })()
-
-  const getLeft = (date) => {
-    const d = new Date(date)
-    const left = (differenceInDays(d, rangeStart) / 7) * weekWidth
-    return Math.max(0, Math.min(left, (weeks.length * weekWidth)))
-  }
-
-  const getWidth = (start, end) => {
-    const s = new Date(start)
-    const e = new Date(end)
-    const a = isNaN(s) ? new Date() : s
-    const b = isNaN(e) ? a : e
-    const [minD, maxD] = a <= b ? [a, b] : [b, a]
-    const weeksSpan = Math.ceil((differenceInDays(maxD, minD) + 1) / 7)
-    return Math.max(weekWidth / 2, weeksSpan * weekWidth)
-  }
-
-  const colorHex = (c) => {
-    if (c === "bg-emerald-500") return "#10b981"
-    if (c === "bg-sky-500") return "#0ea5e9"
-    if (c === "bg-purple-500") return "#a855f7"
-    if (c === "bg-slate-500") return "#64748b"
-    return c
-  }
-
-  const lightenColor = (hex) => {
-    return hex + '20'
-  }
+function ProjectApp() {
+  const [projects, setProjects] = React.useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved ? JSON.parse(saved) : initialProjects
+  })
   
-  const taskProgressPct = (task) => {
-    return task.progress || 0
+  const [today] = React.useState(new Date())
+  const [startDate, setStartDate] = React.useState(startOfWeek(new Date(), { weekStartsOn: 1 }))
+  const [dragging, setDragging] = React.useState(null)
+  const [isModalOpen, setIsModalOpen] = React.useState(false)
+  const [draft, setDraft] = React.useState({ name: "", start: "", end: "", color: COLORS[0].hex })
+  const [view, setView] = React.useState("timeline") // timeline, list
+
+  // Persist projects
+  React.useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
+  }, [projects])
+
+  // Drag & Drop Logic
+  const handleMouseMove = React.useCallback((e) => {
+    if (!dragging) return
+
+    const dayWidth = 48 // pixel width of one day
+    const diffX = e.clientX - dragging.initialMouseX
+    const daysDiff = Math.round(diffX / dayWidth)
+
+    if (daysDiff === 0) return
+
+    setProjects(prev => prev.map(p => {
+      if (p.id !== dragging.id) return p
+
+      const newStart = new Date(dragging.initialStart)
+      const newEnd = new Date(dragging.initialEnd)
+
+      if (dragging.type === 'move') {
+        newStart.setDate(newStart.getDate() + daysDiff)
+        newEnd.setDate(newEnd.getDate() + daysDiff)
+      } else if (dragging.type === 'resize-start') {
+        newStart.setDate(newStart.getDate() + daysDiff)
+        if (newStart >= newEnd) return p // Prevent inversion
+      } else if (dragging.type === 'resize-end') {
+        newEnd.setDate(newEnd.getDate() + daysDiff)
+        if (newEnd <= newStart) return p // Prevent inversion
+      }
+
+      return {
+        ...p,
+        start: format(newStart, "yyyy-MM-dd"),
+        end: format(newEnd, "yyyy-MM-dd")
+      }
+    }))
+  }, [dragging])
+
+  const handleMouseUp = React.useCallback(() => {
+    setDragging(null)
+  }, [])
+
+  React.useEffect(() => {
+    if (dragging) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [dragging, handleMouseMove, handleMouseUp])
+
+  // Calendar calculations
+  const daysToShow = 21
+  const days = Array.from({ length: daysToShow }).map((_, i) => addDays(startDate, i))
+  const dayWidth = 48
+
+  const left = (dateStr) => {
+    const date = new Date(dateStr)
+    const diff = differenceInDays(date, startDate)
+    return diff * dayWidth
+  }
+
+  const width = (startStr, endStr) => {
+    const start = new Date(startStr)
+    const end = new Date(endStr)
+    const diff = differenceInDays(end, start) + 1
+    return diff * dayWidth
+  }
+
+  const saveProject = () => {
+    if (!draft.name || !draft.start || !draft.end) return
+    
+    setProjects(p => [...p, {
+      id: Date.now(),
+      ...draft
+    }])
+    setIsModalOpen(false)
+    setDraft({ name: "", start: "", end: "", color: COLORS[0].hex })
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      {/* Header */}
-      <div className="max-w-[1600px] mx-auto mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Project Timeline</h1>
-        <div className="flex items-center justify-between">
-          <p className="text-gray-600">{format(weeks[0], "MMM d")} – {format(addDays(weeks[weeks.length - 1], 6), "MMM d, yyyy")}</p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.history.back()}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-full hover:bg-gray-50 transition-colors text-sm"
-            >
-              ← Back
-            </button>
-            <button
-              className="px-4 py-2 rounded-full bg-blue-600 text-white text-sm hover:bg-blue-700 transition-colors"
-              onClick={() => setShowNewProject(true)}
-            >
-              + New Project
-            </button>
+    <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900">
+      <Navigation />
+      
+      {/* Top Bar */}
+      <div className="border-b border-gray-200 bg-white px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm/50">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
+            <Calendar size={20} strokeWidth={2.5} />
           </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">Project Management</h1>
+            <p className="text-xs text-gray-500 font-medium mt-0.5">Track timelines and deliverables</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex bg-gray-100/80 p-1 rounded-lg border border-gray-200/50">
+             <button 
+                onClick={() => setView("timeline")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${view === "timeline" ? "bg-white shadow-sm text-gray-900 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700"}`}
+             >
+                Timeline
+             </button>
+             <button 
+                onClick={() => setView("list")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${view === "list" ? "bg-white shadow-sm text-gray-900 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700"}`}
+             >
+                List View
+             </button>
+          </div>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm active:scale-95 hover:shadow-md ring-1 ring-indigo-500/20"
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            <span>New Project</span>
+          </button>
         </div>
       </div>
 
-      {/* Gantt Chart */}
-      <div className="max-w-[1600px] mx-auto bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="flex">
-          {/* Left Sidebar - Task List */}
-          <div className="w-80 border-r border-gray-200 bg-gray-50">
-            <div className="px-4 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50">
-              <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Tasks</h3>
+      {/* Toolbar */}
+      <div className="px-6 py-3 border-b border-gray-100 flex items-center justify-between bg-white sticky top-[73px] z-20">
+         <div className="flex items-center gap-2">
+            <div className="flex items-center bg-gray-50 rounded-lg p-0.5 border border-gray-200/60">
+                <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-gray-500 transition-all">
+                   <ChevronLeft size={16} />
+                </button>
+                <button onClick={() => setStartDate(startOfWeek(new Date(), { weekStartsOn: 1 }))} className="px-3 py-1.5 text-xs font-semibold text-gray-700 hover:text-indigo-600 transition-colors">
+                   Today
+                </button>
+                <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-gray-500 transition-all">
+                   <ChevronRight size={16} />
+                </button>
             </div>
-            {projects.map(project => (
-              <div key={project.id} className="border-b border-gray-200">
-                {/* Project Header */}
-                <div className="px-4 py-4 bg-gradient-to-r from-white to-gray-50 hover:from-blue-50 hover:to-purple-50 transition-all border-b border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      <div 
-                        className="w-1.5 h-8 rounded-full shadow-sm" 
-                        style={{ backgroundColor: colorHex(project.color) }}
-                      />
-                      <div>
-                        <h4 className="text-sm font-bold text-gray-900">{project.name}</h4>
-                        <div className="flex items-center gap-1 mt-1">
-                          <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
-                          <p className="text-xs text-gray-500 font-medium">{project.tasks.length} tasks</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Tasks */}
-                {project.tasks.map(task => (
-                  <div 
-                    key={task.id} 
-                    className="px-4 py-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-transparent transition-all border-t border-gray-50 group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {task.isMilestone ? (
-                          <svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0">
-                            <defs>
-                              <linearGradient id={`milestone-${task.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stopColor="#fbbf24" />
-                                <stop offset="100%" stopColor="#f59e0b" />
-                              </linearGradient>
-                            </defs>
-                            <polygon points="12,3 21,12 12,21 3,12" fill={`url(#milestone-${task.id})`} stroke="#f59e0b" strokeWidth="2" />
-                          </svg>
-                        ) : (
-                          <div className="w-2 h-2 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex-shrink-0 shadow-sm" />
-                        )}
-                        <span className="text-sm text-gray-700 truncate group-hover:text-blue-700 transition-colors font-medium">{task.title}</span>
-                      </div>
-                      <span className="text-xs font-semibold text-gray-500 ml-3 px-2 py-0.5 bg-gray-100 rounded-full group-hover:bg-blue-100 group-hover:text-blue-700 transition-all">{task.progress}%</span>
-                    </div>
-                    <div className="ml-5 mt-1">
-                      <span className="text-xs text-gray-500">
-                        {format(new Date(task.start), "MMM d")} - {format(new Date(task.end), "MMM d")}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
+            <span className="text-sm font-bold text-gray-800 ml-3">
+               {format(startDate, "MMMM yyyy")}
+            </span>
+         </div>
+         <div className="flex items-center gap-3">
+            <div className="relative group">
+               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-indigo-500 transition-colors" />
+               <input 
+                  type="text" 
+                  placeholder="Search projects..." 
+                  className="pl-9 pr-4 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white w-64 transition-all"
+               />
+            </div>
+            <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
+               <Filter size={14} />
+               Filter
+            </button>
+         </div>
+      </div>
 
-          {/* Right Side - Timeline */}
-          <div className="flex-1 overflow-auto bg-white">
-            <div style={{ width: totalWidth }}>
-              {/* Timeline Header */}
-              <div className="sticky top-0 bg-gradient-to-b from-white to-gray-50 z-10 border-b border-gray-200 shadow-sm">
-                {/* Months */}
-                <div className="flex">
-                  {months.map((m) => (
-                    <div 
-                      key={m.label} 
-                      style={{ width: m.weeks * weekWidth }} 
-                      className="px-3 py-3 text-sm font-bold text-gray-800 border-r border-gray-200"
-                    >
-                      {m.label}
-                    </div>
-                  ))}
-                </div>
-                {/* Weeks */}
-                <div className="flex bg-gradient-to-r from-gray-50 to-blue-50">
-                  {weeks.map((w, idx) => (
-                    <div
-                      key={w}
-                      style={{ width: weekWidth }}
-                      className="px-2 py-2 text-xs text-gray-700 font-medium text-center border-r border-gray-200"
-                      title={`${format(w, "MMM d")} – ${format(addDays(w, 6), "MMM d")}`}
-                    >
-                      W{idx + 1}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Grid Lines */}
-              <div className="relative" style={{ minHeight: '400px' }}>
-                {/* Vertical Grid Lines */}
-                {weeks.map((_, i) => (
-                  <div
-                    key={i}
-                    className="absolute top-0 bottom-0 border-r border-gray-100"
-                    style={{ left: i * weekWidth }}
-                  />
-                ))}
-
-                {/* Tasks Timeline */}
-                {projects.map((project) => {
+      {/* Gantt Area */}
+      <div className="flex-1 overflow-hidden flex flex-col relative bg-gray-50/30">
+        
+        {/* Timeline Header */}
+        <div className="flex border-b border-gray-200 bg-white z-10 shadow-sm/[0.02]">
+            {/* Sidebar Header */}
+            <div className="flex-none w-72 px-6 py-4 flex items-end bg-gray-50/50 border-r border-gray-100 backdrop-blur-sm">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Project Name</span>
+            </div>
+            
+            {/* Calendar Header */}
+            <div className="flex-1 overflow-hidden relative">
+              <div className="flex">
+                {days.map((d, i) => {
+                  const isToday = isSameDay(d, today)
+                  const weekend = isWeekend(d)
                   return (
-                    <div key={project.id} className="border-b border-gray-200">
-                      {/* Project Row */}
-                      <div className="h-16" />
-                      
-                      {/* Task Rows */}
-                      {project.tasks.map((task) => {
-                        const w = getWidth(task.start, task.end)
-                        const progress = taskProgressPct(task)
-                        const durDays = differenceInDays(new Date(task.end), new Date(task.start)) + 1
-
-                        return (
-                          <div key={task.id} className="relative h-14 flex items-center">
-                            {task.isMilestone ? (
-                              /* Milestone Diamond */
-                              <div
-                                className="absolute flex items-center justify-center"
-                                style={{ left: getLeft(task.start) - 12 }}
-                                title={`${task.title} - ${format(new Date(task.start), "MMM d, yyyy")}`}
-                              >
-                                <svg width="24" height="24" viewBox="0 0 24 24">
-                                  <polygon
-                                    points="12,3 21,12 12,21 3,12"
-                                    fill="#f59e0b"
-                                    stroke="#fff"
-                                    strokeWidth="2"
-                                  />
-                                  {progress === 100 && (
-                                    <path
-                                      d="M9 12l2 2 4-4"
-                                      stroke="white"
-                                      strokeWidth="2"
-                                      fill="none"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-                                  )}
-                                </svg>
-                              </div>
-                            ) : (
-                              /* Task Bar */
-                              <div
-                                className="absolute h-7 rounded shadow-sm hover:shadow transition-all cursor-pointer overflow-hidden"
-                                style={{
-                                  left: getLeft(task.start),
-                                  width: w,
-                                  minWidth: 100,
-                                  backgroundColor: lightenColor(colorHex(project.color))
-                                }}
-                                title={`${task.title}\n${format(new Date(task.start), "MMM d")} - ${format(new Date(task.end), "MMM d")}\n${progress}% complete`}
-                              >
-                                {/* Progress Fill */}
-                                <div
-                                  className="h-full transition-all"
-                                  style={{
-                                    width: `${progress}%`,
-                                    backgroundColor: colorHex(project.color)
-                                  }}
-                                />
-                                
-                                {/* Task Label */}
-                                <div className="absolute inset-0 px-3 flex items-center justify-between">
-                                  <span className="text-xs font-medium text-gray-900 truncate">
-                                    {task.title}
-                                  </span>
-                                  <div className="flex items-center gap-2 ml-2">
-                                    {w > 140 && (
-                                      <span className="text-xs text-gray-600 bg-white/80 px-2 py-0.5 rounded">
-                                        {durDays}d
-                                      </span>
-                                    )}
-                                    <span className="text-xs font-semibold text-gray-900 bg-white/90 px-2 py-0.5 rounded">
-                                      {progress}%
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                    <div 
+                      key={i} 
+                      style={{ width: dayWidth }} 
+                      className={`flex-none flex flex-col justify-end pb-3 pt-4 text-center border-r border-gray-100/50 relative ${weekend ? 'bg-gray-50/80' : ''}`}
+                    >
+                      <span className={`text-[10px] font-bold uppercase mb-1 ${isToday ? 'text-indigo-600' : 'text-gray-400'}`}>
+                        {format(d, "EEE")}
+                      </span>
+                      <div className={`mx-auto w-6 h-6 flex items-center justify-center rounded-full text-sm font-medium transition-colors ${isToday ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30' : 'text-gray-700'}`}>
+                        {format(d, "d")}
+                      </div>
                     </div>
                   )
                 })}
               </div>
             </div>
-          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-auto relative">
+             <div className="min-w-max">
+               {/* Background Columns */}
+               <div className="absolute inset-0 flex pl-72 pointer-events-none">
+                 {days.map((d, i) => (
+                   <div 
+                     key={i} 
+                     style={{ width: dayWidth }}
+                     className={`flex-none border-r border-dashed border-gray-200/60 h-full ${isWeekend(d) ? 'bg-gray-50/50' : ''} ${isSameDay(d, today) ? 'bg-indigo-50/5' : ''}`}
+                   />
+                 ))}
+                 {/* Today Line */}
+                 <div 
+                     className="absolute top-0 bottom-0 w-px bg-indigo-500 z-10 shadow-[0_0_8px_rgba(99,102,241,0.4)]"
+                     style={{ left: left(today) + (dayWidth/2) }} 
+                 >
+                    <div className="absolute top-0 -translate-x-1/2 -mt-1 w-2 h-2 bg-indigo-500 rounded-full" />
+                 </div>
+               </div>
+
+               {/* Projects List */}
+               <div className="py-4 space-y-1">
+                 {projects.map(p => (
+                   <div key={p.id} className="group flex items-center h-14 relative hover:bg-white transition-colors">
+                     
+                     {/* Sidebar Item */}
+                     <div className="w-72 flex-none px-6 flex items-center gap-3 z-10 bg-white/50 backdrop-blur-[2px] border-r border-gray-100 group-hover:bg-white group-hover:shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all">
+                       <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm" style={{ backgroundColor: p.color }}>
+                          {p.name.charAt(0)}
+                       </div>
+                       <div className="min-w-0">
+                          <span className="block text-sm font-semibold text-gray-700 truncate">{p.name}</span>
+                          <span className="block text-[10px] text-gray-400 font-medium mt-0.5">
+                             {format(new Date(p.start), "MMM d")} - {format(new Date(p.end), "MMM d")}
+                          </span>
+                       </div>
+                     </div>
+
+                     {/* Bar Area */}
+                     <div className="absolute left-72 right-0 h-full flex items-center">
+                       <div
+                         className={`absolute h-8 rounded-lg shadow-sm flex items-center px-3 cursor-grab relative group/bar transition-all border border-white/20 ${
+                           dragging?.id === p.id ? 'cursor-grabbing shadow-xl ring-2 ring-indigo-500/20 z-20 scale-[1.02]' : 'hover:shadow-md hover:-translate-y-0.5'
+                         }`}
+                         style={{
+                           left: left(p.start),
+                           width: Math.max(width(p.start, p.end), 32),
+                           backgroundColor: p.color,
+                           opacity: dragging?.id === p.id ? 0.9 : 1
+                         }}
+                         onMouseDown={(e) => {
+                           e.preventDefault()
+                           setDragging({
+                             id: p.id,
+                             initialMouseX: e.clientX,
+                             initialStart: p.start,
+                             initialEnd: p.end,
+                             type: 'move'
+                           })
+                         }}
+                       >
+                         {/* Bar Label (visible if wide enough) */}
+                         <span className="text-[11px] font-semibold text-white truncate drop-shadow-sm opacity-90 select-none">
+                            {width(p.start, p.end) > 60 && p.name}
+                         </span>
+
+                         {/* Resize Handles */}
+                         <div 
+                           className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize opacity-0 group-hover/bar:opacity-100 flex items-center justify-center"
+                           onMouseDown={(e) => {
+                             e.stopPropagation(); e.preventDefault();
+                             setDragging({ id: p.id, initialMouseX: e.clientX, initialStart: p.start, initialEnd: p.end, type: 'resize-start' })
+                           }}
+                         >
+                            <div className="w-1 h-3 bg-white/30 rounded-full" />
+                         </div>
+                         <div 
+                           className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize opacity-0 group-hover/bar:opacity-100 flex items-center justify-center"
+                           onMouseDown={(e) => {
+                             e.stopPropagation(); e.preventDefault();
+                             setDragging({ id: p.id, initialMouseX: e.clientX, initialStart: p.start, initialEnd: p.end, type: 'resize-end' })
+                           }}
+                         >
+                            <div className="w-1 h-3 bg-white/30 rounded-full" />
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </div>
         </div>
       </div>
-      {/* New Project Modal */}
-      {showNewProject && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowNewProject(false)}>
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">New Project</h2>
-            </div>
 
-            <div className="p-6 space-y-4">
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
+            <h2 className="text-xl font-bold text-gray-900 mb-6">New Project</h2>
+            
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-700 mb-1">Project Name</label>
-                <input
-                  type="text"
-                  value={newProject.name}
-                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Mobile App Development"
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Name</label>
+                <input 
+                  autoFocus
+                  type="text" 
+                  value={draft.name}
+                  onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                  placeholder="e.g. Q1 Marketing Plan"
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Date</label>
+                    <input 
+                      type="date" 
+                      value={draft.start}
+                      onChange={e => setDraft(d => ({ ...d, start: e.target.value }))}
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
+                    />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Date</label>
+                    <input 
+                      type="date" 
+                      value={draft.end}
+                      onChange={e => setDraft(d => ({ ...d, end: e.target.value }))}
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
+                    />
+                 </div>
+              </div>
+
               <div>
-                <label className="block text-sm text-gray-700 mb-2">Color</label>
-                <div className="flex gap-2">
-                  {["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"].map((c) => (
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Color Label</label>
+                <div className="flex flex-wrap gap-2">
+                  {COLORS.map(c => (
                     <button
-                      key={c}
-                      className={`w-10 h-10 rounded ${newProject.color === c ? "ring-2 ring-gray-900" : ""}`}
-                      style={{ backgroundColor: c }}
-                      onClick={() => setNewProject((prev) => ({ ...prev, color: c }))}
+                      key={c.hex}
+                      onClick={() => setDraft(d => ({ ...d, color: c.hex }))}
+                      className={`w-8 h-8 rounded-full transition-transform hover:scale-110 flex items-center justify-center ${draft.color === c.hex ? 'ring-2 ring-offset-2 ring-gray-900 scale-110' : ''}`}
+                      style={{ backgroundColor: c.hex }}
+                      title={c.name}
                     />
                   ))}
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">First Task</label>
-                <input
-                  type="text"
-                  value={newProject.title}
-                  onChange={(e) => setNewProject((prev) => ({ ...prev, title: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Task name"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Start</label>
-                  <input
-                    type="date"
-                    value={newProject.start}
-                    onChange={(e) => setNewProject((prev) => ({ ...prev, start: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">End</label>
-                  <input
-                    type="date"
-                    value={newProject.end}
-                    onChange={(e) => setNewProject((prev) => ({ ...prev, end: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
             </div>
 
-            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                onClick={() => setShowNewProject(false)}
+            <div className="flex gap-3 mt-8 pt-6 border-t border-gray-50">
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 Cancel
               </button>
-              <button
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
-                disabled={!newProject.name.trim() || !newProject.title || !newProject.start || !newProject.end}
-                onClick={() => {
-                  if (!newProject.name.trim() || !newProject.title || !newProject.start || !newProject.end) return
-                  const nextId = Math.max(...projects.map((p) => p.id), 0) + 1
-                  const proj = {
-                    id: nextId,
-                    name: newProject.name.trim(),
-                    color: newProject.color,
-                    tasks: [
-                      {
-                        id: Date.now(),
-                        title: newProject.title.trim(),
-                        start: newProject.start,
-                        end: newProject.end,
-                        progress: 0,
-                        isMilestone: false
-                      }
-                    ]
-                  }
-                  setProjects((prev) => [...prev, proj])
-                  setShowNewProject(false)
-                  setNewProject({ name: "", title: "", start: "", end: "", color: "#3b82f6" })
-                }}
+              <button 
+                onClick={saveProject}
+                disabled={!draft.name || !draft.start || !draft.end}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
-                Create
+                Create Project
               </button>
             </div>
           </div>
@@ -457,6 +405,8 @@ function GanttChart() {
   )
 }
 
-/* ---------------- RENDER ---------------- */
-const root = ReactDOM.createRoot(document.getElementById("root"))
-root.render(<GanttChart />)
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <ProjectApp />
+  </React.StrictMode>,
+)
