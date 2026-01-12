@@ -11,12 +11,12 @@ if (envUrl && typeof envUrl === "string" && envUrl.trim().length > 0) {
   resolved = envUrl.trim();
 } else if (!host) {
   // Handle file:// pages where hostname is empty
-  resolved = "http://127.0.0.1:8000";
+  resolved = "http://127.0.0.1:8001";
 } else if (isLocalHost) {
-  resolved = "http://127.0.0.1:8000";
+  resolved = "http://127.0.0.1:8001";
 } else {
   // Use current protocol to avoid mixed-content blocks when the page is https
-  resolved = `${proto}://${host}:8000`;
+  resolved = `${proto}://${host}:8001`;
 }
 
 export const API_BASE_URL = resolved;
