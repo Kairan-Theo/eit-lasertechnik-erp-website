@@ -499,7 +499,7 @@ function ManufacturingOrderPage() {
       case "product_za":
         return arr.sort((a,b)=> String(b.product||"").localeCompare(String(a.product||"")))
       default:
-        return arr
+        return arr.sort((a,b) => a.id - b.id)
     }
   }, [filteredOrders, sortKey])
   const handleSelectAll = (e) => {
