@@ -44,17 +44,7 @@ function NewMOPage() {
     recipient: "",
     recipientDate: ""
   })
-  const [items, setItems] = React.useState(() => {
-    if (!isEditMode) {
-      try {
-        const draft = JSON.parse(localStorage.getItem("newMoDraftItems") || "null")
-        if (Array.isArray(draft) && draft.length) {
-          return draft.map((x, i) => ({ ...x, itemCode: x.itemCode || String(i + 1) }))
-        }
-      } catch {}
-    }
-    return [{ itemCode: "1", description: "", qty: "1", unit: "Unit" }]
-  })
+  const [items, setItems] = React.useState([])
   const [itemsTouched, setItemsTouched] = React.useState(false)
   const [previewOrder, setPreviewOrder] = React.useState(null)
   const [printOrder, setPrintOrder] = React.useState(null)
@@ -63,7 +53,10 @@ function NewMOPage() {
 
   const syncItemsFromBOM = React.useCallback(() => {
     const key = String(newOrder.productNo || "").trim().toLowerCase()
-    if (!key) return false
+    if (!key) {
+      setItems([])
+      return false
+    }
     try {
       const bomList = JSON.parse(localStorage.getItem("mfgBOMs") || "[]")
       if (!Array.isArray(bomList) || !bomList.length) return
@@ -92,8 +85,12 @@ function NewMOPage() {
   }, [newOrder.productNo])
 
   React.useEffect(() => {
-    const isDefault = items.length === 1 && !String(items[0]?.description || "").trim() && String(items[0]?.qty || "") === "1" && String(items[0]?.unit || "") === "Unit"
-    if (!isEditMode && !itemsTouched && isDefault) {
+    if (isEditMode) return
+    const key = String(newOrder.productNo || "").trim()
+    if (!key) {
+      setItems([])
+      setItemsTouched(false)
+    } else if (!itemsTouched) {
       syncItemsFromBOM()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,15 +107,7 @@ function NewMOPage() {
     return () => document.removeEventListener("visibilitychange", handler)
   }, [itemsTouched, syncItemsFromBOM, isEditMode])
 
-  React.useEffect(() => {
-    localStorage.setItem("newMoDraftItems", JSON.stringify(items))
-  }, [items])
-  React.useEffect(() => {
-    try {
-      const draft = JSON.parse(localStorage.getItem("newMoDraftItems") || "null")
-      if (!isEditMode && Array.isArray(draft) && draft.length) setItemsTouched(true)
-    } catch {}
-  }, [isEditMode])
+
 
   function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
     const [open, setOpen] = React.useState(false)
@@ -460,7 +449,6 @@ function NewMOPage() {
     const orderData = await createOrderData()
     if (orderData) {
       setOpenCreateConfirm(false)
-      localStorage.removeItem("newMoDraftItems")
       window.location.href = "/manufacturing.html"
     }
   }
