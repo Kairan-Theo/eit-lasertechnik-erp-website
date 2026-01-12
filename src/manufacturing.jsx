@@ -222,7 +222,7 @@ function ManufacturingOrderPage() {
       try {
         const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`)
         if (!res.ok) return
-        const data = await res.json()
+          const data = await res.json()
           const mapped = (Array.isArray(data) ? data : []).map((m) => ({
             id: m.id,
             ref: m.job_order_code,
@@ -235,6 +235,10 @@ function ManufacturingOrderPage() {
             start: m.start_date || "",
             completedDate: m.complete_date || "",
             productionTime: m.production_time || "",
+            supplier: m.supplier || "",
+            supplierDate: m.supplier_date || "",
+            recipient: m.recipient || "",
+            recipientDate: m.recipient_date || "",
             responsible: [
               String(m.responsible_sales_person || "").trim(),
               String(m.responsible_production_person || "").trim(),
@@ -1083,13 +1087,15 @@ function ManufacturingOrderPage() {
                           start: updated.start_date || x.start,
                           completedDate: updated.complete_date || x.completedDate,
                           productionTime: updated.production_time || x.productionTime,
+                          supplier: updated.supplier ?? x.supplier,
+                          supplierDate: updated.supplier_date ?? x.supplierDate,
+                          recipient: updated.recipient ?? x.recipient,
+                          recipientDate: updated.recipient_date ?? x.recipientDate,
                           responsible: [
                             String(updated.responsible_sales_person || "").trim(),
                             String(updated.responsible_production_person || "").trim(),
                           ].filter(Boolean).join(" / ") || x.responsible,
                           customer: updated.customer_name || x.customer,
-                          supplierDate: updated.supplier_date ?? x.supplierDate,
-                          recipientDate: updated.recipient_date ?? x.recipientDate,
                           items: Array.isArray(updated.items) ? updated.items : x.items,
                         } : x))
                         setOpenJobFormId(null)
