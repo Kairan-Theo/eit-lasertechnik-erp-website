@@ -25,15 +25,23 @@ export function JobOrderTemplate({ order }) {
   const displayRecipientDate = recipientDateRaw ? new Date(recipientDateRaw).toLocaleDateString() : ""
 
   return (
-    <div className="bg-white p-8 print:p-0 text-black font-sans min-h-[29.7cm] w-[21cm] mx-auto">
+    <div className="bg-white p-12 text-black font-sans min-h-[29.7cm] w-[21cm] mx-auto select-text">
+      <style>{`
+        @media print {
+          * {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+          }
+        }
+      `}</style>
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-[#3D56A6] text-white flex items-center justify-center font-bold text-lg">EIT</div>
           <div className="text-3xl font-normal leading-none">Lasertechnik</div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <div className="text-right font-bold text-lg leading-none">JOB ORDER</div>
-          <div className="text-right font-bold text-base leading-none">ใบรับงาน</div>
+          <div className="text-xl font-bold leading-none tracking-wide font-serif">JOB ORDER</div>
+          <div className="text-base font-bold mt-1 font-serif">ใบรับงาน</div>
           <div className="flex border-2 border-black">
             <div className="px-2 py-1 text-xs font-bold border-r-2 border-black flex items-center">เลขที่เอกสาร</div>
             <div className="px-5 py-1 min-w-[130px] text-center font-bold">{o.jobOrderCode || o.ref || ""}</div>
