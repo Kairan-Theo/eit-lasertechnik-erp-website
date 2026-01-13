@@ -42,10 +42,10 @@ const KanbanBoard = ({ projects, setProjects }) => {
   const [draggedItem, setDraggedItem] = React.useState(null)
 
   const columns = [
-      { id: 'todo', title: 'To Do', color: 'bg-gray-100/50' },
-      { id: 'in_progress', title: 'In Progress', color: 'bg-blue-50/50' },
-      { id: 'review', title: 'Review', color: 'bg-amber-50/50' },
-      { id: 'done', title: 'Done', color: 'bg-emerald-50/50' }
+      { id: 'todo', title: 'To Do', color: 'bg-gray-100/50', accent: 'border-gray-300' },
+      { id: 'in_progress', title: 'In Progress', color: 'bg-blue-50/50', accent: 'border-blue-300' },
+      { id: 'review', title: 'Review', color: 'bg-amber-50/50', accent: 'border-amber-300' },
+      { id: 'done', title: 'Done', color: 'bg-emerald-50/50', accent: 'border-emerald-300' }
   ]
 
   const handleDragStart = (e, item) => {
@@ -86,8 +86,12 @@ const KanbanBoard = ({ projects, setProjects }) => {
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, col.id)}
                   >
-                      <div className="p-3 border-b border-gray-200/50 flex items-center justify-between">
-                          <h3 className="font-bold text-gray-700 text-sm tracking-wide">{col.title}</h3>
+                      <div className={`p-4 border-b border-gray-200/50 flex items-center justify-between relative overflow-hidden`}>
+                          <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-${col.accent.replace('border-', '')} to-transparent opacity-50`} />
+                          <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${col.accent.replace('border-', 'bg-')}`} />
+                              <h3 className="font-bold text-gray-700 text-sm tracking-wide">{col.title}</h3>
+                          </div>
                           <span className="text-xs font-bold bg-white px-2.5 py-1 rounded-full text-gray-500 shadow-sm border border-gray-100">
                               {getProjectsByStatus(col.id).length}
                           </span>
@@ -98,34 +102,69 @@ const KanbanBoard = ({ projects, setProjects }) => {
                                   key={project.id}
                                   draggable
                                   onDragStart={(e) => handleDragStart(e, project)}
-                                  className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group relative overflow-hidden"
+                                  className="bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
                               >
-                                  <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: project.color }}></div>
-                                  <div className="flex items-start justify-between mb-2 pl-2">
-                                      <div className="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0" style={{ backgroundColor: project.color }}>
-                                          {project.name.charAt(0)}
+                                  {/* Top accent bar */}
+                                  <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: project.color, opacity: 0.8 }}></div>
+                                  
+                                  <div className="flex items-start justify-between mb-3">
+                                      <div className="flex items-center gap-2">
+                                         <div className="w-8 h-8 rounded-2xl flex items-center justify-center text-xs font-bold text-white shadow-md shadow-gray-200 shrink-0 transition-transform group-hover:scale-105" style={{ backgroundColor: project.color }}>
+                                             {project.name.charAt(0)}
+                                         </div>
+                                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-50 text-gray-500 border border-gray-100">
+                                            {getColorMeaning(project.color)}
+                                         </span>
                                       </div>
-                                      <button className="text-gray-300 hover:text-gray-600 transition-colors">
+                                      <button className="text-gray-300 hover:text-gray-600 transition-colors p-1 hover:bg-gray-50 rounded-full">
                                           <MoreHorizontal size={16} />
                                       </button>
                                   </div>
-                                  <h4 className="font-bold text-gray-800 text-sm mb-1.5 pl-2 leading-tight">{project.name}</h4>
-                                  <div className="text-[11px] text-gray-400 mb-3 pl-2 font-medium flex items-center gap-1.5">
-                                      <Calendar size={12} />
-                                      {format(new Date(project.start), "MMM d")} - {format(new Date(project.end), "MMM d")}
+
+                                  <h4 className="font-bold text-gray-800 text-sm mb-2 leading-snug pr-2">{project.name}</h4>
+                                  
+                                  <div className="flex items-center gap-3 mb-4">
+                                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium bg-gray-50 px-2 py-1 rounded-lg border border-gray-100/50">
+                                          <Calendar size={12} className="text-gray-400" />
+                                          {format(new Date(project.start), "MMM d")} - {format(new Date(project.end), "MMM d")}
+                                      </div>
                                   </div>
+
                                   {project.subtasks && project.subtasks.length > 0 && (
-                                      <div className="ml-2 flex items-center gap-2 text-[10px] text-gray-500 bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                              <div 
-                                                className="h-full rounded-full transition-all" 
-                                                style={{ 
-                                                  width: `${(project.subtasks.filter(s => s.status === 'done').length / project.subtasks.length) * 100}%`,
-                                                  backgroundColor: project.color 
-                                                }} 
-                                              />
+                                      <div className="flex flex-col gap-2 p-3 rounded-2xl bg-gray-50/50 border border-gray-100/60 group-hover:bg-gray-50/80 transition-colors">
+                                          <div className="flex items-center justify-between mb-1">
+                                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Progress</span>
+                                              <span className="text-[10px] font-bold text-gray-700 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
+                                                  {Math.round((project.subtasks.filter(s => s.status === 'done').length / project.subtasks.length) * 100)}%
+                                              </span>
                                           </div>
-                                          <span className="font-semibold">{project.subtasks.filter(s => s.status === 'done').length}/{project.subtasks.length} done</span>
+                                          <div className="flex items-center gap-2 flex-wrap px-1">
+                                               {project.subtasks.map((subtask, idx) => {
+                                                   const isDone = subtask.status === 'done';
+                                                   return (
+                                                       <div 
+                                                           key={subtask.id}
+                                                           className={`h-3 flex-1 rounded-full transition-all duration-300 relative group/pip border ${isDone ? 'border-transparent shadow-[0_2px_4px_rgba(0,0,0,0.15)] scale-105' : 'bg-white border-gray-200 shadow-sm'}`}
+                                                           style={{ minWidth: '12px', backgroundColor: isDone ? project.color : undefined }}
+                                                           title={`${subtask.name}: ${subtask.status}`}
+                                                       >
+                                                           {/* Tooltip on Hover */}
+                                                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/pip:block whitespace-nowrap z-10">
+                                                               <div className="bg-gray-900 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-xl flex items-center gap-2 transform -translate-y-1 transition-transform">
+                                                                   <div className={`w-2 h-2 rounded-full ring-2 ring-white/20 ${isDone ? 'bg-emerald-400' : 'bg-gray-400'}`} />
+                                                                   {subtask.name}
+                                                               </div>
+                                                               {/* Arrow */}
+                                                               <div className="w-2.5 h-2.5 bg-gray-900 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                                                           </div>
+                                                       </div>
+                                                   )
+                                               })}
+                                           </div>
+                                          <div className="flex items-center justify-between text-[10px] text-gray-400 font-medium mt-0.5">
+                                              <span>{project.subtasks.filter(s => s.status === 'done').length} done</span>
+                                              <span>{project.subtasks.length - project.subtasks.filter(s => s.status === 'done').length} left</span>
+                                          </div>
                                       </div>
                                   )}
                               </div>
