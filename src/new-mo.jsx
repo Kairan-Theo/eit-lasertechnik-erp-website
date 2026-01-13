@@ -7,7 +7,7 @@ import { API_BASE_URL } from "./config"
 import { JobOrderTemplate } from "./components/job-order-template.jsx"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash } from "lucide-react"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft } from "lucide-react"
 
 function NewMOPage() {
   const [orders, setOrders] = React.useState(() => {
@@ -492,7 +492,16 @@ function NewMOPage() {
         <div className="max-w-7xl mx-auto">
           <div className="mb-6">
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-semibold text-gray-900">Manufacturing Order</h1>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => window.location.href = "/manufacturing.html"}
+                  className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
+                  title="Back to List"
+                >
+                  <ArrowLeft className="w-6 h-6" />
+                </button>
+                <h1 className="text-2xl font-semibold text-gray-900">Manufacturing Order</h1>
+              </div>
             </div>
           </div>
 
