@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import Footer from "./components/footer.jsx"
 import "./index.css"
+import { API_BASE_URL } from "./config"
 
 const NodeMenu = ({ onEdit, onDelete }) => {
   const [isOpen, setIsOpen] = React.useState(false)
@@ -794,9 +795,34 @@ function BOMPage() {
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenTreeId(null)}>Cancel</button>
                 <button
                    className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
-                   onClick={()=>{
+                   onClick={async ()=>{
                     const next = boms.map((x)=> x.id===openTreeId ? { ...x, productTree: editingTree, product: editingTree.product || "Untitled" } : x)
                     setAndPersist(next)
+                    try {
+                      const bom = next.find((x)=>x.id===openTreeId) || {}
+                      const payload = {
+                        product: editingTree.product || "Untitled",
+                        version: bom.version || "",
+                        type: bom.type || "",
+                        systems: (Array.isArray(editingTree.systems) ? editingTree.systems : []).map(s => ({
+                          name: s.name || "",
+                          components: (Array.isArray(s.components) ? s.components : []).map(c => ({
+                            name: c.name || "",
+                            qty: Number(c.qty) || 0
+                          }))
+                        }))
+                      }
+                      const headers = { "Content-Type": "application/json" }
+                      const res = await fetch(`${API_BASE_URL}/api/bom/import/`, {
+                        method: "POST",
+                        headers,
+                        body: JSON.stringify(payload)
+                      }).catch(()=>null)
+                      if (res && !res.ok) {
+                        const msg = await res.text().catch(()=> "")
+                        alert(`Failed to save BOM: ${res.status} ${msg}`)
+                      }
+                    } catch {}
                     setOpenTreeId(null)
                    }}
                 >

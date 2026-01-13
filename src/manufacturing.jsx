@@ -8,7 +8,7 @@ import "./index.css"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon } from "lucide-react"
+import { Calendar as CalendarIcon, ArrowUpDown } from "lucide-react"
 
   function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
     const [open, setOpen] = React.useState(false)
@@ -686,10 +686,12 @@ function ManufacturingOrderPage() {
                 <button
                   onClick={() => setOpenSortMenu(v => !v)}
                   //className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-                  className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
+                  className="inline-flex items-center justify-center gap-2 px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
                   title="Sort"
                 >
-                  Sort 
+                  <span>Sort</span>
+                  <ArrowUpDown className="w-4 h-4" />
+                  
                 </button>
                 {openSortMenu && (
                   <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-md z-20 w-44">

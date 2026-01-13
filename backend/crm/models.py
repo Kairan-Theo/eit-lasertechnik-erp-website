@@ -266,3 +266,56 @@ def save_user_profile(sender, instance, **kwargs):
         # Fallback if profile doesn't exist for some reason
         default_apps = "all" if instance.is_staff else ""
         UserProfile.objects.create(user=instance, allowed_apps=default_apps)
+
+class Product(models.Model):
+    code = models.CharField(max_length=100, blank=True, default='')
+    name = models.CharField(max_length=255, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.code or ''} {self.name}".strip()
+
+class ProductVersion(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='versions')
+    version_code = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.product.name} - {self.version_code}"
+
+class ProductType(models.Model):
+    version = models.ForeignKey(ProductVersion, on_delete=models.CASCADE, related_name='types')
+    type_code = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.version.version_code} - {self.type_code}"
+
+class System(models.Model):
+    type = models.ForeignKey(ProductType, on_delete=models.CASCADE, related_name='systems')
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.type.type_code} - {self.name}"
+
+class Component(models.Model):
+    part_number = models.CharField(max_length=100)
+    name = models.CharField(max_length=255)
+    unit = models.CharField(max_length=50)
+
+    def __str__(self):
+        return f"{self.part_number} - {self.name}"
+
+class SystemComponent(models.Model):
+    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name='system_components')
+    component = models.ForeignKey(Component, on_delete=models.CASCADE, related_name='system_components')
+    quantity = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('system', 'component')
+
+    def __str__(self):
+        return f"{self.system.name}: {self.component.name} x {self.quantity}"
