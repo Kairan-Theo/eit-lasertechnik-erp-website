@@ -711,7 +711,7 @@ function ManufacturingOrderPage() {
                 title="Bills of Materials"
                 onClick={() => window.location.href = "/bom.html"}
               >
-                Bills of Materials
+                Bill of Materials
               </button>
               <button
                 //className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
