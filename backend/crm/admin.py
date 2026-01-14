@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -128,3 +128,35 @@ class ManufacturingOrderAdmin(admin.ModelAdmin):
     list_display = ("job_order_code", "po", "customer", "product_no", "quantity", "start_date", "complete_date", "updated_at")
     search_fields = ("job_order_code", "product_no", "customer__company_name", "po__number")
     list_filter = ("start_date", "complete_date", "state", "component_status")
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "description", "updated_at")
+    search_fields = ("code", "name", "description")
+    ordering = ("name",)
+
+@admin.register(ProductVersion)
+class ProductVersionAdmin(admin.ModelAdmin):
+    list_display = ("product", "version_code", "description", "created_at")
+    search_fields = ("product__name", "version_code")
+    ordering = ("-created_at",)
+
+@admin.register(ProductType)
+class ProductTypeAdmin(admin.ModelAdmin):
+    list_display = ("version", "type_code", "description")
+    search_fields = ("version__version_code", "type_code")
+
+@admin.register(System)
+class SystemAdmin(admin.ModelAdmin):
+    list_display = ("type", "name")
+    search_fields = ("type__type_code", "name")
+
+@admin.register(Component)
+class ComponentAdmin(admin.ModelAdmin):
+    list_display = ("part_number", "name", "unit")
+    search_fields = ("part_number", "name")
+
+@admin.register(SystemComponent)
+class SystemComponentAdmin(admin.ModelAdmin):
+    list_display = ("system", "component", "quantity")
+    search_fields = ("system__name", "component__name", "component__part_number")

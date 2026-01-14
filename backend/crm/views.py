@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer
 from datetime import date, timedelta
 
 
@@ -332,6 +332,75 @@ class ManufacturingOrderViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         instance = serializer.save()
         return Response(self.get_serializer(instance).data)
+
+class ProductViewSet(viewsets.ModelViewSet):
+    queryset = Product.objects.all().order_by('-updated_at')
+    serializer_class = ProductSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+class ProductVersionViewSet(viewsets.ModelViewSet):
+    queryset = ProductVersion.objects.all().order_by('-created_at')
+    serializer_class = ProductVersionSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+class ProductTypeViewSet(viewsets.ModelViewSet):
+    queryset = ProductType.objects.all()
+    serializer_class = ProductTypeSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+class SystemViewSet(viewsets.ModelViewSet):
+    queryset = System.objects.all()
+    serializer_class = SystemSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+class ComponentViewSet(viewsets.ModelViewSet):
+    queryset = Component.objects.all().order_by('part_number')
+    serializer_class = ComponentSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+class SystemComponentViewSet(viewsets.ModelViewSet):
+    queryset = SystemComponent.objects.all()
+    serializer_class = SystemComponentSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def import_bom(request):
+    data = request.data if isinstance(request.data, dict) else {}
+    product_name = str(data.get('product') or '').strip()
+    version_code = str(data.get('version') or '').strip() or 'v1'
+    type_code = str(data.get('type') or '').strip() or 'standard'
+    systems = data.get('systems') or []
+    if not product_name:
+        return Response({'error': 'product is required'}, status=status.HTTP_400_BAD_REQUEST)
+    product, _ = Product.objects.get_or_create(name=product_name, defaults={'code': '', 'description': ''})
+    version, _ = ProductVersion.objects.get_or_create(product=product, version_code=version_code, defaults={'description': ''})
+    ptype, _ = ProductType.objects.get_or_create(version=version, type_code=type_code, defaults={'description': ''})
+    created_rows = 0
+    for s in systems or []:
+        sys_name = str(s.get('name') or s.get('system') or '').strip()
+        comps = s.get('components') or []
+        if not sys_name or not ptype:
+            continue
+        sys_obj, _ = System.objects.get_or_create(type=ptype, name=sys_name)
+        for c in comps:
+            cname = str(c.get('name') or '').strip()
+            qty = int(c.get('qty') or c.get('quantity') or 0)
+            part_number = str(c.get('part_number') or '').strip() or cname
+            unit = str(c.get('unit') or 'Unit').strip()
+            comp_obj, _ = Component.objects.get_or_create(part_number=part_number, defaults={'name': cname or part_number, 'unit': unit})
+            sc, created = SystemComponent.objects.get_or_create(system=sys_obj, component=comp_obj, defaults={'quantity': max(qty, 0)})
+            if not created:
+                sc.quantity = max(qty, 0)
+                sc.save(update_fields=['quantity'])
+            created_rows += 1
+    return Response({'status': 'ok', 'created_or_updated': created_rows})
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup(request):
