@@ -9,6 +9,85 @@ import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
 import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft } from "lucide-react"
 
+function getComponentInventory() {
+  try {
+    const raw = localStorage.getItem("mfgProducts") || "[]"
+    const list = JSON.parse(raw)
+    if (!Array.isArray(list)) return {}
+    const map = {}
+    for (const p of list) {
+      const key = String(p.name || "").trim().toLowerCase()
+      if (!key) continue
+      const qty = Number(p.qty)
+      if (!Number.isFinite(qty)) continue
+      map[key] = (map[key] || 0) + qty
+    }
+    return map
+  } catch {
+    return {}
+  }
+}
+
+function mergeComponentHints(names) {
+  try {
+    const raw = localStorage.getItem("componentHints") || "[]"
+    let base = []
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) base = parsed
+    } catch {}
+    const all = Array.from(new Set(
+      [...base, ...(Array.isArray(names) ? names : [])]
+        .map(v => String(v || "").trim())
+        .filter(Boolean)
+    ))
+    if (!all.length) return
+    localStorage.setItem("componentHints", JSON.stringify(all))
+  } catch {}
+}
+
+function syncComponentHintsFromItems(items) {
+  const names = Array.from(new Set(
+    (Array.isArray(items) ? items : [])
+      .map(it => String(it.description || "").trim())
+      .filter(Boolean)
+  ))
+  if (!names.length) return
+  mergeComponentHints(names)
+}
+
+function computeComponentStatusFromItems(items) {
+  if (!Array.isArray(items) || !items.length) return ""
+  const inventory = getComponentInventory()
+  const requiredTotals = {}
+  for (const it of items) {
+    const key = String(it.description || "").trim().toLowerCase()
+    if (!key) continue
+    const qty = Number(it.qty)
+    if (!Number.isFinite(qty) || qty <= 0) continue
+    requiredTotals[key] = (requiredTotals[key] || 0) + qty
+  }
+  const keys = Object.keys(requiredTotals)
+  if (!keys.length) return ""
+  for (const key of keys) {
+    const available = Number(inventory[key] || 0)
+    const required = Number(requiredTotals[key] || 0)
+    // Debug log to trace status calculation
+    console.debug(`[Status Check] Item: "${key}", Required: ${required}, Available: ${available}`)
+    
+    // Condition:
+    // 1. If available is invalid (NaN), it's Not Available.
+    // 2. If required >= available, it means we don't have enough surplus (strict less-than required for Available).
+    //    e.g. Req 5, Avail 5 -> 5 >= 5 -> Not Available.
+    //    e.g. Req 5, Avail 0 -> 5 >= 0 -> Not Available.
+    if (!Number.isFinite(available) || required >= available) {
+      console.debug(`[Status Check] -> Not Available (Insufficient: ${available} <= ${required})`)
+      return "Not Available"
+    }
+  }
+  return "Available"
+}
+
 function NewMOPage() {
   const [orders, setOrders] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem("mfgOrders") || "[]") } catch { return [] }
@@ -101,6 +180,10 @@ function NewMOPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newOrder.productNo, itemsTouched, isEditMode])
+
+  React.useEffect(() => {
+    syncComponentHintsFromItems(items)
+  }, [items])
 
   React.useEffect(() => {
     if (!showBomSuggestions) return
@@ -357,6 +440,7 @@ function NewMOPage() {
       return v ? v : null
     }
     const normalizedItems = items.map((x, i) => ({ ...x, itemCode: x.itemCode || String(i + 1) }))
+    const componentStatus = computeComponentStatusFromItems(normalizedItems)
     const payload = {
       job_order_code: String(newOrder.jobOrderCode || "").trim(),
       po_number: String(newOrder.purchaseOrder || "").trim(),
@@ -382,6 +466,7 @@ function NewMOPage() {
       item_description: String((normalizedItems[0]?.description) || "").trim(),
       item_quantity: String((normalizedItems[0]?.qty) || "").trim(),
       item_unit: String((normalizedItems[0]?.unit) || "Unit").trim(),
+      component_status: componentStatus,
     }
     try {
       const params = new URLSearchParams(window.location.search)
