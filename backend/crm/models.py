@@ -306,6 +306,11 @@ class Component(models.Model):
     name = models.CharField(max_length=255)
     unit = models.CharField(max_length=50)
 
+    class Meta:
+        db_table = 'bom_component'
+        verbose_name = 'BOM component'
+        verbose_name_plural = 'BOM components'
+
     def __str__(self):
         return f"{self.part_number} - {self.name}"
 
@@ -319,3 +324,15 @@ class SystemComponent(models.Model):
 
     def __str__(self):
         return f"{self.system.name}: {self.component.name} x {self.quantity}"
+
+class ComponentEntry(models.Model):
+    component_name = models.CharField(max_length=255)
+    quantity = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'component'
+        verbose_name = 'Component'
+        verbose_name_plural = 'Components'
+
+    def __str__(self):
+        return f"{self.component_name} x {self.quantity}"
