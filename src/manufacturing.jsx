@@ -10,6 +10,64 @@ import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
 import { Calendar as CalendarIcon, ArrowUpDown } from "lucide-react"
 
+function getComponentInventory() {
+  try {
+    const raw = localStorage.getItem("mfgProducts") || "[]"
+    const list = JSON.parse(raw)
+    if (!Array.isArray(list)) return {}
+    const map = {}
+    for (const p of list) {
+      const key = String(p.name || "").trim().toLowerCase()
+      if (!key) continue
+      const qty = Number(p.qty)
+      if (!Number.isFinite(qty)) continue
+      map[key] = (map[key] || 0) + qty
+    }
+    return map
+  } catch {
+    return {}
+  }
+}
+
+function mergeComponentHints(names) {
+  try {
+    const raw = localStorage.getItem("componentHints") || "[]"
+    let base = []
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) base = parsed
+    } catch {}
+    const all = Array.from(new Set(
+      [...base, ...(Array.isArray(names) ? names : [])]
+        .map(v => String(v || "").trim())
+        .filter(Boolean)
+    ))
+    if (!all.length) return
+    localStorage.setItem("componentHints", JSON.stringify(all))
+  } catch {}
+}
+
+function computeComponentStatusFromItems(items) {
+  if (!Array.isArray(items) || !items.length) return ""
+  const inventory = getComponentInventory()
+  const requiredTotals = {}
+  for (const it of items) {
+    const key = String(it.description || "").trim().toLowerCase()
+    if (!key) continue
+    const qty = Number(it.qty)
+    if (!Number.isFinite(qty) || qty <= 0) continue
+    requiredTotals[key] = (requiredTotals[key] || 0) + qty
+  }
+  const keys = Object.keys(requiredTotals)
+  if (!keys.length) return ""
+  for (const key of keys) {
+    const available = Number(inventory[key] || 0)
+    const required = Number(requiredTotals[key] || 0)
+    if (!Number.isFinite(available) || required >= available) return "Not Available"
+  }
+  return "Available"
+}
+
   function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
     const [open, setOpen] = React.useState(false)
     const containerRef = React.useRef(null)
@@ -222,45 +280,54 @@ function ManufacturingOrderPage() {
       try {
         const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`)
         if (!res.ok) return
-          const data = await res.json()
-          const mapped = (Array.isArray(data) ? data : []).map((m) => ({
-            id: m.id,
-            ref: m.job_order_code,
-            jobOrderCode: m.job_order_code || "",
-            purchaseOrder: m.po_number || "",
-            productNo: m.product_no || "",
-            product: m.product || "",
-            quantity: Number(m.quantity) || 1,
-            totalQuantity: Number(m.quantity) || Number(m.totalQuantity) || Number(m.quantity) || 1,
-            start: m.start_date || "",
-            completedDate: m.complete_date || "",
-            productionTime: m.production_time || "",
-            supplier: m.supplier || "",
-            supplierDate: m.supplier_date || "",
-            recipient: m.recipient || "",
-            recipientDate: m.recipient_date || "",
-            responsible: [
-              String(m.responsible_sales_person || "").trim(),
-              String(m.responsible_production_person || "").trim(),
-            ].filter(Boolean).join(" / "),
-            responsibleSales: String(m.responsible_sales_person || "").trim(),
-            responsibleProduction: String(m.responsible_production_person || "").trim(),
-            customer: m.customer_name || "",
-            componentStatus: m.component_status || "",
-            state: m.state || "",
-            favorite: false,
-            selected: false,
-            activitySchedules: [],
-            items: Array.isArray(m.items)
+        const data = await res.json()
+          const allNames = []
+          const mapped = (Array.isArray(data) ? data : []).map((m) => {
+            const items = Array.isArray(m.items)
               ? m.items.map(x => ({
                   itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
                   description: String((x.item_description ?? x.description ?? "")).trim(),
                   qty: String((x.item_quantity ?? x.qty ?? "")),
                   unit: String((x.item_unit ?? x.unit ?? "Unit")),
                 }))
-              : [],
-          }))
+              : []
+            for (const it of items) {
+              const n = String(it.description || "").trim()
+              if (n) allNames.push(n)
+            }
+            const autoStatus = computeComponentStatusFromItems(items)
+            return {
+              id: m.id,
+              ref: m.job_order_code,
+              jobOrderCode: m.job_order_code || "",
+              purchaseOrder: m.po_number || "",
+              productNo: m.product_no || "",
+              product: m.product || "",
+              quantity: Number(m.quantity) || 1,
+              totalQuantity: Number(m.quantity) || Number(m.totalQuantity) || Number(m.quantity) || 1,
+              start: m.start_date || "",
+              completedDate: m.complete_date || "",
+              productionTime: m.production_time || "",
+              supplier: m.supplier || "",
+              supplierDate: m.supplier_date || "",
+              recipient: m.recipient || "",
+              recipientDate: m.recipient_date || "",
+              responsible: [
+                String(m.responsible_sales_person || "").trim(),
+                String(m.responsible_production_person || "").trim(),
+              ].filter(Boolean).join(" / "),
+              responsibleSales: String(m.responsible_sales_person || "").trim(),
+              responsibleProduction: String(m.responsible_production_person || "").trim(),
+              customer: m.customer_name || "",
+              componentStatus: autoStatus || m.component_status || "",
+              state: m.state || "",
+              favorite: false,
+              selected: false,
+              activitySchedules: [],
+              items,
+          }})
         setOrders(mapped)
+        if (allNames.length) mergeComponentHints(allNames)
         setRemoteLoaded(true)
       } catch {}
     })()
@@ -289,14 +356,16 @@ function ManufacturingOrderPage() {
           recipient: m.recipient || "",
           recipient_date: m.recipient_date || "",
         })
-        setJobFormItems(Array.isArray(m.items)
+        const its = Array.isArray(m.items)
           ? m.items.map(x => ({
               itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
               description: String((x.item_description ?? x.description ?? "")).trim(),
               qty: String((x.item_quantity ?? x.qty ?? "")),
               unit: String((x.item_unit ?? x.unit ?? "Unit")),
             }))
-          : [])
+          : []
+        setJobFormItems(its)
+        if (its.length) mergeComponentHints(its.map(it => it.description))
       } catch {}
     })()
   }, [openJobFormId])
@@ -1262,6 +1331,15 @@ function ManufacturingOrderPage() {
                             return
                           }
                           const m = await res.json()
+                          const items = Array.isArray(m.items)
+                            ? m.items.map(x => ({
+                                itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
+                                description: String((x.item_description ?? x.description ?? "")).trim(),
+                                qty: String((x.item_quantity ?? x.qty ?? "")),
+                                unit: String((x.item_unit ?? x.unit ?? "Unit")),
+                              }))
+                            : []
+                          const autoStatus = computeComponentStatusFromItems(items)
                           const o = {
                             id: m.id,
                             ref,
@@ -1279,21 +1357,14 @@ function ManufacturingOrderPage() {
                             ].filter(Boolean).join(" / ") || payload.responsible_sales_person || "",
                             nextActivity: "",
                             customer: m.customer_name || payload.write_customer_name || "",
-                            componentStatus: m.component_status || "",
+                            componentStatus: autoStatus || m.component_status || "",
                             quantity: Number(m.quantity) || payload.quantity || 1,
                             totalQuantity: Number(m.quantity) || payload.quantity || 1,
                             state: m.state || "",
                             priority: newOrder.priority || "None",
                             favorite: false,
                             selected: false,
-                            items: Array.isArray(m.items)
-                              ? m.items.map(x => ({
-                                  itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
-                                  description: String((x.item_description ?? x.description ?? "")).trim(),
-                                  qty: String((x.item_quantity ?? x.qty ?? "")),
-                                  unit: String((x.item_unit ?? x.unit ?? "Unit")),
-                                }))
-                              : [],
+                            items,
                           }
                           const next = [o, ...orders]
                           setAndPersist(next)

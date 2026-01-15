@@ -14,6 +14,9 @@ function ProductsPage() {
   const [selectedRows, setSelectedRows] = React.useState([])
   const [openBulkDelete, setOpenBulkDelete] = React.useState(false)
   const [editingItem, setEditingItem] = React.useState(null)
+  const [nameHints, setNameHints] = React.useState([])
+  const [nameFocused, setNameFocused] = React.useState(false)
+  const [editNameFocused, setEditNameFocused] = React.useState(false)
   React.useEffect(() => {
     if (!products.length) {
       const seed = [
@@ -25,6 +28,14 @@ function ProductsPage() {
       setProducts(seed)
       localStorage.setItem("mfgProducts", JSON.stringify(seed))
     }
+  }, [])
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem("componentHints") || "[]"
+      const arr = JSON.parse(raw)
+      if (Array.isArray(arr)) setNameHints(arr)
+    } catch {}
   }, [])
   const setAndPersist = (next) => { setProducts(next); localStorage.setItem("mfgProducts", JSON.stringify(next)) }
   const toggleFavorite = (id) => setAndPersist(products.map(p => p.id===id ? { ...p, favorite: !p.favorite } : p))
@@ -228,12 +239,42 @@ function ProductsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-x-10 gap-y-3">
                   <div className="grid grid-cols-[100px_1fr] items-center gap-1">
                     <div className="text-sm text-gray-700">Component</div>
-                    <input
-                      value={editingItem.name || ""}
-                      onChange={(e)=>setEditingItem({...editingItem, name:e.target.value})}
-                      placeholder="Component name"
-                      className="w-full rounded-lg border border-gray-300 shadow-sm focus:border-[#3D56A6] focus:ring-[#3D56A6] text-sm px-3 py-2"
-                    />
+                    <div className="relative">
+                      <input
+                        value={editingItem.name || ""}
+                        onChange={(e)=>setEditingItem({...editingItem, name:e.target.value})}
+                        onFocus={()=>setEditNameFocused(true)}
+                        onBlur={()=>setTimeout(()=>setEditNameFocused(false), 120)}
+                        placeholder="Component name"
+                        className="w-full rounded-lg border border-gray-300 shadow-sm focus:border-[#3D56A6] focus:ring-[#3D56A6] text-sm px-3 py-2"
+                      />
+                      {editNameFocused && (() => {
+                        const q = String(editingItem.name || "").toLowerCase()
+                        const base = Array.from(new Set(nameHints))
+                        const candidates = base
+                          .filter(v => {
+                            const s = String(v || "")
+                            if (!s) return false
+                            if (!q) return true
+                            return s.toLowerCase().includes(q)
+                          })
+                          .slice(0, 8)
+                        return candidates.length ? (
+                          <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                            {candidates.map((val, i) => (
+                              <button
+                                key={`${val}-${i}`}
+                                type="button"
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+                                onMouseDown={(e)=>{ e.preventDefault(); setEditingItem({...editingItem, name: val}); setEditNameFocused(false) }}
+                              >
+                                {val}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null
+                      })()}
+                    </div>
                   </div>
                   <div className="grid grid-cols-[100px_1fr] items-center gap-1">
                     <div className="text-sm text-gray-700">Quantity</div>
@@ -291,12 +332,42 @@ function ProductsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-x-10 gap-y-3">
                   <div className="grid grid-cols-[100px_1fr] items-center gap-1">
                     <div className="text-sm text-gray-700">Component</div>
-                    <input
-                      value={newItem.name}
-                      onChange={(e)=>setNewItem({...newItem, name:e.target.value})}
-                      placeholder="Component name"
-                      className="w-full rounded-lg border border-gray-300 shadow-sm focus:border-[#3D56A6] focus:ring-[#3D56A6] text-sm px-3 py-2"
-                    />
+                    <div className="relative">
+                      <input
+                        value={newItem.name}
+                        onChange={(e)=>setNewItem({...newItem, name:e.target.value})}
+                        onFocus={()=>setNameFocused(true)}
+                        onBlur={()=>setTimeout(()=>setNameFocused(false), 120)}
+                        placeholder="Component name"
+                        className="w-full rounded-lg border border-gray-300 shadow-sm focus:border-[#3D56A6] focus:ring-[#3D56A6] text-sm px-3 py-2"
+                      />
+                      {nameFocused && (() => {
+                        const q = String(newItem.name || "").toLowerCase()
+                        const base = Array.from(new Set(nameHints))
+                        const candidates = base
+                          .filter(v => {
+                            const s = String(v || "")
+                            if (!s) return false
+                            if (!q) return true
+                            return s.toLowerCase().includes(q)
+                          })
+                          .slice(0, 8)
+                        return candidates.length ? (
+                          <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                            {candidates.map((val, i) => (
+                              <button
+                                key={`${val}-${i}`}
+                                type="button"
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+                                onMouseDown={(e)=>{ e.preventDefault(); setNewItem({...newItem, name: val}); setNameFocused(false) }}
+                              >
+                                {val}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null
+                      })()}
+                    </div>
                   </div>
                   <div className="grid grid-cols-[100px_1fr] items-center gap-1">
                     <div className="text-sm text-gray-700">Quantity</div>
