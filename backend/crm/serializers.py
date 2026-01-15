@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent
+from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry
 
 class LeadSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
@@ -220,6 +220,11 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
 
     def get_customer_name(self, obj):
         return obj.customer.company_name if obj.customer else ""
+
+class ComponentEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ComponentEntry
+        fields = '__all__'
 
     def _normalize_items(self, items):
         result = []
