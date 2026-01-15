@@ -42,10 +42,10 @@ const KanbanBoard = ({ projects, setProjects }) => {
   const [draggedItem, setDraggedItem] = React.useState(null)
 
   const columns = [
-      { id: 'todo', title: 'To Do', color: 'bg-gray-100/50' },
-      { id: 'in_progress', title: 'In Progress', color: 'bg-blue-50/50' },
-      { id: 'review', title: 'Review', color: 'bg-amber-50/50' },
-      { id: 'done', title: 'Done', color: 'bg-emerald-50/50' }
+      { id: 'todo', title: 'To Do', color: 'bg-gray-100/50', accent: 'border-gray-300' },
+      { id: 'in_progress', title: 'In Progress', color: 'bg-blue-50/50', accent: 'border-blue-300' },
+      { id: 'review', title: 'Review', color: 'bg-amber-50/50', accent: 'border-amber-300' },
+      { id: 'done', title: 'Done', color: 'bg-emerald-50/50', accent: 'border-emerald-300' }
   ]
 
   const handleDragStart = (e, item) => {
@@ -82,12 +82,16 @@ const KanbanBoard = ({ projects, setProjects }) => {
               {columns.map(col => (
                   <div 
                       key={col.id} 
-                      className={`w-80 flex flex-col rounded-2xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
+                      className={`w-80 flex flex-col rounded-3xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, col.id)}
                   >
-                      <div className="p-4 border-b border-gray-200/50 flex items-center justify-between">
-                          <h3 className="font-bold text-gray-700 text-sm tracking-wide">{col.title}</h3>
+                      <div className={`p-4 border-b border-gray-200/50 flex items-center justify-between relative overflow-hidden`}>
+                          <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-${col.accent.replace('border-', '')} to-transparent opacity-50`} />
+                          <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${col.accent.replace('border-', 'bg-')}`} />
+                              <h3 className="font-bold text-gray-700 text-sm tracking-wide">{col.title}</h3>
+                          </div>
                           <span className="text-xs font-bold bg-white px-2.5 py-1 rounded-full text-gray-500 shadow-sm border border-gray-100">
                               {getProjectsByStatus(col.id).length}
                           </span>
@@ -98,34 +102,69 @@ const KanbanBoard = ({ projects, setProjects }) => {
                                   key={project.id}
                                   draggable
                                   onDragStart={(e) => handleDragStart(e, project)}
-                                  className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group relative overflow-hidden"
+                                  className="bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
                               >
-                                  <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: project.color }}></div>
-                                  <div className="flex items-start justify-between mb-3 pl-2">
-                                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0" style={{ backgroundColor: project.color }}>
-                                          {project.name.charAt(0)}
+                                  {/* Top accent bar */}
+                                  <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: project.color, opacity: 0.8 }}></div>
+                                  
+                                  <div className="flex items-start justify-between mb-3">
+                                      <div className="flex items-center gap-2">
+                                         <div className="w-8 h-8 rounded-2xl flex items-center justify-center text-xs font-bold text-white shadow-md shadow-gray-200 shrink-0 transition-transform group-hover:scale-105" style={{ backgroundColor: project.color }}>
+                                             {project.name.charAt(0)}
+                                         </div>
+                                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-50 text-gray-500 border border-gray-100">
+                                            {getColorMeaning(project.color)}
+                                         </span>
                                       </div>
-                                      <button className="text-gray-300 hover:text-gray-600 transition-colors">
+                                      <button className="text-gray-300 hover:text-gray-600 transition-colors p-1 hover:bg-gray-50 rounded-full">
                                           <MoreHorizontal size={16} />
                                       </button>
                                   </div>
-                                  <h4 className="font-bold text-gray-800 text-sm mb-1.5 pl-2 leading-tight">{project.name}</h4>
-                                  <div className="text-[11px] text-gray-400 mb-3 pl-2 font-medium flex items-center gap-1.5">
-                                      <Calendar size={12} />
-                                      {format(new Date(project.start), "MMM d")} - {format(new Date(project.end), "MMM d")}
+
+                                  <h4 className="font-bold text-gray-800 text-sm mb-2 leading-snug pr-2">{project.name}</h4>
+                                  
+                                  <div className="flex items-center gap-3 mb-4">
+                                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium bg-gray-50 px-2 py-1 rounded-lg border border-gray-100/50">
+                                          <Calendar size={12} className="text-gray-400" />
+                                          {format(new Date(project.start), "MMM d")} - {format(new Date(project.end), "MMM d")}
+                                      </div>
                                   </div>
+
                                   {project.subtasks && project.subtasks.length > 0 && (
-                                      <div className="ml-2 flex items-center gap-2 text-[10px] text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                              <div 
-                                                className="h-full rounded-full transition-all" 
-                                                style={{ 
-                                                  width: `${(project.subtasks.filter(s => s.status === 'done').length / project.subtasks.length) * 100}%`,
-                                                  backgroundColor: project.color 
-                                                }} 
-                                              />
+                                      <div className="flex flex-col gap-2 p-3 rounded-2xl bg-gray-50/50 border border-gray-100/60 group-hover:bg-gray-50/80 transition-colors">
+                                          <div className="flex items-center justify-between mb-1">
+                                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Progress</span>
+                                              <span className="text-[10px] font-bold text-gray-700 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
+                                                  {Math.round((project.subtasks.filter(s => s.status === 'done').length / project.subtasks.length) * 100)}%
+                                              </span>
                                           </div>
-                                          <span className="font-semibold">{project.subtasks.filter(s => s.status === 'done').length}/{project.subtasks.length} done</span>
+                                          <div className="flex items-center gap-2 flex-wrap px-1">
+                                               {project.subtasks.map((subtask, idx) => {
+                                                   const isDone = subtask.status === 'done';
+                                                   return (
+                                                       <div 
+                                                           key={subtask.id}
+                                                           className={`h-3 flex-1 rounded-full transition-all duration-300 relative group/pip border ${isDone ? 'border-transparent shadow-[0_2px_4px_rgba(0,0,0,0.15)] scale-105' : 'bg-white border-gray-200 shadow-sm'}`}
+                                                           style={{ minWidth: '12px', backgroundColor: isDone ? project.color : undefined }}
+                                                           title={`${subtask.name}: ${subtask.status}`}
+                                                       >
+                                                           {/* Tooltip on Hover */}
+                                                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/pip:block whitespace-nowrap z-10">
+                                                               <div className="bg-gray-900 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-xl flex items-center gap-2 transform -translate-y-1 transition-transform">
+                                                                   <div className={`w-2 h-2 rounded-full ring-2 ring-white/20 ${isDone ? 'bg-emerald-400' : 'bg-gray-400'}`} />
+                                                                   {subtask.name}
+                                                               </div>
+                                                               {/* Arrow */}
+                                                               <div className="w-2.5 h-2.5 bg-gray-900 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                                                           </div>
+                                                       </div>
+                                                   )
+                                               })}
+                                           </div>
+                                          <div className="flex items-center justify-between text-[10px] text-gray-400 font-medium mt-0.5">
+                                              <span>{project.subtasks.filter(s => s.status === 'done').length} done</span>
+                                              <span>{project.subtasks.length - project.subtasks.filter(s => s.status === 'done').length} left</span>
+                                          </div>
                                       </div>
                                   )}
                               </div>
@@ -145,7 +184,7 @@ function ProjectApp() {
   })
   
   const [today] = React.useState(new Date())
-  const [startDate, setStartDate] = React.useState(startOfWeek(new Date(), { weekStartsOn: 1 }))
+  const [startDate, setStartDate] = React.useState(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))
   const [dragging, setDragging] = React.useState(null)
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [draftParentId, setDraftParentId] = React.useState(null)
@@ -288,19 +327,69 @@ function ProjectApp() {
     setProjects(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p))
   }
 
+  const handleProgressChange = (id, newProgress) => {
+    setProjects(prev => prev.map(p => {
+        if (p.id === id) {
+            return { ...p, progress: newProgress }
+        }
+        return p
+    }))
+  }
+
   // --- UI Helper Components ---
   
-  const ProjectRow = ({ item, isSubtask = false, onToggle }) => (
+  const ProjectRow = ({ item, isSubtask = false, onToggle }) => {
+    let progress = 0
+    let readOnly = false
+    
+    if (item.subtasks && item.subtasks.length > 0) {
+        const done = item.subtasks.filter(s => s.status === 'done').length
+        progress = Math.round((done / item.subtasks.length) * 100)
+        readOnly = true
+    } else {
+        progress = typeof item.progress === 'number' ? item.progress : (
+            item.status === 'done' ? 100 :
+            item.status === 'review' ? 80 :
+            item.status === 'in_progress' ? 50 : 0
+        )
+        readOnly = false
+    }
+
+    const barRef = React.useRef(null)
+
+    const handleProgressDragStart = (e) => {
+        if (readOnly) return
+        e.preventDefault()
+        e.stopPropagation()
+        
+        const rect = barRef.current.getBoundingClientRect()
+        
+        const handleMouseMove = (moveEvent) => {
+             const x = moveEvent.clientX - rect.left
+             const newProgress = Math.max(0, Math.min(100, Math.round((x / rect.width) * 100)))
+             handleProgressChange(item.id, newProgress)
+        }
+        
+        const handleMouseUp = () => {
+             window.removeEventListener('mousemove', handleMouseMove)
+             window.removeEventListener('mouseup', handleMouseUp)
+        }
+        
+        window.addEventListener('mousemove', handleMouseMove)
+        window.addEventListener('mouseup', handleMouseUp)
+    }
+
+    return (
     <div className="group flex items-center h-14 relative hover:bg-gray-50/50 transition-colors">
                      
         {/* Sidebar Item */}
-        <div className={`w-80 flex-none px-6 flex items-center gap-3 z-20 bg-white/80 backdrop-blur-[2px] border-r border-gray-100 group-hover:bg-white group-hover:shadow-[8px_0_30px_-10px_rgba(0,0,0,0.05)] transition-all duration-300 ${isSubtask ? 'pl-12' : ''}`}>
+        <div className={`sticky left-0 w-80 flex-none px-6 flex items-center gap-3 z-20 bg-white/80 backdrop-blur-[2px] border-r border-gray-100 group-hover:bg-white group-hover:shadow-[8px_0_30px_-10px_rgba(0,0,0,0.05)] transition-all duration-300 ${isSubtask ? 'pl-12' : ''}`}>
         
         {/* Expand Toggle (only for parents with subtasks) */}
         {!isSubtask && (
             <button 
                 onClick={() => onToggle(item.id)}
-                className={`p-1 rounded-md hover:bg-gray-100 text-gray-400 transition-colors ${item.subtasks?.length ? '' : 'invisible'}`}
+                className={`p-1 rounded-full hover:bg-gray-100 text-gray-400 transition-colors ${item.subtasks?.length ? '' : 'invisible'}`}
             >
                 {item.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
@@ -308,7 +397,7 @@ function ProjectApp() {
         
         {isSubtask && <CornerDownRight size={14} className="text-gray-300 mr-1" />}
 
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`} style={{ backgroundColor: item.color, transform: isSubtask ? 'scale(0.85)' : 'none' }}>
+        <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`} style={{ backgroundColor: item.color, transform: isSubtask ? 'scale(0.85)' : 'none' }}>
             {item.name.charAt(0)}
         </div>
         
@@ -318,7 +407,7 @@ function ProjectApp() {
                 {!isSubtask && (
                     <button 
                         onClick={(e) => { e.stopPropagation(); handleAddSubtask(item.id) }}
-                        className="opacity-0 group-hover/info:opacity-100 p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-indigo-600 transition-all"
+                        className="opacity-0 group-hover/info:opacity-100 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-indigo-600 transition-all"
                         title="Add Subtask"
                     >
                         <Plus size={14} strokeWidth={2.5} />
@@ -330,16 +419,28 @@ function ProjectApp() {
                 {format(new Date(item.start), "MMM d")} - {format(new Date(item.end), "MMM d")}
                 </span>
             </div>
-            {!isSubtask && <ProgressBar progress={65} color={item.color} />}
         </div>
         </div>
 
         {/* Bar Area */}
         <div className="absolute left-80 right-0 h-full flex items-center py-1">
         <div
-            className={`absolute rounded-xl shadow-sm flex items-center px-3 relative group/bar transition-all duration-300 border border-white/10 hover:shadow-lg hover:-translate-y-0.5 select-none`}
+            ref={barRef}
+            onMouseDown={(e) => {
+                if (e.button !== 0) return
+                e.preventDefault()
+                e.stopPropagation()
+                setDragging({
+                  id: item.id,
+                  type: 'move',
+                  initialMouseX: e.clientX,
+                  initialStart: item.start,
+                  initialEnd: item.end
+                })
+            }}
+            className={`absolute rounded-full shadow-sm flex items-center px-3 relative group/bar transition-all duration-300 border border-white/10 hover:shadow-lg hover:-translate-y-0.5 select-none cursor-grab active:cursor-grabbing`}
             style={{
-            height: isSubtask ? '24px' : '36px',
+            height: isSubtask ? '20px' : '28px',
             left: left(item.start),
             width: Math.max(width(item.start, item.end), 40),
             backgroundColor: item.color,
@@ -348,7 +449,23 @@ function ProjectApp() {
             }}
         >
             {/* Bar Texture */}
-            <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+            <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+            
+            {/* Progress Fill */}
+            <div 
+                className="absolute left-0 top-0 bottom-0 bg-black/20 rounded-l-full transition-all duration-200" 
+                style={{ width: `${progress}%`, borderRadius: progress === 100 ? '9999px' : '9999px 0 0 9999px' }} 
+            />
+
+            {/* Progress Handle */}
+            {!readOnly && (
+                <div
+                    onMouseDown={handleProgressDragStart}
+                    className="absolute bottom-0 w-3 h-3 -ml-1.5 bg-white border-2 border-indigo-600 rounded-full cursor-col-resize opacity-0 group-hover/bar:opacity-100 transition-opacity z-10 shadow-sm hover:scale-125"
+                    style={{ left: `${progress}%`, bottom: '-4px' }}
+                    title={`Progress: ${progress}%`}
+                />
+            )}
 
             <div
               onMouseDown={(e) => {
@@ -362,7 +479,7 @@ function ProjectApp() {
                   initialEnd: item.end
                 })
               }}
-              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l-xl opacity-0 group-hover/bar:opacity-100 transition-opacity"
+              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l-full opacity-0 group-hover/bar:opacity-100 transition-opacity"
               style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.35), rgba(255,255,255,0))' }}
               title="Resize start"
             />
@@ -378,16 +495,23 @@ function ProjectApp() {
                   initialEnd: item.end
                 })
               }}
-              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r-xl opacity-0 group-hover/bar:opacity-100 transition-opacity"
+              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r-full opacity-0 group-hover/bar:opacity-100 transition-opacity"
               style={{ background: 'linear-gradient(to left, rgba(255,255,255,0.35), rgba(255,255,255,0))' }}
               title="Resize end"
             />
             
-            {/* Bar Content */}
-            <div className="relative flex items-center justify-between w-full overflow-hidden">
-                <span className="text-[10px] font-bold text-white truncate drop-shadow-md select-none tracking-wide px-1">
-                    {width(item.start, item.end) > 60 && item.name}
-                </span>
+              {/* Bar Content */}
+            <div className="relative flex items-center justify-between w-full overflow-hidden px-1">
+                <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="text-[10px] font-bold text-white truncate drop-shadow-md select-none tracking-wide">
+                        {width(item.start, item.end) > 60 && item.name}
+                    </span>
+                    {width(item.start, item.end) > 120 && (
+                        <span className="text-[9px] text-white/90 font-medium select-none bg-black/20 px-1.5 rounded-full">
+                            {progress}%
+                        </span>
+                    )}
+                </div>
                 {!isSubtask && width(item.start, item.end) > 120 && (
                    <div className="opacity-90 scale-75 origin-right">
                       <AvatarGroup color={item.color} count={2} />
@@ -398,6 +522,7 @@ function ProjectApp() {
         </div>
     </div>
   )
+  }
 
   const AvatarGroup = ({ count = 3, color }) => (
     <div className="flex -space-x-2">
@@ -412,11 +537,9 @@ function ProjectApp() {
     </div>
   )
 
-  const ProgressBar = ({ progress = 65, color }) => (
-    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mt-2">
-       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: color }} />
-    </div>
-  )
+  const ProgressBar = ({ progress = 0, color, onChange, readOnly = false }) => {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-gray-50/50 flex flex-col font-sans text-gray-900 selection:bg-indigo-100 selection:text-indigo-900">
@@ -443,17 +566,17 @@ function ProjectApp() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex bg-gray-100/50 p-1.5 rounded-xl border border-gray-200/50">
+          <div className="flex bg-gray-100/50 p-1 rounded-full border border-gray-200/50">
              <button 
                 onClick={() => setView("timeline")}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${view === "timeline" ? "bg-white shadow-sm text-indigo-600 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
+                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all duration-200 flex items-center gap-2 ${view === "timeline" ? "bg-white shadow-sm text-indigo-600 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
              >
                 <Layout size={14} />
                 Timeline
              </button>
              <button 
                 onClick={() => setView("kanban")}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${view === "kanban" ? "bg-white shadow-sm text-indigo-600 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
+                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all duration-200 flex items-center gap-2 ${view === "kanban" ? "bg-white shadow-sm text-indigo-600 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
              >
                 <List size={14} />
                 Kanban
@@ -461,9 +584,9 @@ function ProjectApp() {
           </div>
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-gray-900 hover:bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-gray-900/20 active:scale-95 hover:shadow-xl"
+            className="flex items-center gap-1.5 bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white px-4 py-2 rounded-full text-xs font-bold transition-all shadow-lg shadow-[#2D4485]/20 active:scale-95 hover:opacity-90 hover:shadow-xl"
           >
-            <Plus size={18} strokeWidth={3} />
+            <Plus size={16} strokeWidth={3} />
             <span>New Project</span>
           </button>
         </div>
@@ -473,15 +596,18 @@ function ProjectApp() {
       <div className="px-8 py-4 flex items-center justify-between bg-transparent sticky top-[88px] z-30">
          <div className="flex items-center gap-4">
             {view === 'timeline' && (
-                <div className="flex items-center bg-white rounded-xl p-1 border border-gray-200 shadow-sm">
-                    <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-2 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-700 transition-all">
-                       <ChevronLeft size={18} />
+                <div className="flex items-center bg-white rounded-full p-1 border border-gray-200 shadow-sm gap-1">
+                    <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-1.5 hover:bg-gray-50 rounded-full text-gray-400 hover:text-gray-700 transition-all">
+                       <ChevronLeft size={16} />
                     </button>
-                    <button onClick={() => setStartDate(startOfWeek(new Date(), { weekStartsOn: 1 }))} className="px-4 py-1.5 text-xs font-bold text-gray-700 hover:text-indigo-600 transition-colors uppercase tracking-wide">
-                       Today
+                    <button
+                        onClick={() => setStartDate(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))}
+                        className="px-3 py-1 hover:bg-gray-100 rounded-full text-gray-600 transition-colors text-xs font-medium border border-gray-200"
+                    >
+                        Today
                     </button>
-                    <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-2 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-700 transition-all">
-                       <ChevronRight size={18} />
+                    <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-1.5 hover:bg-gray-50 rounded-full text-gray-400 hover:text-gray-700 transition-all">
+                       <ChevronRight size={16} />
                     </button>
                 </div>
             )}
@@ -491,14 +617,14 @@ function ProjectApp() {
          </div>
          <div className="flex items-center gap-3">
             <div className="relative group">
-               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-indigo-500 transition-colors" />
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5 group-focus-within:text-indigo-500 transition-colors" />
                <input 
                   type="text" 
                   placeholder="Search projects..." 
-                  className="pl-10 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-64 transition-all shadow-sm hover:border-gray-300"
+                  className="pl-9 pr-4 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-56 transition-all shadow-sm hover:border-gray-300"
                />
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
+            <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
                <Filter size={14} />
                Filters
             </button>
@@ -555,7 +681,7 @@ function ProjectApp() {
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-auto relative bg-white">
-             <div className="min-w-max">
+             <div className="min-w-max min-h-full relative" style={{ minWidth: (days.length * dayWidth) + 320 }}>
                {/* Background Columns */}
                <div className="absolute inset-0 flex pl-80 pointer-events-none">
                  {days.map((d, i) => (
@@ -565,13 +691,7 @@ function ProjectApp() {
                      className={`flex-none border-r border-dashed border-gray-100 h-full ${isWeekend(d) ? 'bg-gray-50/40' : ''} ${isSameDay(d, today) ? 'bg-indigo-50/5' : ''}`}
                    />
                  ))}
-                 {/* Today Line */}
-                 <div 
-                     className="absolute top-0 bottom-0 w-px bg-indigo-500/50 z-10"
-                     style={{ left: left(today) + (dayWidth/2) }} 
-                 >
-                    <div className="absolute top-0 -translate-x-1/2 w-full h-full bg-indigo-500/5 blur-[2px]" />
-                 </div>
+
                </div>
 
                {/* Projects List */}
@@ -604,7 +724,7 @@ function ProjectApp() {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
             <h2 className="text-xl font-bold text-gray-900 mb-6">New Project</h2>
             
             <div className="space-y-4">
@@ -615,7 +735,7 @@ function ProjectApp() {
                   type="text" 
                   value={draft.name}
                   onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm"
                   placeholder="e.g. Q1 Marketing Plan"
                 />
               </div>
@@ -627,7 +747,7 @@ function ProjectApp() {
                       type="date" 
                       value={draft.start}
                       onChange={e => setDraft(d => ({ ...d, start: e.target.value }))}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
+                      className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
                     />
                  </div>
                  <div>
@@ -636,7 +756,7 @@ function ProjectApp() {
                       type="date" 
                       value={draft.end}
                       onChange={e => setDraft(d => ({ ...d, end: e.target.value }))}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
+                      className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
                     />
                  </div>
               </div>
@@ -665,14 +785,14 @@ function ProjectApp() {
             <div className="flex gap-3 mt-8 pt-6 border-t border-gray-50">
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 text-sm font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-full transition-colors"
               >
                 Cancel
               </button>
               <button 
                 onClick={saveProject}
                 disabled={!draft.name || !draft.start || !draft.end}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className="flex-1 px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
                 Create Project
               </button>
