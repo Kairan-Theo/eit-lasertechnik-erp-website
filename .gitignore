@@ -46,3 +46,7 @@ media/
 logs
 *.log
 backend/debug_thread.log
+
+# local editor / temp files
+*.swp
+tmp_models_*.py
