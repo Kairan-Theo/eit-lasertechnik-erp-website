@@ -898,18 +898,21 @@ function ManufacturingOrderPage() {
       )}
       {openBulkDelete && (
         <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenBulkDelete(false)}>
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px]" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-white rounded-xl shadow-lg border-2 border-white">
-              <div className="px-4 py-3 border-b-2 border-white">
-                <h3 className="font-semibold text-gray-900">Confirm Delete</h3>
+          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Delete orders</h3>
+                <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenBulkDelete(false)}>✕</button>
               </div>
-              <div className="p-4">
-                <div className="text-sm text-gray-800">Delete {selectedRows.length} orders?</div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-gray-700">
+                  Are you sure you want to delete <span className="font-semibold">{selectedRows.length}</span> selected orders?
+                </p>
               </div>
-              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenBulkDelete(false)}>Cancel</button>
                 <button
-                  className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
+                  className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
                   onClick={async () => { await handleBulkDelete(); setOpenBulkDelete(false) }}
                 >
                   Delete

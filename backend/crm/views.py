@@ -375,6 +375,58 @@ class ComponentEntryViewSet(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = [AllowAny]
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def list_boms(request):
+    products = Product.objects.all().prefetch_related(
+        'versions__types__systems__system_components__component'
+    )
+    result = []
+    products_with_boms = set()
+    for product in products:
+        for version in product.versions.all():
+            for ptype in version.types.all():
+                systems_list = []
+                for system in ptype.systems.all():
+                    components_list = []
+                    for sc in system.system_components.select_related('component').all():
+                        comp = sc.component
+                        components_list.append({
+                            'name': comp.name,
+                            'qty': sc.quantity,
+                            'part_number': comp.part_number,
+                            'unit': comp.unit,
+                        })
+                    systems_list.append({
+                        'name': system.name,
+                        'components': components_list,
+                    })
+                result.append({
+                    'id': ptype.id,
+                    'product': product.name,
+                    'version': version.version_code,
+                    'type': ptype.type_code,
+                    'productTree': {
+                        'product': product.name,
+                        'systems': systems_list,
+                    },
+                })
+                products_with_boms.add(product.id)
+    for product in products:
+        if product.id in products_with_boms:
+            continue
+        result.append({
+            'id': -product.id,
+            'product': product.name,
+            'version': '',
+            'type': '',
+            'productTree': {
+                'product': product.name,
+                'systems': [],
+            },
+        })
+    return Response(result)
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def import_bom(request):
