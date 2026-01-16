@@ -3,11 +3,10 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import "./index.css"
+import { API_BASE_URL } from "./config"
 
 function ProductsPage() {
-  const [products, setProducts] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem("mfgProducts") || "[]") } catch { return [] }
-  })
+  const [products, setProducts] = React.useState([])
   const [query, setQuery] = React.useState("")
   const [showNew, setShowNew] = React.useState(false)
   const [newItem, setNewItem] = React.useState({ name: "", sku: "", qty: 1 })
@@ -18,16 +17,25 @@ function ProductsPage() {
   const [nameFocused, setNameFocused] = React.useState(false)
   const [editNameFocused, setEditNameFocused] = React.useState(false)
   React.useEffect(() => {
-    if (!products.length) {
-      const seed = [
-        { id: 1, name: "Laser Cladding Machine", sku: "CN-00001", category: "Machine", qty: 12, state: "Active", favorite: false },
-        { id: 2, name: "Laser Welding Machine", sku: "CN-00002", category: "Machine", qty: 8, state: "Active", favorite: true },
-        { id: 3, name: "Cake", sku: "CN-00003", category: "Food", qty: 50, state: "Inactive", favorite: false },
-        { id: 4, name: "mohinga", sku: "CN-00004", category: "Food", qty: 24, state: "Active", favorite: false },
-      ]
-      setProducts(seed)
-      localStorage.setItem("mfgProducts", JSON.stringify(seed))
-    }
+    ;(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/component_entries/`)
+        if (!res.ok) throw new Error("Failed to load components")
+        const data = await res.json()
+        const mapped = (Array.isArray(data) ? data : []).map((c) => ({
+          id: c.id,
+          name: c.component_name || "",
+          sku: "",
+          category: "",
+          qty: Number(c.quantity) || 0,
+          state: "",
+          favorite: false,
+        }))
+        setProducts(mapped)
+      } catch (e) {
+        console.error("Failed to load component entries", e)
+      }
+    })()
   }, [])
 
   React.useEffect(() => {
@@ -37,8 +45,8 @@ function ProductsPage() {
       if (Array.isArray(arr)) setNameHints(arr)
     } catch {}
   }, [])
-  const setAndPersist = (next) => { setProducts(next); localStorage.setItem("mfgProducts", JSON.stringify(next)) }
-  const toggleFavorite = (id) => setAndPersist(products.map(p => p.id===id ? { ...p, favorite: !p.favorite } : p))
+  const updateProducts = (next) => { setProducts(next) }
+  const toggleFavorite = (id) => updateProducts(products.map(p => p.id===id ? { ...p, favorite: !p.favorite } : p))
   const parseCnNum = (s) => {
     const m = /CN(?:\/|-)?(\d+)/.exec(String(s || ""))
     return m ? parseInt(m[1], 10) : null
@@ -68,7 +76,7 @@ function ProductsPage() {
         }
         return p
       })
-      if (changed) setAndPersist(next)
+      if (changed) updateProducts(next)
     }
   }, []) 
   const filtered = products.filter((p) => {
@@ -83,11 +91,20 @@ function ProductsPage() {
   const toggleRow = (id) => {
     setSelectedRows((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
   }
-  const confirmBulkDelete = () => {
-    const next = products.filter((p) => !selectedRows.includes(p.id))
-    setAndPersist(next)
-    setSelectedRows([])
-    setOpenBulkDelete(false)
+  const confirmBulkDelete = async () => {
+    try {
+      const ids = selectedRows.slice()
+      for (const id of ids) {
+        try {
+          await fetch(`${API_BASE_URL}/api/component_entries/${id}/`, { method: "DELETE" })
+        } catch {}
+      }
+    } finally {
+      const next = products.filter((p) => !selectedRows.includes(p.id))
+      updateProducts(next)
+      setSelectedRows([])
+      setOpenBulkDelete(false)
+    }
   }
 
   return (
@@ -286,9 +303,20 @@ function ProductsPage() {
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setEditingItem(null)}>Cancel</button>
                 <button
                   className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
-                  onClick={() => {
-                    const next = products.map((p) => p.id === editingItem.id ? { ...p, name: editingItem.name || "Untitled", sku: editingItem.sku || p.sku, qty: Number(editingItem.qty)||0 } : p)
-                    setAndPersist(next)
+                  onClick={async () => {
+                    const payload = {
+                      component_name: editingItem.name || "Untitled",
+                      quantity: Number(editingItem.qty) || 0,
+                    }
+                    try {
+                      await fetch(`${API_BASE_URL}/api/component_entries/${editingItem.id}/`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                      })
+                    } catch {}
+                    const next = products.map((p) => p.id === editingItem.id ? { ...p, name: payload.component_name, qty: payload.quantity } : p)
+                    updateProducts(next)
                     setEditingItem(null)
                   }}
                 >
@@ -379,10 +407,26 @@ function ProductsPage() {
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setShowNew(false)}>Cancel</button>
                 <button
                   className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
-                  onClick={() => {
-                    const o = { id: Date.now(), name: newItem.name || "Untitled", sku: newItem.sku || nextCnNumber(), category: "", qty: Number(newItem.qty)||0, state: "", favorite: false }
+                  onClick={async () => {
+                    const payload = {
+                      component_name: newItem.name || "Untitled",
+                      quantity: Number(newItem.qty) || 0,
+                    }
+                    let created = null
+                    try {
+                      const res = await fetch(`${API_BASE_URL}/api/component_entries/`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                      })
+                      if (res.ok) {
+                        created = await res.json()
+                      }
+                    } catch {}
+                    const id = created && created.id ? created.id : Date.now()
+                    const o = { id, name: payload.component_name, sku: newItem.sku || nextCnNumber(), category: "", qty: payload.quantity, state: "", favorite: false }
                     const next = [...products, o]
-                    setAndPersist(next)
+                    updateProducts(next)
                     setShowNew(false)
                     setNewItem({ name: "", sku: "", qty: 1 })
                   }}

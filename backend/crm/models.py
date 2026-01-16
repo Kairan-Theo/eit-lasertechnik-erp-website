@@ -11,7 +11,6 @@ class Customer(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
     industry = models.CharField(max_length=100, blank=True)
-    contact_name = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -220,36 +219,6 @@ class Task(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     def __str__(self):
         return self.title
-
-# Manufacturing Orders
-class ManufacturingOrder(models.Model):
-    job_order_code = models.CharField(max_length=50)  # e.g., JO-001; not unique by design
-    po = models.ForeignKey(PurchaseOrder, null=True, blank=True, on_delete=models.SET_NULL, related_name='manufacturing_orders')
-    po_number = models.CharField(max_length=100, blank=True)
-    customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='manufacturing_orders')
-    product = models.CharField(max_length=255, blank=True)
-    product_no = models.CharField(max_length=100, blank=True)
-    quantity = models.PositiveIntegerField(default=1)
-    start_date = models.DateField(null=True, blank=True)
-    complete_date = models.DateField(null=True, blank=True)
-    production_time = models.CharField(max_length=100, blank=True)
-    responsible_sales_person = models.CharField(max_length=255, blank=True)
-    responsible_production_person = models.CharField(max_length=255, blank=True)
-    supplier = models.CharField(max_length=255, blank=True)
-    supplier_date = models.DateField(null=True, blank=True)
-    recipient = models.CharField(max_length=255, blank=True)
-    recipient_date = models.DateField(null=True, blank=True)
-    component_status = models.CharField(max_length=50, blank=True)
-    state = models.CharField(max_length=50, blank=True)
-    items = models.JSONField(default=list, blank=True)  # Product Items Description rows
-    item_description = models.CharField(max_length=255, blank=True)
-    item_quantity = models.CharField(max_length=50, blank=True)
-    item_unit = models.CharField(max_length=50, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.job_order_code} - {self.product_no or ''}"
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
@@ -267,6 +236,37 @@ def save_user_profile(sender, instance, **kwargs):
         default_apps = "all" if instance.is_staff else ""
         UserProfile.objects.create(user=instance, allowed_apps=default_apps)
 
+
+class ManufacturingOrder(models.Model):
+    job_order_code = models.CharField(max_length=50)
+    product = models.CharField(max_length=255, blank=True)
+    product_no = models.CharField(max_length=100, blank=True)
+    quantity = models.PositiveIntegerField(default=1)
+    start_date = models.DateField(null=True, blank=True)
+    complete_date = models.DateField(null=True, blank=True)
+    production_time = models.CharField(max_length=100, blank=True)
+    supplier = models.CharField(max_length=255, blank=True)
+    supplier_date = models.DateField(null=True, blank=True)
+    recipient = models.CharField(max_length=255, blank=True)
+    recipient_date = models.DateField(null=True, blank=True)
+    component_status = models.CharField(max_length=50, blank=True)
+    state = models.CharField(max_length=50, blank=True)
+    items = models.JSONField(default=list, blank=True)
+    item_description = models.CharField(max_length=255, blank=True)
+    item_quantity = models.CharField(max_length=50, blank=True)
+    item_unit = models.CharField(max_length=50, blank=True)
+    po_number = models.CharField(max_length=100, blank=True)
+    responsible_sales_person = models.CharField(max_length=255, blank=True)
+    responsible_production_person = models.CharField(max_length=255, blank=True)
+    customer = models.ForeignKey(Customer, related_name='manufacturing_orders', on_delete=models.SET_NULL, null=True, blank=True)
+    po = models.ForeignKey(PurchaseOrder, related_name='manufacturing_orders', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.job_order_code
+
+
 class Product(models.Model):
     code = models.CharField(max_length=100, blank=True, default='')
     name = models.CharField(max_length=255, blank=True, default='')
@@ -275,31 +275,35 @@ class Product(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.code or ''} {self.name}".strip()
+        return self.name or self.code
+
 
 class ProductVersion(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='versions')
+    product = models.ForeignKey(Product, related_name='versions', on_delete=models.CASCADE)
     version_code = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.product.name} - {self.version_code}"
+        return f"{self.product.name} {self.version_code}"
+
 
 class ProductType(models.Model):
-    version = models.ForeignKey(ProductVersion, on_delete=models.CASCADE, related_name='types')
+    version = models.ForeignKey(ProductVersion, related_name='types', on_delete=models.CASCADE)
     type_code = models.CharField(max_length=100)
     description = models.TextField(blank=True)
 
     def __str__(self):
-        return f"{self.version.version_code} - {self.type_code}"
+        return self.type_code
+
 
 class System(models.Model):
-    type = models.ForeignKey(ProductType, on_delete=models.CASCADE, related_name='systems')
+    type = models.ForeignKey(ProductType, related_name='systems', on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
 
     def __str__(self):
-        return f"{self.type.type_code} - {self.name}"
+        return self.name
+
 
 class Component(models.Model):
     part_number = models.CharField(max_length=100)
@@ -308,22 +312,22 @@ class Component(models.Model):
 
     class Meta:
         db_table = 'bom_component'
-        verbose_name = 'BOM component'
-        verbose_name_plural = 'BOM components'
 
     def __str__(self):
-        return f"{self.part_number} - {self.name}"
+        return self.part_number
+
 
 class SystemComponent(models.Model):
-    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name='system_components')
-    component = models.ForeignKey(Component, on_delete=models.CASCADE, related_name='system_components')
+    system = models.ForeignKey(System, related_name='system_components', on_delete=models.CASCADE)
+    component = models.ForeignKey(Component, related_name='system_components', on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = ('system', 'component')
 
     def __str__(self):
-        return f"{self.system.name}: {self.component.name} x {self.quantity}"
+        return f"{self.system} - {self.component}"
+
 
 class ComponentEntry(models.Model):
     component_name = models.CharField(max_length=255)
@@ -331,8 +335,6 @@ class ComponentEntry(models.Model):
 
     class Meta:
         db_table = 'component'
-        verbose_name = 'Component'
-        verbose_name_plural = 'Components'
 
     def __str__(self):
-        return f"{self.component_name} x {self.quantity}"
+        return self.component_name
