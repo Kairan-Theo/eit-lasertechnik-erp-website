@@ -41,6 +41,9 @@ const initialProjects = [
 const KanbanBoard = ({ projects, setProjects }) => {
   const [draggedItem, setDraggedItem] = React.useState(null)
 
+  // Prevent UI from changing pipelines in Kanban
+  const PIPELINE_LOCKED = false
+
   const columns = [
       { id: 'todo', title: 'To Do', color: 'bg-gray-100/50', accent: 'border-gray-300' },
       { id: 'in_progress', title: 'In Progress', color: 'bg-blue-50/50', accent: 'border-blue-300' },
@@ -62,6 +65,8 @@ const KanbanBoard = ({ projects, setProjects }) => {
   const handleDrop = (e, status) => {
       e.preventDefault()
       if (!draggedItem) return
+      // Disallow pipeline changes via UI
+      if (PIPELINE_LOCKED) { setDraggedItem(null); return }
 
       setProjects(prev => prev.map(p => {
           if (p.id === draggedItem.id) {
@@ -100,9 +105,10 @@ const KanbanBoard = ({ projects, setProjects }) => {
                           {getProjectsByStatus(col.id).map(project => (
                               <div
                                   key={project.id}
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, project)}
-                                  className="bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
+                                  draggable={!PIPELINE_LOCKED}
+                                  onDragStart={(e) => !PIPELINE_LOCKED && handleDragStart(e, project)}
+                                  title={PIPELINE_LOCKED ? 'Pipeline changes are disabled' : undefined}
+                                  className={`bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 ${PIPELINE_LOCKED ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden`}
                               >
                                   {/* Top accent bar */}
                                   <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: project.color, opacity: 0.8 }}></div>
@@ -144,7 +150,7 @@ const KanbanBoard = ({ projects, setProjects }) => {
                                                    return (
                                                        <div 
                                                            key={subtask.id}
-                                                           className={`h-3 flex-1 rounded-full transition-all duration-300 relative group/pip border ${isDone ? 'border-transparent shadow-[0_2px_4px_rgba(0,0,0,0.15)] scale-105' : 'bg-white border-gray-200 shadow-sm'}`}
+                                                           className={`h-3 flex-1 rounded-full transition-all duration-300 relative group/pip ${isDone ? 'border-transparent shadow-[0_2px_4px_rgba(0,0,0,0.15)] scale-105' : 'bg-white border-gray-200 shadow-sm'}`}
                                                            style={{ minWidth: '12px', backgroundColor: isDone ? project.color : undefined }}
                                                            title={`${subtask.name}: ${subtask.status}`}
                                                        >
@@ -336,8 +342,24 @@ function ProjectApp() {
     }))
   }
 
-  // --- UI Helper Components ---
-  
+  // Helper to update dates for project or subtask by id
+  const updateItemDates = (id, newStart, newEnd) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id === id) {
+        return { ...p, start: newStart, end: newEnd }
+      }
+      if (p.subtasks) {
+        const updatedSubtasks = p.subtasks.map(sub =>
+          sub.id === id ? { ...sub, start: newStart, end: newEnd } : sub
+        )
+        if (updatedSubtasks.some((s, i) => s !== p.subtasks[i])) {
+          return { ...p, subtasks: updatedSubtasks }
+        }
+      }
+      return p
+    }))
+  }
+
   const ProjectRow = ({ item, isSubtask = false, onToggle }) => {
     let progress = 0
     let readOnly = false
@@ -356,6 +378,33 @@ function ProjectApp() {
     }
 
     const barRef = React.useRef(null)
+
+    // Inline date editor state
+    const [isEditing, setIsEditing] = React.useState(false)
+    const [startInput, setStartInput] = React.useState(item.start)
+    const [endInput, setEndInput] = React.useState(item.end)
+
+    const openEditor = (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setStartInput(item.start)
+      setEndInput(item.end)
+      setIsEditing(true)
+    }
+
+    const saveEditor = () => {
+      if (!startInput || !endInput) { setIsEditing(false); return }
+      const s = new Date(startInput)
+      const e = new Date(endInput)
+      if (s > e) {
+        // prevent invalid range; swap or ignore
+        updateItemDates(item.id, endInput, startInput)
+        setIsEditing(false)
+        return
+      }
+      updateItemDates(item.id, startInput, endInput)
+      setIsEditing(false)
+    }
 
     const handleProgressDragStart = (e) => {
         if (readOnly) return
@@ -438,6 +487,7 @@ function ProjectApp() {
                   initialEnd: item.end
                 })
             }}
+            onDoubleClick={openEditor}
             className={`absolute rounded-full shadow-sm flex items-center px-3 relative group/bar transition-all duration-300 border border-white/10 hover:shadow-lg hover:-translate-y-0.5 select-none cursor-grab active:cursor-grabbing`}
             style={{
             height: isSubtask ? '20px' : '28px',
@@ -479,7 +529,7 @@ function ProjectApp() {
                   initialEnd: item.end
                 })
               }}
-              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l-full opacity-0 group-hover/bar:opacity-100 transition-opacity"
+              className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize rounded-l-full opacity-100"
               style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.35), rgba(255,255,255,0))' }}
               title="Resize start"
             />
@@ -495,11 +545,21 @@ function ProjectApp() {
                   initialEnd: item.end
                 })
               }}
-              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r-full opacity-0 group-hover/bar:opacity-100 transition-opacity"
+              className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize rounded-r-full opacity-100"
               style={{ background: 'linear-gradient(to left, rgba(255,255,255,0.35), rgba(255,255,255,0))' }}
               title="Resize end"
             />
             
+            {isEditing && (
+              <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-white border border-gray-200 rounded-xl shadow-lg p-2 z-30 flex items-center gap-2">
+                <input type="date" value={startInput} onChange={e=>setStartInput(e.target.value)} className="text-xs border border-gray-200 rounded px-1 py-0.5" />
+                <span className="text-xs text-gray-400">→</span>
+                <input type="date" value={endInput} onChange={e=>setEndInput(e.target.value)} className="text-xs border border-gray-200 rounded px-1 py-0.5" />
+                <button onClick={saveEditor} className="text-xs font-bold bg-indigo-600 text-white rounded px-2 py-0.5">Save</button>
+                <button onClick={()=>setIsEditing(false)} className="text-xs text-gray-600 px-2 py-0.5">Cancel</button>
+              </div>
+            )}
+              
               {/* Bar Content */}
             <div className="relative flex items-center justify-between w-full overflow-hidden px-1">
                 <div className="flex items-center gap-2 overflow-hidden">

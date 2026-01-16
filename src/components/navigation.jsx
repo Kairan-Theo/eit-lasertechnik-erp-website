@@ -19,6 +19,7 @@ export default function Navigation() {
   const { toast } = useToast()
   const lastNotifIdRef = React.useRef(null)
   const initialToastShownRef = React.useRef(false)
+  const nextProbeTimeRef = React.useRef(0)
   const handleLogoClick = () => {
     window.location.href = "/"
   }
@@ -141,14 +142,32 @@ export default function Navigation() {
           })
         })
         setDueCount(count)
+
+        // Notifications: gracefully avoid repeated network errors when backend is down
+        const nowTs = Date.now()
+        if (nowTs < (nextProbeTimeRef.current || 0)) {
+          try {
+            const local = JSON.parse(localStorage.getItem("notifications") || "[]")
+            const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
+            setNotificationsCount(unread)
+          } catch {
+            setNotificationsCount(0)
+          }
+          return
+        }
+
         const token = localStorage.getItem("authToken")
         const headers = {
           "Cache-Control": "no-store",
           ...(token ? { "Authorization": `Token ${token}` } : {})
         }
-        fetch(`${API_BASE_URL}/api/notifications/`, { headers })
+        const controller = new AbortController()
+        const tid = setTimeout(() => controller.abort(), 3500)
+        fetch(`${API_BASE_URL}/api/notifications/`, { headers, signal: controller.signal })
           .then(r => r.ok ? r.json() : Promise.resolve([]))
           .then(list => {
+            clearTimeout(tid)
+            nextProbeTimeRef.current = 0
             if (Array.isArray(list) && list.length) {
               // Toast Logic for new alerts
               const newestId = Math.max(...list.map(n => n.id))
@@ -191,9 +210,12 @@ export default function Navigation() {
             }
           })
           .catch(() => {
+            clearTimeout(tid)
+            // Backoff 60s before probing backend again to prevent repeated console errors
+            nextProbeTimeRef.current = Date.now() + 60 * 1000
             try {
               const local = JSON.parse(localStorage.getItem("notifications") || "[]")
-              const unread = local.reduce((acc, n) => acc + (n && n.unread === true ? 1 : 0), 0)
+              const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
               setNotificationsCount(unread)
             } catch {
               setNotificationsCount(0)
