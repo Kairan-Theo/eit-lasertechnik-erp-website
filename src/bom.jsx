@@ -70,6 +70,49 @@ function BOMPage() {
   const [boms, setBoms] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem("mfgBOMs") || "[]") } catch { return [] }
   })
+  const setAndPersist = React.useCallback((next) => {
+    setBoms(next)
+    try {
+      localStorage.setItem("mfgBOMs", JSON.stringify(next))
+    } catch {}
+  }, [])
+  const reloadBoms = React.useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bom/`)
+      if (res && res.ok) {
+        const data = await res.json()
+        const arr = Array.isArray(data) ? data : []
+        if (arr.length) {
+          const mapped = arr.map((item) => ({
+            id: item.id,
+            name: item.product || "",
+            product: item.product || "",
+            version: item.version || "",
+            type: item.type || "",
+            active: true,
+            productTree: item.productTree || []
+          }))
+          setAndPersist(mapped)
+          return
+        }
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    try {
+      const stored = JSON.parse(localStorage.getItem("mfgBOMs") || "[]")
+      if (Array.isArray(stored) && stored.length) {
+        setBoms(stored)
+        return
+      }
+    } catch {}
+    const seed = [
+      { id: 1, name: "LCM Standard", product: "Laser Cladding Machine", version: "v1", type: "Manufacture", active: true },
+      { id: 2, name: "LWM Standard", product: "Laser Welding Machine", version: "v2", type: "Manufacture", active: true },
+      { id: 3, name: "Cake BOM", product: "Cake", version: "v1", type: "Manufacture", active: false },
+    ]
+    setAndPersist(seed)
+  }, [setAndPersist])
   const [openTreeId, setOpenTreeId] = React.useState(null)
   const [editingTree, setEditingTree] = React.useState({ product: "", version: "", type: "Manufacture", systems: [] })
   const [expandedIds, setExpandedIds] = React.useState(new Set())
@@ -83,7 +126,17 @@ function BOMPage() {
   const [showNew, setShowNew] = React.useState(false)
   const [newBom, setNewBom] = React.useState({ product: "", version: "", type: "Manufacture", systems: [] })
   const [selectedRows, setSelectedRows] = React.useState([])
+  const [openBulkDelete, setOpenBulkDelete] = React.useState(false)
   const [query, setQuery] = React.useState("")
+  const confirmBulkDelete = async () => {
+    try {
+      const next = boms.filter(x => !selectedRows.includes(x.id))
+      setAndPersist(next)
+    } finally {
+      setSelectedRows([])
+      setOpenBulkDelete(false)
+    }
+  }
   const columns = [
     { id: 'index', label: 'Index' },
     { id: 'product', label: 'Product' },
@@ -118,17 +171,8 @@ function BOMPage() {
     })
   }, [boms, query])
   React.useEffect(() => {
-    if (!boms.length) {
-      const seed = [
-        { id: 1, name: "LCM Standard", product: "Laser Cladding Machine", version: "v1", type: "Manufacture", active: true },
-        { id: 2, name: "LWM Standard", product: "Laser Welding Machine", version: "v2", type: "Manufacture", active: true },
-        { id: 3, name: "Cake BOM", product: "Cake", version: "v1", type: "Manufacture", active: false },
-      ]
-      setBoms(seed)
-      localStorage.setItem("mfgBOMs", JSON.stringify(seed))
-    }
-  }, [])
-  const setAndPersist = (next) => { setBoms(next); localStorage.setItem("mfgBOMs", JSON.stringify(next)) }
+    reloadBoms()
+  }, [reloadBoms])
 
   const updateBomTree = (bomId, newTree) => {
     const next = boms.map(b => b.id === bomId ? { ...b, productTree: newTree } : b)
@@ -294,12 +338,7 @@ function BOMPage() {
             <div className="flex items-center gap-6">
               {selectedRows.length > 0 && (
                 <button
-                  onClick={() => {
-                    if (!window.confirm("Delete selected BOMs?")) return
-                    const next = boms.filter(x => !selectedRows.includes(x.id))
-                    setAndPersist(next)
-                    setSelectedRows([])
-                  }}
+                  onClick={() => setOpenBulkDelete(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -369,7 +408,7 @@ function BOMPage() {
               <tbody>
                 {viewBoms.map((b, index) => (
                   <React.Fragment key={b.id}>
-                    <tr className="hover:bg-gray-50 transition-colors border-b border-gray-100">
+                    <tr className={`border-b border-gray-100 transition-colors ${selectedRows.includes(b.id) ? 'bg-blue-200 hover:bg-blue-300' : 'hover:bg-gray-50'}`}>
                       <td className="p-4 border-b w-10">
                         <input
                           type="checkbox"
@@ -732,6 +771,8 @@ function BOMPage() {
                       if (!res || !res.ok) {
                         const msg = res ? await res.text().catch(()=>"") : ""
                         alert(`Failed to save BOM: ${res ? res.status : 'network'} ${msg}`)
+                      } else {
+                        await reloadBoms()
                       }
                     }).catch(()=>{
                       alert("Failed to reach backend while saving BOM")
@@ -742,6 +783,25 @@ function BOMPage() {
                 >
                   Add
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {openBulkDelete && (
+        <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setOpenBulkDelete(false)}>
+          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Delete BOMs</h3>
+                <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenBulkDelete(false)}>✕</button>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-gray-700">Are you sure you want to delete <span className="font-semibold">{selectedRows.length}</span> selected BOMs?</p>
+              </div>
+              <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenBulkDelete(false)}>Cancel</button>
+                <button className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700" onClick={confirmBulkDelete}>Delete</button>
               </div>
             </div>
           </div>
@@ -962,6 +1022,8 @@ function BOMPage() {
                       if (!res || !res.ok) {
                         const msg = res ? await res.text().catch(()=> "") : ""
                         alert(`Failed to save BOM: ${res ? res.status : 'network'} ${msg}`)
+                      } else {
+                        await reloadBoms()
                       }
                     } catch {}
                     setOpenTreeId(null)

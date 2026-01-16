@@ -205,7 +205,7 @@ function ProductsPage() {
                 {filtered.map((p, i)=> {
                   const checked = selectedRows.includes(p.id)
                   return (
-                    <tr key={p.id} className="hover:bg-gray-50">
+                    <tr key={p.id} className={`transition-colors ${checked ? 'bg-blue-200 hover:bg-blue-300' : 'hover:bg-gray-50'}`}>
                       <td className="p-4 border-b">
                         <input
                           type="checkbox"
