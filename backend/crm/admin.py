@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -122,3 +122,52 @@ class SupportTicketAdmin(admin.ModelAdmin):
     list_filter = ("status", "priority", "assigned_to")
     search_fields = ("ticket_id", "title", "customer__company_name", "description")
     ordering = ("-updated_at",)
+
+
+@admin.register(ManufacturingOrder)
+class ManufacturingOrderAdmin(admin.ModelAdmin):
+    list_display = ("job_order_code", "customer", "product", "quantity", "component_status", "state", "start_date", "complete_date")
+    search_fields = ("job_order_code", "product", "product_no", "customer__company_name", "po_number")
+    list_filter = ("component_status", "state", "start_date", "complete_date")
+
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "description", "created_at", "updated_at")
+    search_fields = ("name", "code", "description")
+
+
+@admin.register(ProductVersion)
+class ProductVersionAdmin(admin.ModelAdmin):
+    list_display = ("product", "version_code", "description", "created_at")
+    search_fields = ("product__name", "version_code")
+
+
+@admin.register(ProductType)
+class ProductTypeAdmin(admin.ModelAdmin):
+    list_display = ("version", "type_code", "description")
+    search_fields = ("version__product__name", "type_code")
+
+
+@admin.register(System)
+class SystemAdmin(admin.ModelAdmin):
+    list_display = ("name", "type")
+    search_fields = ("name", "type__type_code", "type__version__product__name")
+
+
+@admin.register(Component)
+class ComponentAdmin(admin.ModelAdmin):
+    list_display = ("part_number", "name", "unit")
+    search_fields = ("part_number", "name")
+
+
+@admin.register(SystemComponent)
+class SystemComponentAdmin(admin.ModelAdmin):
+    list_display = ("system", "component", "quantity")
+    search_fields = ("system__name", "component__part_number", "component__name")
+
+
+@admin.register(ComponentEntry)
+class ComponentEntryAdmin(admin.ModelAdmin):
+    list_display = ("component_name", "quantity")
+    search_fields = ("component_name",)

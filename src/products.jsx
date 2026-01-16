@@ -32,12 +32,8 @@ function ProductsPage() {
           favorite: false,
         }))
         setProducts(mapped)
-        localStorage.setItem("mfgProducts", JSON.stringify(mapped))
-      } catch {
-        try {
-          const fallback = JSON.parse(localStorage.getItem("mfgProducts") || "[]")
-          if (Array.isArray(fallback) && fallback.length) setProducts(fallback)
-        } catch {}
+      } catch (e) {
+        console.error("Failed to load component entries", e)
       }
     })()
   }, [])
@@ -49,8 +45,8 @@ function ProductsPage() {
       if (Array.isArray(arr)) setNameHints(arr)
     } catch {}
   }, [])
-  const setAndPersist = (next) => { setProducts(next); localStorage.setItem("mfgProducts", JSON.stringify(next)) }
-  const toggleFavorite = (id) => setAndPersist(products.map(p => p.id===id ? { ...p, favorite: !p.favorite } : p))
+  const updateProducts = (next) => { setProducts(next) }
+  const toggleFavorite = (id) => updateProducts(products.map(p => p.id===id ? { ...p, favorite: !p.favorite } : p))
   const parseCnNum = (s) => {
     const m = /CN(?:\/|-)?(\d+)/.exec(String(s || ""))
     return m ? parseInt(m[1], 10) : null
@@ -80,7 +76,7 @@ function ProductsPage() {
         }
         return p
       })
-      if (changed) setAndPersist(next)
+      if (changed) updateProducts(next)
     }
   }, []) 
   const filtered = products.filter((p) => {
@@ -105,7 +101,7 @@ function ProductsPage() {
       }
     } finally {
       const next = products.filter((p) => !selectedRows.includes(p.id))
-      setAndPersist(next)
+      updateProducts(next)
       setSelectedRows([])
       setOpenBulkDelete(false)
     }
@@ -320,7 +316,7 @@ function ProductsPage() {
                       })
                     } catch {}
                     const next = products.map((p) => p.id === editingItem.id ? { ...p, name: payload.component_name, qty: payload.quantity } : p)
-                    setAndPersist(next)
+                    updateProducts(next)
                     setEditingItem(null)
                   }}
                 >
@@ -430,7 +426,7 @@ function ProductsPage() {
                     const id = created && created.id ? created.id : Date.now()
                     const o = { id, name: payload.component_name, sku: newItem.sku || nextCnNumber(), category: "", qty: payload.quantity, state: "", favorite: false }
                     const next = [...products, o]
-                    setAndPersist(next)
+                    updateProducts(next)
                     setShowNew(false)
                     setNewItem({ name: "", sku: "", qty: 1 })
                   }}
