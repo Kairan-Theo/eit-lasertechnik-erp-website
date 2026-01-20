@@ -1,561 +1,466 @@
-import React from "react"
+﻿import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
-import { LanguageProvider } from "./components/language-context"
-import "./index.css"
 import { API_BASE_URL } from "./config"
+import { format, parseISO } from "date-fns"
+import { DayPicker, getDefaultClassNames } from "react-day-picker"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft } from "lucide-react"
+import "./index.css"
 
-function useQuotationState() {
-  const [docType, setDocType] = React.useState("Quotation")
-  const [extraFields, setExtraFields] = React.useState({ refQuotation: "", orderDate: "", deliveryDate: "", paymentTerms: "", deliveryTo: "" })
-  const [customer, setCustomer] = React.useState({ name: "", company: "", email: "", companyEmail: "", phone: "", companyPhone: "" })
-  const [details, setDetails] = React.useState({
-    number: "",
-    date: new Date().toISOString().slice(0, 10),
-    expires: "",
-    currency: "THB",
-    salesperson: "",
-    status: "Draft",
-    terms:
-      "Please send payment within 30 days of receiving this quotation. There may be a 1.5% interest charge per month on late payments.",
-    paymentAccountName: "EIT Lasertechnik",
-    paymentBankNote: "Bank/Credit Card",
-    Email: "hello@eitlasertechnik.com",
-  })
-  const [items, setItems] = React.useState([{ product: "", description: "", note: "", qty: "1", price: "0", tax: "0" }])
-
+function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
+  const [open, setOpen] = React.useState(false)
+  const containerRef = React.useRef(null)
+  const defaultClassNames = getDefaultClassNames()
+  const selected = (() => {
+    try {
+      return value ? parseISO(value) : undefined
+    } catch {
+      return undefined
+    }
+  })()
+  const display = (() => {
+    try {
+      return selected ? format(selected, "dd/MM/yyyy") : ""
+    } catch {
+      return ""
+    }
+  })()
   React.useEffect(() => {
-    try {
-      const po = localStorage.getItem("poInbound")
-      if (po) {
-        const data = JSON.parse(po)
-        if (data.poNumber) {
-            setDocType("Purchase Order")
-            setDetails(prev => ({ ...prev, number: data.poNumber }))
-        }
-        if (data.extraFields) setExtraFields(data.extraFields)
-        if (data.customer) setCustomer((prev) => ({ ...prev, ...data.customer }))
-        if (Array.isArray(data.items) && data.items.length) setItems(data.items)
-        localStorage.removeItem("poInbound")
-      }
-    } catch {}
-    if (!details.number) {
-      const d = new Date()
-      const id = `Q-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`
-      setDetails((prev) => ({ ...prev, number: id }))
+    if (!open) return
+    const handle = (e) => {
+      const el = containerRef.current
+      if (el && !el.contains(e.target)) setOpen(false)
     }
-  }, [])
-
-  const addItem = () => setItems((prev) => [...prev, { product: "", description: "", note: "", qty: "1", price: "0", tax: "0" }])
-  const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
-  const updateItem = (i, field, value) =>
-    setItems((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)))
-
-  const subtotal = items.reduce(
-    (sum, it) => sum + Number(it.qty || 0) * Number(it.price || 0),
-    0,
-  )
-  const taxTotal = docType === "Purchase Order"
-    ? subtotal * 0.07
-    : items.reduce(
-        (sum, it) => sum + Number(it.qty || 0) * Number(it.price || 0) * (Number(it.tax || 0) / 100),
-        0,
-      )
-  const total = subtotal + taxTotal
-
-  const save = () => {
-    const payload = { customer, details, items, totals: { subtotal, taxTotal, total }, docType, extraFields }
-    localStorage.setItem("quotationDraft", JSON.stringify(payload))
-    try {
-      const key = `history:${customer.email || customer.phone || customer.name || details.number}`
-      const existing = JSON.parse(localStorage.getItem(key) || "{}")
-      const quotations = Array.isArray(existing.quotations) ? existing.quotations : []
-      quotations.push({ ...payload, savedAt: new Date().toISOString() })
-      localStorage.setItem(key, JSON.stringify({ ...existing, customer, quotations }))
-    } catch {}
-    try {
-      const token = localStorage.getItem("authToken")
-      if (token) {
-        const body = {
-          number: details.number,
-          customer,
-          items,
-          details,
-          totals: { subtotal, taxTotal, total },
-          doc_type: docType
-        }
-        fetch(`${API_BASE_URL}/api/quotations/`, {
-          method: "POST",
-          headers: { "Authorization": `Token ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        }).catch(() => {})
-      }
-    } catch {}
-  }
-  const confirm = () => {
-    save()
-    const key = encodeURIComponent(customer.email || customer.phone || customer.name || details.number)
-    window.location.href = `/admin.html?view=customerHistory&filter=${key}`
-  }
-  const print = () => window.print()
-  const exportPdf = async () => {
-    const el = document.getElementById("quotation-document")
-    if (!el) return
-    const filename = docType === "Purchase Order" ? `PO_${details.number}.pdf` : `Quotation_${details.number}.pdf`
-    const opt = { margin: 10, filename, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }
-    const clone = el.cloneNode(true)
-    clone.style.position = "fixed"
-    clone.style.left = "-10000px"
-    clone.style.top = "0"
-    clone.style.display = "block"
-    clone.style.background = "#ffffff"
-    clone.classList.remove("hidden")
-    clone.removeAttribute("aria-hidden")
-    document.body.appendChild(clone)
-    try {
-      const loadLib = () =>
-        new Promise((resolve) => {
-          if (window.html2pdf) return resolve(window.html2pdf)
-          const s = document.createElement("script")
-          s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"
-          s.onload = () => resolve(window.html2pdf)
-          s.onerror = () => resolve(null)
-          document.head.appendChild(s)
-        })
-      const lib = await loadLib()
-      if (typeof lib === "function") {
-        await lib().set(opt).from(clone).save()
-      } else {
-        window.print()
-      }
-    } finally {
-      document.body.removeChild(clone)
+    const handleKey = (e) => {
+      if (e.key === "Escape") setOpen(false)
     }
-  }
-
-  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, subtotal, taxTotal, total, save, confirm, print, exportPdf, docType, extraFields, setExtraFields }
-}
-
-import { PurchaseOrderTemplate } from "./components/purchase-order-template.jsx"
-
-function QuotationDocument({ q, compact = false }) {
-  if (q.docType === "Purchase Order") {
-      return <PurchaseOrderTemplate q={q} compact={compact} />
-  }
-  const sym = q.details.currency === "THB" ? "฿" : q.details.currency === "USD" ? "$" : q.details.currency === "EUR" ? "€" : q.details.currency === "GBP" ? "£" : q.details.currency
-  const isPO = false // Force false because PO is handled above
+    document.addEventListener("mousedown", handle)
+    document.addEventListener("touchstart", handle, { passive: true })
+    document.addEventListener("keydown", handleKey)
+    return () => {
+      document.removeEventListener("mousedown", handle)
+      document.removeEventListener("touchstart", handle)
+      document.removeEventListener("keydown", handleKey)
+    }
+  }, [open])
   return (
-    <div className={`bg-white rounded-xl border shadow-sm ${compact ? "p-4 text-[12px]" : "p-8"} print:shadow-none print:border-0`}>
-      <div className={`flex items-start justify-between ${compact ? "mb-6" : "mb-8"}`}>
-        <div className="flex items-center gap-3">
-          <div className={`${compact ? "w-10 h-10" : "w-12 h-12"} bg-[#3D56A6] rounded flex items-center justify-center`}>
-            <img src="/eit-icon.png" alt="EIT" className={`${compact ? "w-7 h-7" : "w-8 h-8"}`} />
-          </div>
-          <div className="leading-tight">
-            <div className={`text-[#3D56A6] font-bold ${compact ? "text-base" : "text-lg"}`}>EIT Lasertechnik</div>
-            <div className={`text-gray-500 ${compact ? "text-xs" : "text-sm"}`}>{isPO ? "Purchase Order" : "Quotation"}</div>
-          </div>
+    <div ref={containerRef} className="relative inline-block w-full">
+      <input
+        type="text"
+        value={display}
+        placeholder={placeholder}
+        onClick={() => setOpen((o) => !o)}
+        readOnly
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+      />
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+        aria-label="Open calendar"
+      >
+        <CalendarIcon className="size-4" aria-hidden="true" />
+      </button>
+      {open && (
+        <div onMouseDown={(e) => e.stopPropagation()} className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+2px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
+          <DayPicker
+            mode="single"
+            selected={selected}
+            onSelect={(d) => {
+              if (!d) return
+              const v = format(d, "yyyy-MM-dd")
+              onChange(v)
+            }}
+            captionLayout="buttons"
+            classNames={{
+              root: `w-fit ${defaultClassNames.root}`,
+              months: `flex flex-col ${defaultClassNames.months}`,
+              month: `rounded-2xl pt-8 ${defaultClassNames.month}`,
+              caption: `relative h-8 ${defaultClassNames.caption}`,
+              nav: `absolute left-3 right-3 top-0 flex items-center justify-between ${defaultClassNames.nav}`,
+              nav_button: `p-2 rounded-full hover:bg-slate-100 ${defaultClassNames.nav_button}`,
+              nav_button_previous: `${defaultClassNames.nav_button_previous}`,
+              nav_button_next: `${defaultClassNames.nav_button_next}`,
+              caption_label: `absolute left-1/2 -translate-x-1/2 top-0 h-8 leading-8 text-center font-semibold uppercase tracking-wide text-[#2D4485] ${defaultClassNames.caption_label}`,
+              table: `w-full border-collapse`,
+              weekdays: `flex justify-between border-b border-slate-200 pb-2 ${defaultClassNames.weekdays}`,
+              weekday: `text-slate-500 flex-1 text-sm text-center ${defaultClassNames.weekday}`,
+              week: `grid grid-cols-7 mt-2 ${defaultClassNames.week}`,
+              day: `mx-auto size-10 flex items-center justify-center rounded-full hover:bg-blue-50 ${defaultClassNames.day}`,
+              today: `bg-[#D6E4FF] text-[#2D4485] font-semibold ${defaultClassNames.today}`,
+              outside: `text-slate-400 ${defaultClassNames.outside}`,
+              disabled: `${defaultClassNames.disabled}`,
+            }}
+            modifiersClassNames={{
+              selected: "border-2 border-[#2D4485]/30 !bg-transparent text-[#2D4485] font-semibold",
+            }}
+          />
         </div>
-        <div className="text-right">
-          <div className={`${compact ? "text-xl" : "text-2xl"} font-bold text-[#3D56A6] tracking-wide`}>{isPO ? "PURCHASE ORDER" : "QUOTATION"}</div>
-          <div className={`mt-2 ${compact ? "text-xs" : "text-sm"} text-gray-700`}>{isPO ? "PO Number" : "Quotation Number"} : <span className="font-semibold">{q.details.number}</span></div>
-          {!isPO && <div className={`${compact ? "text-xs" : "text-sm"} text-gray-700`}>Quote Date : <span className="font-semibold">{q.details.date}</span></div>}
-          {!isPO && <div className={`${compact ? "text-xs" : "text-sm"} text-gray-700`}>Valid Until : <span className="font-semibold">{q.details.expires || "-"}</span></div>}
-        </div>
-      </div>
-
-      {isPO ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-                 <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>Vendor Name:</div>
-                 <div className={`text-[#3D56A6] font-semibold ${compact ? "text-base" : "text-lg"}`}>{q.customer.company || "-"}</div>
-                 <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600 mt-2`}>Contact Person:</div>
-                 <div className={`${compact ? "text-xs" : "text-sm"} font-semibold`}>{q.customer.name || "-"}</div>
-                 <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>{q.customer.email || ""}</div>
-                 <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>{q.customer.phone || ""}</div>
-                 <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600 mt-2`}>Delivery To:</div>
-                 <div className={`${compact ? "text-xs" : "text-sm"} whitespace-pre-line`}>{q.extraFields?.deliveryTo || "-"}</div>
-            </div>
-            <div className="space-y-2">
-                 <div className={`grid grid-cols-2 ${compact ? "text-xs" : "text-sm"}`}>
-                    <div className="text-gray-600">Ref. Quotation No. :</div>
-                    <div className="font-semibold">{q.extraFields?.refQuotation || "-"}</div>
-                 </div>
-                 <div className={`grid grid-cols-2 ${compact ? "text-xs" : "text-sm"}`}>
-                    <div className="text-gray-600">Date of Order :</div>
-                    <div className="font-semibold">{q.extraFields?.orderDate || "-"}</div>
-                 </div>
-                 <div className={`grid grid-cols-2 ${compact ? "text-xs" : "text-sm"}`}>
-                    <div className="text-gray-600">Delivery Date :</div>
-                    <div className="font-semibold">{q.extraFields?.deliveryDate || "-"}</div>
-                 </div>
-                 <div className={`grid grid-cols-2 ${compact ? "text-xs" : "text-sm"}`}>
-                    <div className="text-gray-600">Payment Terms :</div>
-                    <div className="font-semibold">{q.extraFields?.paymentTerms || "-"}</div>
-                 </div>
-            </div>
-        </div>
-      ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>Quote to:</div>
-              <div className={`text-[#3D56A6] font-semibold ${compact ? "text-base" : "text-lg"}`}>{q.customer.name || q.customer.company || "-"}</div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>{q.customer.company || ""}</div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>{q.customer.email || ""}</div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>{q.customer.companyEmail || ""}</div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>{q.customer.phone || ""}</div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>{q.customer.companyPhone || ""}</div>
-            </div>
-            <div className="md:text-right">
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-600`}>Currency:</div>
-              <div className={`${compact ? "text-sm" : "text-base"} text-gray-900 font-semibold`}>{q.details.currency}</div>
-            </div>
-          </div>
       )}
-
-      <div className="overflow-x-auto mb-6">
-        <table className={`min-w-full ${compact ? "text-[11px]" : "text-sm"}`}>
-          <thead>
-            <tr className="bg-gray-100 text-gray-700">
-              {isPO ? (
-                  <>
-                    <th className={`${compact ? "p-1.5" : "p-2"} text-center w-12`}>ITEM</th>
-                    <th className={`${compact ? "p-1.5" : "p-2"} text-left`}>DESCRIPTION</th>
-                    <th className={`${compact ? "p-1.5" : "p-2"} text-right`}>Q'TY</th>
-                    <th className={`${compact ? "p-1.5" : "p-2"} text-right`}>UNIT PRICE</th>
-                    <th className={`${compact ? "p-1.5" : "p-2"} text-right`}>TOTAL AMOUNT</th>
-                  </>
-              ) : (
-                  <>
-                    <th className={`${compact ? "p-1.5" : "p-2"} text-left`}>QUANTITY</th>
-                    <th className={`${compact ? "p-1.5" : "p-2"} text-left`}>ITEM DESCRIPTION</th>
-                    <th className={`${compact ? "p-1.5" : "p-2"} text-left`}>PRICE</th>
-                    <th className={`${compact ? "p-1.5" : "p-2"} text-left`}>AMOUNT</th>
-                  </>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {q.items.map((it, i) => {
-              const amount = Number(it.qty || 0) * Number(it.price || 0)
-              return (
-                <tr key={i} className="border-t">
-                  {isPO ? (
-                      <>
-                        <td className={`${compact ? "p-1.5" : "p-2"} text-center`}>{i + 1}</td>
-                        <td className={`${compact ? "p-1.5" : "p-2"}`}>
-                             <div>{it.description}</div>
-                             {it.product && <div className="text-gray-500 text-xs">{it.product}</div>}
-                        </td>
-                        <td className={`${compact ? "p-1.5" : "p-2"} text-right`}>{it.qty}</td>
-                        <td className={`${compact ? "p-1.5" : "p-2"} text-right`}>{Number(it.price).toFixed(2)}</td>
-                        <td className={`${compact ? "p-1.5" : "p-2"} text-right`}>{amount.toFixed(2)}</td>
-                      </>
-                  ) : (
-                      <>
-                          <td className={`${compact ? "p-1.5" : "p-2"}`}>{it.qty}</td>
-                          <td className={`${compact ? "p-1.5" : "p-2"}`}>
-                            <div>{it.description || it.product}</div>
-                            {it.note ? <div className={`${compact ? "text-[10px]" : "text-xs"} text-gray-500 mt-1`}>Note: {it.note}</div> : null}
-                          </td>
-                          <td className={`${compact ? "p-1.5" : "p-2"}`}>{sym} {Number(it.price).toFixed(2)}</td>
-                          <td className={`${compact ? "p-1.5" : "p-2"}`}>{sym} {amount.toFixed(2)}</td>
-                      </>
-                  )}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div>
-          {isPO ? (
-             <div className="border p-4 rounded text-sm">
-                <div className="font-semibold mb-2">Vendor Confirmation</div>
-                <div className="h-20"></div>
-                <div className="border-t pt-1 text-xs text-gray-500">Signature & Stamp</div>
-             </div>
-          ) : (
-             <>
-              <div className={`${compact ? "text-xs" : "text-sm"} font-semibold text-gray-900 mb-2`}>Payment Method :</div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-700`}>Account Name : {q.details.paymentAccountName || "-"}</div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-700`}>{q.details.paymentBankNote || "Bank/Credit Card"}</div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-700`}>Paypal : {q.details.paymentPaypal || "-"}</div>
-             </>
-          )}
-        </div>
-        <div className="md:text-right">
-          <div className="flex justify-end">
-            <div className={`${compact ? "w-48" : "w-56"}`}>
-              <div className={`flex justify-between ${compact ? "text-xs" : "text-sm"}`}><span className="text-gray-700">SUB TOTAL :</span><span className="font-semibold">{sym} {q.subtotal.toFixed(2)}</span></div>
-              <div className={`flex justify-between ${compact ? "text-xs" : "text-sm"}`}><span className="text-gray-700">{isPO ? "Vat 7%" : "TAX"} :</span><span className="font-semibold">{sym} {q.taxTotal.toFixed(2)}</span></div>
-              <div className={`flex justify-between ${compact ? "text-sm" : "text-base"} mt-1 border-t pt-1`}><span className="text-gray-900 font-bold">{isPO ? "Grand Total Amount" : "TOTAL"} :</span><span className="font-bold text-[#3D56A6]">{sym} {q.total.toFixed(2)}</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {isPO ? (
-        <div className="grid grid-cols-2 gap-8 mt-12">
-            <div className="text-center">
-                <div className="border-b border-gray-400 w-3/4 mx-auto mb-2"></div>
-                <div className="text-sm font-semibold">Authorized By</div>
-            </div>
-            <div className="text-center">
-                <div className="border-b border-gray-400 w-3/4 mx-auto mb-2"></div>
-                <div className="text-sm font-semibold">Buyer By</div>
-            </div>
-        </div>
-      ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <div className={`${compact ? "text-xs" : "text-sm"} font-semibold text-gray-900 mb-2`}>Terms & Conditions :</div>
-              <div className={`${compact ? "text-xs" : "text-sm"} text-gray-700 whitespace-pre-line`}>{q.details.terms}</div>
-            </div>
-            <div className="md:text-right">
-              <div className="inline-block">
-                <div className={`${compact ? "text-2xl" : "text-3xl"} font-signature text-gray-700`}>EIT</div>
-                <div className={`${compact ? "text-xs" : "text-sm"} text-gray-700`}>EIT Lasertechnik</div>
-              </div>
-            </div>
-          </div>
-      )}
-      {!isPO && <div className={`${compact ? "mt-6" : "mt-10"} text-[#3D56A6] font-bold`}>Thank you for your business with us!</div>}
     </div>
   )
 }
 
+function useQuotationState() {
+  const [customer, setCustomer] = React.useState({
+    company: "",
+    address: "",
+    telephone: "",
+    fax: "",
+    attn: "",
+    div: "",
+    mobile: "",
+    email: ""
+  })
+
+  const [details, setDetails] = React.useState({
+    number: "",
+    date: new Date().toISOString().slice(0, 10),
+    validUntil: "",
+    currency: "THB",
+    deliveryTerms: "Ex-Works",
+    salesPerson: "",
+    eitMobile: "",
+    eitTelephone: "",
+    eitFax: "",
+    tradeTerms: "",
+    validity: "",
+    delivery: "",
+    shipmentLocation: "",
+    invoiceDate: new Date().toISOString().slice(0, 10),
+    remark: "",
+    paymentTerms: ": "
+  })
+
+  const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0 }])
+
+  const total = items.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.price) || 0), 0)
+
+  const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0 }])
+  const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
+  const updateItem = (i, field, value) =>
+    setItems((prev) =>
+      prev.map((row, idx) =>
+        idx === i ? { ...row, [field]: field === "qty" || field === "price" ? (value === "" ? "" : Number(value)) : value } : row,
+      ),
+    )
+
+  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total }
+}
+
 function QuotationPage() {
   const q = useQuotationState()
-  const exportPdfRef = React.useRef(q.exportPdf)
-  React.useEffect(() => { exportPdfRef.current = q.exportPdf }, [q.exportPdf])
+  const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
 
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get("autoExport") === "true") {
-      const timer = setTimeout(() => {
-        if (exportPdfRef.current) exportPdfRef.current()
-        const url = new URL(window.location)
-        url.searchParams.delete('autoExport')
-        window.history.replaceState({}, '', url)
-      }, 1000)
-      return () => clearTimeout(timer)
-    }
-  }, [])
-
-  const [previewOpen, setPreviewOpen] = React.useState(false)
-  const sendAndSave = () => {
-    q.setDetails({ ...q.details, status: "Sent" })
-    q.save()
-    const key = encodeURIComponent(q.customer.email || q.customer.phone || q.customer.name || q.details.number)
-    window.location.href = `/admin.html?view=customerHistory&filter=${key}`
-  }
   return (
-    <main className="min-h-screen bg-white">
-      <div className="print:hidden">
-        <Navigation />
-      </div>
-      <section className="w-full py-10 px-4 sm:px-6 lg:px-8">
-       <div className="max-w-7xl mx-auto">
-          <div className="print:hidden relative z-10">
-              <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Quotation</h1>
-                <div className="flex gap-2">
-                  <button type="button" onClick={q.print} className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        const payload = {
-                          customer: q.customer,
-                          items: q.items,
-                          details: {
-                            currency: q.details.currency,
-                            date: q.details.date,
-                            paymentTermsDays: 7,
-                            sourceQuotationNumber: q.details.number,
-                          },
-                        }
-                        localStorage.setItem("confirmedQuotation", JSON.stringify(payload))
-                        window.location.href = "/invoice.html"
-                      } catch {}
-                    }}
-                    className="px-4 py-2 text-sm rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white"
-                  >
-                    Create Invoice
-                  </button>
-                </div>
-              </div>
+    <main className="min-h-screen bg-gray-50">
+      <Navigation />
+      <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => window.location.href = "/crm.html"}
+              className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
+              title="Back to List"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900">Quotation</h1>
           </div>
-
-          <div className="grid grid-cols-1 gap-6 print:hidden">
-            <div className="space-y-6">
-              <div className="bg-white rounded-xl shadow-sm border p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Customer</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input value={q.customer.name} onChange={(e) => q.setCustomer({ ...q.customer, name: e.target.value })} placeholder="Customer name" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                  <input value={q.customer.company} onChange={(e) => q.setCustomer({ ...q.customer, company: e.target.value })} placeholder="Company" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                  <input value={q.customer.email} onChange={(e) => q.setCustomer({ ...q.customer, email: e.target.value })} placeholder="Email" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                  <input value={q.customer.companyEmail} onChange={(e) => q.setCustomer({ ...q.customer, companyEmail: e.target.value })} placeholder="Company email" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                  <input value={q.customer.phone} onChange={(e) => q.setCustomer({ ...q.customer, phone: e.target.value })} placeholder="Phone" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                  <input value={q.customer.companyPhone} onChange={(e) => q.setCustomer({ ...q.customer, companyPhone: e.target.value })} placeholder="Company phone" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border p-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-3">Details</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  <input value={q.details.number} onChange={(e) => q.setDetails({ ...q.details, number: e.target.value })} placeholder="Quotation number" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                  <input type="date" value={q.details.date} onChange={(e) => q.setDetails({ ...q.details, date: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                  <input type="date" value={q.details.expires} onChange={(e) => q.setDetails({ ...q.details, expires: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                  <select value={q.details.currency} onChange={(e) => q.setDetails({ ...q.details, currency: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]">
-                    <option value="THB">THB</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                  </select>
-                  <input value={q.details.salesperson} onChange={(e) => q.setDetails({ ...q.details, salesperson: e.target.value })} placeholder="Salesperson" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl shadow-sm border p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-2">Terms & Conditions</h2>
-                  <textarea
-                    value={q.details.terms}
-                    onChange={(e) => q.setDetails({ ...q.details, terms: e.target.value })}
-                    placeholder="Enter terms & conditions to appear on the quotation"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]"
-                    rows="6"
-                  />
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-2">Payment Method</h2>
-                  <div className="grid grid-cols-1 gap-3">
-                    <input
-                      value={q.details.paymentAccountName}
-                      onChange={(e) => q.setDetails({ ...q.details, paymentAccountName: e.target.value })}
-                      placeholder="Account Name"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]"
-                    />
-                    <input
-                      value={q.details.paymentBankNote}
-                      onChange={(e) => q.setDetails({ ...q.details, paymentBankNote: e.target.value })}
-                      placeholder="Bank / Credit Card info"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]"
-                    />
-                    <input
-                      value={q.details.paymentPaypal}
-                      onChange={(e) => q.setDetails({ ...q.details, paymentPaypal: e.target.value })}
-                      placeholder="PayPal address"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border p-6 mt-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Items</h2>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-gray-600">
-                        <th className="p-2">Product</th>
-                        <th className="p-2">Description</th>
-                        <th className="p-2">Qty</th>
-              <th className="p-2">Unit Price</th>
-              {q.docType !== "Purchase Order" && <th className="p-2">Tax %</th>}
-              <th className="p-2">Line Total</th>
-              <th className="p-2">Note</th>
-              <th className="p-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {q.items.map((it, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="p-2"><input value={it.product} onChange={(e) => q.updateItem(i, "product", e.target.value)} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" /></td>
-                          <td className="p-2"><input value={it.description} onChange={(e) => q.updateItem(i, "description", e.target.value)} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" /></td>
-                          <td className="p-2"><input type="text" inputMode="numeric" value={it.qty} onChange={(e) => q.updateItem(i, "qty", e.target.value)} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" /></td>
-                          <td className="p-2"><input type="text" inputMode="decimal" value={it.price} onChange={(e) => q.updateItem(i, "price", e.target.value)} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" /></td>
-                          {q.docType !== "Purchase Order" && <td className="p-2"><input type="text" inputMode="decimal" value={it.tax} onChange={(e) => q.updateItem(i, "tax", e.target.value)} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" /></td>}
-                          <td className="p-2 text-right">{(Number(it.qty || 0) * Number(it.price || 0) * (1 + (q.docType === "Purchase Order" ? 0 : Number(it.tax || 0)) / 100)).toFixed(2)}</td>
-                          <td className="p-2"><input value={it.note || ""} onChange={(e) => q.updateItem(i, "note", e.target.value)} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D56A6]" /></td>
-                          <td className="p-2 text-right"><button onClick={() => q.removeItem(i)} className="px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] hover:bg-blue-100">Remove</button></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="flex justify-between mt-4">
-                  <button
-                    onClick={q.addItem}
-                    aria-label="Add item"
-                    className="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="5" x2="12" y2="19"></line>
-                      <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                  </button>
-                  <div className="w-64">
-                    <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span className="font-semibold">{q.subtotal.toFixed(2)} {q.details.currency}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">{q.docType === "Purchase Order" ? "Vat 7%" : "Tax"}</span><span className="font-semibold">{q.taxTotal.toFixed(2)} {q.details.currency}</span></div>
-                    <div className="flex justify-between text-lg"><span className="text-gray-900">{q.docType === "Purchase Order" ? "Grand Total Amount" : "Total"}</span><span className="font-bold text-[#3D56A6]">{q.total.toFixed(2)} {q.details.currency}</span></div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end mt-2 print:hidden">
-                <button type="button" onClick={() => setPreviewOpen(true)} className="btn-pill">Confirm</button>
-              </div>
-            </div>
-
-            
-          </div>
-
-          
-
-          <div className="mt-8 print:mt-0 hidden print:block" id="quotation-document" aria-hidden="true">
-            <QuotationDocument q={q} />
-          </div>
-          {previewOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center">
-              <div className="absolute inset-0 bg-black/50"></div>
-              <div className="relative bg-white rounded-xl shadow-xl border w-full max-w-3xl mx-4 p-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-xl font-bold text-[#2D4485]">Preview Quotation</div>
-                </div>
-                <div className="bg-white rounded-xl border shadow-sm p-2">
-                  <QuotationDocument q={q} compact />
-                </div>
-                <div className="flex items-center justify-between gap-2 mt-4">
-                  <button aria-label="Close preview" onClick={() => setPreviewOpen(false)} className="px-3 py-2 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                  <div className="flex items-center justify-end gap-2">
-                    <button onClick={q.exportPdf} className="px-4 py-2 rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Export PDF</button>
-                    <button onClick={q.print} className="px-4 py-2 rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Print</button>
-                    <button onClick={sendAndSave} className="px-4 py-2 rounded-full bg-[#2D4485] text-white hover:bg-[#3D56A6]">Send</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
-      </section>
-      </main>
+
+        {/* Customer / Codes Box */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
+          <h2 className="text-xl font-bold text-[#2D4485]">Customer Information</h2>
+          
+          {/* Quotation Code */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Quotation Number</label>
+               <input value={q.details.number} onChange={(e) => q.setDetails({ ...q.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Quotation number" />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+               <DateField value={q.details.date} onChange={(val) => q.setDetails({ ...q.details, date: val })} />
+             </div>
+          </div>
+
+          <h3 className="text-base font-bold text-gray-900 pt-2">Customer Company</h3>
+
+          {/* Company Name (50% width) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+               <input value={q.customer.company} onChange={(e) => q.setCustomer({ ...q.customer, company: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Company name" />
+             </div>
+          </div>
+
+          {/* Telephone / Fax / Address */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
+                <input value={q.customer.telephone} onChange={(e) => q.setCustomer({ ...q.customer, telephone: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Telephone" />
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
+                <input value={q.customer.fax} onChange={(e) => q.setCustomer({ ...q.customer, fax: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Fax" />
+            </div>
+             <div className="md:col-span-2">
+               <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+               <textarea value={q.customer.address} onChange={(e) => q.setCustomer({ ...q.customer, address: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
+             </div>
+          </div>
+
+          <h3 className="text-base font-bold text-gray-900 pt-2">Customer Responsible</h3>
+
+          {/* Attn / Div / Mobile */}
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Attention(Attn.)</label>
+                <input value={q.customer.attn} onChange={(e) => q.setCustomer({ ...q.customer, attn: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Attention" />
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
+                <input value={q.customer.div} onChange={(e) => q.setCustomer({ ...q.customer, div: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                <input value={q.customer.mobile} onChange={(e) => q.setCustomer({ ...q.customer, mobile: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+            </div>
+          </div>
+        </div>
+
+        {/* EIT Box */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
+           <h2 className="text-xl font-bold text-[#2D4485]">EIT Lasertechnik</h2>
+           
+           {/* From / Mobile */}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+               <input value={q.details.salesPerson} onChange={(e) => q.setDetails({ ...q.details, salesPerson: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="From" />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+               <input value={q.details.eitMobile} onChange={(e) => q.setDetails({ ...q.details, eitMobile: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+             </div>
+           </div>
+
+           {/* Telephone / Fax */}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
+               <input value={q.details.eitTelephone} onChange={(e) => q.setDetails({ ...q.details, eitTelephone: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Telephone" />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
+               <input value={q.details.eitFax} onChange={(e) => q.setDetails({ ...q.details, eitFax: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Fax" />
+             </div>
+           </div>
+        </div>
+
+        {/* Quotation Description Box */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 mb-8">
+           <div className="flex justify-between items-center mb-4">
+             <h2 className="text-xl font-bold text-[#2D4485]">Quotation Description</h2>
+             <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
+               <Plus className="w-4 h-4" />
+               <span className="text-sm font-medium">Add Item</span>
+             </button>
+           </div>
+           <div className="overflow-x-auto">
+             <table className="w-full text-left border-collapse">
+               <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
+                 <tr>
+                   <th className="p-3 border-b">Item</th>
+                   <th className="p-3 border-b">Model</th>
+                   <th className="p-3 border-b">Description</th>
+                   <th className="p-3 border-b w-32">Price</th>
+                   <th className="p-3 border-b w-20">Quantity</th>
+                   <th className="p-3 border-b w-32">Total (Baht)</th>
+                   <th className="p-3 border-b w-12"></th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-gray-100">
+                 {q.items.map((item, i) => (
+                   <tr key={i} className="hover:bg-gray-50 transition border-b border-gray-100">
+                     <td className="p-3">
+                       <input value={item.item} onChange={(e) => q.updateItem(i, "item", e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Item" />
+                     </td>
+                     <td className="p-3">
+                       <input value={item.model} onChange={(e) => q.updateItem(i, "model", e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Model" />
+                     </td>
+                     <td className="p-3">
+                       <input value={item.description} onChange={(e) => q.updateItem(i, "description", e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Description" />
+                     </td>
+                     <td className="p-3">
+                       <input type="number" value={item.price} onChange={(e) => q.updateItem(i, "price", e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                     </td>
+                     <td className="p-3">
+                       <input type="number" value={item.qty} onChange={(e) => q.updateItem(i, "qty", e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                     </td>
+                     <td className="p-3 text-right text-sm text-gray-700">
+                       {(Number(item.qty || 0) * Number(item.price || 0)).toFixed(2)}
+                     </td>
+                     <td className="p-3 text-right">
+                       <button onClick={() => q.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete"><Trash className="w-4 h-4" /></button>
+                     </td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           </div>
+           <div className="flex justify-end mt-4">
+             <div className="w-64 space-y-2">
+               <div className="flex justify-between text-base font-bold text-gray-900"><span>Total:</span> <span>{q.total.toFixed(2)}</span></div>
+               <div className="flex justify-between text-base font-bold text-gray-900"><span>VAT 7%:</span> <span>{(q.total * 0.07).toFixed(2)}</span></div>
+               <div className="flex justify-between text-base font-bold text-[#2D4485] pt-2 border-t"><span>Grand Total:</span> <span>{(q.total * 1.07).toFixed(2)}</span></div>
+             </div>
+           </div>
+        </div>
+        
+        {/* Terms & Conditions Box */}
+        <div className="mb-8">
+           <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6">
+             <h2 className="text-xl font-bold text-[#2D4485] mb-4">Terms & Conditions</h2>
+             <div className="space-y-4">
+                {/* Row 1: Trade Terms, Validity, Delivery */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Trade Terms</label>
+                     <input value={q.details.tradeTerms} onChange={(e) => q.setDetails({ ...q.details, tradeTerms: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Trade Terms" />
+                  </div>
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Validity</label>
+                     <input value={q.details.validity} onChange={(e) => q.setDetails({ ...q.details, validity: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Validity" />
+                  </div>
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Delivery</label>
+                     <input value={q.details.delivery} onChange={(e) => q.setDetails({ ...q.details, delivery: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Delivery" />
+                  </div>
+                </div>
+
+                {/* Row 2: Payment Terms */}
+                <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Payment Terms</label>
+                   <textarea 
+                     name="paymentTerms"
+                     value={q.details.paymentTerms} 
+                     onChange={(e) => {
+                       let val = e.target.value
+                       if (!val.startsWith(": ")) {
+                         if (val.startsWith(":")) {
+                           val = ": " + val.substring(1)
+                         } else if (val.startsWith(" ")) {
+                           val = ":" + val
+                         } else {
+                           val = ": " + val
+                         }
+                       }
+                       q.setDetails({ ...q.details, paymentTerms: val })
+                     }} 
+                     onKeyDown={(e) => {
+                       if (e.key === 'Enter') {
+                         const val = e.target.value;
+                         const selectionStart = e.target.selectionStart;
+                         const currentLineStart = val.lastIndexOf('\n', selectionStart - 1) + 1;
+                         const currentLine = val.substring(currentLineStart, selectionStart);
+                         if (currentLine.trim().startsWith(':')) {
+                           e.preventDefault();
+                           const newValue = val.substring(0, selectionStart) + "\n: " + val.substring(e.target.selectionEnd);
+                           q.setDetails({ ...q.details, paymentTerms: newValue });
+                           setTimeout(() => {
+                             const ta = document.getElementsByName("paymentTerms")[0];
+                             if (ta) ta.setSelectionRange(selectionStart + 3, selectionStart + 3);
+                           }, 0);
+                         }
+                       }
+                     }}
+                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
+                     rows="4" 
+                     placeholder=": Payment terms" 
+                   />
+                </div>
+
+                {/* Row 3: Shipment Location, Invoice Date */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Shipment Location</label>
+                     <input value={q.details.shipmentLocation} onChange={(e) => q.setDetails({ ...q.details, shipmentLocation: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Shipment Location" />
+                  </div>
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
+                     <DateField value={q.details.invoiceDate} onChange={(val) => q.setDetails({ ...q.details, invoiceDate: val })} />
+                  </div>
+                </div>
+
+                {/* Row 4: Remark */}
+                <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Remark</label>
+                   <textarea value={q.details.remark} onChange={(e) => q.setDetails({ ...q.details, remark: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="4" placeholder="Remark" />
+                </div>
+             </div>
+           </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href="/admin.html"}>Cancel</button>
+          <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={() => setOpenCreateConfirm(true)}>Create QO Form</button>
+        </div>
+
+        {openCreateConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setOpenCreateConfirm(false)}>
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] max-w-[95vw]" onClick={(e)=>e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Create QO Form</h3>
+                  <div className="text-sm text-gray-600 mt-1">Choose how you want to proceed</div>
+                </div>
+                <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenCreateConfirm(false)}>✕</button>
+              </div>
+              <div className="p-4 grid grid-cols-3 gap-4">
+                <button
+                  className="w-full px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
+                  onClick={() => { setOpenCreateConfirm(false); window.location.href = "/admin.html" }}
+                >
+                  Discard
+                </button>
+                <button
+                  className="w-full px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] min-w-[140px]"
+                  onClick={() => {
+                    // Mock save functionality
+                    alert("Changes saved!")
+                    setOpenCreateConfirm(false)
+                    window.location.href = "/crm.html"
+                  }}
+                >
+                  Save Changes
+                </button>
+                <button
+                  className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
+                  onClick={() => {
+                    // Mock download functionality
+                    alert("Downloading form...")
+                    setOpenCreateConfirm(false)
+                  }}
+                >
+                  Download Form
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      </div>
+    </main>
   )
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <LanguageProvider>
-      <QuotationPage />
-    </LanguageProvider>
+    <QuotationPage />
   </React.StrictMode>,
 )
-

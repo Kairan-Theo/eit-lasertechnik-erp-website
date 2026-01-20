@@ -214,7 +214,7 @@ function NewMOPage() {
           <CalendarIcon className="size-4" aria-hidden="true" />
         </button>
         {open && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+8px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
+          <div onMouseDown={(e) => e.stopPropagation()} className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+8px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
             <DayPicker
               mode="single"
               selected={selected}
@@ -222,7 +222,6 @@ function NewMOPage() {
                 if (!d) return
                 const v = format(d, "yyyy-MM-dd")
                 onChange(v)
-                setOpen(false)
               }}
               captionLayout="buttons"
               classNames={{
@@ -240,12 +239,12 @@ function NewMOPage() {
                 weekday: `text-slate-500 flex-1 text-sm text-center ${defaultClassNames.weekday}`,
                 week: `grid grid-cols-7 mt-2 ${defaultClassNames.week}`,
                 day: `mx-auto size-10 flex items-center justify-center rounded-full hover:bg-blue-50 ${defaultClassNames.day}`,
-                today: `bg-[#E7F1FF] text-[#2D4485] ${defaultClassNames.today}`,
+                today: `bg-[#D6E4FF] text-[#2D4485] font-semibold ${defaultClassNames.today}`,
                 outside: `text-slate-400 ${defaultClassNames.outside}`,
                 disabled: `${defaultClassNames.disabled}`,
               }}
               modifiersClassNames={{
-                selected: "bg-[#E7F1FF] text-[#2D4485]",
+                selected: "border-2 border-[#2D4485]/30 !bg-transparent text-[#2D4485] font-semibold",
               }}
             />
           </div>
