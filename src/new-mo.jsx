@@ -7,12 +7,40 @@ import { API_BASE_URL } from "./config"
 import { JobOrderTemplate } from "./components/job-order-template.jsx"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash } from "lucide-react"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft } from "lucide-react"
+
+function computeComponentStatusFromItems(items, inventory) {
+  if (!Array.isArray(items) || !items.length) return ""
+  // inventory is passed in, expected to be a map { key: qty }
+  const requiredTotals = {}
+  for (const it of items) {
+    const key = String(it.description || "").trim().toLowerCase()
+    if (!key) continue
+    const qty = Number(it.qty)
+    if (!Number.isFinite(qty) || qty <= 0) continue
+    requiredTotals[key] = (requiredTotals[key] || 0) + qty
+  }
+  const keys = Object.keys(requiredTotals)
+  if (!keys.length) return ""
+  for (const key of keys) {
+    const available = Number(inventory[key] || 0)
+    const required = Number(requiredTotals[key] || 0)
+    // Debug log to trace status calculation
+    console.debug(`[Status Check] Item: "${key}", Required: ${required}, Available: ${available}`)
+    
+    if (!Number.isFinite(available) || required >= available) {
+      console.debug(`[Status Check] -> Not Available (Insufficient: ${available} <= ${required})`)
+      return "Not Available"
+    }
+  }
+  return "Available"
+}
 
 function NewMOPage() {
-  const [orders, setOrders] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem("mfgOrders") || "[]") } catch { return [] }
-  })
+  const [inventory, setInventory] = React.useState({})
+  const [bomList, setBomList] = React.useState([])
+  const [moList, setMoList] = React.useState([])
+  
   const [isEditMode, setIsEditMode] = React.useState(() => {
     try {
       const params = new URLSearchParams(window.location.search)
@@ -22,9 +50,10 @@ function NewMOPage() {
     }
   })
   const [remoteJobCodes, setRemoteJobCodes] = React.useState([])
-  const [poList, setPoList] = React.useState([])
   const [crmPoNumbers, setCrmPoNumbers] = React.useState([])
   const [showPoSuggestions, setShowPoSuggestions] = React.useState(false)
+  const [showBomSuggestions, setShowBomSuggestions] = React.useState(false)
+  const bomSuggestionRef = React.useRef(null)
   const [newOrder, setNewOrder] = React.useState({
     product: "",
     productNo: "",
@@ -37,35 +66,32 @@ function NewMOPage() {
     responsible: "",
     priority: "None",
     customer: "",
-    salesDepartment: "",
-    productionDepartment: "",
+    responsibleSalesPerson: "",
+    responsibleProductionPerson: "",
     supplier: "",
     supplierDate: "",
     recipient: "",
     recipientDate: ""
   })
-  const [items, setItems] = React.useState(() => {
-    if (!isEditMode) {
-      try {
-        const draft = JSON.parse(localStorage.getItem("newMoDraftItems") || "null")
-        if (Array.isArray(draft) && draft.length) {
-          return draft.map((x, i) => ({ ...x, itemCode: x.itemCode || String(i + 1) }))
-        }
-      } catch {}
-    }
-    return [{ itemCode: "1", description: "", qty: "1", unit: "Unit" }]
-  })
+  const [items, setItems] = React.useState([])
   const [itemsTouched, setItemsTouched] = React.useState(false)
   const [previewOrder, setPreviewOrder] = React.useState(null)
   const [printOrder, setPrintOrder] = React.useState(null)
   const [previewZoom, setPreviewZoom] = React.useState(0.5)
   const [previewOrientation, setPreviewOrientation] = React.useState("portrait")
 
+  const printJobOrder = React.useCallback((orderData) => {
+    setPrintOrder(orderData)
+  }, [])
+
   const syncItemsFromBOM = React.useCallback(() => {
     const key = String(newOrder.productNo || "").trim().toLowerCase()
-    if (!key) return false
+    if (!key) {
+      setItems([])
+      return false
+    }
     try {
-      const bomList = JSON.parse(localStorage.getItem("mfgBOMs") || "[]")
+      // Use bomList state
       if (!Array.isArray(bomList) || !bomList.length) return
       const match = bomList.find(b => String(b.product || "").trim().toLowerCase() === key)
       if (!match) return false
@@ -89,15 +115,36 @@ function NewMOPage() {
     } catch {
       return false
     }
-  }, [newOrder.productNo])
+  }, [newOrder.productNo, bomList])
 
   React.useEffect(() => {
-    const isDefault = items.length === 1 && !String(items[0]?.description || "").trim() && String(items[0]?.qty || "") === "1" && String(items[0]?.unit || "") === "Unit"
-    if (!isEditMode && !itemsTouched && isDefault) {
+    if (isEditMode) return
+    const key = String(newOrder.productNo || "").trim()
+    if (!key) {
+      if (!itemsTouched) {
+        setItems([])
+      }
+    } else if (!itemsTouched) {
       syncItemsFromBOM()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newOrder.productNo, itemsTouched, isEditMode])
+
+
+
+  React.useEffect(() => {
+    if (!showBomSuggestions) return
+    const handleClickOutside = (event) => {
+      const el = bomSuggestionRef.current
+      if (el && !el.contains(event.target)) {
+        setShowBomSuggestions(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [showBomSuggestions])
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
 
   React.useEffect(() => {
@@ -110,15 +157,7 @@ function NewMOPage() {
     return () => document.removeEventListener("visibilitychange", handler)
   }, [itemsTouched, syncItemsFromBOM, isEditMode])
 
-  React.useEffect(() => {
-    localStorage.setItem("newMoDraftItems", JSON.stringify(items))
-  }, [items])
-  React.useEffect(() => {
-    try {
-      const draft = JSON.parse(localStorage.getItem("newMoDraftItems") || "null")
-      if (!isEditMode && Array.isArray(draft) && draft.length) setItemsTouched(true)
-    } catch {}
-  }, [isEditMode])
+
 
   function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
     const [open, setOpen] = React.useState(false)
@@ -175,7 +214,7 @@ function NewMOPage() {
           <CalendarIcon className="size-4" aria-hidden="true" />
         </button>
         {open && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+8px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
+          <div onMouseDown={(e) => e.stopPropagation()} className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+8px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
             <DayPicker
               mode="single"
               selected={selected}
@@ -183,7 +222,6 @@ function NewMOPage() {
                 if (!d) return
                 const v = format(d, "yyyy-MM-dd")
                 onChange(v)
-                setOpen(false)
               }}
               captionLayout="buttons"
               classNames={{
@@ -201,12 +239,12 @@ function NewMOPage() {
                 weekday: `text-slate-500 flex-1 text-sm text-center ${defaultClassNames.weekday}`,
                 week: `grid grid-cols-7 mt-2 ${defaultClassNames.week}`,
                 day: `mx-auto size-10 flex items-center justify-center rounded-full hover:bg-blue-50 ${defaultClassNames.day}`,
-                today: `bg-[#E7F1FF] text-[#2D4485] ${defaultClassNames.today}`,
+                today: `bg-[#D6E4FF] text-[#2D4485] font-semibold ${defaultClassNames.today}`,
                 outside: `text-slate-400 ${defaultClassNames.outside}`,
                 disabled: `${defaultClassNames.disabled}`,
               }}
               modifiersClassNames={{
-                selected: "bg-[#E7F1FF] text-[#2D4485]",
+                selected: "border-2 border-[#2D4485]/30 !bg-transparent text-[#2D4485] font-semibold",
               }}
             />
           </div>
@@ -238,6 +276,7 @@ function NewMOPage() {
         const codes = (Array.isArray(data) ? data : []).map(d => String(d.job_order_code || "").trim()).filter(Boolean)
         const list = Array.isArray(data) ? data : []
         setRemoteJobCodes(codes)
+        setMoList(list)
         window.__remoteManufacturingOrders = list
         if (!isEditMode) {
           const nums = codes
@@ -278,8 +317,8 @@ function NewMOPage() {
               scheduledDate: m.start_date || prev.scheduledDate,
               completedDate: m.complete_date || prev.completedDate,
               productionTime: m.production_time || prev.productionTime,
-              salesDepartment: m.responsible_sales_person || m.sales_department || prev.salesDepartment,
-              productionDepartment: m.responsible_production_person || m.production_department || prev.productionDepartment,
+              responsibleSalesPerson: m.responsible_sales_person || prev.responsibleSalesPerson,
+              responsibleProductionPerson: m.responsible_production_person || prev.responsibleProductionPerson,
               supplier: m.supplier || prev.supplier,
               supplierDate: m.supplier_date || prev.supplierDate,
               recipient: m.recipient || prev.recipient,
@@ -304,11 +343,23 @@ function NewMOPage() {
   }, [])
 
   React.useEffect(() => {
-    try {
-      const data = JSON.parse(localStorage.getItem("poList") || "[]")
-      if (Array.isArray(data)) setPoList(data)
-    } catch {}
-    (async () => {
+    // Fetch Inventory
+    fetch(`${API_BASE_URL}/api/component_entries/`)
+      .then(res => res.json())
+      .then(data => {
+         const map = {}
+         for (const p of (Array.isArray(data) ? data : [])) {
+           const key = String(p.component_name || "").trim().toLowerCase()
+           if (key) map[key] = (map[key] || 0) + (Number(p.quantity) || 0)
+         }
+         setInventory(map)
+      })
+      .catch(console.error)
+
+    // BOMs - backend only
+    setBomList([])
+
+    ;(async () => {
       try {
         const token = localStorage.getItem("authToken")
         const headers = token ? { "Authorization": `Token ${token}` } : {}
@@ -324,20 +375,9 @@ function NewMOPage() {
   const applyPoSuggestion = React.useCallback((val) => {
     const s = String(val || "").trim()
     let next = { ...newOrder, purchaseOrder: s }
-    const p = poList.find((x) => String(x.poNumber || "").trim() === s)
-    if (p) {
-      const cname = String((p.customer && (p.customer.company || p.customer.name)) || "").trim()
-      if (cname) next.customer = cname
-      const it = Array.isArray(p.items) && p.items.length ? p.items[0] : null
-      if (it) {
-        if (!String(next.product || "").trim()) next.product = String(it.product || it.description || "").trim()
-        const q = Number(it.qty)
-        if (!Number(next.quantity) && Number.isFinite(q) && q > 0) next.quantity = q
-      }
-    }
     setNewOrder(next)
     setShowPoSuggestions(false)
-  }, [newOrder, poList])
+  }, [newOrder])
 
   const createOrderData = async () => {
     const token = localStorage.getItem("authToken")
@@ -348,6 +388,7 @@ function NewMOPage() {
       return v ? v : null
     }
     const normalizedItems = items.map((x, i) => ({ ...x, itemCode: x.itemCode || String(i + 1) }))
+    const componentStatus = computeComponentStatusFromItems(normalizedItems, inventory)
     const payload = {
       job_order_code: String(newOrder.jobOrderCode || "").trim(),
       po_number: String(newOrder.purchaseOrder || "").trim(),
@@ -373,6 +414,7 @@ function NewMOPage() {
       item_description: String((normalizedItems[0]?.description) || "").trim(),
       item_quantity: String((normalizedItems[0]?.qty) || "").trim(),
       item_unit: String((normalizedItems[0]?.unit) || "Unit").trim(),
+      component_status: componentStatus,
     }
     try {
       const params = new URLSearchParams(window.location.search)
@@ -415,6 +457,10 @@ function NewMOPage() {
           totalQuantity: Number(result.quantity) || Number(newOrder.quantity) || 1,
           quantity: Number(result.quantity) || Number(newOrder.quantity) || 1,
           productionTime: result.production_time || newOrder.productionTime,
+          supplier: result.supplier || newOrder.supplier,
+          supplierDate: result.supplier_date || newOrder.supplierDate,
+          recipient: result.recipient || newOrder.recipient,
+          recipientDate: result.recipient_date || newOrder.recipientDate,
           items: its,
           responsible: [
             String(result.responsible_sales_person || "").trim(),
@@ -434,13 +480,17 @@ function NewMOPage() {
           totalQuantity: Number(newOrder.quantity) || 1,
           quantity: Number(newOrder.quantity) || 1,
           productionTime: newOrder.productionTime,
+          supplier: newOrder.supplier,
+          supplierDate: newOrder.supplierDate,
+          recipient: newOrder.recipient,
+          recipientDate: newOrder.recipientDate,
           items: normalizedItems,
           responsible: [
-            String(newOrder.salesDepartment || "").trim(),
-            String(newOrder.productionDepartment || "").trim(),
+            String(newOrder.responsibleSalesPerson || "").trim(),
+            String(newOrder.responsibleProductionPerson || "").trim(),
           ].filter(Boolean).join(" / "),
-          responsibleSales: String(newOrder.salesDepartment || "").trim(),
-          responsibleProduction: String(newOrder.productionDepartment || "").trim(),
+          responsibleSales: String(newOrder.responsibleSalesPerson || "").trim(),
+          responsibleProduction: String(newOrder.responsibleProductionPerson || "").trim(),
         }
         return orderData
       }
@@ -452,7 +502,7 @@ function NewMOPage() {
   const saveAndExit = async () => {
     const orderData = await createOrderData()
     if (orderData) {
-      setPrintOrder(orderData)
+      printJobOrder(orderData)
       // Keep draft so edits remain visible after download; user can discard or save later
     }
   }
@@ -460,7 +510,6 @@ function NewMOPage() {
     const orderData = await createOrderData()
     if (orderData) {
       setOpenCreateConfirm(false)
-      localStorage.removeItem("newMoDraftItems")
       window.location.href = "/manufacturing.html"
     }
   }
@@ -476,7 +525,16 @@ function NewMOPage() {
         <div className="max-w-7xl mx-auto">
           <div className="mb-6">
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-semibold text-gray-900">Manufacturing Order</h1>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => window.location.href = "/manufacturing.html"}
+                  className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
+                  title="Back to List"
+                >
+                  <ArrowLeft className="w-6 h-6" />
+                </button>
+                <h1 className="text-2xl font-semibold text-gray-900">Manufacturing Order</h1>
+              </div>
             </div>
           </div>
 
@@ -501,8 +559,7 @@ function NewMOPage() {
                     {showPoSuggestions && newOrder.purchaseOrder && (() => {
                       const q = newOrder.purchaseOrder.toLowerCase()
                       const candidates = Array.from(new Set([
-                        ...orders.map(o => String(o.ref || "").trim()).filter(Boolean),
-                        ...poList.map(p => String(p.poNumber || "").trim()).filter(Boolean),
+                        ...moList.map(o => String(o.po_number || "").trim()).filter(Boolean),
                         ...crmPoNumbers,
                       ])).filter(x => x.toLowerCase().includes(q)).slice(0, 8)
                       return candidates.length ? (
@@ -537,7 +594,51 @@ function NewMOPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Product No</label>
-                  <input value={newOrder.productNo} onChange={(e)=>setNewOrder({...newOrder, productNo:e.target.value})} placeholder="e.g. LCM-001" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                  <div className="relative" ref={bomSuggestionRef}>
+                    <input
+                      value={newOrder.productNo}
+                      onChange={(e) => {
+                        setNewOrder({ ...newOrder, productNo: e.target.value })
+                        setShowBomSuggestions(true)
+                      }}
+                      onFocus={() => setShowBomSuggestions(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setShowBomSuggestions(false)
+                      }}
+                      placeholder="e.g. LCM-001"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                    />
+                    {showBomSuggestions && String(newOrder.productNo || "").trim() && (() => {
+                      const q = String(newOrder.productNo || "").trim().toLowerCase()
+                      // Use bomList state
+                      const candidates = Array.from(new Set(
+                        (Array.isArray(bomList) ? bomList : [])
+                          .map(b => String(b?.product || "").trim())
+                          .filter(Boolean)
+                      ))
+                        .filter(x => x.toLowerCase().includes(q))
+                        .slice(0, 8)
+                      return candidates.length ? (
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                          {candidates.map((val, i) => (
+                            <button
+                              key={`${val}-${i}`}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+                              onClick={() => {
+                                setNewOrder({ ...newOrder, productNo: val })
+                                setItems([])
+                                setItemsTouched(false)
+                                setShowBomSuggestions(false)
+                              }}
+                            >
+                              {val}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null
+                    })()}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Order Quantity</label>
@@ -566,12 +667,12 @@ function NewMOPage() {
               <div className="text-xs font-bold text-blue-900 uppercase tracking-wide mb-2">Responsible Person</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Sales Department</label>
-                  <input value={newOrder.salesDepartment} onChange={(e)=>setNewOrder({...newOrder, salesDepartment:e.target.value})} placeholder="Sales person" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Responsible Sales Person</label>
+                  <input value={newOrder.responsibleSalesPerson} onChange={(e)=>setNewOrder({...newOrder, responsibleSalesPerson:e.target.value})} placeholder="Sales person" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Production Department</label>
-                  <input value={newOrder.productionDepartment} onChange={(e)=>setNewOrder({...newOrder, productionDepartment:e.target.value})} placeholder="Production lead" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Responsible Production Person</label>
+                  <input value={newOrder.responsibleProductionPerson} onChange={(e)=>setNewOrder({...newOrder, responsibleProductionPerson:e.target.value})} placeholder="Production lead" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
                 </div>
               </div>
             </div>

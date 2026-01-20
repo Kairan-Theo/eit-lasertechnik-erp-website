@@ -21,7 +21,7 @@ from django.db import connection
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet
+from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom
 
 router = DefaultRouter()
 router.register(r'deals', DealViewSet)
@@ -32,6 +32,14 @@ router.register(r'activity_schedules', ActivityScheduleViewSet)
 router.register(r'projects', ProjectViewSet)
 router.register(r'tasks', TaskViewSet)
 router.register(r'manufacturing_orders', ManufacturingOrderViewSet)
+router.register(r'product', ProductViewSet)  # legacy
+router.register(r'products', ProductViewSet, basename='products')
+router.register(r'product_versions', ProductVersionViewSet)
+router.register(r'product_types', ProductTypeViewSet)
+router.register(r'systems', SystemViewSet)
+router.register(r'components', ComponentViewSet)
+router.register(r'system_components', SystemComponentViewSet)
+router.register(r'component_entries', ComponentEntryViewSet, basename='component_entries')
 
 def health(request):
     return JsonResponse({"status": "ok"})
@@ -54,6 +62,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', health),
     path('api/', include(router.urls)),
+    path('api/bom/', list_boms),
+    path('api/bom/import/', import_bom),
     path('api/crm/analytics/', get_crm_analytics),
     path('api/auth/signup/', signup),
     path('api/auth/login/', login),

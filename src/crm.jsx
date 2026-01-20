@@ -9,6 +9,8 @@ import "./index.css"
 import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
 import CRMActivities from "./crm-activities.jsx"
+import CRMTickets from "./crm-tickets.jsx"
+import CRMLeads from "./crm-leads.jsx"
 import CRMAnalytics from "./crm-analytics.jsx"
 import { Toaster } from "../components/ui/toaster"
 
@@ -946,7 +948,7 @@ function CRMPage() {
             </h1>
             <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
             <div className="flex items-center gap-2">
-              {["Deals", "Customers", "Activities", "Analytics"].map((tab) => (
+              {["Deals", "Customers", "Activities", "Tickets", "Leads", "Analytics"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -1298,8 +1300,8 @@ function CRMPage() {
                                           activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, dueAt: e.target.value } : s)
                                         }))
                                       }}
-                                      readOnly={!isEditing}
-                                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 w-[220px] text-sm text-slate-900 font-mono focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      disabled={!isEditing}
+                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[170px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <input
                                       type="text"
@@ -1318,9 +1320,9 @@ function CRMPage() {
                                         const { stageIndex, cardIndex } = openActivity
                                         updateSchedule(stageIndex, cardIndex, i, { salesperson: e.target.value })
                                       }}
-                                      readOnly={!isEditing}
+                                      disabled={!isEditing}
                                       placeholder="Salesperson"
-                                      className="w-[140px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      className="w-[110px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <div className="relative">
                                       <button
@@ -1334,7 +1336,7 @@ function CRMPage() {
                                         ⋮
                                       </button>
                                       {openScheduleMenuKey && openScheduleMenuKey.stageIndex===openActivity.stageIndex && openScheduleMenuKey.cardIndex===openActivity.cardIndex && openScheduleMenuKey.idx===i && (
-                                        <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-2xl z-50 w-36">
+                                        <div className="absolute right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-10 overflow-hidden w-32">
                                           <button
                                             className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                                             onClick={()=>{ setEditingScheduleKey({ stageIndex: openActivity.stageIndex, cardIndex: openActivity.cardIndex, idx: i }); setOpenScheduleMenuKey(null) }}
@@ -1342,7 +1344,7 @@ function CRMPage() {
                                             Edit
                                           </button>
                                           <button
-                                            className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                            className="block w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600 transition-colors"
                                             onClick={()=>{
                                               const { stageIndex, cardIndex } = openActivity
                                               setDeleteConfirmation({ 
@@ -1665,7 +1667,7 @@ function CRMPage() {
                   <div className="p-6 max-h-[70vh] overflow-y-auto">
                     <div className="space-y-6">
                       <div>
-                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Sales Person</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Sales Person</div>
                         <input 
                           type="text"
                           value={detailDeal.salesperson} 
@@ -1676,7 +1678,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Company</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-2">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
@@ -1733,7 +1735,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Contact</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
@@ -1775,7 +1777,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Codes</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Codes</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Tax ID</label>
@@ -1799,7 +1801,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Amount</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Amount</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-1">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
@@ -1825,7 +1827,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Priority</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Priority</div>
                         <div className="flex items-center gap-3">
                           {[1,2,3].map(n => {
                             const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
@@ -1846,7 +1848,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Notes</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Notes</div>
                         <textarea 
                           value={detailDeal.notes} 
                           onChange={(e)=>setDetailDeal({...detailDeal, notes:e.target.value})} 
@@ -1885,7 +1887,7 @@ function CRMPage() {
                   <div className="p-4 max-h-[60vh] overflow-y-auto">
                     <div className="space-y-6">
                       <div>
-                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Sales Person</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Sales Person</div>
                         <input 
                           type="text"
                           value={newDeal.salesperson} 
@@ -1896,7 +1898,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Company</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Company</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-2">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
@@ -1953,7 +1955,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-[#2D4485] uppercase tracking-wide mb-2">Contact</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
@@ -1995,7 +1997,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Codes</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Codes</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Tax ID</label>
@@ -2019,7 +2021,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Amount</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Amount</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="sm:col-span-1">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
@@ -2045,7 +2047,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Priority</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Priority</div>
                         <div className="flex items-center gap-3">
                           {[1,2,3].map(n => {
                             const p = n===1 ? 'low' : n===2 ? 'medium' : 'high'
@@ -2066,7 +2068,7 @@ function CRMPage() {
                       </div>
 
                       <div>
-                        <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2">Stage</div>
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Stage</div>
                         <select 
                           value={newDeal.stageIndex} 
                           onChange={(e)=>setNewDeal({...newDeal, stageIndex:Number(e.target.value)})} 
@@ -2110,7 +2112,7 @@ function CRMPage() {
                           notes: "",
                           stage: stageName,
                           write_customer_name: newDeal.company || "",
-                          salesperson: newDeal.salesperson || ""
+                          salesperson: newDeal.salesperson || null
                         }
                         if ((newDeal.company || "").trim()) {
                           dealData.write_customer_name = newDeal.company.trim()
@@ -2348,6 +2350,14 @@ function CRMPage() {
             deals={stages.flatMap(s => s.deals)} 
             onDeleteActivity={handleDeleteActivityFromTable}
           />
+        </div>
+      ) : activeTab === "Tickets" ? (
+        <div className="min-h-screen bg-white">
+          <CRMTickets />
+        </div>
+      ) : activeTab === "Leads" ? (
+        <div className="min-h-screen bg-white">
+          <CRMLeads />
         </div>
       ) : activeTab === "Analytics" ? (
         <div className="min-h-screen bg-white">

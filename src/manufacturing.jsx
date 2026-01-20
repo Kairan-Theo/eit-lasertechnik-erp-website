@@ -8,7 +8,28 @@ import "./index.css"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon } from "lucide-react"
+import { Calendar as CalendarIcon, ArrowUpDown } from "lucide-react"
+
+function computeComponentStatusFromItems(items, inventory) {
+  if (!Array.isArray(items) || !items.length) return ""
+  // inventory is passed in
+  const requiredTotals = {}
+  for (const it of items) {
+    const key = String(it.description || "").trim().toLowerCase()
+    if (!key) continue
+    const qty = Number(it.qty)
+    if (!Number.isFinite(qty) || qty <= 0) continue
+    requiredTotals[key] = (requiredTotals[key] || 0) + qty
+  }
+  const keys = Object.keys(requiredTotals)
+  if (!keys.length) return ""
+  for (const key of keys) {
+    const available = Number(inventory[key] || 0)
+    const required = Number(requiredTotals[key] || 0)
+    if (!Number.isFinite(available) || required >= available) return "Not Available"
+  }
+  return "Available"
+}
 
   function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
     const [open, setOpen] = React.useState(false)
@@ -106,9 +127,7 @@ import { Calendar as CalendarIcon } from "lucide-react"
 }
 
 function ManufacturingOrderPage() {
-  const [orders, setOrders] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem("mfgOrders") || "[]") } catch { return [] }
-  })
+  const [orders, setOrders] = React.useState([])
   const [openStatusId, setOpenStatusId] = React.useState(null)
   const [openActivityId, setOpenActivityId] = React.useState(null)
   const [openScheduleForId, setOpenScheduleForId] = React.useState(null)
@@ -147,40 +166,27 @@ function ManufacturingOrderPage() {
   const popoverRef = React.useRef(null)
   const [draggingScheduleKey, setDraggingScheduleKey] = React.useState(null)
   const [dragOverIdx, setDragOverIdx] = React.useState(null)
-  const [inventoryItems, setInventoryItems] = React.useState([])
+  const [inventory, setInventory] = React.useState({})
   const [showProductDropdown, setShowProductDropdown] = React.useState(false)
   const [printingOrder, setPrintingOrder] = React.useState(null)
-  const [poList, setPoList] = React.useState([])
   const [showPoSuggestions, setShowPoSuggestions] = React.useState(false)
   const [crmPoNumbers, setCrmPoNumbers] = React.useState([])
   const applyPoSuggestion = React.useCallback((val) => {
     const s = String(val || "").trim()
     let next = { ...newOrder, purchaseOrder: s }
-    const p = poList.find((x) => String(x.poNumber || "").trim() === s)
-    if (p) {
-      const cname = String((p.customer && (p.customer.company || p.customer.name)) || "").trim()
-      if (cname) next.customer = cname
-      const it = Array.isArray(p.items) && p.items.length ? p.items[0] : null
-      if (it) {
-        if (!String(next.product || "").trim()) next.product = String(it.product || it.description || "").trim()
-        const q = Number(it.qty)
-        if (!Number(next.quantity) && Number.isFinite(q) && q > 0) next.quantity = q
-      }
-    } else {
-      const o = orders.find((x) => String(x.ref || "").trim() === s)
-      if (o) {
-        if (String(o.customer || "").trim()) next.customer = o.customer
-        if (!String(next.product || "").trim() && String(o.product || "").trim()) next.product = o.product
-        if (!String(next.productNo || "").trim() && String(o.productNo || "").trim()) next.productNo = o.productNo
-        const q1 = Number(o.quantity)
-        const q2 = Number(o.totalQuantity)
-        if (!Number(next.quantity) && Number.isFinite(q1) && q1 > 0) next.quantity = q1
-        if (!Number(next.totalQuantity) && Number.isFinite(q2) && q2 > 0) next.totalQuantity = q2
-      }
+    const o = orders.find((x) => String(x.ref || "").trim() === s || String(x.purchaseOrder || "").trim() === s)
+    if (o) {
+      if (String(o.customer || "").trim()) next.customer = o.customer
+      if (!String(next.product || "").trim() && String(o.product || "").trim()) next.product = o.product
+      if (!String(next.productNo || "").trim() && String(o.productNo || "").trim()) next.productNo = o.productNo
+      const q1 = Number(o.quantity)
+      const q2 = Number(o.totalQuantity)
+      if (!Number(next.quantity) && Number.isFinite(q1) && q1 > 0) next.quantity = q1
+      if (!Number(next.totalQuantity) && Number.isFinite(q2) && q2 > 0) next.totalQuantity = q2
     }
     setNewOrder(next)
     setShowPoSuggestions(false)
-  }, [newOrder, poList, orders])
+  }, [newOrder, orders])
 
   const handlePrint = (o) => {
     setPrintingOrder(o)
@@ -191,18 +197,17 @@ function ManufacturingOrderPage() {
   }
 
   React.useEffect(() => {
-    try {
-      const data = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
-      if (Array.isArray(data)) {
-        setInventoryItems(data)
-      }
-    } catch {}
-  }, [])
-  React.useEffect(() => {
-    try {
-      const data = JSON.parse(localStorage.getItem("poList") || "[]")
-      if (Array.isArray(data)) setPoList(data)
-    } catch {}
+    fetch(`${API_BASE_URL}/api/component_entries/`)
+      .then(res => res.json())
+      .then(data => {
+        const map = {}
+        for (const p of (Array.isArray(data) ? data : [])) {
+          const key = String(p.component_name || "").trim().toLowerCase()
+          if (key) map[key] = (map[key] || 0) + (Number(p.quantity) || 0)
+        }
+        setInventory(map)
+      })
+      .catch(console.error)
   }, [])
   React.useEffect(() => {
     (async () => {
@@ -223,7 +228,17 @@ function ManufacturingOrderPage() {
         const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`)
         if (!res.ok) return
         const data = await res.json()
-          const mapped = (Array.isArray(data) ? data : []).map((m) => ({
+        const mapped = (Array.isArray(data) ? data : []).map((m) => {
+          const items = Array.isArray(m.items)
+            ? m.items.map(x => ({
+                itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
+                description: String((x.item_description ?? x.description ?? "")).trim(),
+                qty: String((x.item_quantity ?? x.qty ?? "")),
+                unit: String((x.item_unit ?? x.unit ?? "Unit")),
+              }))
+            : []
+          const autoStatus = computeComponentStatusFromItems(items, inventory)
+          return {
             id: m.id,
             ref: m.job_order_code,
             jobOrderCode: m.job_order_code || "",
@@ -235,6 +250,10 @@ function ManufacturingOrderPage() {
             start: m.start_date || "",
             completedDate: m.complete_date || "",
             productionTime: m.production_time || "",
+            supplier: m.supplier || "",
+            supplierDate: m.supplier_date || "",
+            recipient: m.recipient || "",
+            recipientDate: m.recipient_date || "",
             responsible: [
               String(m.responsible_sales_person || "").trim(),
               String(m.responsible_production_person || "").trim(),
@@ -242,25 +261,19 @@ function ManufacturingOrderPage() {
             responsibleSales: String(m.responsible_sales_person || "").trim(),
             responsibleProduction: String(m.responsible_production_person || "").trim(),
             customer: m.customer_name || "",
-            componentStatus: m.component_status || "",
+            componentStatus: autoStatus || m.component_status || "",
             state: m.state || "",
             favorite: false,
             selected: false,
             activitySchedules: [],
-            items: Array.isArray(m.items)
-              ? m.items.map(x => ({
-                  itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
-                  description: String((x.item_description ?? x.description ?? "")).trim(),
-                  qty: String((x.item_quantity ?? x.qty ?? "")),
-                  unit: String((x.item_unit ?? x.unit ?? "Unit")),
-                }))
-              : [],
-          }))
+            items,
+          }
+        })
         setOrders(mapped)
         setRemoteLoaded(true)
       } catch {}
     })()
-  }, [])
+  }, [inventory])
   React.useEffect(() => {
     if (!openJobFormId) return
     ;(async () => {
@@ -278,21 +291,22 @@ function ManufacturingOrderPage() {
           start_date: m.start_date || "",
           complete_date: m.complete_date || "",
           production_time: m.production_time || "",
-          sales_department: m.responsible_sales_person || m.sales_department || "",
-          production_department: m.responsible_production_person || m.production_department || "",
+          responsible_sales_person: m.responsible_sales_person || "",
+          responsible_production_person: m.responsible_production_person || "",
           supplier: m.supplier || "",
           supplier_date: m.supplier_date || "",
           recipient: m.recipient || "",
           recipient_date: m.recipient_date || "",
         })
-        setJobFormItems(Array.isArray(m.items)
+        const its = Array.isArray(m.items)
           ? m.items.map(x => ({
               itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
               description: String((x.item_description ?? x.description ?? "")).trim(),
               qty: String((x.item_quantity ?? x.qty ?? "")),
               unit: String((x.item_unit ?? x.unit ?? "Unit")),
             }))
-          : [])
+          : []
+        setJobFormItems(its)
       } catch {}
     })()
   }, [openJobFormId])
@@ -307,31 +321,8 @@ function ManufacturingOrderPage() {
     } catch {}
   }, [])
 
-  React.useEffect(() => {
-    if (!orders.length && !remoteLoaded) {
-      const seed = [
-        { id: 1, ref: "WH/MO/00001", jobOrderCode: "JO-001", start: new Date(Date.now() - 2*24*60*60*1000).toISOString(), product: "Laser Cladding Machine", nextActivity: "", customer: "Big C Supercenter PLC", componentStatus: "", quantity: 1, totalQuantity: 1, state: "", favorite: false, selected: false },
-        { id: 2, ref: "WH/MO/00002", jobOrderCode: "JO-002", start: new Date(Date.now() - 1*24*60*60*1000).toISOString(), product: "Laser Welding Machine", nextActivity: "", customer: "SIANGHAI EITING TRADING COMPANY", componentStatus: "", quantity: 1, totalQuantity: 1, state: "", favorite: true, selected: false },
-        { id: 3, ref: "WH/MO/00003", jobOrderCode: "JO-003", start: new Date().toISOString(), product: "Cake", nextActivity: "", customer: "METRO MACHINERY", componentStatus: "", quantity: 10, totalQuantity: 10, state: "", favorite: false, selected: false },
-        { id: 4, ref: "WH/MO/00004", jobOrderCode: "JO-004", start: new Date().toISOString(), product: "mohinga", nextActivity: "", customer: "Konvy", componentStatus: "", quantity: 5, totalQuantity: 5, state: "", favorite: false, selected: false },
-      ]
-      setOrders(seed)
-      localStorage.setItem("mfgOrders", JSON.stringify(seed))
-    }
-  }, [remoteLoaded, orders.length])
-  React.useEffect(() => {
-    try {
-      const pf = JSON.parse(localStorage.getItem("mfgPreFill") || "null")
-      if (pf && pf.product) {
-        setNewOrder((prev) => ({ ...prev, product: pf.product || pf.sku || prev.product, quantity: Number(pf.quantity) || 1 }))
-        setShowNew(true)
-        localStorage.removeItem("mfgPreFill")
-      }
-    } catch {}
-  }, [])
-  const setAndPersist = (next) => { setOrders(next); localStorage.setItem("mfgOrders", JSON.stringify(next)) }
-  const toggleFavorite = (id) => setAndPersist(orders.map(o => o.id===id ? { ...o, favorite: !o.favorite } : o))
-  const toggleSelected = (id) => setAndPersist(orders.map(o => o.id===id ? { ...o, selected: !o.selected } : o))
+  const toggleFavorite = (id) => setOrders(orders.map(o => o.id===id ? { ...o, favorite: !o.favorite } : o))
+  const toggleSelected = (id) => setOrders(orders.map(o => o.id===id ? { ...o, selected: !o.selected } : o))
   const totalQty = orders.reduce((a,b)=>a+(parseInt(b.quantity,10)||0),0)
   const totalTotalQty = orders.reduce((a,b)=>a+(parseInt(b.totalQuantity,10)||0),0)
   const relStart = (iso) => {
@@ -475,13 +466,18 @@ function ManufacturingOrderPage() {
   }
   const filteredOrders = orders.filter(o => {
     const term = searchTerm.toLowerCase()
-    return [
-      o.product,
-      o.customer,
-      o.jobOrderCode,
-      o.ref,
-      o.purchaseOrder
-    ].some(v => String(v || "").toLowerCase().includes(term))
+    const tokens = term.split(/\s+/).filter(Boolean)
+    if (!tokens.length) return true
+    return tokens.every(token => 
+      [
+        o.product,
+        o.customer,
+        o.jobOrderCode,
+        o.ref,
+        o.purchaseOrder,
+        o.productNo
+      ].some(v => String(v || "").toLowerCase().includes(token))
+    )
   })
   const displayOrders = React.useMemo(() => {
     const arr = [...filteredOrders]
@@ -499,7 +495,7 @@ function ManufacturingOrderPage() {
       case "product_za":
         return arr.sort((a,b)=> String(b.product||"").localeCompare(String(a.product||"")))
       default:
-        return arr
+        return arr.sort((a,b) => a.id - b.id)
     }
   }, [filteredOrders, sortKey])
   const handleSelectAll = (e) => {
@@ -667,7 +663,7 @@ function ManufacturingOrderPage() {
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold text-gray-800">Manufacturing Orders</h2>
               <button
-                className="inline-flex items-center justify-center px-3 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
+                className="inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                 title="New MO"
                 onClick={() => { window.location.href = "/new-mo.html" }}
               >
@@ -676,10 +672,13 @@ function ManufacturingOrderPage() {
               <div className="relative">
                 <button
                   onClick={() => setOpenSortMenu(v => !v)}
-                  className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  //className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  className="inline-flex items-center justify-center gap-2 px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
                   title="Sort"
                 >
-                  Sort
+                  <span>Sort</span>
+                  <ArrowUpDown className="w-4 h-4" />
+                  
                 </button>
                 {openSortMenu && (
                   <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-md z-20 w-44">
@@ -694,14 +693,16 @@ function ManufacturingOrderPage() {
                 )}
               </div>
               <button
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                //className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
                 title="Bills of Materials"
                 onClick={() => window.location.href = "/bom.html"}
               >
-                Bills of Materials
+                Bill of Materials
               </button>
               <button
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                //className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
                 title="Components"
                 onClick={() => window.location.href = "/products.html"}
               >
@@ -897,18 +898,21 @@ function ManufacturingOrderPage() {
       )}
       {openBulkDelete && (
         <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenBulkDelete(false)}>
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px]" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-white rounded-xl shadow-lg border-2 border-white">
-              <div className="px-4 py-3 border-b-2 border-white">
-                <h3 className="font-semibold text-gray-900">Confirm Delete</h3>
+          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Delete orders</h3>
+                <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenBulkDelete(false)}>✕</button>
               </div>
-              <div className="p-4">
-                <div className="text-sm text-gray-800">Delete {selectedRows.length} orders?</div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-gray-700">
+                  Are you sure you want to delete <span className="font-semibold">{selectedRows.length}</span> selected orders?
+                </p>
               </div>
-              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenBulkDelete(false)}>Cancel</button>
                 <button
-                  className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
+                  className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
                   onClick={async () => { await handleBulkDelete(); setOpenBulkDelete(false) }}
                 >
                   Delete
@@ -1049,6 +1053,13 @@ function ManufacturingOrderPage() {
                   <button
                     className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                     onClick={async () => {
+                      const normalizedItems = jobFormItems.map((it, i) => ({
+                        item: String(it.itemCode || String(i + 1)).trim(),
+                        item_description: String(it.description || "").trim(),
+                        item_quantity: String(it.qty || "").trim(),
+                        item_unit: String(it.unit || "Unit").trim(),
+                      }))
+                      const componentStatus = computeComponentStatusFromItems(jobFormItems)
                       const payload = {
                         job_order_code: String(jobForm.job_order_code || "").trim(),
                         po_number: String(jobForm.po_number || "").trim(),
@@ -1062,9 +1073,13 @@ function ManufacturingOrderPage() {
                         recipient: String(jobForm.recipient || "").trim(),
                         recipient_date: jobForm.recipient_date || null,
                         production_time: String(jobForm.production_time || "").trim(),
-                        responsible_sales_person: String(jobForm.sales_department || "").trim(),
-                        responsible_production_person: String(jobForm.production_department || "").trim(),
-                        items: jobFormItems,
+                        responsible_sales_person: String(jobForm.responsible_sales_person || "").trim(),
+                        responsible_production_person: String(jobForm.responsible_production_person || "").trim(),
+                        items: normalizedItems,
+                        item_description: String((normalizedItems[0]?.item_description) || "").trim(),
+                        item_quantity: String((normalizedItems[0]?.item_quantity) || "").trim(),
+                        item_unit: String((normalizedItems[0]?.item_unit) || "Unit").trim(),
+                        component_status: componentStatus,
                       }
                       try {
                         const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${jobForm.id}/`, {
@@ -1074,6 +1089,15 @@ function ManufacturingOrderPage() {
                         })
                         if (!res.ok) return
                         const updated = await res.json()
+                        const its = Array.isArray(updated.items)
+                          ? updated.items.map(x => ({
+                              itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
+                              description: String((x.item_description ?? x.description ?? "")).trim(),
+                              qty: String((x.item_quantity ?? x.qty ?? "")),
+                              unit: String((x.item_unit ?? x.unit ?? "Unit")),
+                            }))
+                          : jobFormItems
+                        const autoStatus = computeComponentStatusFromItems(its)
                         setOrders(prev => prev.map(x => x.id===openJobFormId ? {
                           ...x,
                           jobOrderCode: updated.job_order_code || x.jobOrderCode,
@@ -1083,14 +1107,17 @@ function ManufacturingOrderPage() {
                           start: updated.start_date || x.start,
                           completedDate: updated.complete_date || x.completedDate,
                           productionTime: updated.production_time || x.productionTime,
+                          supplier: updated.supplier ?? x.supplier,
+                          supplierDate: updated.supplier_date ?? x.supplierDate,
+                          recipient: updated.recipient ?? x.recipient,
+                          recipientDate: updated.recipient_date ?? x.recipientDate,
                           responsible: [
                             String(updated.responsible_sales_person || "").trim(),
                             String(updated.responsible_production_person || "").trim(),
                           ].filter(Boolean).join(" / ") || x.responsible,
                           customer: updated.customer_name || x.customer,
-                          supplierDate: updated.supplier_date ?? x.supplierDate,
-                          recipientDate: updated.recipient_date ?? x.recipientDate,
-                          items: Array.isArray(updated.items) ? updated.items : x.items,
+                          componentStatus: autoStatus || updated.component_status || x.componentStatus || "",
+                          items: its,
                         } : x))
                         setOpenJobFormId(null)
                         setJobForm(null)
@@ -1246,6 +1273,15 @@ function ManufacturingOrderPage() {
                             return
                           }
                           const m = await res.json()
+                          const items = Array.isArray(m.items)
+                            ? m.items.map(x => ({
+                                itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
+                                description: String((x.item_description ?? x.description ?? "")).trim(),
+                                qty: String((x.item_quantity ?? x.qty ?? "")),
+                                unit: String((x.item_unit ?? x.unit ?? "Unit")),
+                              }))
+                            : []
+                          const autoStatus = computeComponentStatusFromItems(items)
                           const o = {
                             id: m.id,
                             ref,
@@ -1263,21 +1299,14 @@ function ManufacturingOrderPage() {
                             ].filter(Boolean).join(" / ") || payload.responsible_sales_person || "",
                             nextActivity: "",
                             customer: m.customer_name || payload.write_customer_name || "",
-                            componentStatus: m.component_status || "",
+                            componentStatus: autoStatus || m.component_status || "",
                             quantity: Number(m.quantity) || payload.quantity || 1,
                             totalQuantity: Number(m.quantity) || payload.quantity || 1,
                             state: m.state || "",
                             priority: newOrder.priority || "None",
                             favorite: false,
                             selected: false,
-                            items: Array.isArray(m.items)
-                              ? m.items.map(x => ({
-                                  itemCode: String((x.item ?? x.itemCode ?? "")).trim(),
-                                  description: String((x.item_description ?? x.description ?? "")).trim(),
-                                  qty: String((x.item_quantity ?? x.qty ?? "")),
-                                  unit: String((x.item_unit ?? x.unit ?? "Unit")),
-                                }))
-                              : [],
+                            items,
                           }
                           const next = [o, ...orders]
                           setAndPersist(next)

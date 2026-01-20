@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder
+from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry
 
 class LeadSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
@@ -221,6 +221,11 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
     def get_customer_name(self, obj):
         return obj.customer.company_name if obj.customer else ""
 
+class ComponentEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ComponentEntry
+        fields = '__all__'
+
     def _normalize_items(self, items):
         result = []
         for x in items or []:
@@ -261,3 +266,33 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
                 validated_data.setdefault('item_quantity', first.get('item_quantity') or '')
                 validated_data.setdefault('item_unit', first.get('item_unit') or '')
         return super().update(instance, validated_data)
+
+class ProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = '__all__'
+
+class ProductVersionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductVersion
+        fields = '__all__'
+
+class ProductTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductType
+        fields = '__all__'
+
+class SystemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = System
+        fields = '__all__'
+
+class ComponentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Component
+        fields = '__all__'
+
+class SystemComponentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemComponent
+        fields = '__all__'

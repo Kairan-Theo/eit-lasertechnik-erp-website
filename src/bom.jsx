@@ -1,8 +1,8 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
-import Footer from "./components/footer.jsx"
 import "./index.css"
+import { API_BASE_URL } from "./config"
 
 const NodeMenu = ({ onEdit, onDelete }) => {
   const [isOpen, setIsOpen] = React.useState(false)
@@ -70,8 +70,51 @@ function BOMPage() {
   const [boms, setBoms] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem("mfgBOMs") || "[]") } catch { return [] }
   })
+  const setAndPersist = React.useCallback((next) => {
+    setBoms(next)
+    try {
+      localStorage.setItem("mfgBOMs", JSON.stringify(next))
+    } catch {}
+  }, [])
+  const reloadBoms = React.useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bom/`)
+      if (res && res.ok) {
+        const data = await res.json()
+        const arr = Array.isArray(data) ? data : []
+        if (arr.length) {
+          const mapped = arr.map((item) => ({
+            id: item.id,
+            name: item.product || "",
+            product: item.product || "",
+            version: item.version || "",
+            type: item.type || "",
+            active: true,
+            productTree: item.productTree || []
+          }))
+          setAndPersist(mapped)
+          return
+        }
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    try {
+      const stored = JSON.parse(localStorage.getItem("mfgBOMs") || "[]")
+      if (Array.isArray(stored) && stored.length) {
+        setBoms(stored)
+        return
+      }
+    } catch {}
+    const seed = [
+      { id: 1, name: "LCM Standard", product: "Laser Cladding Machine", version: "v1", type: "Manufacture", active: true },
+      { id: 2, name: "LWM Standard", product: "Laser Welding Machine", version: "v2", type: "Manufacture", active: true },
+      { id: 3, name: "Cake BOM", product: "Cake", version: "v1", type: "Manufacture", active: false },
+    ]
+    setAndPersist(seed)
+  }, [setAndPersist])
   const [openTreeId, setOpenTreeId] = React.useState(null)
-  const [editingTree, setEditingTree] = React.useState({ product: "", systems: [] })
+  const [editingTree, setEditingTree] = React.useState({ product: "", version: "", type: "Manufacture", systems: [] })
   const [expandedIds, setExpandedIds] = React.useState(new Set())
   const [viewingPhoto, setViewingPhoto] = React.useState(null)
   const toggleExpand = (id) => {
@@ -82,18 +125,54 @@ function BOMPage() {
   }
   const [showNew, setShowNew] = React.useState(false)
   const [newBom, setNewBom] = React.useState({ product: "", version: "", type: "Manufacture", systems: [] })
-  React.useEffect(() => {
-    if (!boms.length) {
-      const seed = [
-        { id: 1, name: "LCM Standard", product: "Laser Cladding Machine", version: "v1", type: "Manufacture", active: true },
-        { id: 2, name: "LWM Standard", product: "Laser Welding Machine", version: "v2", type: "Manufacture", active: true },
-        { id: 3, name: "Cake BOM", product: "Cake", version: "v1", type: "Manufacture", active: false },
-      ]
-      setBoms(seed)
-      localStorage.setItem("mfgBOMs", JSON.stringify(seed))
+  const [selectedRows, setSelectedRows] = React.useState([])
+  const [openBulkDelete, setOpenBulkDelete] = React.useState(false)
+  const [query, setQuery] = React.useState("")
+  const confirmBulkDelete = async () => {
+    try {
+      const next = boms.filter(x => !selectedRows.includes(x.id))
+      setAndPersist(next)
+    } finally {
+      setSelectedRows([])
+      setOpenBulkDelete(false)
     }
-  }, [])
-  const setAndPersist = (next) => { setBoms(next); localStorage.setItem("mfgBOMs", JSON.stringify(next)) }
+  }
+  const columns = [
+    { id: 'index', label: 'Index' },
+    { id: 'product', label: 'Product' },
+    { id: 'systems', label: 'Systems' },
+    { id: 'version', label: 'Version' },
+    { id: 'type', label: 'Type' },
+  ]
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const ids = viewBoms.map(d => d.id)
+      setSelectedRows(prev => Array.from(new Set([...prev, ...ids])))
+    } else {
+      setSelectedRows(prev => prev.filter(id => !viewBoms.some(b => b.id === id)))
+    }
+  }
+  const handleSelectRow = (id) => {
+    setSelectedRows(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  const systemsCount = (b) => {
+    const pt = b.productTree
+    if (pt && !Array.isArray(pt)) return (pt.systems || []).length
+    if (Array.isArray(pt)) return (pt || []).length
+    return 0
+  }
+ 
+  const viewBoms = React.useMemo(() => {
+    const q = String(query || "").toLowerCase().trim()
+    if (!q) return boms
+    return boms.filter(b => {
+      const p = String(b.product || "").toLowerCase()
+      return p.includes(q)
+    })
+  }, [boms, query])
+  React.useEffect(() => {
+    reloadBoms()
+  }, [reloadBoms])
 
   const updateBomTree = (bomId, newTree) => {
     const next = boms.map(b => b.id === bomId ? { ...b, productTree: newTree } : b)
@@ -166,160 +245,225 @@ function BOMPage() {
     }
     return b.product
   }
+  const renderCellContent = (col, b, index) => {
+    switch (col.id) {
+      case 'index': return <span className="font-medium text-gray-800">{index + 1}</span>
+      case 'product': return (
+        <div className="flex items-center gap-2">
+          <button
+            className="text-[#2D4485] hover:underline font-semibold"
+            onClick={() => {
+              setOpenTreeId(b.id)
+              const pt = b.productTree
+              if (pt && !Array.isArray(pt)) {
+                const systems = (pt.systems || []).map((s) => ({
+                  name: s.name || "",
+                  photo: s.photo,
+                  components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1, photo: c.photo }))
+                }))
+                if (!systems.length && (pt.components || []).length) {
+                  const first = { name: b.product || "", components: (pt.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1 })) }
+                  setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", photo: pt.photo, systems: [first] })
+                } else {
+                  setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", photo: pt.photo, systems })
+                }
+              } else if (Array.isArray(pt)) {
+                const systems = (pt || []).map((s) => ({
+                  name: s.system || "",
+                  components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1 }))
+                }))
+                setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", systems })
+              } else {
+                setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", systems: [] })
+              }
+            }}
+            title="Edit Settings"
+          >
+            {b.product || "Untitled"}
+          </button>
+          <button
+            className="text-gray-500 hover:text-[#2D4485] p-1 rounded-full hover:bg-gray-100 transition-colors"
+            onClick={() => toggleExpand(b.id)}
+            title="Toggle details"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+        </div>
+      )
+      case 'version': return <span className="text-gray-800">{b.version || "-"}</span>
+      case 'type': return <span className="text-gray-800">{b.type || "-"}</span>
+      case 'systems': return <span className="text-gray-800">{systemsCount(b)}</span>
+      default: return null
+    }
+  }
 
   return (
     <main className="min-h-screen bg-white">
       <Navigation />
-      <section className="w-full py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-6 flex items-center justify-between">
+      <section className="w-full bg-gray-50">
+        <div className="w-full mx-auto p-6 min-h-full">
+          <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Bill of Materials</h1>
+              <h2 className="text-2xl font-bold text-gray-800">Bill of Materials</h2>
               <button
-                className="inline-flex items-center justify-center px-3 py-2 min-w-[150px] rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
+                className="inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                 title="New BOM"
                 onClick={() => setShowNew(true)}
               >
                 New BOM
               </button>
               <button
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="hidden"
+                style={{ display: "none" }}
+                aria-hidden="true"
+              />
+              <button
+                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
                 title="Manufacturing Order"
                 onClick={() => window.location.href = "/manufacturing.html"}
               >
-                Manufacturing Order
+                Manufacturing Orders
               </button>
               <button
-                className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
                 title="Component"
                 onClick={() => window.location.href = "/products.html"}
               >
                 Component
               </button>
             </div>
+            <div className="flex items-center gap-6">
+              {selectedRows.length > 0 && (
+                <button
+                  onClick={() => setOpenBulkDelete(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span className="font-medium">Delete ({selectedRows.length})</span>
+                </button>
+              )}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search by Product"
+                  className="pl-10 pr-10 py-2 border border-slate-300 rounded-lg text-sm w-80 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {query && (
+                  <button
+                    onClick={() => setQuery("")}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                    title="Clear Search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <div className="text-slate-500 font-medium text-sm">
+                {query ? (
+                  <span>Showing <span className="text-slate-900 font-bold">{viewBoms.length}</span> of <span className="text-slate-900 font-bold">{boms.length}</span> BOMs</span>
+                ) : (
+                  <span>Total: <span className="text-slate-900 font-bold">{boms.length}</span> BOMs</span>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-gray-600">
-                  <th className="p-2 text-left">Product</th>
-                  <th className="p-2 text-left">Version</th>
-                  <th className="p-2 text-left">Type</th>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
+                <tr>
+                  <th className="p-4 border-b w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                      onChange={handleSelectAll}
+                      checked={viewBoms.length > 0 && viewBoms.every(b => selectedRows.includes(b.id))}
+                      ref={input => {
+                        if (input) {
+                          const count = selectedRows.filter(id => viewBoms.some(b => b.id === id)).length
+                          input.indeterminate = count > 0 && count < viewBoms.length
+                        }
+                      }}
+                    />
+                  </th>
+                  {columns.map(col => (
+                    <th key={col.id} className="p-4 border-b whitespace-nowrap">
+                      {col.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {boms.map((b)=> (
-                  <tr key={b.id} className="border-t">
-                    <td className="p-2">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <button
-                            className="text-[#3D56A6] hover:underline font-medium flex items-center gap-2 text-lg"
-                            onClick={() => toggleExpand(b.id)}
-                            title="Toggle details"
-                          >
-                            {b.productTree?.photo && <img src={b.productTree.photo} className="h-8 w-8 rounded object-cover border" />}
-                            <span>{b.product || "Untitled"}</span>
-                            <span className="text-gray-400 text-xs">{expandedIds.has(b.id) ? "▲" : "▼"}</span>
-                          </button>
-                          
-                          <button
-                            className="text-gray-500 hover:text-[#3D56A6] p-1 rounded-full hover:bg-gray-100 transition-colors"
-                            onClick={() => {
-                              setOpenTreeId(b.id)
-                              const pt = b.productTree
-                              if (pt && !Array.isArray(pt)) {
-                                const systems = (pt.systems || []).map((s) => ({
-                                  name: s.name || "",
-                                  photo: s.photo,
-                                  components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1, photo: c.photo }))
-                                }))
-                                if (!systems.length && (pt.components || []).length) {
-                                  const first = { name: b.product || "", components: (pt.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1 })) }
-                                  setEditingTree({ product: b.product || "", photo: pt.photo, systems: [first] })
-                                } else {
-                                  setEditingTree({ product: b.product || "", photo: pt.photo, systems })
-                                }
-                              } else if (Array.isArray(pt)) {
-                                const systems = (pt || []).map((s) => ({
-                                  name: s.system || "",
-                                  components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1 }))
-                                }))
-                                setEditingTree({ product: b.product || "", systems })
-                              } else {
-                                setEditingTree({ product: b.product || "", systems: [] })
-                              }
-                            }}
-                            title="Edit Settings"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
-                              <circle cx="12" cy="12" r="3"></circle>
-                            </svg>
-                          </button>
-                          <button
-                            className="text-gray-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (window.confirm("Are you sure you want to delete this product?")) {
-                                const next = boms.filter((x) => x.id !== b.id)
-                                setAndPersist(next)
-                              }
-                            }}
-                            title="Delete Product"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                              <line x1="10" y1="11" x2="10" y2="17"></line>
-                              <line x1="14" y1="11" x2="14" y2="17"></line>
-                            </svg>
-                          </button>
-                        </div>
-
-                        {expandedIds.has(b.id) && (() => {
-                          const pt = b.productTree
-                          const systems = pt && !Array.isArray(pt)
-                            ? (pt.systems || [])
-                            : Array.isArray(pt)
-                              ? (pt || []).map((s) => ({ name: s.system || "", components: s.components || [] }))
-                              : []
-                          
-                          return (
-                            <div className="mt-4 border-t border-gray-100 pt-6 animate-in fade-in slide-in-from-top-2 duration-200 overflow-x-auto">
-                              <style>{`
-                                .mm-branch { position: relative; padding-left: 2rem; }
-                                .mm-branch::before { content: ''; position: absolute; left: 0; top: 50%; width: 2rem; height: 1px; background: #e5e7eb; }
-                                .mm-branch::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: #e5e7eb; }
-                                .mm-branch:first-child::after { top: 50%; }
-                                .mm-branch:last-child::after { bottom: 50%; }
-                                .mm-branch:only-child::after { display: none; }
-                                .mm-branch:only-child::before { width: 2rem; } /* Keep horizontal line */
-                              `}</style>
-                              
-                              <div className="flex items-center p-4 min-w-max">
-                                {/* Product Node (Root) */}
-                                <div className="flex-shrink-0 z-10 border border-gray-200 bg-white rounded-lg p-2 shadow-sm flex items-center gap-3 min-w-[200px] hover:shadow-md transition-shadow relative pr-8">
-                                   {pt?.photo ? (
-                                      <img 
-                                        src={pt.photo} 
+                {viewBoms.map((b, index) => (
+                  <React.Fragment key={b.id}>
+                    <tr className={`border-b border-gray-100 transition-colors ${selectedRows.includes(b.id) ? 'bg-blue-200 hover:bg-blue-300' : 'hover:bg-gray-50'}`}>
+                      <td className="p-4 border-b w-10">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                          onChange={() => handleSelectRow(b.id)}
+                          checked={selectedRows.includes(b.id)}
+                        />
+                      </td>
+                      {columns.map(col => (
+                        <td key={col.id} className="p-4 whitespace-nowrap text-gray-600">
+                          {renderCellContent(col, b, index)}
+                        </td>
+                      ))}
+                    </tr>
+                    {expandedIds.has(b.id) && (
+                      <tr className="border-t">
+                        <td colSpan={columns.length + 1} className="p-0">
+                          {(() => {
+                            const pt = b.productTree
+                            const systems = pt && !Array.isArray(pt)
+                              ? (pt.systems || [])
+                              : Array.isArray(pt)
+                                ? (pt || []).map((s) => ({ name: s.system || "", components: s.components || [] }))
+                                : []
+                            return (
+                              <div className="mt-4 border-t border-gray-100 pt-6 animate-in fade-in slide-in-from-top-2 duration-200 overflow-x-auto">
+                                <style>{`
+                                  .mm-branch { position: relative; padding-left: 2rem; }
+                                  .mm-branch::before { content: ''; position: absolute; left: 0; top: 50%; width: 2rem; height: 1px; background: #e5e7eb; }
+                                  .mm-branch::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: #e5e7eb; }
+                                  .mm-branch:first-child::after { top: 50%; }
+                                  .mm-branch:last-child::after { bottom: 50%; }
+                                  .mm-branch:only-child::after { display: none; }
+                                  .mm-branch:only-child::before { width: 2rem; }
+                                `}</style>
+                                <div className="flex items-center p-4 min-w-max">
+                                  <div className="flex-shrink-0 z-10 border border-gray-200 bg-white rounded-lg p-2 shadow-sm flex items-center gap-3 min-w-[200px] hover:shadow-md transition-shadow relative pr-8">
+                                    {pt?.photo ? (
+                                      <img
+                                        src={pt.photo}
                                         className="w-10 h-10 object-cover rounded-md border border-gray-100 cursor-zoom-in"
                                         onClick={(e) => { e.stopPropagation(); setViewingPhoto(pt.photo) }}
                                       />
-                                   ) : (
+                                    ) : (
                                       <div className="w-10 h-10 bg-gray-50 rounded-md border border-gray-100 flex items-center justify-center text-[8px] text-gray-400">No Photo</div>
-                                   )}
-                                   <div>
+                                    )}
+                                    <div>
                                       <div className="text-[10px] font-bold text-[#3D56A6] uppercase tracking-wider">Product</div>
                                       <div className="font-semibold text-sm text-gray-900">{b.product || "Untitled"}</div>
-                                   </div>
-                                   <div className="absolute top-1 right-1">
-                                      <NodeMenu 
+                                    </div>
+                                    <div className="absolute top-1 right-1">
+                                      <NodeMenu
                                         onEdit={() => {
                                           setOpenTreeId(b.id)
-                                          // Initialize editing tree same as the edit button
-                                          const systems = (pt && !Array.isArray(pt)) ? (pt.systems || []).map((s) => ({
+                                          const systemsEdit = (pt && !Array.isArray(pt)) ? (pt.systems || []).map((s) => ({
                                             name: s.name || "",
                                             photo: s.photo,
                                             components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1, photo: c.photo }))
@@ -327,50 +471,43 @@ function BOMPage() {
                                             name: s.system || "",
                                             components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1 }))
                                           }))
-                                          
                                           if (pt && !Array.isArray(pt)) {
-                                            setEditingTree({ product: b.product || "", photo: pt.photo, systems })
+                                            setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", photo: pt.photo, systems: systemsEdit })
                                           } else {
-                                            setEditingTree({ product: b.product || "", systems })
+                                            setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", systems: systemsEdit })
                                           }
                                         }}
                                         onDelete={() => {
-                                           if (window.confirm("Are you sure you want to delete this product?")) {
-                                              const next = boms.filter((x) => x.id !== b.id)
-                                              setAndPersist(next)
-                                           }
+                                          if (window.confirm("Are you sure you want to delete this product?")) {
+                                            const next = boms.filter((x) => x.id !== b.id)
+                                            setAndPersist(next)
+                                          }
                                         }}
                                       />
-                                   </div>
-                                </div>
-
-                                {/* Connector to Systems */}
-                                {systems.length > 0 && <div className="w-8 h-px bg-gray-200 flex-shrink-0"></div>}
-
-                                {/* Systems List */}
-                                {systems.length > 0 && (
-                                  <div className="flex flex-col justify-center">
-                                    {systems.map((sys, i) => (
-                                      <div key={`s${i}`} className="mm-branch flex items-center py-2">
-                                        {/* System Node */}
-                                        <div className="flex-shrink-0 z-10 border border-gray-200 bg-white rounded-lg p-2 shadow-sm flex items-center gap-3 min-w-[180px] hover:shadow-md transition-shadow relative pr-8">
-                                           {sys.photo ? (
-                                              <img 
-                                                src={sys.photo} 
+                                    </div>
+                                  </div>
+                                  {systems.length > 0 && <div className="w-8 h-px bg-gray-200 flex-shrink-0"></div>}
+                                  {systems.length > 0 && (
+                                    <div className="flex flex-col justify-center">
+                                      {systems.map((sys, i) => (
+                                        <div key={`s${i}`} className="mm-branch flex items-center py-2">
+                                          <div className="flex-shrink-0 z-10 border border-gray-200 bg-white rounded-lg p-2 shadow-sm flex items-center gap-3 min-w-[180px] hover:shadow-md transition-shadow relative pr-8">
+                                            {sys.photo ? (
+                                              <img
+                                                src={sys.photo}
                                                 className="w-8 h-8 object-cover rounded-md border border-gray-100 cursor-zoom-in"
                                                 onClick={(e) => { e.stopPropagation(); setViewingPhoto(sys.photo) }}
                                               />
-                                           ) : (
+                                            ) : (
                                               <div className="w-8 h-8 bg-gray-50 rounded-md border border-gray-100 flex items-center justify-center text-[8px] text-gray-400">No Photo</div>
-                                           )}
-                                           <div>
+                                            )}
+                                            <div>
                                               <div className="text-[9px] font-bold text-[#3D56A6] uppercase tracking-wider">System</div>
                                               <div className="font-medium text-xs text-gray-800">{sys.name || "Untitled"}</div>
-                                           </div>
-                                           <div className="absolute top-1 right-1">
-                                              <NodeMenu 
+                                            </div>
+                                            <div className="absolute top-1 right-1">
+                                              <NodeMenu
                                                 onEdit={() => {
-                                                  // Open main editor for now
                                                   setOpenTreeId(b.id)
                                                   const systemsData = (pt && !Array.isArray(pt)) ? (pt.systems || []).map((s) => ({
                                                     name: s.name || "",
@@ -381,83 +518,83 @@ function BOMPage() {
                                                     components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1 }))
                                                   }))
                                                   if (pt && !Array.isArray(pt)) {
-                                                    setEditingTree({ product: b.product || "", photo: pt.photo, systems: systemsData })
+                                                    setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", photo: pt.photo, systems: systemsData })
                                                   } else {
-                                                    setEditingTree({ product: b.product || "", systems: systemsData })
+                                                    setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", systems: systemsData })
                                                   }
                                                 }}
                                                 onDelete={() => deleteSystem(b.id, i)}
                                               />
-                                           </div>
-                                        </div>
-
-                                        {/* Connector to Components */}
-                                        {(sys.components || []).length > 0 && <div className="w-8 h-px bg-gray-200 flex-shrink-0"></div>}
-
-                                        {/* Components List */}
-                                        {(sys.components || []).length > 0 && (
-                                           <div className="flex flex-col justify-center">
+                                            </div>
+                                          </div>
+                                          {(sys.components || []).length > 0 && <div className="w-8 h-px bg-gray-200 flex-shrink-0"></div>}
+                                          {(sys.components || []).length > 0 && (
+                                            <div className="flex flex-col justify-center">
                                               {(sys.components || []).map((c, j) => (
-                                                 <div key={`c${i}-${j}`} className="mm-branch flex items-center py-1">
-                                                    {/* Component Node */}
-                                                    <div className="flex-shrink-0 z-10 border border-gray-100 bg-gray-50/50 rounded-lg p-1.5 shadow-sm flex items-center gap-2 min-w-[150px] hover:bg-white hover:shadow transition-all relative pr-8">
-                                                       {c.photo ? (
-                                                          <img 
-                                                            src={c.photo} 
-                                                            className="w-6 h-6 object-cover rounded border border-gray-200 cursor-zoom-in"
-                                                            onClick={(e) => { e.stopPropagation(); setViewingPhoto(c.photo) }}
-                                                          />
-                                                       ) : (
-                                                          <div className="w-6 h-6 bg-white rounded border border-gray-200 flex items-center justify-center text-[6px] text-gray-400">No Photo</div>
-                                                       )}
-                                                       <div>
-                                                          <div className="font-medium text-xs text-gray-700">{c.name || "Untitled"}</div>
-                                                          <div className="text-[10px] text-gray-500">Qty: {Number(c.qty) || 0}</div>
-                                                       </div>
-                                                       <div className="absolute top-0.5 right-0.5">
-                                                          <NodeMenu 
-                                                            onEdit={() => {
-                                                              setOpenTreeId(b.id)
-                                                              const systemsData = (pt && !Array.isArray(pt)) ? (pt.systems || []).map((s) => ({
-                                                                name: s.name || "",
-                                                                photo: s.photo,
-                                                                components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1, photo: c.photo }))
-                                                              })) : (pt || []).map((s) => ({
-                                                                name: s.system || "",
-                                                                components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1 }))
-                                                              }))
-                                                              if (pt && !Array.isArray(pt)) {
-                                                                setEditingTree({ product: b.product || "", photo: pt.photo, systems: systemsData })
-                                                              } else {
-                                                                setEditingTree({ product: b.product || "", systems: systemsData })
-                                                              }
-                                                            }}
-                                                            onDelete={() => deleteComponent(b.id, i, j)}
-                                                          />
-                                                       </div>
+                                                <div key={`c${i}-${j}`} className="mm-branch flex items-center py-1">
+                                                  <div className="flex-shrink-0 z-10 border border-gray-100 bg-gray-50/50 rounded-lg p-1.5 shadow-sm flex items-center gap-2 min-w-[150px] hover:bg-white hover:shadow transition-all relative pr-8">
+                                                    {c.photo ? (
+                                                      <img
+                                                        src={c.photo}
+                                                        className="w-6 h-6 object-cover rounded border border-gray-200 cursor-zoom-in"
+                                                        onClick={(e) => { e.stopPropagation(); setViewingPhoto(c.photo) }}
+                                                      />
+                                                    ) : (
+                                                      <div className="w-6 h-6 bg-white rounded border border-gray-200 flex items-center justify-center text-[6px] text-gray-400">No Photo</div>
+                                                    )}
+                                                    <div>
+                                                      <div className="font-medium text-xs text-gray-700">{c.name || "Untitled"}</div>
+                                                      <div className="text-[10px] text-gray-500">Qty: {Number(c.qty) || 0}</div>
                                                     </div>
-                                                 </div>
+                                                    <div className="absolute top-0.5 right-0.5">
+                                                      <NodeMenu
+                                                        onEdit={() => {
+                                                          setOpenTreeId(b.id)
+                                                          const systemsData = (pt && !Array.isArray(pt)) ? (pt.systems || []).map((s) => ({
+                                                            name: s.name || "",
+                                                            photo: s.photo,
+                                                            components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1, photo: c.photo }))
+                                                          })) : (pt || []).map((s) => ({
+                                                            name: s.system || "",
+                                                            components: (s.components || []).map((c) => ({ name: c.name || "", qty: Number(c.qty) || 1 }))
+                                                          }))
+                                                          if (pt && !Array.isArray(pt)) {
+                                                            setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", photo: pt.photo, systems: systemsData })
+                                                          } else {
+                                                            setEditingTree({ product: b.product || "", version: b.version || "", type: b.type || "Manufacture", systems: systemsData })
+                                                          }
+                                                        }}
+                                                        onDelete={() => deleteComponent(b.id, i, j)}
+                                                      />
+                                                    </div>
+                                                  </div>
+                                                </div>
                                               ))}
-                                           </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                
-                                {systems.length === 0 && !pt?.photo && (
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {systems.length === 0 && !pt?.photo && (
                                     <div className="text-gray-500 italic ml-4 text-xs">No details available.</div>
-                                )}
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          )
-                        })()}
-                      </div>
-                    </td>
-                    <td className="p-2"><span className="text-gray-700">{b.version}</span></td>
-                    <td className="p-2"><span className="text-gray-700">{b.type}</span></td>
-                  </tr>
+                            )
+                          })()}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
+                {boms.length === 0 && (
+                  <tr>
+                    <td colSpan={columns.length + 1} className="p-8 text-center text-gray-400">
+                      No bills of materials.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -612,14 +749,59 @@ function BOMPage() {
                   className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                   onClick={()=>{
                     const o = { id: Date.now(), product: newBom.product || "Untitled", version: newBom.version || "", type: newBom.type || "Manufacture", productTree: { product: newBom.product || "Untitled", photo: newBom.photo, systems: (newBom.systems||[]).map((s)=>({ name: s.name || "", photo: s.photo, components: (s.components||[]).map((c)=>({ name: c.name || "", qty: Number(c.qty)||0, photo: c.photo })) })) } }
-                    const next = [o, ...boms]
+                    const next = [...boms, o]
                     setAndPersist(next)
+                    const payload = {
+                      product: o.productTree.product || "Untitled",
+                      version: o.version || "",
+                      type: o.type || "",
+                      systems: (Array.isArray(o.productTree.systems) ? o.productTree.systems : []).map(s => ({
+                        name: s.name || "",
+                        components: (Array.isArray(s.components) ? s.components : []).map(c => ({
+                          name: c.name || "",
+                          qty: Number(c.qty) || 0
+                        }))
+                      }))
+                    }
+                    fetch(`${API_BASE_URL}/api/bom/import/`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(payload)
+                    }).then(async (res)=>{
+                      if (!res || !res.ok) {
+                        const msg = res ? await res.text().catch(()=>"") : ""
+                        alert(`Failed to save BOM: ${res ? res.status : 'network'} ${msg}`)
+                      } else {
+                        await reloadBoms()
+                      }
+                    }).catch(()=>{
+                      alert("Failed to reach backend while saving BOM")
+                    })
                     setShowNew(false)
                     setNewBom({ product: "", version: "", type: "Manufacture", systems: [] })
                   }}
                 >
                   Add
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {openBulkDelete && (
+        <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setOpenBulkDelete(false)}>
+          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Delete BOMs</h3>
+                <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenBulkDelete(false)}>✕</button>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-gray-700">Are you sure you want to delete <span className="font-semibold">{selectedRows.length}</span> selected BOMs?</p>
+              </div>
+              <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenBulkDelete(false)}>Cancel</button>
+                <button className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700" onClick={confirmBulkDelete}>Delete</button>
               </div>
             </div>
           </div>
@@ -652,6 +834,26 @@ function BOMPage() {
                      <div className="space-y-1">
                         <label className="text-xs font-medium text-gray-700">Cover Photo</label>
                         <PhotoUpload photo={editingTree.photo} onUpload={(e)=>handleFileChange(e, (v)=>setEditingTree({...editingTree, photo: v}))} />
+                     </div>
+                     <div className="space-y-1">
+                        <label className="text-xs font-medium text-gray-700">Version</label>
+                        <input 
+                          value={editingTree.version || ""} 
+                          onChange={(e)=> setEditingTree((prev)=>({ ...prev, version: e.target.value })) }
+                          className="w-full rounded-lg border-gray-300 shadow-sm focus:border-[#3D56A6] focus:ring-[#3D56A6] text-sm px-3 py-2 border"
+                          placeholder="e.g. v1.0"
+                        />
+                     </div>
+                     <div className="space-y-1">
+                        <label className="text-xs font-medium text-gray-700">Type</label>
+                        <select 
+                          value={editingTree.type || "Manufacture"} 
+                          onChange={(e)=> setEditingTree((prev)=>({ ...prev, type: e.target.value })) }
+                          className="w-full rounded-lg border-gray-300 shadow-sm focus:border-[#3D56A6] focus:ring-[#3D56A6] text-sm px-3 py-2 border bg-white"
+                        >
+                          <option value="Manufacture">Manufacture</option>
+                          <option value="Purchase Order">Purchase Order</option>
+                        </select>
                      </div>
                   </div>
                 </div>
@@ -794,9 +996,36 @@ function BOMPage() {
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenTreeId(null)}>Cancel</button>
                 <button
                    className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
-                   onClick={()=>{
-                    const next = boms.map((x)=> x.id===openTreeId ? { ...x, productTree: editingTree, product: editingTree.product || "Untitled" } : x)
+                   onClick={async ()=>{
+                    const next = boms.map((x)=> x.id===openTreeId ? { ...x, productTree: editingTree, product: editingTree.product || "Untitled", version: editingTree.version || x.version || "", type: editingTree.type || x.type || "" } : x)
                     setAndPersist(next)
+                    try {
+                      const bom = next.find((x)=>x.id===openTreeId) || {}
+                      const payload = {
+                        product: editingTree.product || "Untitled",
+                        version: editingTree.version || "",
+                        type: editingTree.type || "",
+                        systems: (Array.isArray(editingTree.systems) ? editingTree.systems : []).map(s => ({
+                          name: s.name || "",
+                          components: (Array.isArray(s.components) ? s.components : []).map(c => ({
+                            name: c.name || "",
+                            qty: Number(c.qty) || 0
+                          }))
+                        }))
+                      }
+                      const headers = { "Content-Type": "application/json" }
+                      const res = await fetch(`${API_BASE_URL}/api/bom/import/`, {
+                        method: "POST",
+                        headers,
+                        body: JSON.stringify(payload)
+                      }).catch(()=>null)
+                      if (!res || !res.ok) {
+                        const msg = res ? await res.text().catch(()=> "") : ""
+                        alert(`Failed to save BOM: ${res ? res.status : 'network'} ${msg}`)
+                      } else {
+                        await reloadBoms()
+                      }
+                    } catch {}
                     setOpenTreeId(null)
                    }}
                 >
@@ -807,7 +1036,6 @@ function BOMPage() {
           </div>
         </div>
       )}
-      <Footer />
       {viewingPhoto && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setViewingPhoto(null)}>
           <div className="relative max-w-[90vw] max-h-[90vh]">
@@ -831,5 +1059,5 @@ function BOMPage() {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BOMPage />
-  </React.StrictMode>,
+  </React.StrictMode>
 )

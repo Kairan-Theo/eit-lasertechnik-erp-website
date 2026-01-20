@@ -38,14 +38,17 @@ const initialProjects = [
   { id: 4, name: "Database Migration", start: "2026-02-01", end: "2026-02-15", status: "done", color: "#f59e0b" },
 ]
 
-const KanbanBoard = ({ projects, setProjects }) => {
+const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) => {
   const [draggedItem, setDraggedItem] = React.useState(null)
 
+  // Prevent UI from changing pipelines in Kanban
+  const PIPELINE_LOCKED = false
+
   const columns = [
-      { id: 'todo', title: 'To Do', color: 'bg-gray-100/50' },
-      { id: 'in_progress', title: 'In Progress', color: 'bg-blue-50/50' },
-      { id: 'review', title: 'Review', color: 'bg-amber-50/50' },
-      { id: 'done', title: 'Done', color: 'bg-emerald-50/50' }
+      { id: 'todo', title: 'To Do', color: 'bg-gray-100/50', accent: 'border-gray-300' },
+      { id: 'in_progress', title: 'In Progress', color: 'bg-blue-50/50', accent: 'border-blue-300' },
+      { id: 'review', title: 'Review', color: 'bg-amber-50/50', accent: 'border-amber-300' },
+      { id: 'done', title: 'Done', color: 'bg-emerald-50/50', accent: 'border-emerald-300' }
   ]
 
   const handleDragStart = (e, item) => {
@@ -59,9 +62,15 @@ const KanbanBoard = ({ projects, setProjects }) => {
       e.dataTransfer.dropEffect = 'move'
   }
 
+  const labelFor = (s) => s === 'in_progress' ? 'In Progress' : s === 'todo' ? 'To Do' : s === 'review' ? 'Review' : s === 'done' ? 'Done' : s
+
   const handleDrop = (e, status) => {
       e.preventDefault()
       if (!draggedItem) return
+      if (PIPELINE_LOCKED) { setDraggedItem(null); return }
+
+      const fromStatus = draggedItem.status || 'todo'
+      const toStatus = status
 
       setProjects(prev => prev.map(p => {
           if (p.id === draggedItem.id) {
@@ -69,6 +78,12 @@ const KanbanBoard = ({ projects, setProjects }) => {
           }
           return p
       }))
+
+      const baseMsg = `Project: Moved "${draggedItem.name}" from ${labelFor(fromStatus)} -> ${labelFor(toStatus)}`
+      showNotification && showNotification(baseMsg)
+      notifyTeam && notifyTeam(baseMsg, 'info', '', 'Project')
+      try { window.dispatchEvent(new Event('notificationUpdated')) } catch {}
+
       setDraggedItem(null)
   }
 
@@ -82,12 +97,16 @@ const KanbanBoard = ({ projects, setProjects }) => {
               {columns.map(col => (
                   <div 
                       key={col.id} 
-                      className={`w-80 flex flex-col rounded-2xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
+                      className={`w-80 flex flex-col rounded-3xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, col.id)}
                   >
-                      <div className="p-4 border-b border-gray-200/50 flex items-center justify-between">
-                          <h3 className="font-bold text-gray-700 text-sm tracking-wide">{col.title}</h3>
+                      <div className={`p-4 border-b border-gray-200/50 flex items-center justify-between relative overflow-hidden`}>
+                          <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-${col.accent.replace('border-', '')} to-transparent opacity-50`} />
+                          <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${col.accent.replace('border-', 'bg-')}`} />
+                              <h3 className="font-bold text-gray-700 text-sm tracking-wide">{col.title}</h3>
+                          </div>
                           <span className="text-xs font-bold bg-white px-2.5 py-1 rounded-full text-gray-500 shadow-sm border border-gray-100">
                               {getProjectsByStatus(col.id).length}
                           </span>
@@ -96,24 +115,37 @@ const KanbanBoard = ({ projects, setProjects }) => {
                           {getProjectsByStatus(col.id).map(project => (
                               <div
                                   key={project.id}
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, project)}
-                                  className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group relative overflow-hidden"
+                                  draggable={!PIPELINE_LOCKED}
+                                  onDragStart={(e) => !PIPELINE_LOCKED && handleDragStart(e, project)}
+                                  title={PIPELINE_LOCKED ? 'Pipeline changes are disabled' : undefined}
+                                  className={`bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 ${PIPELINE_LOCKED ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden`}
                               >
-                                  <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: project.color }}></div>
-                                  <div className="flex items-start justify-between mb-3 pl-2">
-                                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0" style={{ backgroundColor: project.color }}>
-                                          {project.name.charAt(0)}
+                                  {/* Top accent bar */}
+                                  <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: project.color, opacity: 0.8 }}></div>
+                                  
+                                  <div className="flex items-start justify-between mb-3">
+                                      <div className="flex items-center gap-2">
+                                          <div className="w-8 h-8 rounded-2xl flex items-center justify-center text-xs font-bold text-white shadow-md shadow-gray-200 shrink-0 transition-transform group-hover:scale-105" style={{ backgroundColor: project.color }}>
+                                              {project.name.charAt(0)}
+                                          </div>
+                                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-50 text-gray-500 border border-gray-100">
+                                              {getColorMeaning(project.color)}
+                                          </span>
                                       </div>
-                                      <button className="text-gray-300 hover:text-gray-600 transition-colors">
+                                      <button className="text-gray-300 hover:text-gray-600 transition-colors p-1 hover:bg-gray-50 rounded-full">
                                           <MoreHorizontal size={16} />
                                       </button>
                                   </div>
-                                  <h4 className="font-bold text-gray-800 text-sm mb-1.5 pl-2 leading-tight">{project.name}</h4>
-                                  <div className="text-[11px] text-gray-400 mb-3 pl-2 font-medium flex items-center gap-1.5">
-                                      <Calendar size={12} />
-                                      {format(new Date(project.start), "MMM d")} - {format(new Date(project.end), "MMM d")}
+
+                                  <h4 className="font-bold text-gray-800 text-sm mb-2 leading-snug pr-2">{project.name}</h4>
+                                  
+                                  <div className="flex items-center gap-3 mb-4">
+                                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium bg-gray-50 px-2 py-1 rounded-lg border border-gray-100/50">
+                                          <Calendar size={12} className="text-gray-400" />
+                                          {format(new Date(project.start), "MMM d")} - {format(new Date(project.end), "MMM d")}
+                                      </div>
                                   </div>
+
                                   {project.subtasks && project.subtasks.length > 0 && (
                                       <div className="flex flex-col gap-2 p-3 rounded-2xl bg-gray-50/50 border border-gray-100/60 group-hover:bg-gray-50/80 transition-colors">
                                           <div className="flex items-center justify-between mb-1">
@@ -130,6 +162,7 @@ const KanbanBoard = ({ projects, setProjects }) => {
                                                            key={subtask.id}
                                                            className={`h-3 flex-1 rounded-full transition-all duration-300 relative group/pip ${isDone ? 'border-transparent shadow-[0_2px_4px_rgba(0,0,0,0.15)] scale-105' : 'bg-white border-gray-200 shadow-sm'}`}
                                                            style={{ minWidth: '12px', backgroundColor: isDone ? subtask.color : undefined }}
+                                                           style={{ minWidth: '12px', backgroundColor: isDone ? project.color : undefined }}
                                                            title={`${subtask.name}: ${subtask.status}`}
                                                        >
                                                            {/* Tooltip on Hover */}
@@ -149,7 +182,6 @@ const KanbanBoard = ({ projects, setProjects }) => {
                                               <span>{project.subtasks.filter(s => s.status === 'done').length} done</span>
                                               <span>{project.subtasks.length - project.subtasks.filter(s => s.status === 'done').length} left</span>
                                           </div>
-                                          <span className="font-semibold">{project.subtasks.filter(s => s.status === 'done').length}/{project.subtasks.length} done</span>
                                       </div>
                                   )}
                               </div>
@@ -479,6 +511,10 @@ function ProjectApp() {
     return saved ? JSON.parse(saved) : initialProjects
   })
 
+  
+  const [today] = React.useState(new Date())
+  const [startDate, setStartDate] = React.useState(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))
+  const [dragging, setDragging] = React.useState(null)
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [draftParentId, setDraftParentId] = React.useState(null)
   const [draft, setDraft] = React.useState({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
@@ -489,8 +525,6 @@ function ProjectApp() {
   const doneProjectsCount = projects.filter((p) => (p.status || "todo") === "done").length
   const totalProjectsCount = projects.length
 
-  // Keep existing saved colors; do not auto-overwrite based on status
-
   // Persist projects
   React.useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
@@ -499,6 +533,103 @@ function ProjectApp() {
   const showNotification = (msg) => {
     setNotification({ show: true, message: msg })
     setTimeout(() => setNotification({ show: false, message: "" }), 3000)
+  }
+
+  const notifyTeam = (msg, type = "info", company = "", source = "") => {
+    try {
+      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      list.unshift({
+        id: Date.now(),
+        message: msg,
+        timestamp: new Date().toISOString(),
+        unread: true,
+        type,
+        company: company || "",
+        source: source || ""
+      })
+      if (list.length > 50) list.length = 50
+      localStorage.setItem("notifications", JSON.stringify(list))
+      window.dispatchEvent(new Event("storage"))
+    } catch {}
+  }
+
+  // Drag & Drop Logic
+  const handleMouseMove = React.useCallback((e) => {
+    if (!dragging) return
+
+    const dayWidth = 48 // pixel width of one day
+    const diffX = e.clientX - dragging.initialMouseX
+    const daysDiff = Math.round(diffX / dayWidth)
+
+    if (daysDiff === 0) return
+
+    const updateItem = (item) => {
+        const newStart = new Date(dragging.initialStart)
+        const newEnd = new Date(dragging.initialEnd)
+
+        if (dragging.type === 'move') {
+            newStart.setDate(newStart.getDate() + daysDiff)
+            newEnd.setDate(newEnd.getDate() + daysDiff)
+        } else if (dragging.type === 'resize-start') {
+            newStart.setDate(newStart.getDate() + daysDiff)
+            if (newStart >= newEnd) return item // Prevent inversion
+        } else if (dragging.type === 'resize-end') {
+            newEnd.setDate(newEnd.getDate() + daysDiff)
+            if (newEnd <= newStart) return item // Prevent inversion
+        }
+
+        return {
+            ...item,
+            start: format(newStart, "yyyy-MM-dd"),
+            end: format(newEnd, "yyyy-MM-dd")
+        }
+    }
+
+    setProjects(prev => prev.map(p => {
+      // Check main project
+      if (p.id === dragging.id) {
+          return updateItem(p)
+      }
+
+      // Check subtasks
+      if (p.subtasks) {
+          const updatedSubtasks = p.subtasks.map(sub => 
+              sub.id === dragging.id ? updateItem(sub) : sub
+          )
+          
+          if (updatedSubtasks.some((s, i) => s !== p.subtasks[i])) {
+              return { ...p, subtasks: updatedSubtasks }
+          }
+      }
+
+      return p
+    }))
+  }, [dragging])
+
+  const handleMouseUp = React.useCallback(() => {
+    setDragging(null)
+  }, [])
+
+  React.useEffect(() => {
+    if (dragging) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [dragging, handleMouseMove, handleMouseUp])
+
+  // Calendar calculations
+  const daysToShow = 21
+  const days = Array.from({ length: daysToShow }).map((_, i) => addDays(startDate, i))
+  const dayWidth = 48
+
+  const left = (dateStr) => {
+    const date = new Date(dateStr)
+    const diff = differenceInDays(date, startDate)
+    return diff * dayWidth
   }
 
   const notifyTeam = (msg, type = "info", company = "", source = "") => {
@@ -588,8 +719,28 @@ function ProjectApp() {
                 + New Project
             </button>
           </div>
+  const toggleProject = (id) => {
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p))
+  }
+
+  const handleProgressChange = (id, newProgress) => {
+    setProjects(prev => prev.map(p => {
+        if (p.id === id) {
+            return { ...p, progress: newProgress }
+        }
+        return p
+    }))
+  }
+
+  return (
+    <main className="min-h-screen bg-white font-sans text-gray-900">
+      <Navigation />
+
+      {notification.show && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+          {notification.message}
         </div>
-      </div>
+      )}
 
       <div className="flex-1 overflow-hidden">
         {view === 'kanban' ? (
@@ -674,6 +825,22 @@ function ProjectApp() {
             </div>
         </div>
       )}
+      {/* Toolbar and stats can go here if needed */}
+
+      <div className="px-6 py-4 border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-800">Project Management</h1>
+          </div>
+          <div className="text-sm text-slate-500">
+            <span className="mr-3">Active: {activeProjectsCount}</span>
+            <span className="mr-3">Done: {doneProjectsCount}</span>
+            <span>Total: {totalProjectsCount}</span>
+          </div>
+        </div>
+      </div>
+
+      <KanbanBoard projects={projects} setProjects={setProjects} showNotification={showNotification} notifyTeam={notifyTeam} />
     </main>
   )
 }
@@ -681,5 +848,5 @@ function ProjectApp() {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ProjectApp />
-  </React.StrictMode>,
+  </React.StrictMode>
 )

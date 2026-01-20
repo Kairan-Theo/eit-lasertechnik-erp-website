@@ -158,6 +158,15 @@
   }
 }
 
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
 @media print {
   html, body {
     -webkit-print-color-adjust: exact;
