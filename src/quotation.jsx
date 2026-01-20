@@ -167,7 +167,7 @@ function QuotationPage() {
             </button>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
               <ClipboardList className="w-8 h-8" />
-              Quotation
+              New Quotation
             </h1>
           </div>
         </div>
