@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿import React from "react"
+﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
 import { 
   LayoutDashboard, 
   FileText, 
@@ -20,6 +20,7 @@ const getAllData = () => {
   const data = {
     quotations: [],
     invoices: [],
+    billingNotes: [],
     customers: [],
     purchaseOrders: []
   }
@@ -49,6 +50,11 @@ const getAllData = () => {
                 data.quotations.push({ ...q, customerName: item.customer?.name || item.customer?.company })
               })
             }
+            if (Array.isArray(item.billingNotes)) {
+              item.billingNotes.forEach(bn => {
+                data.billingNotes.push({ ...bn, customerName: item.customer?.name || item.customer?.company })
+              })
+            }
             if (Array.isArray(item.invoices)) {
               item.invoices.forEach(inv => {
                 data.invoices.push({ ...inv, customerName: item.customer?.name || item.customer?.company })
@@ -67,6 +73,7 @@ const getAllData = () => {
   // Sort by date descending
   data.quotations.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
   data.invoices.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
+  data.billingNotes.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
   data.purchaseOrders.sort((a, b) => new Date(b.updatedAt || b.extraFields?.orderDate) - new Date(a.updatedAt || a.extraFields?.orderDate))
   
   return data
@@ -302,6 +309,53 @@ function InvoiceList({ list }) {
             ))}
             {list.length === 0 && (
               <tr><td colSpan={6} className="p-8 text-center text-gray-500">No invoices found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function BillingNoteList({ list }) {
+  return (
+    <div className="bg-white rounded-xl border shadow-sm p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-semibold text-gray-900">Billing Notes</h2>
+        <a href="/billing-note.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+          <Plus className="w-4 h-4" />
+          New Billing Note
+        </a>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-gray-700 border-b">
+              <th className="p-3 text-left">Number</th>
+              <th className="p-3 text-left">Customer</th>
+              <th className="p-3 text-left">Date</th>
+              <th className="p-3 text-left">Due Date</th>
+              <th className="p-3 text-right">Total</th>
+              <th className="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {list.map((bn, i) => (
+              <tr key={i} className="hover:bg-gray-50">
+                <td className="p-3 font-medium text-purple-600">{bn.details?.number}</td>
+                <td className="p-3">{bn.customerName || "-"}</td>
+                <td className="p-3">{bn.details?.date}</td>
+                <td className="p-3">{bn.details?.dueDate}</td>
+                <td className="p-3 text-right font-medium">
+                  {bn.details?.currency} {bn.totals?.total?.toFixed(2)}
+                </td>
+                <td className="p-3 text-right">
+                   <span className="text-xs text-gray-400">View in History</span>
+                </td>
+              </tr>
+            ))}
+            {list.length === 0 && (
+              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No billing notes found</td></tr>
             )}
           </tbody>
         </table>
@@ -615,7 +669,7 @@ function PermissionsManager() {
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = React.useState("dashboard")
-  const [data, setData] = React.useState({ quotations: [], invoices: [], customers: [], purchaseOrders: [] })
+  const [data, setData] = React.useState({ quotations: [], invoices: [], billingNotes: [], customers: [], purchaseOrders: [] })
 
   // Refresh data when tab changes or periodically
   React.useEffect(() => {
@@ -655,6 +709,15 @@ export default function AdminPage() {
           >
             <FileText className="w-5 h-5" />
             Quotations
+          </button>
+          <button
+            onClick={() => setActiveTab("billing-notes")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "billing-notes" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            Billing Notes
           </button>
           <button
             onClick={() => setActiveTab("invoices")}
@@ -701,6 +764,7 @@ export default function AdminPage() {
           <h1 className="text-2xl font-bold text-gray-900">
             {activeTab === "dashboard" && "Dashboard"}
             {activeTab === "quotations" && "Quotations"}
+            {activeTab === "billing-notes" && "Billing Notes"}
             {activeTab === "invoices" && "Invoices"}
             {activeTab === "purchase-orders" && "Purchase Orders"}
             {activeTab === "customers" && "Customer History"}
@@ -710,6 +774,7 @@ export default function AdminPage() {
 
         {activeTab === "dashboard" && <Dashboard data={data} />}
         {activeTab === "quotations" && <QuotationList list={data.quotations} />}
+        {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} />}
         {activeTab === "invoices" && <InvoiceList list={data.invoices} />}
         {activeTab === "purchase-orders" && <PurchaseOrderPage />}
         {activeTab === "customers" && <CustomerHistory data={data} />}

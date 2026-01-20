@@ -159,7 +159,7 @@ function QuotationPage() {
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => window.location.href = "/crm.html"}
+              onClick={() => window.location.href = "/admin.html"}
               className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
               title="Back to List"
             >
