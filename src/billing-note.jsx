@@ -255,7 +255,7 @@ function BillingNotePage() {
             </button>
             <div className="flex items-center gap-3">
               <FileText className="w-8 h-8 text-gray-900" />
-              <h1 className="text-3xl font-bold text-gray-900">Billing Note</h1>
+              <h1 className="text-3xl font-bold text-gray-900">New Billing Note</h1>
             </div>
           </div>
         </div>
