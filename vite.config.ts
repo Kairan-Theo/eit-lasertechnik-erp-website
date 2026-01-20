@@ -32,6 +32,7 @@ export default defineConfig({
         admin: path.resolve(__dirname, 'admin.html'),
         project: path.resolve(__dirname, 'project.html'),
         newmo: path.resolve(__dirname, 'new-mo.html'),
+        billingNote: path.resolve(__dirname, 'billing-note.html'),
       },
     },
   },

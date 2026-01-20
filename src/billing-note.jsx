@@ -1,10 +1,10 @@
-﻿import React from "react"
+import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, ClipboardList } from "lucide-react"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText } from "lucide-react"
 import "./index.css"
 
 function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
@@ -101,7 +101,54 @@ function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
   )
 }
 
-function useQuotationState() {
+function THBText(num) {
+  if (!num || num === 0) return "ศูนย์บาทถ้วน"
+  num = Number(num).toFixed(2)
+  let [baht, satang] = num.split(".")
+  const thaiNum = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
+  const unit = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
+
+  function convert(n) {
+    let res = ""
+    let len = n.length
+    for (let i = 0; i < len; i++) {
+      let digit = parseInt(n.charAt(i))
+      let pos = len - i - 1
+      if (digit !== 0) {
+        if (pos === 0 && digit === 1 && len > 1) res += "เอ็ด"
+        else if (pos === 1 && digit === 2) res += "ยี่"
+        else if (pos === 1 && digit === 1) res += ""
+        else res += thaiNum[digit]
+
+        if (pos === 0) res += ""
+        else if (pos === 1) res += "สิบ"
+        else res += unit[pos]
+      }
+    }
+    return res
+  }
+
+  let text = ""
+  if (parseInt(baht) > 0) {
+    if (baht.length > 6) {
+       let millions = baht.substring(0, baht.length - 6)
+       let remainder = baht.substring(baht.length - 6)
+       text += convert(millions) + "ล้าน" + convert(remainder)
+    } else {
+       text += convert(baht)
+    }
+    text += "บาท"
+  }
+
+  if (parseInt(satang) > 0) {
+    text += convert(satang) + "สตางค์"
+  } else {
+    text += "ถ้วน"
+  }
+  return text
+}
+
+function useBillingNoteState() {
   const [customer, setCustomer] = React.useState({
     company: "",
     address: "",
@@ -120,7 +167,7 @@ function useQuotationState() {
     currency: "THB",
     deliveryTerms: "Ex-Works",
     salesPerson: "",
-    eitMobile: "",
+    eitAddress: "",
     eitTelephone: "",
     eitFax: "",
     tradeTerms: "",
@@ -129,28 +176,69 @@ function useQuotationState() {
     shipmentLocation: "",
     invoiceDate: new Date().toISOString().slice(0, 10),
     remark: "",
-    paymentTerms: ": "
+    recipient: "",
+    receivedDate: "",
+    chequeDate: "",
+    onBehalfOf: "",
+    depositor: ""
   })
 
-  const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0 }])
+  const [items, setItems] = React.useState([{ invoiceNo: "", date: "", dueDate: "", amount: 0, paid: 0 }])
 
-  const total = items.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.price) || 0), 0)
+  const total = items.reduce((sum, it) => sum + ((Number(String(it.amount).replace(/,/g, '')) || 0) - (Number(String(it.paid).replace(/,/g, '')) || 0)), 0)
 
-  const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0 }])
+  const addItem = () => setItems((prev) => [...prev, { invoiceNo: "", date: "", dueDate: "", amount: 0, paid: 0 }])
   const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, value) =>
     setItems((prev) =>
       prev.map((row, idx) =>
-        idx === i ? { ...row, [field]: field === "qty" || field === "price" ? (value === "" ? "" : Number(value)) : value } : row,
+        idx === i ? { ...row, [field]: value } : row,
       ),
     )
 
   return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total }
 }
 
-function QuotationPage() {
-  const q = useQuotationState()
+function BillingNotePage() {
+  const q = useBillingNoteState()
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
+
+  const handleSave = () => {
+    try {
+      const company = q.customer.company || "Unknown"
+      const key = `history:${company}`
+      
+      let data = { customer: q.customer, quotations: [], invoices: [], billingNotes: [] }
+      try {
+        const existing = localStorage.getItem(key)
+        if (existing) {
+          data = JSON.parse(existing)
+        }
+      } catch (e) {}
+
+      if (!data.billingNotes) data.billingNotes = []
+      if (!data.customer || !data.customer.company) data.customer = q.customer
+
+      const newNote = {
+        id: Date.now(),
+        savedAt: new Date().toISOString(),
+        details: q.details,
+        items: q.items,
+        total: q.total,
+        totals: { total: q.total },
+        customerName: company
+      }
+
+      data.billingNotes.push(newNote)
+      localStorage.setItem(key, JSON.stringify(data))
+      
+      alert("Billing Note saved successfully!")
+      window.location.href = "/admin.html"
+    } catch (error) {
+      console.error(error)
+      alert("Error saving billing note")
+    }
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -165,20 +253,20 @@ function QuotationPage() {
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <ClipboardList className="w-8 h-8" />
-              Quotation
-            </h1>
+            <div className="flex items-center gap-3">
+              <FileText className="w-8 h-8 text-gray-900" />
+              <h1 className="text-3xl font-bold text-gray-900">Billing Note</h1>
+            </div>
           </div>
         </div>
 
-        {/* Codes Box */}
+        {/* Billing Note Details Box */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
-           <h2 className="text-xl font-bold text-[#2D4485]">Codes</h2>
+           <h2 className="text-xl font-bold text-[#2D4485]">Code</h2>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Quotation Number</label>
-               <input value={q.details.number} onChange={(e) => q.setDetails({ ...q.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Quotation number" />
+               <label className="block text-sm font-medium text-gray-700 mb-1">Billing Note Number</label>
+               <input value={q.details.number} onChange={(e) => q.setDetails({ ...q.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Billing Note number" />
              </div>
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
@@ -193,15 +281,15 @@ function QuotationPage() {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-               <select value={q.details.salesPerson} onChange={(e) => q.setDetails({ ...q.details, salesPerson: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none">
+               <select value={q.details.salesPerson} onChange={(e) => q.setDetails({ ...q.details, salesPerson: e.target.value, onBehalfOf: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none">
                  <option value="">Select Organization</option>
                  <option value="EIT LASERTECHNIK CO.,LTD">EIT LASERTECHNIK CO.,LTD</option>
                  <option value="EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD">EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD</option>
                </select>
              </div>
              <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
-               <input value={q.details.eitMobile} onChange={(e) => q.setDetails({ ...q.details, eitMobile: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+               <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+               <textarea value={q.details.eitAddress} onChange={(e) => q.setDetails({ ...q.details, eitAddress: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
              </div>
            </div>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -216,15 +304,13 @@ function QuotationPage() {
            </div>
         </div>
 
-        {/* Customer Information Box */}
+        {/* Customer Information */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
           <h2 className="text-xl font-bold text-[#2D4485]">Customer Information</h2>
           
-
-
           <h3 className="text-base font-bold text-gray-900 pt-2">Customer Company</h3>
 
-          {/* Company Name (50% width) */}
+          {/* Company Name */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
@@ -269,10 +355,10 @@ function QuotationPage() {
 
 
 
-        {/* Quotation Description Box */}
+        {/* Description Box */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 mb-8">
            <div className="flex justify-between items-center mb-4">
-             <h2 className="text-xl font-bold text-[#2D4485]">Quotation Description</h2>
+             <h2 className="text-xl font-bold text-[#2D4485]">Billing Note Description</h2>
              <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
                <Plus className="w-4 h-4" />
                <span className="text-sm font-medium">Add Item</span>
@@ -280,14 +366,15 @@ function QuotationPage() {
            </div>
            <div className="overflow-x-auto">
              <table className="w-full text-left border-collapse">
-               <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
+               <thead className="bg-gray-50 text-[#2D4485] uppercase text-xs font-bold">
                  <tr>
-                   <th className="p-3 border-b w-16">Item</th>
-                   <th className="p-3 border-b">Model</th>
-                   <th className="p-3 border-b">Description</th>
-                   <th className="p-3 border-b w-32">Price</th>
-                   <th className="p-3 border-b w-20">Quantity</th>
-                   <th className="p-3 border-b w-32">Total (Baht)</th>
+                   <th className="p-3 border-b w-16">No.</th>
+                   <th className="p-3 border-b">เลขที่ใบก ำกับ</th>
+                   <th className="p-3 border-b">วันท</th>
+                   <th className="p-3 border-b">ครบก ำหนด</th>
+                   <th className="p-3 border-b w-32">จ ำนวนเงิน</th>
+                   <th className="p-3 border-b w-32">ช ำระแล้ว</th>
+                   <th className="p-3 border-b w-32">เงินคงค้ำง</th>
                    <th className="p-3 border-b w-12"></th>
                  </tr>
                </thead>
@@ -298,20 +385,37 @@ function QuotationPage() {
                        {i + 1}
                      </td>
                      <td className="p-3">
-                       <input value={item.model} onChange={(e) => q.updateItem(i, "model", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Model" />
-                     </td>
-                    <td className="p-3">
-                      <input value={item.description} onChange={(e) => q.updateItem(i, "description", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Description" />
+                      <input value={item.invoiceNo} onChange={(e) => q.updateItem(i, "invoiceNo", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Invoice No" />
                     </td>
                     <td className="p-3">
-                      <input type="number" value={item.price} onChange={(e) => q.updateItem(i, "price", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
+                      <input type="date" value={item.date} onChange={(e) => q.updateItem(i, "date", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
                     </td>
                     <td className="p-3">
-                      <input type="number" value={item.qty} onChange={(e) => q.updateItem(i, "qty", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
+                      <input type="date" value={item.dueDate} onChange={(e) => q.updateItem(i, "dueDate", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
                     </td>
-                     <td className="p-3 text-right text-sm text-gray-700">
-                       {(Number(item.qty || 0) * Number(item.price || 0)).toFixed(2)}
-                     </td>
+                    <td className="p-3">
+                      <input type="text" value={item.amount} onChange={(e) => {
+                        const val = e.target.value.replace(/,/g, '')
+                        if (val === '' || !isNaN(val)) {
+                          const parts = val.split('.')
+                          parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                          q.updateItem(i, "amount", parts.join('.'))
+                        }
+                      }} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none text-right" />
+                    </td>
+                    <td className="p-3">
+                      <input type="text" value={item.paid} onChange={(e) => {
+                        const val = e.target.value.replace(/,/g, '')
+                        if (val === '' || !isNaN(val)) {
+                          const parts = val.split('.')
+                          parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                          q.updateItem(i, "paid", parts.join('.'))
+                        }
+                      }} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none text-right" />
+                    </td>
+                    <td className="p-3 text-right text-sm text-gray-700">
+                      {((Number(String(item.amount).replace(/,/g, '') || 0)) - (Number(String(item.paid).replace(/,/g, '') || 0))).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </td>
                      <td className="p-3 text-right">
                        <button onClick={() => q.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete"><Trash className="w-4 h-4" /></button>
                      </td>
@@ -321,93 +425,54 @@ function QuotationPage() {
              </table>
            </div>
            <div className="flex justify-end mt-4">
-             <div className="w-64 space-y-2">
-               <div className="flex justify-between text-base font-bold text-gray-900"><span>Total:</span> <span>{q.total.toFixed(2)}</span></div>
-               <div className="flex justify-between text-base font-bold text-gray-900"><span>VAT 7%:</span> <span>{(q.total * 0.07).toFixed(2)}</span></div>
-               <div className="flex justify-between text-base font-bold text-[#2D4485] pt-2 border-t"><span>Grand Total:</span> <span>{(q.total * 1.07).toFixed(2)}</span></div>
-             </div>
-           </div>
+              <div className="w-auto min-w-[250px] space-y-2">
+                <div className="flex justify-between text-base font-bold text-gray-900 gap-8"><span>รวมทั้งสิ้น:</span> <span>{q.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
+                <div className="text-right text-base font-bold text-[#2D4485] pt-2 border-t"><span>{THBText(q.total)}</span></div>
+              </div>
+            </div>
         </div>
         
-        {/* Terms & Conditions Box */}
+        {/* Payee Information Box */}
         <div className="mb-8">
            <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6">
-             <h2 className="text-xl font-bold text-[#2D4485] mb-4">Terms & Conditions</h2>
+             <h2 className="text-xl font-bold text-[#2D4485] mb-4">Payee Information</h2>
              <div className="space-y-4">
-                {/* Row 1: Trade Terms, Validity, Delivery */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Trade Terms</label>
-                     <input value={q.details.tradeTerms} onChange={(e) => q.setDetails({ ...q.details, tradeTerms: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Trade Terms" />
-                  </div>
-                  <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Validity</label>
-                     <input value={q.details.validity} onChange={(e) => q.setDetails({ ...q.details, validity: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Validity" />
-                  </div>
-                  <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Delivery</label>
-                     <input value={q.details.delivery} onChange={(e) => q.setDetails({ ...q.details, delivery: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Delivery" />
-                  </div>
-                </div>
-
-                {/* Row 2: Payment Terms */}
+                {/* Row 1: Remark */}
                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Payment Terms</label>
-                   <textarea 
-                     name="paymentTerms"
-                     value={q.details.paymentTerms} 
-                     onChange={(e) => {
-                       let val = e.target.value
-                       if (!val.startsWith(": ")) {
-                         if (val.startsWith(":")) {
-                           val = ": " + val.substring(1)
-                         } else if (val.startsWith(" ")) {
-                           val = ":" + val
-                         } else {
-                           val = ": " + val
-                         }
-                       }
-                       q.setDetails({ ...q.details, paymentTerms: val })
-                     }} 
-                     onKeyDown={(e) => {
-                       if (e.key === 'Enter') {
-                         const val = e.target.value;
-                         const selectionStart = e.target.selectionStart;
-                         const currentLineStart = val.lastIndexOf('\n', selectionStart - 1) + 1;
-                         const currentLine = val.substring(currentLineStart, selectionStart);
-                         if (currentLine.trim().startsWith(':')) {
-                           e.preventDefault();
-                           const newValue = val.substring(0, selectionStart) + "\n: " + val.substring(e.target.selectionEnd);
-                           q.setDetails({ ...q.details, paymentTerms: newValue });
-                           setTimeout(() => {
-                             const ta = document.getElementsByName("paymentTerms")[0];
-                             if (ta) ta.setSelectionRange(selectionStart + 3, selectionStart + 3);
-                           }, 0);
-                         }
-                       }
-                     }}
-                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
-                     rows="4" 
-                     placeholder=": Payment terms" 
-                   />
+                   <label className="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
+                   <textarea value={q.details.remark} onChange={(e) => q.setDetails({ ...q.details, remark: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="3" />
                 </div>
 
-                {/* Row 3: Shipment Location, Invoice Date */}
+                {/* Row 2: Recipient, Received Date */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Shipment Location</label>
-                     <input value={q.details.shipmentLocation} onChange={(e) => q.setDetails({ ...q.details, shipmentLocation: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Shipment Location" />
+                     <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อผู้รับวางบิล</label>
+                     <input value={q.details.recipient} onChange={(e) => q.setDetails({ ...q.details, recipient: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
                   </div>
                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
-                     <DateField value={q.details.invoiceDate} onChange={(val) => q.setDetails({ ...q.details, invoiceDate: val })} />
+                     <label className="block text-sm font-medium text-gray-700 mb-1">วันที่รับ</label>
+                     <DateField value={q.details.receivedDate} onChange={(val) => q.setDetails({ ...q.details, receivedDate: val })} />
                   </div>
                 </div>
 
-                {/* Row 4: Remark */}
-                <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Remark</label>
-                   <textarea value={q.details.remark} onChange={(e) => q.setDetails({ ...q.details, remark: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="4" placeholder="Remark" />
+                {/* Row 3: Cheque Date */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">วันที่นัดรับเช็ค</label>
+                     <DateField value={q.details.chequeDate} onChange={(val) => q.setDetails({ ...q.details, chequeDate: val })} />
+                  </div>
+                </div>
+
+                {/* Row 4: On Behalf Of, Depositor */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">ในนาม</label>
+                     <input value={q.details.onBehalfOf} onChange={(e) => q.setDetails({ ...q.details, onBehalfOf: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                  </div>
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อผู้วางบิล</label>
+                     <input value={q.details.depositor} onChange={(e) => q.setDetails({ ...q.details, depositor: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                  </div>
                 </div>
              </div>
            </div>
@@ -415,7 +480,7 @@ function QuotationPage() {
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href="/admin.html"}>Cancel</button>
-          <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={() => setOpenCreateConfirm(true)}>Create QO Form</button>
+          <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={() => setOpenCreateConfirm(true)}>Create BN Form</button>
         </div>
 
         {openCreateConfirm && (
@@ -424,7 +489,7 @@ function QuotationPage() {
             <div className="bg-white rounded-xl shadow-lg border border-gray-200">
               <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-gray-900">Create QO Form</h3>
+                  <h3 className="font-semibold text-gray-900">Create BN Form</h3>
                   <div className="text-sm text-gray-600 mt-1">Choose how you want to proceed</div>
                 </div>
                 <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenCreateConfirm(false)}>✕</button>
@@ -438,12 +503,7 @@ function QuotationPage() {
                 </button>
                 <button
                   className="w-full px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] min-w-[140px]"
-                  onClick={() => {
-                    // Mock save functionality
-                    alert("Changes saved!")
-                    setOpenCreateConfirm(false)
-                    window.location.href = "/crm.html"
-                  }}
+                  onClick={handleSave}
                 >
                   Save Changes
                 </button>
@@ -471,6 +531,6 @@ function QuotationPage() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <QuotationPage />
+    <BillingNotePage />
   </React.StrictMode>,
 )
