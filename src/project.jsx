@@ -92,13 +92,13 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
   }
 
   return (
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-8 bg-gray-50/50">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-8 bg-white">
           <div className="flex gap-6 h-full min-w-max">
               {columns.map(col => (
                   <div 
                       key={col.id} 
-                      className={`w-80 flex flex-col rounded-3xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
-                      onDragOver={handleDragOver}
+                    className={`w-80 h-full min-h-[75vh] shrink-0 flex flex-col rounded-3xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
+                    onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, col.id)}
                   >
                       <div className={`p-4 border-b border-gray-200/50 flex items-center justify-between relative overflow-hidden`}>
@@ -289,7 +289,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
       }, [dragging, handleMouseMove, handleMouseUp])
 
     return (
-        <div className="flex flex-col h-full bg-slate-50/50">
+        <div className="flex flex-col h-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6]">
           {/* Date Controls */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white shadow-sm z-30">
              <div className="flex items-center gap-4">
@@ -535,23 +535,7 @@ function ProjectApp() {
     setTimeout(() => setNotification({ show: false, message: "" }), 3000)
   }
 
-  const notifyTeam = (msg, type = "info", company = "", source = "") => {
-    try {
-      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-      list.unshift({
-        id: Date.now(),
-        message: msg,
-        timestamp: new Date().toISOString(),
-        unread: true,
-        type,
-        company: company || "",
-        source: source || ""
-      })
-      if (list.length > 50) list.length = 50
-      localStorage.setItem("notifications", JSON.stringify(list))
-      window.dispatchEvent(new Event("storage"))
-    } catch {}
-  }
+
 
 
   const handleAddSubtask = (parentId) => {
@@ -579,9 +563,9 @@ function ProjectApp() {
         }))
     } else {
         setProjects(p => [...p, {
-          id: Date.now(),
-          ...draft,
-          subtasks: []
+            id: Date.now(),
+            ...draft,
+            subtasks: []
         }])
     }
     setIsModalOpen(false)
@@ -604,6 +588,7 @@ function ProjectApp() {
   }
 
   return (
+    <main className="min-h-screen bg-white font-sans text-gray-900 flex flex-col">
     <main className="min-h-screen bg-white font-sans text-gray-900">
       <Navigation />
 
@@ -613,7 +598,40 @@ function ProjectApp() {
         </div>
       )}
 
-      <div className="flex-1 overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-800">Project Management</h1>
+            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg ml-6">
+                <button 
+                    onClick={() => setView('timeline')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'timeline' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <Layout size={16} /> Timeline
+                </button>
+                <button 
+                    onClick={() => setView('kanban')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'kanban' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <List size={16} /> Kanban
+                </button>
+            </div>
+          </div>
+          <div className="text-sm text-slate-500">
+            <span className="mr-3">Active: {activeProjectsCount}</span>
+            <span className="mr-3">Done: {doneProjectsCount}</span>
+            <span>Total: {totalProjectsCount}</span>
+            <button 
+                onClick={() => { setDraftParentId(null); setIsModalOpen(true) }}
+                className="ml-4 px-4 py-2 bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white rounded-lg text-sm font-bold shadow hover:shadow-lg transition-all"
+            >
+                + New Project
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-hidden flex flex-col">
         {view === 'kanban' ? (
             <KanbanBoard projects={projects} setProjects={setProjects} showNotification={showNotification} notifyTeam={notifyTeam} />
         ) : (
@@ -735,6 +753,8 @@ function ProjectApp() {
     </main>
   )
 }
+
+export default ProjectApp
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
