@@ -42,7 +42,7 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
   const [draggedItem, setDraggedItem] = React.useState(null)
 
   // Prevent UI from changing pipelines in Kanban
-  const PIPELINE_LOCKED = false
+  const PIPELINE_LOCKED = true
 
   const columns = [
       { id: 'todo', title: 'To Do', color: 'bg-gray-100/50', accent: 'border-gray-300' },
