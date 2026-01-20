@@ -92,13 +92,13 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
   }
 
   return (
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-8 bg-gray-50/50">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-8 bg-white">
           <div className="flex gap-6 h-full min-w-max">
               {columns.map(col => (
                   <div 
                       key={col.id} 
-                      className={`w-80 h-full shrink-0 flex flex-col rounded-3xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
-                      onDragOver={handleDragOver}
+                    className={`w-80 h-full min-h-[75vh] shrink-0 flex flex-col rounded-3xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
+                    onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, col.id)}
                   >
                       <div className={`p-4 border-b border-gray-200/50 flex items-center justify-between relative overflow-hidden`}>
@@ -145,44 +145,6 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
                                           {format(new Date(project.start), "MMM d")} - {format(new Date(project.end), "MMM d")}
                                       </div>
                                   </div>
-
-                                  {project.subtasks && project.subtasks.length > 0 && (
-                                      <div className="flex flex-col gap-2 p-3 rounded-2xl bg-gray-50/50 border border-gray-100/60 group-hover:bg-gray-50/80 transition-colors">
-                                          <div className="flex items-center justify-between mb-1">
-                                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Progress</span>
-                                              <span className="text-[10px] font-bold text-gray-700 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
-                                                  {Math.round((project.subtasks.filter(s => s.status === 'done').length / project.subtasks.length) * 100)}%
-                                              </span>
-                                          </div>
-                                          <div className="flex items-center gap-2 flex-wrap px-1">
-                                               {project.subtasks.map((subtask, idx) => {
-                                                   const isDone = subtask.status === 'done';
-                                                   return (
-                                                       <div 
-                                                           key={subtask.id}
-                                                           className={`h-3 flex-1 rounded-full transition-all duration-300 relative group/pip ${isDone ? 'border-transparent shadow-[0_2px_4px_rgba(0,0,0,0.15)] scale-105' : 'bg-white border-gray-200 shadow-sm'}`}
-                                                           style={{ minWidth: '12px', backgroundColor: isDone ? subtask.color : undefined }}
-                                                           title={`${subtask.name}: ${subtask.status}`}
-                                                       >
-                                                           {/* Tooltip on Hover */}
-                                                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/pip:block whitespace-nowrap z-10">
-                                                               <div className="bg-gray-900 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-xl flex items-center gap-2 transform -translate-y-1 transition-transform">
-                                                                   <div className={`w-2 h-2 rounded-full ring-2 ring-white/20 ${isDone ? 'bg-emerald-400' : 'bg-gray-400'}`} />
-                                                                   {subtask.name}
-                                                               </div>
-                                                               {/* Arrow */}
-                                                               <div className="w-2.5 h-2.5 bg-gray-900 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2" />
-                                                           </div>
-                                                       </div>
-                                                   )
-                                               })}
-                                           </div>
-                                          <div className="flex items-center justify-between text-[10px] text-gray-400 font-medium mt-0.5">
-                                              <span>{project.subtasks.filter(s => s.status === 'done').length} done</span>
-                                              <span>{project.subtasks.length - project.subtasks.filter(s => s.status === 'done').length} left</span>
-                                          </div>
-                                      </div>
-                                  )}
                               </div>
                           ))}
                       </div>
@@ -288,7 +250,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
       }, [dragging, handleMouseMove, handleMouseUp])
 
     return (
-        <div className="flex flex-col h-full bg-slate-50/50">
+        <div className="flex flex-col h-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6]">
           {/* Date Controls */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white shadow-sm z-30">
              <div className="flex items-center gap-4">
@@ -716,7 +678,7 @@ function ProjectApp() {
             <span>Total: {totalProjectsCount}</span>
             <button 
                 onClick={() => { setDraftParentId(null); setIsModalOpen(true) }}
-                className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow hover:bg-indigo-700 transition-all"
+                className="ml-4 px-4 py-2 bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white rounded-lg text-sm font-bold shadow hover:shadow-lg transition-all"
             >
                 + New Project
             </button>
@@ -810,6 +772,8 @@ function ProjectApp() {
     </main>
   )
 }
+
+export default ProjectApp
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
