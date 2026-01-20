@@ -162,7 +162,7 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
                                                            key={subtask.id}
                                                            className={`h-3 flex-1 rounded-full transition-all duration-300 relative group/pip ${isDone ? 'border-transparent shadow-[0_2px_4px_rgba(0,0,0,0.15)] scale-105' : 'bg-white border-gray-200 shadow-sm'}`}
                                                            style={{ minWidth: '12px', backgroundColor: isDone ? subtask.color : undefined }}
-                                                           style={{ minWidth: '12px', backgroundColor: isDone ? project.color : undefined }}
+
                                                            title={`${subtask.name}: ${subtask.status}`}
                                                        >
                                                            {/* Tooltip on Hover */}
@@ -553,102 +553,6 @@ function ProjectApp() {
     } catch {}
   }
 
-  // Drag & Drop Logic
-  const handleMouseMove = React.useCallback((e) => {
-    if (!dragging) return
-
-    const dayWidth = 48 // pixel width of one day
-    const diffX = e.clientX - dragging.initialMouseX
-    const daysDiff = Math.round(diffX / dayWidth)
-
-    if (daysDiff === 0) return
-
-    const updateItem = (item) => {
-        const newStart = new Date(dragging.initialStart)
-        const newEnd = new Date(dragging.initialEnd)
-
-        if (dragging.type === 'move') {
-            newStart.setDate(newStart.getDate() + daysDiff)
-            newEnd.setDate(newEnd.getDate() + daysDiff)
-        } else if (dragging.type === 'resize-start') {
-            newStart.setDate(newStart.getDate() + daysDiff)
-            if (newStart >= newEnd) return item // Prevent inversion
-        } else if (dragging.type === 'resize-end') {
-            newEnd.setDate(newEnd.getDate() + daysDiff)
-            if (newEnd <= newStart) return item // Prevent inversion
-        }
-
-        return {
-            ...item,
-            start: format(newStart, "yyyy-MM-dd"),
-            end: format(newEnd, "yyyy-MM-dd")
-        }
-    }
-
-    setProjects(prev => prev.map(p => {
-      // Check main project
-      if (p.id === dragging.id) {
-          return updateItem(p)
-      }
-
-      // Check subtasks
-      if (p.subtasks) {
-          const updatedSubtasks = p.subtasks.map(sub => 
-              sub.id === dragging.id ? updateItem(sub) : sub
-          )
-          
-          if (updatedSubtasks.some((s, i) => s !== p.subtasks[i])) {
-              return { ...p, subtasks: updatedSubtasks }
-          }
-      }
-
-      return p
-    }))
-  }, [dragging])
-
-  const handleMouseUp = React.useCallback(() => {
-    setDragging(null)
-  }, [])
-
-  React.useEffect(() => {
-    if (dragging) {
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [dragging, handleMouseMove, handleMouseUp])
-
-  // Calendar calculations
-  const daysToShow = 21
-  const days = Array.from({ length: daysToShow }).map((_, i) => addDays(startDate, i))
-  const dayWidth = 48
-
-  const left = (dateStr) => {
-    const date = new Date(dateStr)
-    const diff = differenceInDays(date, startDate)
-    return diff * dayWidth
-  }
-
-  const notifyTeam = (msg, type = "info", company = "", source = "") => {
-    try {
-      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-      list.unshift({
-        id: Date.now(),
-        message: msg,
-        timestamp: new Date().toISOString(),
-        unread: true,
-        type,
-        company: company || "",
-        source: source || ""
-      })
-      if (list.length > 50) list.length = 50
-      localStorage.setItem("notifications", JSON.stringify(list))
-      window.dispatchEvent(new Event("storage"))
-    } catch {}
-  }
 
   const handleAddSubtask = (parentId) => {
       setDraftParentId(parentId)
@@ -685,40 +589,7 @@ function ProjectApp() {
     setDraftParentId(null)
   }
 
-  return (
-    <main className="min-h-screen bg-white font-sans text-gray-900 flex flex-col">
-      <Navigation />
-      
-      <div className="px-6 py-4 border-b border-slate-200 bg-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-800">Project Management</h1>
-            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg ml-6">
-                <button 
-                    onClick={() => setView('timeline')}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'timeline' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                    <Layout size={16} /> Timeline
-                </button>
-                <button 
-                    onClick={() => setView('kanban')}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'kanban' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                    <List size={16} /> Kanban
-                </button>
-            </div>
-          </div>
-          <div className="text-sm text-slate-500">
-            <span className="mr-3">Active: {activeProjectsCount}</span>
-            <span className="mr-3">Done: {doneProjectsCount}</span>
-            <span>Total: {totalProjectsCount}</span>
-            <button 
-                onClick={() => { setDraftParentId(null); setIsModalOpen(true) }}
-                className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow hover:bg-indigo-700 transition-all"
-            >
-                + New Project
-            </button>
-          </div>
+
   const toggleProject = (id) => {
     setProjects(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p))
   }
@@ -831,11 +702,31 @@ function ProjectApp() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-800">Project Management</h1>
+            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg ml-6">
+                <button 
+                    onClick={() => setView('timeline')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'timeline' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <Layout size={16} /> Timeline
+                </button>
+                <button 
+                    onClick={() => setView('kanban')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'kanban' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <List size={16} /> Kanban
+                </button>
+            </div>
           </div>
           <div className="text-sm text-slate-500">
             <span className="mr-3">Active: {activeProjectsCount}</span>
             <span className="mr-3">Done: {doneProjectsCount}</span>
             <span>Total: {totalProjectsCount}</span>
+            <button 
+                onClick={() => { setDraftParentId(null); setIsModalOpen(true) }}
+                className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow hover:bg-indigo-700 transition-all"
+            >
+                + New Project
+            </button>
           </div>
         </div>
       </div>
