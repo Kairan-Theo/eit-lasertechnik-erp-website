@@ -42,7 +42,7 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
   const [draggedItem, setDraggedItem] = React.useState(null)
 
   // Prevent UI from changing pipelines in Kanban
-  const PIPELINE_LOCKED = true
+  const PIPELINE_LOCKED = false
 
   const columns = [
       { id: 'todo', title: 'To Do', color: 'bg-gray-100/50', accent: 'border-gray-300' },
@@ -97,7 +97,7 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
               {columns.map(col => (
                   <div 
                       key={col.id} 
-                      className={`w-80 flex flex-col rounded-3xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
+                      className={`w-80 h-full shrink-0 flex flex-col rounded-3xl ${col.color} border border-gray-200/60 shadow-sm backdrop-blur-sm transition-colors`}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, col.id)}
                   >
