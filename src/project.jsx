@@ -162,7 +162,6 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
                                                            key={subtask.id}
                                                            className={`h-3 flex-1 rounded-full transition-all duration-300 relative group/pip ${isDone ? 'border-transparent shadow-[0_2px_4px_rgba(0,0,0,0.15)] scale-105' : 'bg-white border-gray-200 shadow-sm'}`}
                                                            style={{ minWidth: '12px', backgroundColor: isDone ? subtask.color : undefined }}
-                                                           style={{ minWidth: '12px', backgroundColor: isDone ? project.color : undefined }}
                                                            title={`${subtask.name}: ${subtask.status}`}
                                                        >
                                                            {/* Tooltip on Hover */}
@@ -535,23 +534,7 @@ function ProjectApp() {
     setTimeout(() => setNotification({ show: false, message: "" }), 3000)
   }
 
-  const notifyTeam = (msg, type = "info", company = "", source = "") => {
-    try {
-      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
-      list.unshift({
-        id: Date.now(),
-        message: msg,
-        timestamp: new Date().toISOString(),
-        unread: true,
-        type,
-        company: company || "",
-        source: source || ""
-      })
-      if (list.length > 50) list.length = 50
-      localStorage.setItem("notifications", JSON.stringify(list))
-      window.dispatchEvent(new Event("storage"))
-    } catch {}
-  }
+
 
   // Drag & Drop Logic
   const handleMouseMove = React.useCallback((e) => {
@@ -675,9 +658,9 @@ function ProjectApp() {
         }))
     } else {
         setProjects(p => [...p, {
-          id: Date.now(),
-          ...draft,
-          subtasks: []
+            id: Date.now(),
+            ...draft,
+            subtasks: []
         }])
     }
     setIsModalOpen(false)
@@ -685,10 +668,29 @@ function ProjectApp() {
     setDraftParentId(null)
   }
 
+  const toggleProject = (id) => {
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p))
+  }
+
+  const handleProgressChange = (id, newProgress) => {
+    setProjects(prev => prev.map(p => {
+        if (p.id === id) {
+            return { ...p, progress: newProgress }
+        }
+        return p
+    }))
+  }
+
   return (
     <main className="min-h-screen bg-white font-sans text-gray-900 flex flex-col">
       <Navigation />
-      
+
+      {notification.show && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+          {notification.message}
+        </div>
+      )}
+
       <div className="px-6 py-4 border-b border-slate-200 bg-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -719,30 +721,10 @@ function ProjectApp() {
                 + New Project
             </button>
           </div>
-  const toggleProject = (id) => {
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p))
-  }
-
-  const handleProgressChange = (id, newProgress) => {
-    setProjects(prev => prev.map(p => {
-        if (p.id === id) {
-            return { ...p, progress: newProgress }
-        }
-        return p
-    }))
-  }
-
-  return (
-    <main className="min-h-screen bg-white font-sans text-gray-900">
-      <Navigation />
-
-      {notification.show && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
-          {notification.message}
         </div>
-      )}
+      </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden flex flex-col">
         {view === 'kanban' ? (
             <KanbanBoard projects={projects} setProjects={setProjects} showNotification={showNotification} notifyTeam={notifyTeam} />
         ) : (
@@ -825,22 +807,6 @@ function ProjectApp() {
             </div>
         </div>
       )}
-      {/* Toolbar and stats can go here if needed */}
-
-      <div className="px-6 py-4 border-b border-slate-200 bg-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-800">Project Management</h1>
-          </div>
-          <div className="text-sm text-slate-500">
-            <span className="mr-3">Active: {activeProjectsCount}</span>
-            <span className="mr-3">Done: {doneProjectsCount}</span>
-            <span>Total: {totalProjectsCount}</span>
-          </div>
-        </div>
-      </div>
-
-      <KanbanBoard projects={projects} setProjects={setProjects} showNotification={showNotification} notifyTeam={notifyTeam} />
     </main>
   )
 }
