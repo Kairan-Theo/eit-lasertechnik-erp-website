@@ -478,17 +478,12 @@ function ProjectApp() {
     const saved = localStorage.getItem(STORAGE_KEY)
     return saved ? JSON.parse(saved) : initialProjects
   })
-  
-<<<<<<< Updated upstream
-  const [today] = React.useState(new Date())
-  const [startDate, setStartDate] = React.useState(startOfWeek(new Date(), { weekStartsOn: 1 }))
-  const [dragging, setDragging] = React.useState(null)
-=======
->>>>>>> Stashed changes
+
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [draftParentId, setDraftParentId] = React.useState(null)
   const [draft, setDraft] = React.useState({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
   const [view, setView] = React.useState("timeline") // timeline, list
+  const [notification, setNotification] = React.useState({ show: false, message: "" })
 
   const activeProjectsCount = projects.filter((p) => (p.status || "todo") !== "done").length
   const doneProjectsCount = projects.filter((p) => (p.status || "todo") === "done").length
@@ -501,92 +496,6 @@ function ProjectApp() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
   }, [projects])
 
-<<<<<<< Updated upstream
-  // Drag & Drop Logic
-  const handleMouseMove = React.useCallback((e) => {
-    if (!dragging) return
-
-    const dayWidth = 48 // pixel width of one day
-    const diffX = e.clientX - dragging.initialMouseX
-    const daysDiff = Math.round(diffX / dayWidth)
-
-    if (daysDiff === 0) return
-
-    const updateItem = (item) => {
-        const newStart = new Date(dragging.initialStart)
-        const newEnd = new Date(dragging.initialEnd)
-
-        if (dragging.type === 'move') {
-            newStart.setDate(newStart.getDate() + daysDiff)
-            newEnd.setDate(newEnd.getDate() + daysDiff)
-        } else if (dragging.type === 'resize-start') {
-            newStart.setDate(newStart.getDate() + daysDiff)
-            if (newStart >= newEnd) return item // Prevent inversion
-        } else if (dragging.type === 'resize-end') {
-            newEnd.setDate(newEnd.getDate() + daysDiff)
-            if (newEnd <= newStart) return item // Prevent inversion
-        }
-
-        return {
-            ...item,
-            start: format(newStart, "yyyy-MM-dd"),
-            end: format(newEnd, "yyyy-MM-dd")
-        }
-    }
-
-    setProjects(prev => prev.map(p => {
-      // Check main project
-      if (p.id === dragging.id) {
-          return updateItem(p)
-      }
-
-      // Check subtasks
-      if (p.subtasks) {
-          const updatedSubtasks = p.subtasks.map(sub => 
-              sub.id === dragging.id ? updateItem(sub) : sub
-          )
-          
-          if (updatedSubtasks.some((s, i) => s !== p.subtasks[i])) {
-              return { ...p, subtasks: updatedSubtasks }
-          }
-      }
-
-      return p
-    }))
-  }, [dragging])
-
-  const handleMouseUp = React.useCallback(() => {
-    setDragging(null)
-  }, [])
-
-  React.useEffect(() => {
-    if (dragging) {
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [dragging, handleMouseMove, handleMouseUp])
-
-  // Calendar calculations
-  const daysToShow = 21
-  const days = Array.from({ length: daysToShow }).map((_, i) => addDays(startDate, i))
-  const dayWidth = 48
-
-  const left = (dateStr) => {
-    const date = new Date(dateStr)
-    const diff = differenceInDays(date, startDate)
-    return diff * dayWidth
-  }
-
-  const width = (startStr, endStr) => {
-    const start = new Date(startStr)
-    const end = new Date(endStr)
-    const diff = differenceInDays(end, start) + 1
-    return diff * dayWidth
-=======
   const showNotification = (msg) => {
     setNotification({ show: true, message: msg })
     setTimeout(() => setNotification({ show: false, message: "" }), 3000)
@@ -608,7 +517,6 @@ function ProjectApp() {
       localStorage.setItem("notifications", JSON.stringify(list))
       window.dispatchEvent(new Event("storage"))
     } catch {}
->>>>>>> Stashed changes
   }
 
   const handleAddSubtask = (parentId) => {
@@ -646,189 +554,10 @@ function ProjectApp() {
     setDraftParentId(null)
   }
 
-<<<<<<< Updated upstream
-  const toggleProject = (id) => {
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p))
-  }
-
-  // --- UI Helper Components ---
-  
-  const ProjectRow = ({ item, isSubtask = false, onToggle }) => (
-    <div className="group flex items-center h-14 relative hover:bg-gray-50/50 transition-colors">
-                     
-        {/* Sidebar Item */}
-        <div className={`w-80 flex-none px-6 flex items-center gap-3 z-20 bg-white/80 backdrop-blur-[2px] border-r border-gray-100 group-hover:bg-white group-hover:shadow-[8px_0_30px_-10px_rgba(0,0,0,0.05)] transition-all duration-300 ${isSubtask ? 'pl-12' : ''}`}>
-        
-        {/* Expand Toggle (only for parents with subtasks) */}
-        {!isSubtask && (
-            <button 
-                onClick={() => onToggle(item.id)}
-                className={`p-1 rounded-md hover:bg-gray-100 text-gray-400 transition-colors ${item.subtasks?.length ? '' : 'invisible'}`}
-            >
-                {item.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
-        )}
-        
-        {isSubtask && <CornerDownRight size={14} className="text-gray-300 mr-1" />}
-
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0`} style={{ backgroundColor: item.color, transform: isSubtask ? 'scale(0.85)' : 'none' }}>
-            {item.name.charAt(0)}
-        </div>
-        
-        <div className="min-w-0 flex-1 group/info">
-            <div className="flex items-center justify-between">
-                <span className={`block text-sm ${isSubtask ? 'font-medium text-gray-600' : 'font-bold text-gray-800'} truncate`}>{item.name}</span>
-                {!isSubtask && (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); handleAddSubtask(item.id) }}
-                        className="opacity-0 group-hover/info:opacity-100 p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-indigo-600 transition-all"
-                        title="Add Subtask"
-                    >
-                        <Plus size={14} strokeWidth={2.5} />
-                    </button>
-                )}
-            </div>
-            <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] text-gray-400 font-medium">
-                {format(new Date(item.start), "MMM d")} - {format(new Date(item.end), "MMM d")}
-                </span>
-            </div>
-            {!isSubtask && <ProgressBar progress={65} color={item.color} />}
-        </div>
-        </div>
-
-        {/* Bar Area */}
-        <div className="absolute left-80 right-0 h-full flex items-center py-1">
-        <div
-            className={`absolute rounded-xl shadow-sm flex items-center px-3 relative group/bar transition-all duration-300 border border-white/10 hover:shadow-lg hover:-translate-y-0.5 select-none`}
-            style={{
-            height: isSubtask ? '24px' : '36px',
-            left: left(item.start),
-            width: Math.max(width(item.start, item.end), 40),
-            backgroundColor: item.color,
-            opacity: isSubtask ? 0.8 : 1,
-            boxShadow: `0 4px 6px -1px ${item.color}30`
-            }}
-        >
-            {/* Bar Texture */}
-            <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
-
-            <div
-              onMouseDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                setDragging({
-                  id: item.id,
-                  type: 'resize-start',
-                  initialMouseX: e.clientX,
-                  initialStart: item.start,
-                  initialEnd: item.end
-                })
-              }}
-              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l-xl opacity-0 group-hover/bar:opacity-100 transition-opacity"
-              style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.35), rgba(255,255,255,0))' }}
-              title="Resize start"
-            />
-            <div
-              onMouseDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                setDragging({
-                  id: item.id,
-                  type: 'resize-end',
-                  initialMouseX: e.clientX,
-                  initialStart: item.start,
-                  initialEnd: item.end
-                })
-              }}
-              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r-xl opacity-0 group-hover/bar:opacity-100 transition-opacity"
-              style={{ background: 'linear-gradient(to left, rgba(255,255,255,0.35), rgba(255,255,255,0))' }}
-              title="Resize end"
-            />
-            
-            {/* Bar Content */}
-            <div className="relative flex items-center justify-between w-full overflow-hidden">
-                <span className="text-[10px] font-bold text-white truncate drop-shadow-md select-none tracking-wide px-1">
-                    {width(item.start, item.end) > 60 && item.name}
-                </span>
-                {!isSubtask && width(item.start, item.end) > 120 && (
-                   <div className="opacity-90 scale-75 origin-right">
-                      <AvatarGroup color={item.color} count={2} />
-                   </div>
-                )}
-            </div>
-        </div>
-        </div>
-    </div>
-  )
-
-  const AvatarGroup = ({ count = 3, color }) => (
-    <div className="flex -space-x-2">
-      {[...Array(count)].map((_, i) => (
-        <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-600 shadow-sm" style={{ backgroundColor: i === 0 ? color + '20' : undefined, color: i === 0 ? color : undefined }}>
-          {String.fromCharCode(65 + i)}
-        </div>
-      ))}
-      <div className="w-6 h-6 rounded-full border-2 border-white bg-gray-50 flex items-center justify-center text-[8px] font-medium text-gray-400 shadow-sm">
-        +2
-      </div>
-    </div>
-  )
-
-  const ProgressBar = ({ progress = 65, color }) => (
-    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mt-2">
-       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: color }} />
-    </div>
-  )
-
-  return (
-    <div className="min-h-screen bg-gray-50/50 flex flex-col font-sans text-gray-900 selection:bg-indigo-100 selection:text-indigo-900">
-=======
   return (
     <main className="min-h-screen bg-white font-sans text-gray-900 flex flex-col">
->>>>>>> Stashed changes
       <Navigation />
       
-      {/* Top Bar */}
-      <div className="bg-transparent px-6 sm:px-8 py-5 flex items-center justify-between sticky top-0 z-40 transition-all duration-200">
-        <div className="flex items-center gap-4 sm:gap-5 min-w-0">
-          <Calendar className="text-indigo-600 shrink-0" size={24} strokeWidth={2.5} />
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-[28px] font-extrabold tracking-tight text-gray-900 truncate">Project Management</h1>
-            <div className="flex flex-wrap items-center gap-2 mt-2">
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15 text-xs font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                {activeProjectsCount} Active
-              </span>
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100/70 text-gray-700 ring-1 ring-black/10 text-xs font-bold">
-                {doneProjectsCount} Done
-              </span>
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/15 text-xs font-bold">
-                {totalProjectsCount} Total
-              </span>
-            </div>
-          </div>
-        </div>
-<<<<<<< Updated upstream
-        <div className="flex items-center gap-4">
-          <div className="flex bg-gray-100/50 p-1.5 rounded-xl border border-gray-200/50">
-             <button 
-                onClick={() => setView("timeline")}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${view === "timeline" ? "bg-white shadow-sm text-indigo-600 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
-             >
-                <Layout size={14} />
-                Timeline
-             </button>
-             <button 
-                onClick={() => setView("kanban")}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${view === "kanban" ? "bg-white shadow-sm text-indigo-600 ring-1 ring-black/5" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
-             >
-                <List size={14} />
-                Kanban
-             </button>
-=======
-      )}
-
       <div className="px-6 py-4 border-b border-slate-200 bg-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -858,232 +587,10 @@ function ProjectApp() {
             >
                 + New Project
             </button>
->>>>>>> Stashed changes
-          </div>
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-gray-900 hover:bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-gray-900/20 active:scale-95 hover:shadow-xl"
-          >
-            <Plus size={18} strokeWidth={3} />
-            <span>New Project</span>
-          </button>
-        </div>
-      </div>
-
-<<<<<<< Updated upstream
-      {/* Toolbar */}
-      <div className="px-8 py-4 flex items-center justify-between bg-transparent sticky top-[88px] z-30">
-         <div className="flex items-center gap-4">
-            {view === 'timeline' && (
-                <div className="flex items-center bg-white rounded-xl p-1 border border-gray-200 shadow-sm">
-                    <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-2 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-700 transition-all">
-                       <ChevronLeft size={18} />
-                    </button>
-                    <button onClick={() => setStartDate(startOfWeek(new Date(), { weekStartsOn: 1 }))} className="px-4 py-1.5 text-xs font-bold text-gray-700 hover:text-indigo-600 transition-colors uppercase tracking-wide">
-                       Today
-                    </button>
-                    <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-2 hover:bg-gray-50 rounded-lg text-gray-400 hover:text-gray-700 transition-all">
-                       <ChevronRight size={18} />
-                    </button>
-                </div>
-            )}
-            <span className="text-lg font-bold text-gray-800 tracking-tight">
-               {view === 'timeline' ? format(startDate, "MMMM yyyy") : 'Board View'}
-            </span>
-         </div>
-         <div className="flex items-center gap-3">
-            <div className="relative group">
-               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-indigo-500 transition-colors" />
-               <input 
-                  type="text" 
-                  placeholder="Search projects..." 
-                  className="pl-10 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-64 transition-all shadow-sm hover:border-gray-300"
-               />
-            </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
-               <Filter size={14} />
-               Filters
-            </button>
-         </div>
-      </div>
-
-      <div className="px-8 pt-4 bg-white/60 backdrop-blur-sm border-b border-gray-200/40">
-        <div className="flex flex-wrap items-center gap-2 pb-4">
-          <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest mr-2">Color Meaning</span>
-          {COLORS.map((c) => (
-            <div key={c.hex} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-gray-200/60 shadow-sm">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.hex }} />
-              <span className="text-[11px] font-bold text-gray-700">{c.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Gantt Area */}
-      {view === 'timeline' ? (
-      <div className="flex-1 overflow-hidden flex flex-col relative">
-        
-        {/* Timeline Header */}
-        <div className="flex border-b border-gray-200 bg-white z-20 shadow-[0_4px_20px_-12px_rgba(0,0,0,0.1)]">
-            {/* Sidebar Header */}
-            <div className="flex-none w-80 px-8 py-5 flex items-end bg-gray-50/30 border-r border-gray-200/60">
-                <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest">Project Name & Status</span>
-            </div>
-            
-            {/* Calendar Header */}
-            <div className="flex-1 overflow-hidden relative">
-              <div className="flex">
-                {days.map((d, i) => {
-                  const isToday = isSameDay(d, today)
-                  const weekend = isWeekend(d)
-                  return (
-                    <div 
-                      key={i} 
-                      style={{ width: dayWidth }} 
-                      className={`flex-none flex flex-col justify-end pb-4 pt-5 text-center border-r border-dashed border-gray-100 relative group ${weekend ? 'bg-gray-50/50' : 'bg-white'}`}
-                    >
-                      <span className={`text-[10px] font-bold uppercase mb-1.5 transition-colors ${isToday ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-600'}`}>
-                        {format(d, "EEE")}
-                      </span>
-                      <div className={`mx-auto w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold transition-all duration-300 ${isToday ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/40 scale-110' : 'text-gray-700 group-hover:bg-gray-100'}`}>
-                        {format(d, "d")}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-auto relative bg-white">
-             <div className="min-w-max">
-               {/* Background Columns */}
-               <div className="absolute inset-0 flex pl-80 pointer-events-none">
-                 {days.map((d, i) => (
-                   <div 
-                     key={i} 
-                     style={{ width: dayWidth }}
-                     className={`flex-none border-r border-dashed border-gray-100 h-full ${isWeekend(d) ? 'bg-gray-50/40' : ''} ${isSameDay(d, today) ? 'bg-indigo-50/5' : ''}`}
-                   />
-                 ))}
-                 {/* Today Line */}
-                 <div 
-                     className="absolute top-0 bottom-0 w-px bg-indigo-500/50 z-10"
-                     style={{ left: left(today) + (dayWidth/2) }} 
-                 >
-                    <div className="absolute top-0 -translate-x-1/2 w-full h-full bg-indigo-500/5 blur-[2px]" />
-                 </div>
-               </div>
-
-               {/* Projects List */}
-               <div className="py-6 space-y-1">
-                 {projects.map((p, idx) => (
-                   <div key={p.id}>
-                       <ProjectRow item={p} onToggle={toggleProject} />
-                       
-                       {/* Subtasks */}
-                       {p.expanded && p.subtasks && (
-                           <div className="relative">
-                               {/* Tree connector line */}
-                               <div className="absolute left-[38px] top-0 bottom-4 w-px bg-gray-200 z-0"></div>
-                               
-                               {p.subtasks.map(sub => (
-                                   <ProjectRow key={sub.id} item={sub} isSubtask={true} />
-                               ))}
-                           </div>
-                       )}
-                   </div>
-                 ))}
-               </div>
-             </div>
-        </div>
-      </div>
-      ) : (
-        <KanbanBoard projects={projects} setProjects={setProjects} />
-      )}
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">New Project</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Name</label>
-                <input 
-                  autoFocus
-                  type="text" 
-                  value={draft.name}
-                  onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                  placeholder="e.g. Q1 Marketing Plan"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Date</label>
-                    <input 
-                      type="date" 
-                      value={draft.start}
-                      onChange={e => setDraft(d => ({ ...d, start: e.target.value }))}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
-                    />
-                 </div>
-                 <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Date</label>
-                    <input 
-                      type="date" 
-                      value={draft.end}
-                      onChange={e => setDraft(d => ({ ...d, end: e.target.value }))}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
-                    />
-                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Color Meaning</label>
-                <div className="flex flex-wrap gap-2">
-                  {COLORS.map(c => (
-                    <button
-                      key={c.hex}
-                      onClick={() => setDraft(d => ({ ...d, color: c.hex }))}
-                      className={`w-8 h-8 rounded-full transition-transform hover:scale-110 flex items-center justify-center ${draft.color === c.hex ? 'ring-2 ring-offset-2 ring-gray-900 scale-110' : ''}`}
-                      style={{ backgroundColor: c.hex }}
-                      title={c.name}
-                    />
-                  ))}
-                </div>
-                <div className="mt-3">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gray-50 text-gray-700 border border-gray-100">
-                    {getColorMeaning(draft.color)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-8 pt-6 border-t border-gray-50">
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={saveProject}
-                disabled={!draft.name || !draft.start || !draft.end}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-              >
-                Create Project
-              </button>
-            </div>
           </div>
         </div>
-      )}
-    </div>
-=======
+      </div>
+
       <div className="flex-1 overflow-hidden">
         {view === 'kanban' ? (
             <KanbanBoard projects={projects} setProjects={setProjects} showNotification={showNotification} notifyTeam={notifyTeam} />
@@ -1168,7 +675,6 @@ function ProjectApp() {
         </div>
       )}
     </main>
->>>>>>> Stashed changes
   )
 }
 

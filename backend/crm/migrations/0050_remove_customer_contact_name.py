@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('crm', '0049_componententry_component_table'),
+        ('crm', '0045_merge_20260112_0421'),
     ]
 
     operations = [
