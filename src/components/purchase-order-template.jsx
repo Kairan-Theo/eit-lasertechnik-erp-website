@@ -123,8 +123,9 @@ export function PurchaseOrderTemplate({ q, compact }) {
 
         {/* Summary */}
         <div className="flex border border-black border-t-0 mb-4">
-             <div className="w-2/3 border-r border-black p-2 align-top text-xs font-bold underline">
-                หมายเหตุ
+             <div className="w-2/3 border-r border-black p-2 align-top text-xs">
+                <div className="font-bold underline mb-1">หมายเหตุ</div>
+                <div className="whitespace-pre-wrap">{q.details?.remark}</div>
              </div>
              <div className="w-1/3">
                 <div className="flex border-b border-black">
