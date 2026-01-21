@@ -589,7 +589,6 @@ function ProjectApp() {
 
   return (
     <main className="min-h-screen bg-white font-sans text-gray-900 flex flex-col">
-    <main className="min-h-screen bg-white font-sans text-gray-900">
       <Navigation />
 
       {notification.show && (
@@ -715,41 +714,6 @@ function ProjectApp() {
         </div>
       )}
       {/* Toolbar and stats can go here if needed */}
-
-      <div className="px-6 py-4 border-b border-slate-200 bg-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-800">Project Management</h1>
-            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg ml-6">
-                <button 
-                    onClick={() => setView('timeline')}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'timeline' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                    <Layout size={16} /> Timeline
-                </button>
-                <button 
-                    onClick={() => setView('kanban')}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'kanban' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                    <List size={16} /> Kanban
-                </button>
-            </div>
-          </div>
-          <div className="text-sm text-slate-500">
-            <span className="mr-3">Active: {activeProjectsCount}</span>
-            <span className="mr-3">Done: {doneProjectsCount}</span>
-            <span>Total: {totalProjectsCount}</span>
-            <button 
-                onClick={() => { setDraftParentId(null); setIsModalOpen(true) }}
-                className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow hover:bg-indigo-700 transition-all"
-            >
-                + New Project
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <KanbanBoard projects={projects} setProjects={setProjects} showNotification={showNotification} notifyTeam={notifyTeam} />
     </main>
   )
 }

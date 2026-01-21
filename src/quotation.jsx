@@ -1,10 +1,10 @@
-﻿import React from "react"
+import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, ClipboardList } from "lucide-react"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText, ClipboardList } from "lucide-react"
 import "./index.css"
 
 function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
