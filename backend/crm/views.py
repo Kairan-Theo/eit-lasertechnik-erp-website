@@ -96,6 +96,7 @@ class DealViewSet(viewsets.ModelViewSet):
 class ActivityScheduleViewSet(viewsets.ModelViewSet):
     queryset = ActivitySchedule.objects.all().order_by('due_at')
     serializer_class = ActivityScheduleSerializer
+    authentication_classes = []
     permission_classes = [AllowAny]
 
 class ProjectViewSet(viewsets.ModelViewSet):

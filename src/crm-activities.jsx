@@ -5,16 +5,20 @@ import {
   isToday 
 } from "date-fns"
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, MoreHorizontal, Check } from "lucide-react"
+import { API_BASE_URL } from "./config"
 
-export default function CRMActivities({ deals = [], onDeleteActivity }) {
+export default function CRMActivities({ deals = [], onDeleteActivity, onActivityUpdate }) {
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [optimisticUpdates, setOptimisticUpdates] = useState({})
   
   // Flatten and prepare activities
   const activities = deals.flatMap(deal => 
     (deal.activitySchedules || []).map(activity => ({
       ...activity,
       dealId: deal.id,
-      date: activity.dueAt ? new Date(activity.dueAt) : null
+      date: activity.dueAt ? new Date(activity.dueAt) : null,
+      // Apply optimistic update if exists, otherwise use server state
+      completed: optimisticUpdates[activity.id] !== undefined ? optimisticUpdates[activity.id] : activity.completed
     }))
   ).filter(a => a.date) // Only showing activities with dates
 
@@ -44,6 +48,53 @@ export default function CRMActivities({ deals = [], onDeleteActivity }) {
     // Simple hash to keep color consistent for same activity
     const hash = (activity.id || 0) + (activity.activityName?.length || 0)
     return colors[hash % colors.length]
+  }
+
+  const handleToggleComplete = async (activity, e) => {
+    e.stopPropagation()
+    const newStatus = !activity.completed
+    
+    // Optimistic update
+    setOptimisticUpdates(prev => ({
+      ...prev,
+      [activity.id]: newStatus
+    }))
+
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      
+      const res = await fetch(`${API_BASE_URL}/activity_schedules/${activity.id}/`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ completed: newStatus })
+      })
+
+      if (res.ok) {
+        if (onActivityUpdate) onActivityUpdate()
+        // Clear optimistic update after successful sync (optional, but keeps state clean)
+        // Actually better to keep it until props update to avoid flicker
+      } else {
+        console.error("Failed to toggle activity status")
+        // Revert on failure
+        setOptimisticUpdates(prev => {
+          const next = { ...prev }
+          delete next[activity.id]
+          return next
+        })
+      }
+    } catch (err) {
+      console.error("Error toggling activity status", err)
+      // Revert on error
+      setOptimisticUpdates(prev => {
+        const next = { ...prev }
+        delete next[activity.id]
+        return next
+      })
+    }
   }
 
   return (
@@ -99,6 +150,8 @@ export default function CRMActivities({ deals = [], onDeleteActivity }) {
             
             const isCurrentMonth = isSameMonth(day, monthStart)
             const isTodayDate = isToday(day)
+            
+            const pendingCount = dayActivities.filter(a => !a.completed).length
 
             return (
                 <div 
@@ -120,9 +173,9 @@ export default function CRMActivities({ deals = [], onDeleteActivity }) {
                         >
                             {format(day, "d")}
                         </span>
-                        {dayActivities.length > 0 && (
+                        {pendingCount > 0 && (
                             <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
-                                {dayActivities.length}
+                                {pendingCount}
                             </span>
                         )}
                     </div>
@@ -132,16 +185,22 @@ export default function CRMActivities({ deals = [], onDeleteActivity }) {
                             <div 
                                 key={i}
                                 className={`
-                                    text-xs px-2 py-1.5 rounded-md flex items-center gap-2 cursor-pointer transition-all hover:shadow-sm hover:scale-[1.02]
+                                    group/item text-xs px-2 py-1.5 rounded-md flex items-center gap-2 transition-all hover:shadow-sm hover:scale-[1.02] cursor-pointer
                                     ${getEventColor(act)}
+                                    ${act.completed ? 'opacity-50' : ''}
                                 `}
                                 title={`${act.activityName} - ${format(act.date, "p")} - ${act.customer}`}
+                                onClick={(e) => handleToggleComplete(act, e)}
                             >
-                                <div className={`w-3 h-3 rounded-[3px] border border-current flex items-center justify-center shrink-0 bg-white/50`}>
+                                <button
+                                    type="button" 
+                                    className={`w-5 h-5 rounded-[4px] border border-current flex items-center justify-center shrink-0 ${act.completed ? 'bg-current' : 'bg-white/50'} cursor-pointer hover:scale-110 transition-transform focus:outline-none focus:ring-1 focus:ring-current`}
+                                    onClick={(e) => handleToggleComplete(act, e)}
+                                >
                                     {/* Checkbox imitation */}
-                                    <Check className="w-2 h-2 text-current" strokeWidth={3} />
-                                </div>
-                                <span className="truncate font-medium flex-1">
+                                    <Check className={`w-3.5 h-3.5 pointer-events-none ${act.completed ? 'text-white' : 'text-current'} ${act.completed ? '' : 'opacity-0 group-hover/item:opacity-100'}`} strokeWidth={3} />
+                                </button>
+                                <span className={`truncate font-medium flex-1 ${act.completed ? 'line-through opacity-70' : ''}`}>
                                     {act.activityName || "Untitled"}
                                 </span>
                                 {act.date && <span className="opacity-70 text-[10px] whitespace-nowrap">{format(act.date, "HH:mm")}</span>}
