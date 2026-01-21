@@ -16,20 +16,79 @@ import { Toaster } from "../components/ui/toaster"
 
 const initialPipeline = {
   "Appointment Schedule": [
-    { id: 1, title: "Discussing Goods Price", customer: "Big C Supercenter PLC", amount: 0, currency: "฿", priority: "none", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0] },
+    { 
+      id: 1, 
+      title: "Discussing Goods Price", 
+      customer: "Big C Supercenter PLC", 
+      amount: 0, 
+      currency: "฿", 
+      priority: "none", 
+      contact: "", 
+      email: "", 
+      phone: "", 
+      notes: "", 
+      createdAt: new Date().toISOString(), 
+      expectedClose: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
+      activitySchedules: [
+        { id: 101, dueAt: new Date().toISOString(), activityName: "Initial Meeting", salesperson: "Sales Team", customer: "Big C Supercenter PLC" },
+        { id: 102, dueAt: new Date(Date.now() + 2*24*60*60*1000).toISOString(), activityName: "Follow up Email", salesperson: "Sales Team", customer: "Big C Supercenter PLC" }
+      ]
+    },
   ],
   "Presentation Schedule": [
-    { id: 2, title: "Selling New Machines", customer: "SIANGHAI EITING TRADING COMPANY", amount: 50000, currency: "฿", priority: "high", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 45*24*60*60*1000).toISOString().split('T')[0] },
+    { 
+      id: 2, 
+      title: "Selling New Machines", 
+      customer: "SIANGHAI EITING TRADING COMPANY", 
+      amount: 50000, 
+      currency: "฿", 
+      priority: "high", 
+      contact: "", 
+      email: "", 
+      phone: "", 
+      notes: "", 
+      createdAt: new Date().toISOString(), 
+      expectedClose: new Date(Date.now() + 45*24*60*60*1000).toISOString().split('T')[0],
+      activitySchedules: [
+        { id: 201, dueAt: new Date(Date.now() + 5*24*60*60*1000).toISOString(), activityName: "Product Demo", salesperson: "Sales Team", customer: "SIANGHAI EITING" }
+      ]
+    },
   ],
   Quotation: [
-    { id: 3, title: "Introduced New Plan about Manufacturing", customer: "METRO MACHINERY", amount: 100, currency: "฿", priority: "medium", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 20*24*60*60*1000).toISOString().split('T')[0] },
+    { 
+      id: 3, 
+      title: "Introduced New Plan about Manufacturing", 
+      customer: "METRO MACHINERY", 
+      amount: 100, 
+      currency: "฿", 
+      priority: "medium", 
+      contact: "", 
+      email: "", 
+      phone: "", 
+      notes: "", 
+      createdAt: new Date().toISOString(), 
+      expectedClose: new Date(Date.now() + 20*24*60*60*1000).toISOString().split('T')[0] 
+    },
   ],
   Demo: [],
   Decision: [],
   Connection: [],
   "Contract Sent": [],
   "Close Won": [
-    { id: 4, title: "Negotiated and made contract", customer: "Konvy", amount: 80000, currency: "฿", priority: "low", contact: "", email: "", phone: "", notes: "", createdAt: new Date().toISOString(), expectedClose: new Date(Date.now() + 10*24*60*60*1000).toISOString().split('T')[0] },
+    { 
+      id: 4, 
+      title: "Negotiated and made contract", 
+      customer: "Konvy", 
+      amount: 80000, 
+      currency: "฿", 
+      priority: "low", 
+      contact: "", 
+      email: "", 
+      phone: "", 
+      notes: "", 
+      createdAt: new Date().toISOString(), 
+      expectedClose: new Date(Date.now() + 10*24*60*60*1000).toISOString().split('T')[0] 
+    },
   ],
 }
 
@@ -91,7 +150,7 @@ const API_BASE = `${API_BASE_URL}/api`
 
 function CRMPage() {
   const [stages, setStages] = React.useState(
-    Object.keys(initialPipeline).map((name, idx) => ({ id: idx + 1, name, deals: [] }))
+    Object.keys(initialPipeline).map((name, idx) => ({ id: idx + 1, name, deals: initialPipeline[name] }))
   )
   const [activeTab, setActiveTab] = React.useState("Deals")
   const [menuOpenIndex, setMenuOpenIndex] = React.useState(null)
@@ -2345,7 +2404,7 @@ function CRMPage() {
           />
         </div>
       ) : activeTab === "Activities" ? (
-        <div className="min-h-screen bg-white">
+        <div className="h-[calc(100vh-140px)] bg-white">
           <CRMActivities 
             deals={stages.flatMap(s => s.deals)} 
             onDeleteActivity={handleDeleteActivityFromTable}
