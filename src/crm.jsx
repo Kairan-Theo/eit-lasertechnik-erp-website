@@ -214,7 +214,8 @@ function CRMPage() {
               dueAt: s.due_at ? s.due_at.slice(0, 16) : "",
               activityName: s.activity_name || "",
               salesperson: s.salesperson || "",
-              customer: s.customer || ""
+              customer: s.customer || "",
+              completed: s.completed || false
             }))
           }
           const stageIndex = newStages.findIndex(s => s.name === d.stage)
@@ -2408,6 +2409,7 @@ function CRMPage() {
           <CRMActivities 
             deals={stages.flatMap(s => s.deals)} 
             onDeleteActivity={handleDeleteActivityFromTable}
+            onActivityUpdate={fetchDeals}
           />
         </div>
       ) : activeTab === "Tickets" ? (
