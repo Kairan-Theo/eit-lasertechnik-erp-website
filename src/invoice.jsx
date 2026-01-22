@@ -184,12 +184,6 @@ function useInvoiceState() {
     try {
       const fromQuotation = localStorage.getItem("confirmedQuotation")
       if (fromQuotation) {
-<<<<<<< HEAD
-        const raw = JSON.parse(fromQuotation)
-        const q = (raw && typeof raw === 'object') ? raw : {}
-        setCustomer((prev) => ({ ...prev, ...(q.customer || {}) }))
-        setItems(Array.isArray(q.items) && q.items.length ? q.items : [{ product: "", description: "", qty: 1, price: 0, tax: 0 }])
-=======
         const q = JSON.parse(fromQuotation)
         // Map quotation customer to new structure if possible
         setCustomer((prev) => ({
@@ -201,8 +195,7 @@ function useInvoiceState() {
         }))
         
         setItems(Array.isArray(q.items) && q.items.length ? q.items.map(i => ({ ...i, unit: i.unit || "pcs" })) : [{ product: "", description: "", qty: 1, price: 0, tax: 0, unit: "pcs" }])
-        
->>>>>>> 9e68c3afcdea2a635c5aaec9e190b427d2d7b70b
+
         setDetails((prev) => {
           const date = q.details?.date || prev.date
           const paymentTermsDays = Number(q.details?.paymentTermsDays ?? prev.paymentTermsDays)
@@ -277,6 +270,12 @@ function useInvoiceState() {
     const payload = { customer, details, items, totals: { subtotal, taxTotal, total } }
     localStorage.setItem("invoiceDraft", JSON.stringify(payload))
     try {
+<<<<<<< HEAD
+=======
+      const key = `history:${customer.email || customer.phone || customer.name || details.number}`
+      const raw = JSON.parse(localStorage.getItem(key) || "{}")
+      const existing = (raw && typeof raw === 'object') ? raw : {}
+>>>>>>> 83155bd6fab2e514f64f6b6b54acdef6d48884fe
       const key = `history:${customer.email || customer.telephone || customer.company || details.number}`
       const existing = JSON.parse(localStorage.getItem(key) || "{}")
       const invoices = Array.isArray(existing.invoices) ? existing.invoices : []
@@ -350,6 +349,12 @@ function useInvoiceState() {
     const link = `mailto:${customer.email}?subject=${subject}&body=${body}`
     window.location.href = link
     try {
+<<<<<<< HEAD
+=======
+      const key = `history:${customer.email || customer.phone || customer.name || details.number}`
+      const raw = JSON.parse(localStorage.getItem(key) || "{}")
+      const existing = (raw && typeof raw === 'object') ? raw : {}
+>>>>>>> 83155bd6fab2e514f64f6b6b54acdef6d48884fe
       const key = `history:${customer.email || customer.telephone || customer.company || details.number}`
       const existing = JSON.parse(localStorage.getItem(key) || "{}")
       const emails = Array.isArray(existing.emails) ? existing.emails : []
