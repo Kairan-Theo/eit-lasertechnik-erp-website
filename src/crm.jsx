@@ -4,7 +4,7 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import emailjs from '@emailjs/browser';
-import { Mail, Trash2 } from "lucide-react"
+import { Mail, Trash2, FileText } from "lucide-react"
 import "./index.css"
 import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
@@ -635,6 +635,35 @@ function CRMPage() {
     const { stageIndex, cardIndex } = openDetail
     const dealId = stages[stageIndex].deals[cardIndex].id
 
+    // Clean up notes: remove date from empty fragments
+    const separator = "\n\n──────────────────────────\n"
+    let rawNotes = detailDeal.notes || ""
+    let fragments = rawNotes.split(separator)
+    
+    fragments = fragments.map(fragment => {
+        const dateMatch = fragment.match(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/)
+        let contentWithoutDate = dateMatch ? fragment.replace(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/, "") : fragment
+        
+        const attachmentRegex = /[\r\n]*(<<Attachment:([^:]+):([^:]+):(.+?)>>)/g
+        let hasAttachments = false
+        let match
+        let contentForDisplay = contentWithoutDate
+        
+        while ((match = attachmentRegex.exec(contentWithoutDate)) !== null) {
+             hasAttachments = true
+             contentForDisplay = contentForDisplay.replace(match[0], "")
+        }
+        
+        const hasText = contentForDisplay.trim().length > 0
+        
+        if (!hasText && !hasAttachments) {
+            return ""
+        }
+        return fragment
+    })
+    
+    const cleanedNotes = fragments.join(separator)
+
     // Optimistic Update
     setStages((prev) => prev.map((s, i) => {
       if (i !== stageIndex) return s
@@ -652,7 +681,7 @@ function CRMPage() {
           address: detailDeal.address, 
           taxId: detailDeal.taxId,
           poNumber: detailDeal.poNumber,
-          notes: detailDeal.notes,
+          notes: cleanedNotes,
           salesperson: detailDeal.salesperson,
           salespersonName: detailDeal.salesperson
       } : d))
@@ -679,7 +708,7 @@ function CRMPage() {
             address: detailDeal.address,
             tax_id: detailDeal.taxId,
             po_number: detailDeal.poNumber,
-            notes: detailDeal.notes,
+            notes: cleanedNotes,
             stage: stageName,
             salesperson: detailDeal.salesperson
         }
@@ -692,6 +721,82 @@ function CRMPage() {
     } catch (err) {
         console.error("Failed to update deal details", err)
         showNotification("Failed to update deal details")
+    }
+  }
+
+  const [openNote, setOpenNote] = React.useState(null)
+
+  const openDealNote = (stageIndex, cardIndex) => {
+    const d = stages[stageIndex].deals[cardIndex]
+    setDetailDeal({
+        ...defaultNewDeal,
+        notes: d.notes || "",
+    })
+    setOpenNote({ stageIndex, cardIndex })
+  }
+
+  const saveNote = async () => {
+    if (!openNote) return
+    const { stageIndex, cardIndex } = openNote
+    const dealId = stages[stageIndex].deals[cardIndex].id
+
+    // Clean up notes: remove date from empty fragments
+    const separator = "\n\n──────────────────────────\n"
+    let rawNotes = detailDeal.notes || ""
+    let fragments = rawNotes.split(separator)
+    
+    fragments = fragments.map(fragment => {
+        const dateMatch = fragment.match(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/)
+        let contentWithoutDate = dateMatch ? fragment.replace(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/, "") : fragment
+        
+        const attachmentRegex = /[\r\n]*(<<Attachment:([^:]+):([^:]+):(.+?)>>)/g
+        let hasAttachments = false
+        let match
+        let contentForDisplay = contentWithoutDate
+        
+        while ((match = attachmentRegex.exec(contentWithoutDate)) !== null) {
+             hasAttachments = true
+             contentForDisplay = contentForDisplay.replace(match[0], "")
+        }
+        
+        const hasText = contentForDisplay.trim().length > 0
+        
+        if (!hasText && !hasAttachments) {
+            return ""
+        }
+        return fragment
+    })
+    
+    const cleanedNotes = fragments.join(separator)
+
+    // Optimistic Update
+    setStages((prev) => prev.map((s, i) => {
+      if (i !== stageIndex) return s
+      const deals = s.deals.map((d, j) => (j === cardIndex ? { 
+          ...d, 
+          notes: cleanedNotes,
+      } : d))
+      return { ...s, deals }
+    }))
+    setOpenNote(null)
+
+    // API Update
+    try {
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { "Authorization": `Token ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" }
+        
+        const apiBody = {
+            notes: cleanedNotes,
+        }
+
+        await fetch(`${API_BASE}/deals/${dealId}/`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify(apiBody)
+        })
+    } catch (err) {
+        console.error("Failed to update deal notes", err)
+        showNotification("Failed to update deal notes")
     }
   }
 
@@ -1220,6 +1325,61 @@ function CRMPage() {
                              })()}
                            </div>
                         </div>
+                        
+                        <div 
+                           className="flex items-center gap-1.5 max-w-[120px] cursor-pointer group/note"
+                           onClick={(e) => { e.stopPropagation(); openDealNote(stageIndex, cardIndex); }}
+                           title={d.notes || "Add note"}
+                         >
+                           <FileText className={`w-3.5 h-3.5 shrink-0 transition-colors ${d.notes ? "text-[#2D4485]" : "text-slate-300 group-hover/note:text-[#2D4485]"}`} />
+                           <span className={`text-[11px] truncate transition-colors ${d.notes ? "text-[#2D4485] font-medium" : "text-slate-400 group-hover/note:text-[#2D4485]"}`}>
+                             {(() => {
+            if (!d.notes) return "Notes";
+            
+            // Check content and find last valid date
+            const fragments = d.notes.split("\n\n──────────────────────────\n");
+            let hasNonEmptyContent = false;
+            let validDateMatch = null;
+            
+            fragments.forEach(fragment => {
+                const dateMatch = fragment.match(/^\[(\d{1,2}\/\d{1,2}\/\d{4}.*?)\]\s*/);
+                let contentWithoutDate = dateMatch ? fragment.replace(/^\[(\d{1,2}\/\d{1,2}\/\d{4}.*?)\]\s*/, "") : fragment;
+                
+                const attachmentRegex = /[\r\n]*(<<Attachment:([^:]+):([^:]+):(.+?)>>)/g;
+                const cleanContent = contentWithoutDate.replace(attachmentRegex, "").trim();
+                const hasAttachments = contentWithoutDate.match(attachmentRegex);
+                
+                if (cleanContent.length > 0 || (hasAttachments && hasAttachments.length > 0)) {
+                    hasNonEmptyContent = true;
+                    if (dateMatch) {
+                        validDateMatch = dateMatch;
+                    }
+                }
+            });
+            
+            if (!hasNonEmptyContent) return "Notes";
+
+            if (validDateMatch) {
+              const datePart = validDateMatch[1].split(',')[0].trim();
+              if (!datePart) return "Notes";
+              
+              const [day, month, year] = datePart.split('/').map(Number);
+              if (!day || !month || !year) return datePart; // Fallback if parsing fails
+
+              const noteDate = new Date(year, month - 1, day);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const yesterday = new Date(today);
+              yesterday.setDate(yesterday.getDate() - 1);
+              
+              if (noteDate.getTime() === today.getTime()) return "Today";
+              if (noteDate.getTime() === yesterday.getTime()) return "Yesterday";
+              return datePart;
+            }
+            return "Notes";
+          })()}
+                           </span>
+                         </div>
                       </div>
                     </div>
                   ))}
@@ -1906,16 +2066,6 @@ function CRMPage() {
                           })}
                         </div>
                       </div>
-
-                      <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Notes</div>
-                        <textarea 
-                          value={detailDeal.notes} 
-                          onChange={(e)=>setDetailDeal({...detailDeal, notes:e.target.value})} 
-                          className="w-full min-h-[120px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all resize-y" 
-                          placeholder="Add notes about this deal..." 
-                        />
-                      </div>
                     </div>
                   </div>
                   <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
@@ -1928,6 +2078,285 @@ function CRMPage() {
                     <button
                       className="px-5 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
                       onClick={saveDetail}
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {openNote && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setOpenNote(null)}>
+              <div className="absolute left-1/2 top-16 -translate-x-1/2 w-[640px] transition-all" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 text-lg">Note</h3>
+                    <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setOpenNote(null)}>✕</button>
+                  </div>
+                  <div className="p-6 max-h-[70vh] overflow-y-auto">
+                    <div className="space-y-6">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Note Content</div>
+                          <button
+                              className="px-3 py-1.5 rounded-lg border border-[#2D4485] text-[#2D4485] bg-white hover:bg-blue-50 text-xs font-medium flex items-center gap-2 transition-all shadow-sm"
+                              onClick={() => {
+                                  const separator = detailDeal.notes ? "\n\n──────────────────────────\n" : ""
+                                  setDetailDeal({
+                                      ...detailDeal,
+                                      notes: separator + (detailDeal.notes || "")
+                                  })
+                              }}
+                          >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                              Create another note
+                          </button>
+                        </div>
+                        <div className="space-y-4">
+                          {(detailDeal.notes ? detailDeal.notes.split("\n\n──────────────────────────\n") : [""]).map((noteFragment, idx, arr) => {
+                            const dateMatch = noteFragment.match(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/);
+                            const dateDisplay = dateMatch ? dateMatch[1] : "";
+                            let contentWithoutDate = dateMatch ? noteFragment.replace(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/, "") : noteFragment;
+                            
+                            // Extract attachments (supports multiple)
+                            const attachmentRegex = /[\r\n]*(<<Attachment:([^:]+):([^:]+):(.+?)>>)/g;
+                            const attachments = [];
+                            let match;
+                            let contentForDisplay = contentWithoutDate;
+                            
+                            while ((match = attachmentRegex.exec(contentWithoutDate)) !== null) {
+                              attachments.push({
+                                fullMatch: match[1],
+                                type: match[2],
+                                name: match[3],
+                                data: match[4]
+                              });
+                              contentForDisplay = contentForDisplay.replace(match[0], "");
+                            }
+                            const cleanContent = contentForDisplay;
+                            
+                            return (
+                            <div key={idx} className="relative group/note-box">
+                              <textarea 
+                                value={cleanContent} 
+                                onChange={(e)=>{
+                                  const newText = e.target.value;
+                                  let fullContent = newText;
+                                  // Append all existing attachments to the new text
+                                  attachments.forEach(att => {
+                                    fullContent += `\n${att.fullMatch}`;
+                                  });
+                                  
+                                  // Logic for date: only exist if there is content
+                                  let finalDateDisplay = dateDisplay;
+                                  const hasContent = newText.trim().length > 0 || attachments.length > 0;
+                                  
+                                  if (hasContent) {
+                                    if (!finalDateDisplay) {
+                                      finalDateDisplay = new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                    }
+                                  } else {
+                                    finalDateDisplay = "";
+                                  }
+                                  
+                                  const fullFragment = finalDateDisplay ? `[${finalDateDisplay}] ${fullContent}` : fullContent;
+                                  const newFragments = [...arr];
+                                  newFragments[idx] = fullFragment;
+                                  setDetailDeal({
+                                    ...detailDeal, 
+                                    notes: newFragments.join("\n\n──────────────────────────\n")
+                                  });
+                                }} 
+                                className="w-full min-h-[120px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all resize-y pb-10" 
+                                placeholder="Add notes about this deal..."
+                                autoFocus={idx === 0}
+                              />
+                              
+                              {/* Date Display - Bottom Right */}
+                              {dateDisplay && (
+                                <div className="absolute bottom-2 right-3 text-xs text-slate-400 font-medium select-none pointer-events-none">
+                                  {dateDisplay}
+                                </div>
+                              )}
+
+                              {/* Attachment Badges - Bottom Left */}
+                              {attachments.length > 0 && (
+                                <div className="absolute bottom-2 left-2 z-10 flex items-center gap-2 flex-wrap max-w-[70%]">
+                                  {attachments.map((att, attIdx) => (
+                                    <div 
+                                      key={attIdx}
+                                      className="group/att-badge flex items-center gap-1.5 px-2 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-[11px] font-medium text-slate-600 transition-all cursor-pointer select-none"
+                                      onClick={() => {
+                                        if (att.type.startsWith("image/")) {
+                                          const win = window.open();
+                                          if (win) win.document.write(`<img src="${att.data}" style="max-width:100%; height:auto;" />`);
+                                        } else {
+                                          // Convert base64 PDF to Blob and open in new tab
+                                          try {
+                                            const arr = att.data.split(',');
+                                            const mime = arr[0].match(/:(.*?);/)[1];
+                                            const bstr = atob(arr[1]);
+                                            let n = bstr.length;
+                                            const u8arr = new Uint8Array(n);
+                                            while(n--){
+                                              u8arr[n] = bstr.charCodeAt(n);
+                                            }
+                                            const blob = new Blob([u8arr], {type: mime});
+                                            const url = URL.createObjectURL(blob);
+                                            window.open(url, '_blank');
+                                          } catch (e) {
+                                            // Fallback to download if conversion fails
+                                            const link = document.createElement('a');
+                                            link.href = att.data;
+                                            link.download = att.name;
+                                            link.click();
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      {att.type.startsWith("image/") ? (
+                                        <>
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-500"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                                          <span className="truncate max-w-[80px]" title={att.name}>Image</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                          <span className="truncate max-w-[80px]" title={att.name}>PDF</span>
+                                        </>
+                                      )}
+                                      
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (window.confirm("Remove attachment?")) {
+                                            let fullContent = cleanContent;
+                                            // Reconstruct content with all attachments EXCEPT the one being removed
+                                            let remainingAttachmentsCount = 0;
+                                            attachments.forEach((a, i) => {
+                                              if (i !== attIdx) {
+                                                fullContent += `\n${a.fullMatch}`;
+                                                remainingAttachmentsCount++;
+                                              }
+                                            });
+                                            
+                                            let finalDateDisplay = dateDisplay;
+                                            const hasContent = cleanContent.trim().length > 0 || remainingAttachmentsCount > 0;
+                                            
+                                            if (!hasContent) {
+                                                 finalDateDisplay = "";
+                                            }
+                                            
+                                            const fullFragment = finalDateDisplay ? `[${finalDateDisplay}] ${fullContent}` : fullContent;
+                                            const newFragments = [...arr];
+                                            newFragments[idx] = fullFragment;
+                                            setDetailDeal({
+                                              ...detailDeal, 
+                                              notes: newFragments.join("\n\n──────────────────────────\n")
+                                            });
+                                          }
+                                        }}
+                                        className="ml-1 p-0.5 hover:bg-slate-200 rounded-full text-slate-400 hover:text-red-500 opacity-0 group-hover/att-badge:opacity-100 transition-all"
+                                        title="Remove"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                      </button>
+
+                                      {/* Hover Preview for Image */}
+                                      {att.type.startsWith("image/") && (
+                                        <div className="absolute bottom-full left-0 mb-2 hidden group-hover/att-badge:block z-50 pointer-events-none">
+                                          <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-xl">
+                                            <img src={att.data} alt="Preview" className="max-w-[160px] max-h-[160px] rounded object-cover" />
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <div className="absolute top-2 right-2 flex items-center gap-1">
+                                <label className="p-1 text-slate-400 hover:text-[#2D4485] hover:bg-blue-50 rounded cursor-pointer transition-all" title="Attachment">
+                                  <input 
+                                    type="file" 
+                                    accept="image/*,.pdf" 
+                                    className="hidden" 
+                                    onChange={(e) => {
+                                      if (e.target.files && e.target.files[0]) {
+                                        const file = e.target.files[0];
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => {
+                                          const base64 = reader.result;
+                                          // Append new attachment to clean content AND existing attachments
+                                          let fullContent = cleanContent;
+                                          
+                                          // Add existing attachments back
+                                          attachments.forEach(att => {
+                                            fullContent += `\n${att.fullMatch}`;
+                                          });
+                                          
+                                          // Add new attachment
+                                          const safeName = file.name.replace(/:/g, "-");
+                                          const safeType = file.type || "application/octet-stream";
+                                          const attachmentStr = `\n<<Attachment:${safeType}:${safeName}:${base64}>>`;
+                                          fullContent += attachmentStr;
+                                          
+                                          // If there is no existing date, use current date/time to initialize this note section
+                                          let finalDateDisplay = dateDisplay;
+                                          if (!finalDateDisplay) {
+                                            finalDateDisplay = new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                          }
+                                          
+                                          const fullFragment = finalDateDisplay ? `[${finalDateDisplay}] ${fullContent}` : fullContent;
+                                          const newFragments = [...arr];
+                                          newFragments[idx] = fullFragment;
+                                          setDetailDeal({
+                                            ...detailDeal, 
+                                            notes: newFragments.join("\n\n──────────────────────────\n")
+                                          });
+                                        };
+                                        reader.readAsDataURL(file);
+                                      }
+                                    }}
+                                  />
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                </label>
+                                {arr.length > 1 && (
+                                  <button
+                                    onClick={() => {
+                                      if (window.confirm("Delete this note section?")) {
+                                        const newFragments = arr.filter((_, i) => i !== idx);
+                                        setDetailDeal({
+                                          ...detailDeal,
+                                          notes: newFragments.join("\n\n──────────────────────────\n")
+                                        });
+                                      }
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover/note-box:opacity-100 transition-all"
+                                    title="Delete this note section"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+                    <button 
+                      className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm" 
+                      onClick={() => setOpenNote(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="px-5 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 shadow-md transition-all text-sm font-medium"
+                      onClick={saveNote}
                     >
                       Save Changes
                     </button>
