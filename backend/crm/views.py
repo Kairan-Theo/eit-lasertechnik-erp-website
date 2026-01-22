@@ -459,6 +459,20 @@ def import_bom(request):
                 sc.save(update_fields=['quantity'])
             created_rows += 1
     return Response({'status': 'ok', 'created_or_updated': created_rows})
+
+from .tracking_utils import fetch_tracking_status
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_tracking_status(request):
+    courier = request.query_params.get('courier')
+    number = request.query_params.get('number')
+    if not courier or not number:
+        return Response({'error': 'courier and number required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    status_text = fetch_tracking_status(courier, number)
+    return Response({'status': status_text or 'Unknown'})
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup(request):

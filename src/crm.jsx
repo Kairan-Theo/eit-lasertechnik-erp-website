@@ -237,7 +237,8 @@ function CRMPage() {
 
   const notifyTeam = (msg, type = "info", company = "", source = "") => {
     try {
-      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const list = Array.isArray(raw) ? raw : []
       list.unshift({
         id: Date.now(),
         message: msg,

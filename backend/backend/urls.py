@@ -21,7 +21,7 @@ from django.db import connection
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom
+from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom, check_tracking_status
 
 router = DefaultRouter()
 router.register(r'deals', DealViewSet)
@@ -64,6 +64,7 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/bom/', list_boms),
     path('api/bom/import/', import_bom),
+    path('api/tracking/check/', check_tracking_status),
     path('api/crm/analytics/', get_crm_analytics),
     path('api/auth/signup/', signup),
     path('api/auth/login/', login),

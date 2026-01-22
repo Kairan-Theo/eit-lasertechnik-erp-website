@@ -29,8 +29,9 @@ function useInvoiceState() {
     try {
       const fromQuotation = localStorage.getItem("confirmedQuotation")
       if (fromQuotation) {
-        const q = JSON.parse(fromQuotation)
-        setCustomer((prev) => ({ ...prev, ...q.customer }))
+        const raw = JSON.parse(fromQuotation)
+        const q = (raw && typeof raw === 'object') ? raw : {}
+        setCustomer((prev) => ({ ...prev, ...(q.customer || {}) }))
         setItems(Array.isArray(q.items) && q.items.length ? q.items : [{ product: "", description: "", qty: 1, price: 0, tax: 0 }])
         setDetails((prev) => {
           const date = q.details?.date || prev.date
@@ -107,7 +108,8 @@ function useInvoiceState() {
     localStorage.setItem("invoiceDraft", JSON.stringify(payload))
     try {
       const key = `history:${customer.email || customer.phone || customer.name || details.number}`
-      const existing = JSON.parse(localStorage.getItem(key) || "{}")
+      const raw = JSON.parse(localStorage.getItem(key) || "{}")
+      const existing = (raw && typeof raw === 'object') ? raw : {}
       const invoices = Array.isArray(existing.invoices) ? existing.invoices : []
       invoices.push({ ...payload, savedAt: new Date().toISOString() })
       localStorage.setItem(key, JSON.stringify({ ...existing, customer, invoices }))
@@ -181,7 +183,8 @@ function useInvoiceState() {
     window.location.href = link
     try {
       const key = `history:${customer.email || customer.phone || customer.name || details.number}`
-      const existing = JSON.parse(localStorage.getItem(key) || "{}")
+      const raw = JSON.parse(localStorage.getItem(key) || "{}")
+      const existing = (raw && typeof raw === 'object') ? raw : {}
       const emails = Array.isArray(existing.emails) ? existing.emails : []
       emails.push({ type: "invoice", number: details.number, sentAt: new Date().toISOString(), addressChoice: choice })
       localStorage.setItem(key, JSON.stringify({ ...existing, customer, emails }))

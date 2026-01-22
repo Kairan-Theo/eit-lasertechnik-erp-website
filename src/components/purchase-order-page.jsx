@@ -96,7 +96,8 @@ export default function PurchaseOrderPage() {
     if (!k) return
     if (!prefilledRef.current) {
       try {
-        const h = JSON.parse(localStorage.getItem(`history:${k}`) || "{}")
+        const raw = JSON.parse(localStorage.getItem(`history:${k}`) || "{}")
+        const h = (raw && typeof raw === 'object') ? raw : {}
         if (h.customer) {
           setCustomer((prev) => ({
             name: prev.name || h.customer.name || "",
@@ -114,7 +115,8 @@ export default function PurchaseOrderPage() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       try {
-        const h = JSON.parse(localStorage.getItem(`history:${k}`) || "{}")
+        const raw = JSON.parse(localStorage.getItem(`history:${k}`) || "{}")
+        const h = (raw && typeof raw === 'object') ? raw : {}
         const payload = {
           ...h,
           customer: { ...customer },

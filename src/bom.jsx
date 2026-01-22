@@ -68,7 +68,10 @@ const PhotoUpload = ({ photo, onUpload }) => (
 
 function BOMPage() {
   const [boms, setBoms] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem("mfgBOMs") || "[]") } catch { return [] }
+    try { 
+      const raw = JSON.parse(localStorage.getItem("mfgBOMs") || "[]") 
+      return Array.isArray(raw) ? raw : []
+    } catch { return [] }
   })
   const setAndPersist = React.useCallback((next) => {
     setBoms(next)
@@ -100,8 +103,9 @@ function BOMPage() {
       console.error(e)
     }
     try {
-      const stored = JSON.parse(localStorage.getItem("mfgBOMs") || "[]")
-      if (Array.isArray(stored) && stored.length) {
+      const raw = JSON.parse(localStorage.getItem("mfgBOMs") || "[]")
+      const stored = Array.isArray(raw) ? raw : []
+      if (stored.length) {
         setBoms(stored)
         return
       }

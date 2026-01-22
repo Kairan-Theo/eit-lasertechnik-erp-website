@@ -115,10 +115,6 @@ else:
 #         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 # }
-            'HOST': os.getenv('DB_HOST', 'db'),
-            'PORT': os.getenv('DB_PORT', '5432'),
-        }
-    }
 
 
 
