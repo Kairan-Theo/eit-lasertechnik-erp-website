@@ -209,6 +209,7 @@ export default function PurchaseOrderPage() {
   const [printingPo, setPrintingPo] = React.useState(null)
   const fileInputRef = React.useRef(null)
   const prefilledRef = React.useRef(false)
+  const saveTimer = React.useRef(null)
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
   const [importError, setImportError] = React.useState("")
 
@@ -236,35 +237,26 @@ export default function PurchaseOrderPage() {
       return `PO-${Date.now()}-${String(r).padStart(3, "0")}`
     }
   }, [])
-<<<<<<< HEAD
-
-=======
-  React.useEffect(() => {
-    try {
-      const data = JSON.parse(localStorage.getItem("poList") || "[]")
-      if (Array.isArray(data)) setPoList(data)
-    } catch {}
-  }, [])
   React.useEffect(() => {
     if (!showForm) return
-    if (!poNumber) {
-      setPoNumber(generatePoNumber())
+    if (!q.details.poNumber) {
+      const num = generatePoNumber()
+      q.setDetails(prev => ({ ...prev, poNumber: num }))
     }
-  }, [showForm, poNumber, generatePoNumber])
-  const addItem = () => setItems((prev) => [...prev, { product: "", description: "", note: "", qty: 1, price: 0, tax: 0 }])
-  const updateItem = (i, field, value) => setItems((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: field === "qty" || field === "price" || field === "tax" ? Number(value) : value } : row)))
-  const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
+  }, [showForm, q.details.poNumber, generatePoNumber])
+
   const keyForCustomer = React.useCallback(() => {
-    const e = (customer.email || "").trim().toLowerCase()
+    const e = (q.vendor.email || "").trim().toLowerCase()
     if (e) return e
-    const ce = (customer.companyEmail || "").trim().toLowerCase()
+    const ce = (q.vendor.companyEmail || "").trim().toLowerCase()
     if (ce) return ce
-    const p = (customer.phone || "").trim()
+    const p = (q.vendor.phone || "").trim()
     if (p) return p
-    const n = (customer.name || "").trim().toLowerCase()
+    const n = (q.vendor.name || "").trim().toLowerCase()
     if (n) return n
     return ""
-  }, [customer])
+  }, [q.vendor])
+
   React.useEffect(() => {
     if (!showForm) return
     const k = keyForCustomer()
@@ -274,19 +266,24 @@ export default function PurchaseOrderPage() {
         const raw = JSON.parse(localStorage.getItem(`history:${k}`) || "{}")
         const h = (raw && typeof raw === 'object') ? raw : {}
         if (h.customer) {
-          setCustomer((prev) => ({
+          q.setVendor((prev) => ({
+            ...prev,
             name: prev.name || h.customer.name || "",
             company: prev.company || h.customer.company || "",
             email: prev.email || h.customer.email || "",
             companyEmail: prev.companyEmail || h.customer.companyEmail || "",
             phone: prev.phone || h.customer.phone || "",
             companyPhone: prev.companyPhone || h.customer.companyPhone || "",
-            deliveryTo: prev.deliveryTo || h.customer.deliveryTo || "",
+            address: prev.address || h.customer.address || "",
           }))
+          if (h.customer.deliveryTo) {
+             q.setDetails(prev => ({...prev, deliveryTo: prev.deliveryTo || h.customer.deliveryTo}))
+          }
           prefilledRef.current = true
         }
       } catch {}
     }
+    
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       try {
@@ -294,7 +291,7 @@ export default function PurchaseOrderPage() {
         const h = (raw && typeof raw === 'object') ? raw : {}
         const payload = {
           ...h,
-          customer: { ...customer },
+          customer: { ...q.vendor, deliveryTo: q.details.deliveryTo },
           quotations: Array.isArray(h.quotations) ? h.quotations : [],
           invoices: Array.isArray(h.invoices) ? h.invoices : [],
           emails: Array.isArray(h.emails) ? h.emails : [],
@@ -308,8 +305,7 @@ export default function PurchaseOrderPage() {
         saveTimer.current = null
       }
     }
-  }, [showForm, customer.name, customer.company, customer.email, customer.phone, keyForCustomer])
->>>>>>> 83155bd6fab2e514f64f6b6b54acdef6d48884fe
+  }, [showForm, q.vendor, q.details.deliveryTo, keyForCustomer])
   const persistPoList = React.useCallback((next) => {
     setPoList(next)
     try {
@@ -499,7 +495,6 @@ export default function PurchaseOrderPage() {
       if (Object.values(it).some((x) => (typeof x === "number" ? x : String(x).trim()) !== "")) {
         group.get(key).items.push(it)
       }
-<<<<<<< HEAD
     })
     const arr = Array.from(group.values()).map((p) => normalizeImportedPo(p))
     return arr
@@ -643,8 +638,6 @@ export default function PurchaseOrderPage() {
     } catch {}
     e.target.value = ""
   }
-=======
->>>>>>> 83155bd6fab2e514f64f6b6b54acdef6d48884fe
 
   const startNew = () => {
     q.setDetails({

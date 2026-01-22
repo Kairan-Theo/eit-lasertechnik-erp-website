@@ -270,12 +270,6 @@ function useInvoiceState() {
     const payload = { customer, details, items, totals: { subtotal, taxTotal, total } }
     localStorage.setItem("invoiceDraft", JSON.stringify(payload))
     try {
-<<<<<<< HEAD
-=======
-      const key = `history:${customer.email || customer.phone || customer.name || details.number}`
-      const raw = JSON.parse(localStorage.getItem(key) || "{}")
-      const existing = (raw && typeof raw === 'object') ? raw : {}
->>>>>>> 83155bd6fab2e514f64f6b6b54acdef6d48884fe
       const key = `history:${customer.email || customer.telephone || customer.company || details.number}`
       const existing = JSON.parse(localStorage.getItem(key) || "{}")
       const invoices = Array.isArray(existing.invoices) ? existing.invoices : []
@@ -349,12 +343,6 @@ function useInvoiceState() {
     const link = `mailto:${customer.email}?subject=${subject}&body=${body}`
     window.location.href = link
     try {
-<<<<<<< HEAD
-=======
-      const key = `history:${customer.email || customer.phone || customer.name || details.number}`
-      const raw = JSON.parse(localStorage.getItem(key) || "{}")
-      const existing = (raw && typeof raw === 'object') ? raw : {}
->>>>>>> 83155bd6fab2e514f64f6b6b54acdef6d48884fe
       const key = `history:${customer.email || customer.telephone || customer.company || details.number}`
       const existing = JSON.parse(localStorage.getItem(key) || "{}")
       const emails = Array.isArray(existing.emails) ? existing.emails : []
