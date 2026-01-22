@@ -27,7 +27,8 @@ function NotificationsPage() {
           return
         }
       }
-      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const list = Array.isArray(raw) ? raw : []
       const data = list.map(n => ({
         id: n.id,
         message: n.message,
@@ -39,7 +40,12 @@ function NotificationsPage() {
     } catch (error) {
       console.error("Failed to fetch notifications:", error)
       // Fallback to local on error
-      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      let list = []
+      try {
+        const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+        list = Array.isArray(raw) ? raw : []
+      } catch {}
+      
       const data = list.map(n => ({
         id: n.id,
         message: n.message,
@@ -71,7 +77,8 @@ function NotificationsPage() {
     
     // Always try to update local storage if item exists
     try {
-      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const list = Array.isArray(raw) ? raw : []
       if (list.some(n => n.id === id)) {
         const next = list.map(n => n.id === id ? { ...n, unread: false } : n)
         localStorage.setItem("notifications", JSON.stringify(next))
@@ -104,7 +111,8 @@ function NotificationsPage() {
 
     // Always update local storage
     try {
-      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const list = Array.isArray(raw) ? raw : []
       const next = list.map(n => ({ ...n, unread: false }))
       localStorage.setItem("notifications", JSON.stringify(next))
     } catch {}
@@ -141,7 +149,8 @@ function NotificationsPage() {
 
     // Always update local storage
     try {
-      const list = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const list = Array.isArray(raw) ? raw : []
       if (list.some(n => n.id === id)) {
         const next = list.filter(n => n.id !== id)
         localStorage.setItem("notifications", JSON.stringify(next))

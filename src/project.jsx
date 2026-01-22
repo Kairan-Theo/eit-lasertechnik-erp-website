@@ -1,7 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import { format, startOfWeek, addDays, isSameDay, isWeekend, differenceInDays, addWeeks } from "date-fns"
-import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal, ChevronDown, CornerDownRight, Layout, List, X } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal, ChevronDown, CornerDownRight, Layout, List, X, Trash2, Edit } from "lucide-react"
 import Navigation from "./components/navigation.jsx"
 import "./index.css"
 
@@ -38,8 +38,9 @@ const initialProjects = [
   { id: 4, name: "Database Migration", start: "2026-02-01", end: "2026-02-15", status: "done", color: "#f59e0b" },
 ]
 
-const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) => {
+const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam, onEdit, onDelete, onAdd }) => {
   const [draggedItem, setDraggedItem] = React.useState(null)
+  const [activeMenu, setActiveMenu] = React.useState(null)
 
   // Prevent UI from changing pipelines in Kanban
   const PIPELINE_LOCKED = false
@@ -92,7 +93,7 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
   }
 
   return (
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-8 bg-white">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-8 bg-white" onClick={() => setActiveMenu(null)}>
           <div className="flex gap-6 h-full min-w-max">
               {columns.map(col => (
                   <div 
@@ -106,6 +107,9 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
                           <div className="flex items-center gap-2">
                               <div className={`w-2 h-2 rounded-full ${col.accent.replace('border-', 'bg-')}`} />
                               <h3 className="font-bold text-gray-700 text-sm tracking-wide">{col.title}</h3>
+                              <button onClick={() => onAdd && onAdd(col.id)} className="ml-2 p-1 hover:bg-white/50 rounded-full text-gray-400 hover:text-indigo-600 transition-colors">
+                                  <Plus size={14} />
+                              </button>
                           </div>
                           <span className="text-xs font-bold bg-white px-2.5 py-1 rounded-full text-gray-500 shadow-sm border border-gray-100">
                               {getProjectsByStatus(col.id).length}
@@ -118,7 +122,7 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
                                   draggable={!PIPELINE_LOCKED}
                                   onDragStart={(e) => !PIPELINE_LOCKED && handleDragStart(e, project)}
                                   title={PIPELINE_LOCKED ? 'Pipeline changes are disabled' : undefined}
-                                  className={`bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 ${PIPELINE_LOCKED ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden`}
+                                  className={`bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 ${PIPELINE_LOCKED ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 group relative overflow-visible`}
                               >
                                   {/* Top accent bar */}
                                   <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: project.color, opacity: 0.8 }}></div>
@@ -132,9 +136,24 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
                                               {getColorMeaning(project.color)}
                                           </span>
                                       </div>
-                                      <button className="text-gray-300 hover:text-gray-600 transition-colors p-1 hover:bg-gray-50 rounded-full">
-                                          <MoreHorizontal size={16} />
-                                      </button>
+                                      <div className="relative">
+                                          <button 
+                                              onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === project.id ? null : project.id) }}
+                                              className="text-gray-300 hover:text-gray-600 transition-colors p-1 hover:bg-gray-50 rounded-full"
+                                          >
+                                              <MoreHorizontal size={16} />
+                                          </button>
+                                          {activeMenu === project.id && (
+                                              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-100 z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
+                                                  <button onClick={(e) => { e.stopPropagation(); onEdit && onEdit(project); setActiveMenu(null) }} className="w-full px-4 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                                      <Edit size={12} /> Edit
+                                                  </button>
+                                                  <button onClick={(e) => { e.stopPropagation(); onDelete && onDelete(project.id); setActiveMenu(null) }} className="w-full px-4 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2">
+                                                      <Trash2 size={12} /> Delete
+                                                  </button>
+                                              </div>
+                                          )}
+                                      </div>
                                   </div>
 
                                   <h4 className="font-bold text-gray-800 text-sm mb-2 leading-snug pr-2">{project.name}</h4>
@@ -145,45 +164,6 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam }) =>
                                           {format(new Date(project.start), "MMM d")} - {format(new Date(project.end), "MMM d")}
                                       </div>
                                   </div>
-
-                                  {project.subtasks && project.subtasks.length > 0 && (
-                                      <div className="flex flex-col gap-2 p-3 rounded-2xl bg-gray-50/50 border border-gray-100/60 group-hover:bg-gray-50/80 transition-colors">
-                                          <div className="flex items-center justify-between mb-1">
-                                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Progress</span>
-                                              <span className="text-[10px] font-bold text-gray-700 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
-                                                  {Math.round((project.subtasks.filter(s => s.status === 'done').length / project.subtasks.length) * 100)}%
-                                              </span>
-                                          </div>
-                                          <div className="flex items-center gap-2 flex-wrap px-1">
-                                               {project.subtasks.map((subtask, idx) => {
-                                                   const isDone = subtask.status === 'done';
-                                                   return (
-                                                       <div 
-                                                           key={subtask.id}
-                                                           className={`h-3 flex-1 rounded-full transition-all duration-300 relative group/pip ${isDone ? 'border-transparent shadow-[0_2px_4px_rgba(0,0,0,0.15)] scale-105' : 'bg-white border-gray-200 shadow-sm'}`}
-                                                           style={{ minWidth: '12px', backgroundColor: isDone ? subtask.color : undefined }}
-
-                                                           title={`${subtask.name}: ${subtask.status}`}
-                                                       >
-                                                           {/* Tooltip on Hover */}
-                                                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/pip:block whitespace-nowrap z-10">
-                                                               <div className="bg-gray-900 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-xl flex items-center gap-2 transform -translate-y-1 transition-transform">
-                                                                   <div className={`w-2 h-2 rounded-full ring-2 ring-white/20 ${isDone ? 'bg-emerald-400' : 'bg-gray-400'}`} />
-                                                                   {subtask.name}
-                                                               </div>
-                                                               {/* Arrow */}
-                                                               <div className="w-2.5 h-2.5 bg-gray-900 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2" />
-                                                           </div>
-                                                       </div>
-                                                   )
-                                               })}
-                                           </div>
-                                          <div className="flex items-center justify-between text-[10px] text-gray-400 font-medium mt-0.5">
-                                              <span>{project.subtasks.filter(s => s.status === 'done').length} done</span>
-                                              <span>{project.subtasks.length - project.subtasks.filter(s => s.status === 'done').length} left</span>
-                                          </div>
-                                      </div>
-                                  )}
                               </div>
                           ))}
                       </div>
@@ -320,12 +300,11 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
                   </div>
                   <div className="flex">
                      {days.map(day => {
-                        const isToday = isSameDay(day, new Date());
                         const isWknd = isWeekend(day);
                         return (
-                            <div key={day.toString()} style={{ width: dayWidth }} className={`shrink-0 border-r border-slate-100/50 p-2 text-center flex flex-col justify-center items-center ${isWknd ? 'bg-slate-50/80' : ''} ${isToday ? 'bg-indigo-50/30' : ''}`}>
-                               <div className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${isToday ? 'text-indigo-600' : 'text-slate-400'}`}>{format(day, "EEE")}</div>
-                               <div className={`text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center transition-all ${isToday ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-110' : 'text-slate-700 hover:bg-slate-100'}`}>
+                            <div key={day.toString()} style={{ width: dayWidth }} className={`shrink-0 border-r border-slate-100/50 p-2 text-center flex flex-col justify-center items-center ${isWknd ? 'bg-slate-50/80' : ''}`}>
+                               <div className={`text-[10px] font-bold mb-1 uppercase tracking-wider text-slate-400`}>{format(day, "EEE")}</div>
+                               <div className={`text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center transition-all text-slate-700 hover:bg-slate-100`}>
                                    {format(day, "d")}
                                </div>
                             </div>
@@ -339,10 +318,8 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
                   {/* Background Grid & Today Line */}
                   <div className="absolute inset-0 flex ml-80 pointer-events-none z-0">
                      {days.map(day => {
-                         const isToday = isSameDay(day, new Date());
                          return (
                             <div key={`grid-${day}`} style={{ width: dayWidth }} className={`shrink-0 border-r border-dashed border-slate-200 h-full relative ${isWeekend(day) ? 'bg-slate-50/40' : ''}`}>
-                                {isToday && <div className="absolute inset-y-0 left-1/2 w-0.5 bg-indigo-500/20 -translate-x-1/2"></div>}
                             </div>
                          )
                      })}
@@ -507,8 +484,15 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
 
 function ProjectApp() {
   const [projects, setProjects] = React.useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : initialProjects
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (!saved) return initialProjects
+      const parsed = JSON.parse(saved)
+      return Array.isArray(parsed) ? parsed : initialProjects
+    } catch (e) {
+      console.error("Failed to load projects", e)
+      return initialProjects
+    }
   })
 
   
@@ -517,7 +501,8 @@ function ProjectApp() {
   const [dragging, setDragging] = React.useState(null)
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [draftParentId, setDraftParentId] = React.useState(null)
-  const [draft, setDraft] = React.useState({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
+  const [editingId, setEditingId] = React.useState(null)
+  const [draft, setDraft] = React.useState({ name: "", description: "", priority: "medium", budget: "", assignee: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
   const [view, setView] = React.useState("timeline") // timeline, list
   const [notification, setNotification] = React.useState({ show: false, message: "" })
 
@@ -535,19 +520,57 @@ function ProjectApp() {
     setTimeout(() => setNotification({ show: false, message: "" }), 3000)
   }
 
+  const notifyTeam = (msg, type) => {
+    console.log(`[Team Notification] ${type}: ${msg}`)
+    showNotification(msg)
+  }
+
 
 
 
   const handleAddSubtask = (parentId) => {
       setDraftParentId(parentId)
-      setDraft({ name: "", start: format(new Date(), "yyyy-MM-dd"), end: format(addDays(new Date(), 5), "yyyy-MM-dd"), status: "todo", color: DEFAULT_COLOR })
+      setDraft({ name: "", description: "", priority: "medium", budget: "", assignee: "", start: format(new Date(), "yyyy-MM-dd"), end: format(addDays(new Date(), 5), "yyyy-MM-dd"), status: "todo", color: DEFAULT_COLOR })
+      setIsModalOpen(true)
+  }
+
+  const handleEditProject = (project) => {
+      setDraft({ 
+          name: project.name, 
+          description: project.description || "", 
+          priority: project.priority || "medium", 
+          budget: project.budget || "", 
+          assignee: project.assignee || "", 
+          start: project.start, 
+          end: project.end, 
+          status: project.status, 
+          color: project.color 
+      })
+      setEditingId(project.id)
+      setDraftParentId(null)
+      setIsModalOpen(true)
+  }
+
+  const handleDeleteProject = (id) => {
+      if (confirm('Are you sure you want to delete this project?')) {
+          setProjects(prev => prev.filter(p => p.id !== id))
+          showNotification('Project deleted successfully')
+      }
+  }
+
+  const handleAddWithStatus = (status) => {
+      setDraft({ name: "", description: "", priority: "medium", budget: "", assignee: "", start: format(new Date(), "yyyy-MM-dd"), end: format(addDays(new Date(), 5), "yyyy-MM-dd"), status, color: DEFAULT_COLOR })
+      setDraftParentId(null)
+      setEditingId(null)
       setIsModalOpen(true)
   }
 
   const saveProject = () => {
     if (!draft.name || !draft.start || !draft.end) return
     
-    if (draftParentId) {
+    if (editingId) {
+        setProjects(prev => prev.map(p => p.id === editingId ? { ...p, ...draft } : p))
+    } else if (draftParentId) {
         setProjects(prev => prev.map(p => {
             if (p.id === draftParentId) {
                 return {
@@ -568,9 +591,11 @@ function ProjectApp() {
             subtasks: []
         }])
     }
+    showNotification(editingId ? 'Project updated successfully' : 'Project created successfully')
     setIsModalOpen(false)
-    setDraft({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
+    setDraft({ name: "", description: "", priority: "medium", budget: "", assignee: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
     setDraftParentId(null)
+    setEditingId(null)
   }
 
 
@@ -592,7 +617,7 @@ function ProjectApp() {
       <Navigation />
 
       {notification.show && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm animate-in fade-in slide-in-from-top-2 duration-200">
           {notification.message}
         </div>
       )}
@@ -632,7 +657,7 @@ function ProjectApp() {
 
       <div className="flex-1 overflow-hidden flex flex-col">
         {view === 'kanban' ? (
-            <KanbanBoard projects={projects} setProjects={setProjects} showNotification={showNotification} notifyTeam={notifyTeam} />
+            <KanbanBoard projects={projects} setProjects={setProjects} showNotification={showNotification} notifyTeam={notifyTeam} onEdit={handleEditProject} onDelete={handleDeleteProject} onAdd={handleAddWithStatus} />
         ) : (
             <GanttChart projects={projects} setProjects={setProjects} onAddSubtask={handleAddSubtask} />
         )}
@@ -641,14 +666,14 @@ function ProjectApp() {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white w-96 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-white w-[500px] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h3 className="font-bold text-lg text-gray-800">{draftParentId ? 'New Subtask' : 'New Project'}</h3>
+                    <h3 className="font-bold text-lg text-gray-800">{editingId ? 'Edit Project' : draftParentId ? 'New Subtask' : 'New Project'}</h3>
                     <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                         <X size={20} />
                     </button>
                 </div>
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Name</label>
                         <input 
@@ -660,6 +685,53 @@ function ProjectApp() {
                             onChange={e => setDraft({...draft, name: e.target.value})}
                         />
                     </div>
+                    
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Description</label>
+                        <textarea 
+                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium min-h-[80px] resize-none"
+                            placeholder="Add project details..."
+                            value={draft.description}
+                            onChange={e => setDraft({...draft, description: e.target.value})}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Priority</label>
+                            <select 
+                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium"
+                                value={draft.priority}
+                                onChange={e => setDraft({...draft, priority: e.target.value})}
+                            >
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Budget</label>
+                            <input 
+                                type="number" 
+                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium"
+                                placeholder="0.00"
+                                value={draft.budget}
+                                onChange={e => setDraft({...draft, budget: e.target.value})}
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Assignee</label>
+                        <input 
+                            type="text" 
+                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium"
+                            placeholder="e.g. John Doe"
+                            value={draft.assignee}
+                            onChange={e => setDraft({...draft, assignee: e.target.value})}
+                        />
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Start Date</label>
@@ -707,7 +779,7 @@ function ProjectApp() {
                         disabled={!draft.name || !draft.start || !draft.end}
                         className="px-6 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
-                        Save
+                        {editingId ? 'Update' : draftParentId ? 'Add Task' : 'Create Project'}
                     </button>
                 </div>
             </div>

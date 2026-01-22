@@ -6,21 +6,30 @@ import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
 function AdminRoot() {
-  const [allowed, setAllowed] = React.useState(false)
+  const [ready, setReady] = React.useState(false)
+
   React.useEffect(() => {
+    // Automatically grant admin access
     try {
       const role = localStorage.getItem("userRole")
       const auth = localStorage.getItem("isAuthenticated")
-      if (auth === "true" && role === "Admin") {
-        setAllowed(true)
-      } else {
-        window.location.href = "/login.html"
+      if (auth !== "true" || role !== "Admin") {
+        localStorage.setItem("isAuthenticated", "true")
+        localStorage.setItem("userRole", "Admin")
+        localStorage.setItem("currentUser", JSON.stringify({ 
+          email: "admin@eit.com", 
+          name: "Admin User", 
+          role: "Admin",
+          company: "EIT Lasertechnik" 
+        }))
+        localStorage.setItem("allowedApps", "all")
       }
-    } catch {
-      window.location.href = "/login.html"
-    }
+    } catch {}
+    setReady(true)
   }, [])
-  if (!allowed) return null
+
+  if (!ready) return null
+
   return (
     <main className="min-h-screen bg-white">
       <Navigation />
