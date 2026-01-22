@@ -432,7 +432,6 @@ function InventoryTable({ inv }) {
 
   const [openStatusId, setOpenStatusId] = React.useState(null)
   const [openTrackingStatusId, setOpenTrackingStatusId] = React.useState(null)
-  const [viewingTracking, setViewingTracking] = React.useState(null)
 
   const getTrackingLink = (courier, number) => {
     if (!number) return null
@@ -631,9 +630,12 @@ function InventoryTable({ inv }) {
                     <td className="p-3 text-gray-600 font-mono text-xs">
                       {p.trackingNumber ? (
                          getTrackingLink(p.courier, p.trackingNumber) ? (
-                           <button 
-                             onClick={(e) => { e.stopPropagation(); setViewingTracking({ url: getTrackingLink(p.courier, p.trackingNumber), courier: p.courier, number: p.trackingNumber }) }}
-                             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer max-w-[140px]"
+                           <a 
+                             href={getTrackingLink(p.courier, p.trackingNumber)}
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             onClick={(e) => e.stopPropagation()}
+                             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium max-w-[140px]"
                              title={`Track ${p.trackingNumber} on ${p.courier} website`}
                            >
                              <span className="truncate">{p.trackingNumber}</span>
@@ -641,7 +643,7 @@ function InventoryTable({ inv }) {
                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                              </svg>
-                           </button>
+                           </a>
                          ) : (
                            <span className="truncate max-w-[140px] inline-block" title={p.trackingNumber}>{p.trackingNumber}</span>
                          )
@@ -785,59 +787,6 @@ function InventoryTable({ inv }) {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-4 text-gray-900">Import CSV</div>
             <ImportForm onCancel={() => inv.setShowImport(false)} onFile={(f) => inv.importCsv(f)} />
-          </div>
-        </div>
-      )}
-      {viewingTracking && (
-        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={() => setViewingTracking(null)}>
-          <div className="bg-white w-full max-w-4xl h-[80vh] rounded-xl shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            {/* 
-              Tracking Modal Configuration:
-              1. Uses 17TRACK as a universal embedded viewer because many official courier sites (Kerry, Flash) 
-                 block embedding via X-Frame-Options headers.
-              2. Provides a direct "Open Official Site" link as a fallback if the user prefers the native courier interface.
-            */}
-            
-            {/* Modal Header */}
-             <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
-               <div className="flex items-center gap-2">
-                 <span className="font-semibold text-gray-800">{viewingTracking.courier} Tracking</span>
-                 <span className="text-sm text-gray-500 bg-gray-200 px-2 py-0.5 rounded font-mono">{viewingTracking.number}</span>
-                 <span className="text-xs text-gray-400 ml-2">(Powered by 17TRACK)</span>
-               </div>
-               <div className="flex items-center gap-2">
-                 <a 
-                   href={viewingTracking.url} 
-                   target="_blank" 
-                   rel="noopener noreferrer"
-                   className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                 >
-                   <span>Open Official Site</span>
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                 </a>
-                 <button 
-                   onClick={() => setViewingTracking(null)}
-                   className="p-1 hover:bg-gray-200 rounded-full transition-colors text-gray-500"
-                 >
-                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                 </button>
-               </div>
-             </div>
-            
-            {/* Modal Body (Iframe) */}
-             <div className="flex-1 bg-gray-100 relative">
-               {/* 
-                 We use t.17track.net/en#nums=... which is designed for embedding and doesn't send X-Frame-Options: DENY.
-                 Official sites like th.kerryexpress.com will fail to load in an iframe.
-               */}
-               <iframe 
-                 src={`https://t.17track.net/en#nums=${viewingTracking.number}`}
-                 className="w-full h-full border-0"
-                 title="Tracking Info"
-                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-               />
-               {/* Fallback overlay if iframe is blocked (can't detect easily, but we provide the link above) */}
-             </div>
           </div>
         </div>
       )}
