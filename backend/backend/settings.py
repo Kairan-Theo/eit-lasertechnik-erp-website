@@ -109,21 +109,7 @@ else:
         }
     }
 
-<<<<<<< HEAD
 
-
-=======
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
-
-
-
->>>>>>> 83155bd6fab2e514f64f6b6b54acdef6d48884fe
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
