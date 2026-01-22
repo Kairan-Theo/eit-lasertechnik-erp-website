@@ -616,7 +616,8 @@ function InventoryTable({ inv }) {
                         />
                       ) : (
                         <span
-                          className="cursor-pointer hover:text-[#2D4485] hover:underline"
+                          className="cursor-pointer hover:text-[#2D4485] hover:underline truncate max-w-[120px] inline-block align-middle"
+                          title={p.deliveryCompany || "Click to edit"}
                           onClick={() => {
                             setEditingId(rowId)
                             setEditingField("deliveryCompany")
@@ -632,17 +633,17 @@ function InventoryTable({ inv }) {
                          getTrackingLink(p.courier, p.trackingNumber) ? (
                            <button 
                              onClick={(e) => { e.stopPropagation(); setViewingTracking({ url: getTrackingLink(p.courier, p.trackingNumber), courier: p.courier, number: p.trackingNumber }) }}
-                             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer"
-                             title={`Track on ${p.courier} website`}
+                             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer max-w-[140px]"
+                             title={`Track ${p.trackingNumber} on ${p.courier} website`}
                            >
-                             <span>{p.trackingNumber}</span>
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <span className="truncate">{p.trackingNumber}</span>
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                              </svg>
                            </button>
                          ) : (
-                           <span>{p.trackingNumber}</span>
+                           <span className="truncate max-w-[140px] inline-block" title={p.trackingNumber}>{p.trackingNumber}</span>
                          )
                       ) : "-"}
                     </td>
