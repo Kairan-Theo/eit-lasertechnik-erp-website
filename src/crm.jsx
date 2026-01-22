@@ -3,8 +3,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
-import emailjs from '@emailjs/browser';
-import { Mail, Trash2, FileText } from "lucide-react"
+import { Mail, Trash2, FileText, Undo, Redo, ChevronDown, Paperclip, Link as LinkIcon, Type, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Indent, Baseline, X } from "lucide-react"
 import "./index.css"
 import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
@@ -271,6 +270,13 @@ function CRMPage() {
   const [openEmail, setOpenEmail] = React.useState(null) // { stageIndex, cardIndex, to }
   const [emailSubject, setEmailSubject] = React.useState("")
   const [emailBody, setEmailBody] = React.useState("")
+  // Undo/Redo history
+  const [emailHistory, setEmailHistory] = React.useState([])
+  const [historyStep, setHistoryStep] = React.useState(0)
+  const historyTimeoutRef = React.useRef(null)
+  const [showFormatting, setShowFormatting] = React.useState(false)
+  const editorRef = React.useRef(null)
+
   const [openEdit, setOpenEdit] = React.useState(null) // { stageIndex, cardIndex }
   const [editingDeal, setEditingDeal] = React.useState(defaultNewDeal)
   const [isSending, setIsSending] = React.useState(false)
@@ -282,6 +288,20 @@ function CRMPage() {
     }
   })
   const [showEmailSettings, setShowEmailSettings] = React.useState(false)
+  const isInternalUpdate = React.useRef(false)
+  const [attachments, setAttachments] = React.useState([])
+  const fileInputRef = React.useRef(null)
+  
+  // Link Popup State
+  const [showLinkPopup, setShowLinkPopup] = React.useState(false)
+  const [linkValues, setLinkValues] = React.useState({ text: '', url: '' })
+  const savedSelection = React.useRef(null)
+  
+  // Link Tooltip State
+  const [activeLink, setActiveLink] = React.useState(null)
+  const [tooltipPos, setTooltipPos] = React.useState({ top: 0, left: 0 })
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
 
   const saveEmailConfig = (cfg) => {
     setEmailConfig(cfg)
@@ -289,6 +309,173 @@ function CRMPage() {
     setShowEmailSettings(false)
     showNotification("Email settings saved")
   }
+
+  const updateEmailBody = (val, fromEditor = false) => {
+    if (fromEditor) isInternalUpdate.current = true
+    setEmailBody(val)
+    if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current)
+    historyTimeoutRef.current = setTimeout(() => {
+      setEmailHistory(prev => {
+         const newHistory = prev.slice(0, historyStep + 1)
+         newHistory.push(val)
+         return newHistory
+      })
+      setHistoryStep(prev => prev + 1)
+    }, 700)
+  }
+
+  const handleUndo = () => {
+    if (historyStep > 0) {
+      const prevStep = historyStep - 1
+      setHistoryStep(prevStep)
+      setEmailBody(emailHistory[prevStep])
+      if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current)
+    }
+  }
+
+  const handleRedo = () => {
+    if (historyStep < emailHistory.length - 1) {
+      const nextStep = historyStep + 1
+      setHistoryStep(nextStep)
+      setEmailBody(emailHistory[nextStep])
+      if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current)
+    }
+  }
+
+  const execCmd = (command, value = null) => {
+    document.execCommand(command, false, value)
+    if (editorRef.current) {
+      editorRef.current.focus()
+      updateEmailBody(editorRef.current.innerHTML, true)
+    }
+  }
+
+  const handleInsertLink = () => {
+    setActiveLink(null) // Ensure we are in new link mode
+    // Save current selection to restore later
+    const selection = window.getSelection()
+    if (selection.rangeCount > 0) {
+      savedSelection.current = selection.getRangeAt(0)
+      setLinkValues({ text: selection.toString(), url: '' })
+    } else {
+      savedSelection.current = null
+      setLinkValues({ text: '', url: '' })
+    }
+    setShowLinkPopup(true)
+  }
+
+  const applyLink = () => {
+    setShowLinkPopup(false)
+    if (!linkValues.url) return
+
+    if (editorRef.current) {
+      editorRef.current.focus()
+      
+      // EDIT MODE
+      if (activeLink) {
+        activeLink.href = linkValues.url
+        activeLink.textContent = linkValues.text
+        updateEmailBody(editorRef.current.innerHTML, true)
+        setActiveLink(null)
+        return
+      }
+      
+      // Restore selection if we have one
+      if (savedSelection.current) {
+        const selection = window.getSelection()
+        selection.removeAllRanges()
+        selection.addRange(savedSelection.current)
+      }
+
+      // If text provided is different from selection or no selection, we insert HTML
+      if (linkValues.text) {
+        // Simple heuristic: if we have a range and the text matches, just linkify
+        // Otherwise insert full anchor tag
+        const selection = window.getSelection()
+        const selectedText = selection.toString()
+        
+        if (selectedText === linkValues.text) {
+          execCmd('createLink', linkValues.url)
+        } else {
+          // Insert HTML with new text
+          const html = `<a href="${linkValues.url}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline; cursor: pointer;">${linkValues.text}</a>`
+          document.execCommand('insertHTML', false, html)
+          updateEmailBody(editorRef.current.innerHTML, true)
+        }
+      } else {
+        // Fallback if no text provided but URL exists (unlikely given UI, but safe)
+        execCmd('createLink', linkValues.url)
+      }
+    }
+  }
+
+  const handleEditorClick = (e) => {
+    if (e.target.tagName === 'A') {
+      const rect = e.target.getBoundingClientRect()
+      const container = editorRef.current.parentElement
+      const containerRect = container.getBoundingClientRect()
+      
+      setTooltipPos({
+        top: rect.bottom - containerRect.top + editorRef.current.scrollTop + 5,
+        left: rect.left - containerRect.left
+      })
+      setActiveLink(e.target)
+      
+      // Ctrl+Click to open
+      if (e.ctrlKey || e.metaKey) {
+        window.open(e.target.href, '_blank')
+      }
+    } else {
+      setActiveLink(null)
+    }
+  }
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files).map(file => {
+        // Create preview URL for the file
+        file.preview = URL.createObjectURL(file)
+        return file
+      })
+      setAttachments(prev => [...prev, ...newFiles])
+    }
+    // Reset input so same file can be selected again if needed
+    e.target.value = ''
+  }
+
+  const removeAttachment = (index) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Cleanup object URLs to avoid memory leaks
+  React.useEffect(() => {
+    return () => {
+      attachments.forEach(file => {
+        if (file.preview) URL.revokeObjectURL(file.preview)
+      })
+    }
+  }, [attachments])
+
+  React.useEffect(() => {
+    if (isInternalUpdate.current) {
+      isInternalUpdate.current = false
+      return
+    }
+    if (editorRef.current && editorRef.current.innerHTML !== emailBody) {
+      if (document.activeElement !== editorRef.current) {
+        editorRef.current.innerHTML = emailBody
+      } else {
+        // If focused, we generally don't want to overwrite unless it's an undo/redo action
+        // But here we can't distinguish easily. 
+        // For now, we trust onInput keeps them in sync, so this only fires on Undo/Redo or initial load
+        // We'll allow overwrite which might lose cursor position but ensures consistency
+        const selection = window.getSelection()
+        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+        editorRef.current.innerHTML = emailBody
+        // Try to restore cursor to end if possible, or just leave it
+      }
+    }
+  }, [emailBody])
 
   const showNotification = (msg) => {
     setNotification({ show: true, message: msg })
@@ -642,8 +829,10 @@ function CRMPage() {
     let fragments = rawNotes.split(separator)
     
     fragments = fragments.map(fragment => {
-        const dateMatch = fragment.match(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/)
-        let contentWithoutDate = dateMatch ? fragment.replace(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/, "") : fragment
+        // Use lenient regex
+        const dateRegex = /^\[(\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2}(?:\s?[a-zA-Z]{2})?)\]\s*/;
+        const dateMatch = fragment.match(dateRegex)
+        let contentWithoutDate = dateMatch ? fragment.replace(dateRegex, "") : fragment
         
         const attachmentRegex = /[\r\n]*(<<Attachment:([^:]+):([^:]+):(.+?)>>)/g
         let hasAttachments = false
@@ -747,8 +936,10 @@ function CRMPage() {
     let fragments = rawNotes.split(separator)
     
     fragments = fragments.map(fragment => {
-        const dateMatch = fragment.match(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/)
-        let contentWithoutDate = dateMatch ? fragment.replace(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/, "") : fragment
+        // Use lenient regex
+        const dateRegex = /^\[(\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2}(?:\s?[a-zA-Z]{2})?)\]\s*/;
+        const dateMatch = fragment.match(dateRegex)
+        let contentWithoutDate = dateMatch ? fragment.replace(dateRegex, "") : fragment
         
         const attachmentRegex = /[\r\n]*(<<Attachment:([^:]+):([^:]+):(.+?)>>)/g
         let hasAttachments = false
@@ -805,7 +996,10 @@ function CRMPage() {
     const d = stages[stageIndex].deals[cardIndex]
     setOpenEmail({ stageIndex, cardIndex, to: d.email || "" })
     setEmailSubject(`Regarding: ${d.title}`)
-    setEmailBody(`Dear ${d.contact || "Partner"},\n\n`)
+    const initialBody = ""
+    setEmailBody(initialBody)
+    setEmailHistory([initialBody])
+    setHistoryStep(0)
   }
 
   // Drag cards between stages
@@ -1089,18 +1283,7 @@ function CRMPage() {
     }
   }
 
-  const getProbability = (stageName) => {
-    switch(stageName) {
-      case "Appointment Schedule": return 10;
-      case "Presentation Schedule": return 25;
-      case "Quotation": return 40;
-      case "Demo": return 55;
-      case "Decision": return 75;
-      case "Connection": return 90;
-      case "Close Won": return 100;
-      default: return 10;
-    }
-  }
+
 
   return (
     <main className="min-h-screen bg-white font-sans text-gray-900">
@@ -1150,7 +1333,8 @@ function CRMPage() {
           <div className="flex h-full p-6 gap-6">
             {stages.map((stage, stageIndex) => {
               const total = totalFor(stage.deals);
-              const prob = getProbability(stage.name);
+              // Calculate probability based on stage position (index) to show process flow
+              const prob = Math.round(((stageIndex + 1) / stages.length) * 100);
               const weighted = total * (prob / 100);
               const sortedDeals = sortDeals(stage.deals, sortBy, sortAsc);
               return (
@@ -1171,9 +1355,10 @@ function CRMPage() {
                     onDragStart={(e) => onStageDragStart(stageIndex, e)}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-slate-700 uppercase text-xs tracking-wider">{stage.name}</span>
+                      <span className="font-bold text-slate-700 uppercase text-xs tracking-wider">
+                        <span className="mr-1 opacity-60">{stageIndex + 1}.</span> {stage.name}
+                      </span>
                       <div className="flex items-center gap-1">
-                        <span className="text-slate-500 text-xs font-medium bg-slate-200/60 px-2 py-0.5 rounded-full">{stage.deals.length}</span>
                         <button 
                           className="text-slate-400 hover:text-slate-600 opacity-0 group-hover/header:opacity-100 transition-opacity"
                           onClick={(e) => { e.stopPropagation(); setMenuOpenIndex(menuOpenIndex === stageIndex ? null : stageIndex); }}
@@ -1210,14 +1395,8 @@ function CRMPage() {
                               <span className="truncate text-xs leading-tight">{d.customer || d.customer_name || d.contact || d.email || d.title}</span>
                             </span>
 
-                            {d.poNumber && (
-                              <span
-                                className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200"
-                                title="PO Number"
-                              >
-                                <span className="truncate leading-tight max-w-[180px]">PO: {String(d.poNumber || "").trim()}</span>
-                              </span>
-                            )}
+
+                            {/* PO Number display removed */}
                           </div>
                           <div className="flex items-center gap-2">
                             <button
@@ -2116,9 +2295,11 @@ function CRMPage() {
                         </div>
                         <div className="space-y-4">
                           {(detailDeal.notes ? detailDeal.notes.split("\n\n──────────────────────────\n") : [""]).map((noteFragment, idx, arr) => {
-                            const dateMatch = noteFragment.match(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/);
+                            // Use lenient regex to handle potential single-digit dates/times or format variations
+                            const dateRegex = /^\[(\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2}(?:\s?[a-zA-Z]{2})?)\]\s*/;
+                            const dateMatch = noteFragment.match(dateRegex);
                             const dateDisplay = dateMatch ? dateMatch[1] : "";
-                            let contentWithoutDate = dateMatch ? noteFragment.replace(/^\[(\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2})\]\s*/, "") : noteFragment;
+                            let contentWithoutDate = dateMatch ? noteFragment.replace(dateRegex, "") : noteFragment;
                             
                             // Extract attachments (supports multiple)
                             const attachmentRegex = /[\r\n]*(<<Attachment:([^:]+):([^:]+):(.+?)>>)/g;
@@ -2155,7 +2336,7 @@ function CRMPage() {
                                   
                                   if (hasContent) {
                                     if (!finalDateDisplay) {
-                                      finalDateDisplay = new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                      finalDateDisplay = new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
                                     }
                                   } else {
                                     finalDateDisplay = "";
@@ -2651,23 +2832,14 @@ function CRMPage() {
             </div>
           )}
           {openEmail && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity" onClick={() => setOpenEmail(null)}>
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200" onClick={e => e.stopPropagation()}>
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity" onClick={() => { setOpenEmail(null); setShowDeleteConfirm(false); }}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 relative" onClick={e => e.stopPropagation()}>
                  <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                    <h3 className="font-bold text-slate-800 text-lg">
                      {showEmailSettings ? "Email Configuration" : "Send Email"}
                    </h3>
                    <div className="flex items-center gap-2">
-                     {!showEmailSettings && (
-                       <button 
-                         onClick={() => setShowEmailSettings(true)} 
-                         className="p-1.5 text-slate-400 hover:text-[#2D4485] hover:bg-blue-50 rounded-full transition-colors"
-                         title="Configure Email Service"
-                       >
-                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                       </button>
-                     )}
-                     <button onClick={() => setOpenEmail(null)} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+                     <button onClick={() => { setOpenEmail(null); setShowDeleteConfirm(false); }} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
                    </div>
                  </div>
                  
@@ -2746,82 +2918,397 @@ function CRMPage() {
                             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                           />
                         </div>
+                        {/* Message Input Area with Rich Text Toolbar */}
+                        {/* This section replaces the standard textarea with a UI resembling a rich text editor */}
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1.5">Message</label>
-                          <textarea 
-                            rows={6}
-                            value={emailBody} 
-                            onChange={e => setEmailBody(e.target.value)}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none resize-none transition-all"
-                          />
+                           {/* Editor Container */}
+                           <div className="border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-[#2D4485]/20 focus-within:border-[#2D4485] transition-all bg-white relative">
+                              
+                              {/* Top Toolbar */}
+                              <div className="flex flex-col border-b border-slate-200 bg-slate-50 select-none rounded-t-lg">
+                                {/* Basic Toolbar (Undo/Redo) */}
+                                <div className="flex items-center gap-1 p-2">
+                                   <button onClick={handleUndo} className={`p-1.5 rounded transition-colors ${historyStep > 0 ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-200' : 'text-slate-300 cursor-not-allowed'}`} title="Undo (Ctrl+Z)" disabled={historyStep <= 0} onMouseDown={e => e.preventDefault()}>
+                                     <Undo size={14} />
+                                   </button>
+                                   <button onClick={handleRedo} className={`p-1.5 rounded transition-colors ${historyStep < emailHistory.length - 1 ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-200' : 'text-slate-300 cursor-not-allowed'}`} title="Redo (Ctrl+Y)" disabled={historyStep >= emailHistory.length - 1} onMouseDown={e => e.preventDefault()}>
+                                     <Redo size={14} />
+                                   </button>
+                                </div>
+
+                                {/* Extended Formatting Toolbar */}
+                                {showFormatting && (
+                                  <div className="flex items-center flex-wrap gap-2 p-2 border-t border-slate-200 animate-in slide-in-from-top-2 duration-200">
+                                    {/* Font Family */}
+                                    <select onChange={(e) => execCmd('fontName', e.target.value)} className="h-7 text-xs border border-slate-300 rounded px-1 bg-white focus:outline-none focus:border-[#2D4485]" title="Font Family">
+                                      <option value="Arial">Arial</option>
+                                      <option value="Times New Roman">Times New Roman</option>
+                                      <option value="Courier New">Courier New</option>
+                                      <option value="Georgia">Georgia</option>
+                                      <option value="Verdana">Verdana</option>
+                                    </select>
+
+                                    {/* Font Size */}
+                                    <select onChange={(e) => execCmd('fontSize', e.target.value)} className="h-7 text-xs border border-slate-300 rounded px-1 bg-white focus:outline-none focus:border-[#2D4485]" title="Font Size">
+                                      <option value="3">Normal</option>
+                                      <option value="1">Small</option>
+                                      <option value="5">Large</option>
+                                      <option value="7">Huge</option>
+                                    </select>
+
+                                    <div className="w-px h-4 bg-slate-300 mx-1"></div>
+
+                                    {/* Styles */}
+                                    <button onClick={() => execCmd('bold')} className="p-1.5 text-slate-600 hover:bg-slate-200 rounded" title="Bold" onMouseDown={e => e.preventDefault()}><Bold size={14} /></button>
+                                    <button onClick={() => execCmd('italic')} className="p-1.5 text-slate-600 hover:bg-slate-200 rounded" title="Italic" onMouseDown={e => e.preventDefault()}><Italic size={14} /></button>
+                                    <button onClick={() => execCmd('underline')} className="p-1.5 text-slate-600 hover:bg-slate-200 rounded" title="Underline" onMouseDown={e => e.preventDefault()}><Underline size={14} /></button>
+                                    
+                                    {/* Color - simplified as a button for now, usually needs a picker */}
+                                    <div className="relative group">
+                                      <button className="p-1.5 text-slate-600 hover:bg-slate-200 rounded flex items-center gap-1" title="Text Color" onMouseDown={e => e.preventDefault()}>
+                                        <Baseline size={14} /> <ChevronDown size={10} />
+                                      </button>
+                                      {/* Simple Color Picker Dropdown */}
+                                      <div className="absolute top-full left-0 mt-1 p-2 bg-white border border-slate-200 rounded shadow-lg hidden group-hover:grid grid-cols-4 gap-1 z-50">
+                                        {['#000000', '#444444', '#888888', '#ffffff', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#6366f1', '#a855f7', '#ec4899'].map(c => (
+                                          <button key={c} onClick={() => execCmd('foreColor', c)} className="w-4 h-4 rounded-full border border-slate-200" style={{ backgroundColor: c }} onMouseDown={e => e.preventDefault()} />
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <div className="w-px h-4 bg-slate-300 mx-1"></div>
+
+                                    {/* Alignment */}
+                                    <button onClick={() => execCmd('justifyLeft')} className="p-1.5 text-slate-600 hover:bg-slate-200 rounded" title="Align Left" onMouseDown={e => e.preventDefault()}><AlignLeft size={14} /></button>
+                                    <button onClick={() => execCmd('justifyCenter')} className="p-1.5 text-slate-600 hover:bg-slate-200 rounded" title="Align Center" onMouseDown={e => e.preventDefault()}><AlignCenter size={14} /></button>
+                                    <button onClick={() => execCmd('justifyRight')} className="p-1.5 text-slate-600 hover:bg-slate-200 rounded" title="Align Right" onMouseDown={e => e.preventDefault()}><AlignRight size={14} /></button>
+
+                                    <div className="w-px h-4 bg-slate-300 mx-1"></div>
+
+                                    {/* Lists & Indent */}
+                                    <button onClick={() => execCmd('insertUnorderedList')} className="p-1.5 text-slate-600 hover:bg-slate-200 rounded" title="Bullet List" onMouseDown={e => e.preventDefault()}><List size={14} /></button>
+                                    <button onClick={() => execCmd('insertOrderedList')} className="p-1.5 text-slate-600 hover:bg-slate-200 rounded" title="Numbered List" onMouseDown={e => e.preventDefault()}><ListOrdered size={14} /></button>
+                                    <button onClick={() => execCmd('indent')} className="p-1.5 text-slate-600 hover:bg-slate-200 rounded" title="Indent" onMouseDown={e => e.preventDefault()}><Indent size={14} /></button>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Message Editor (ContentEditable) */}
+                              <div className="relative rounded-b-lg">
+                                {!emailBody && (
+                                  <div className="absolute top-3 left-4 text-slate-400 text-sm pointer-events-none select-none">
+                                    Write email...
+                                  </div>
+                                )}
+                                <div
+                                  ref={editorRef}
+                                  contentEditable
+                                  className="w-full px-4 py-3 text-sm outline-none min-h-[192px] max-h-[500px] overflow-y-auto block text-slate-700"
+                                  onInput={e => updateEmailBody(e.currentTarget.innerHTML, true)}
+                                  onClick={handleEditorClick}
+                                  onScroll={() => setActiveLink(null)}
+                                  suppressContentEditableWarning={true}
+                                  onKeyDown={e => {
+                                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                                      e.preventDefault();
+                                      if (e.shiftKey) {
+                                        handleRedo();
+                                      } else {
+                                        handleUndo();
+                                      }
+                                    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                                      e.preventDefault();
+                                      handleRedo();
+                                    }
+                                  }}
+                                />
+                                
+                                {/* Link Tooltip */}
+                                {activeLink && (
+                                  <div 
+                                    className="absolute z-50 bg-white border border-slate-300 shadow-lg rounded px-3 py-2 flex items-center gap-2 text-sm animate-in fade-in zoom-in-95 duration-150"
+                                    style={{ top: tooltipPos.top, left: tooltipPos.left }}
+                                    onMouseDown={e => e.preventDefault()} // Prevent taking focus from editor
+                                  >
+                                    <a 
+                                      href={activeLink.href} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="text-[#1a73e8] hover:underline whitespace-nowrap"
+                                    >
+                                      Go to link: {activeLink.href.length > 30 ? activeLink.href.substring(0, 30) + '...' : activeLink.href}
+                                    </a>
+                                    <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                                    <button 
+                                      onClick={() => {
+                                        setLinkValues({ text: activeLink.textContent, url: activeLink.href })
+                                        setShowLinkPopup(true)
+                                      }}
+                                      className="text-[#1a73e8] hover:underline whitespace-nowrap"
+                                    >
+                                      Change
+                                    </button>
+                                    <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                                    <button 
+                                      onClick={() => {
+                                         // Remove link logic: replace A with its children
+                                         const parent = activeLink.parentNode
+                                         while(activeLink.firstChild) parent.insertBefore(activeLink.firstChild, activeLink)
+                                         parent.removeChild(activeLink)
+                                         updateEmailBody(editorRef.current.innerHTML, true)
+                                         setActiveLink(null)
+                                      }}
+                                      className="text-[#1a73e8] hover:underline whitespace-nowrap"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                           </div>
+                           
+                           {/* Attachments List */}
+                           {attachments.length > 0 && (
+                             <div className="flex flex-wrap gap-2 mt-3">
+                               {attachments.map((file, i) => (
+                                 <div key={i} className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 animate-in fade-in zoom-in duration-200 group">
+                                   <Paperclip size={14} className="text-slate-400" />
+                                   <a 
+                                     href={file.preview} 
+                                     target="_blank" 
+                                     rel="noopener noreferrer"
+                                     className="truncate max-w-[200px] hover:text-[#2D4485] hover:underline cursor-pointer"
+                                     title={`View ${file.name}`}
+                                   >
+                                     {file.name}
+                                   </a>
+                                   <span className="text-xs text-slate-500">({(file.size / 1024).toFixed(1)} KB)</span>
+                                   <button onClick={() => removeAttachment(i)} className="text-slate-400 hover:text-red-500 transition-colors ml-1" title="Remove attachment">
+                                     <X size={14} />
+                                   </button>
+                                 </div>
+                               ))}
+                             </div>
+                           )}
                         </div>
                      </div>
-                     <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-end gap-3 items-center">
-                       {!emailConfig.serviceId && (
-                         <span className="text-xs text-slate-500 mr-auto max-w-[200px] leading-tight">
-                           Tip: Click the gear icon <span className="inline-block align-middle"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span> to configure instant sending.
-                         </span>
-                       )}
-                       
-                       <button 
-                         onClick={() => {
-                           const subject = encodeURIComponent(emailSubject);
-                           const body = encodeURIComponent(emailBody.replace(/\n/g, "\r\n"));
-                           const mailtoLink = `mailto:${openEmail.to}?subject=${subject}&body=${body}`;
-                           const link = document.createElement('a');
-                           link.href = mailtoLink;
-                           link.target = '_blank';
-                           document.body.appendChild(link);
-                           link.click();
-                           document.body.removeChild(link);
-                           setOpenEmail(null);
-                         }}
-                         className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200/50 rounded-lg transition-colors border border-transparent hover:border-slate-200"
-                       >
-                         Open Mail App
-                       </button>
+                     
+                     {/* Footer Action Bar: Contains Send Button and secondary actions */}
+                     <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                       <div className="flex items-center gap-3">
+                          {/* Send Split Button */}
+                          <div className="flex items-center shadow-sm relative z-10">
+                             {/* Primary Send Button */}
+                             <button 
+                               onClick={async () => {
+                                 // Check if recipient exists
+                                 if (!openEmail.to) {
+                                   showNotification("Please enter an email address");
+                                   return;
+                                 }
+                                 // Perform send operation
+                                 setIsSending(true);
+                                 try {
+                                   const formData = new FormData();
+                                   formData.append('to_email', openEmail.to);
+                                   formData.append('subject', emailSubject);
+                                   formData.append('message', emailBody);
+                                   
+                                   // Attach files
+                                   if (attachments && attachments.length > 0) {
+                                     attachments.forEach(file => {
+                                       formData.append('attachments', file);
+                                     });
+                                   }
 
-                       {emailConfig.serviceId && (
+                                   const response = await fetch(`${API_BASE_URL}/api/send-email/`, {
+                                     method: 'POST',
+                                     body: formData,
+                                   });
+
+                                   if (!response.ok) {
+                                       const errorData = await response.json();
+                                       throw new Error(errorData.error || 'Failed to send email');
+                                   }
+
+                                   showNotification(`Email sent successfully to ${openEmail.to}`);
+                                   setOpenEmail(null);
+                                   setAttachments([]);
+                                   setEmailSubject("");
+                                   setEmailBody("");
+                                 } catch (error) {
+                                   console.error("Email failed:", error);
+                                   showNotification(`Failed to send: ${error.message}`);
+                                 } finally {
+                                   setIsSending(false);
+                                 }
+                               }}
+                               disabled={isSending}
+                               className="px-6 py-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-slate-400 text-white text-sm font-bold rounded-l-full border-r border-white/20 transition-colors flex items-center gap-2"
+                             >
+                               {isSending ? "Sending..." : "Send"}
+                             </button>
+                             
+                             {/* Dropdown Trigger */}
+                             <div className="relative group">
+                               <button className="px-2 py-2.5 bg-[#1a73e8] hover:bg-[#1557b0] text-white rounded-r-full transition-colors flex items-center h-full">
+                                 <ChevronDown size={16} />
+                               </button>
+                               {/* Dropdown Menu Options */}
+                               <div className="absolute bottom-full left-0 mb-1 w-56 bg-white rounded-lg shadow-xl border border-slate-200 hidden group-hover:block overflow-hidden">
+                                  <button 
+                                    onClick={() => {
+                                      const subject = encodeURIComponent(emailSubject);
+                                      // Strip HTML tags for mailto
+                                      const plainBody = emailBody.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ");
+                                      const body = encodeURIComponent(plainBody);
+                                      // Open system default mail client
+                                      const link = document.createElement('a');
+                                      link.href = `mailto:${openEmail.to}?subject=${subject}&body=${body}`;
+                                      link.target = '_blank';
+                                      document.body.appendChild(link);
+                                      link.click();
+                                      document.body.removeChild(link);
+                                      setOpenEmail(null);
+                                    }}
+                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                  >
+                                    <Mail size={14} className="text-slate-400" /> Open in Mail App
+                                  </button>
+                               </div>
+                             </div>
+                          </div>
+                          
+                          {/* Formatting & Attachment Icons */}
+                          <div className="flex items-center gap-1 ml-2">
+                            <button 
+                              onClick={() => setShowFormatting(!showFormatting)}
+                              className={`p-2 rounded-full transition-colors ${showFormatting ? 'bg-slate-200 text-slate-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`} 
+                              title="Formatting Options"
+                            >
+                               <div className="flex items-baseline font-serif font-bold italic select-none">
+                                 <span className="text-lg">A</span><span className="text-sm">a</span>
+                               </div>
+                            </button>
+                            <button 
+                              onClick={() => fileInputRef.current?.click()}
+                              className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors" 
+                              title="Attach File"
+                            >
+                               <Paperclip size={20} />
+                            </button>
+                            <input 
+                              type="file" 
+                              ref={fileInputRef} 
+                              className="hidden" 
+                              multiple 
+                              onChange={handleFileSelect} 
+                            />
+                            <button 
+                               onClick={handleInsertLink}
+                               className={`p-2 rounded-full transition-colors ${showLinkPopup ? 'bg-slate-200 text-slate-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}
+                               title="Insert Link"
+                             >
+                                <LinkIcon size={20} />
+                             </button>
+                             
+
+                          </div>
+                       </div>
+                       
+                       {/* Delete/Discard Button */}
+                       <div className="relative">
                          <button 
-                           onClick={async () => {
-                             if (!openEmail.to) {
-                               showNotification("Please enter an email address");
-                               return;
-                             }
-                             setIsSending(true);
-                             try {
-                               await emailjs.send(emailConfig.serviceId, emailConfig.templateId, {
-                                  to_email: openEmail.to,
-                                  subject: emailSubject,
-                                  message: emailBody,
-                               }, emailConfig.publicKey);
-                               showNotification(`Email sent successfully to ${openEmail.to}`);
-                               setOpenEmail(null);
-                             } catch (error) {
-                               console.error("Email failed:", error);
-                               showNotification("Failed to send. Check configuration.");
-                             } finally {
-                               setIsSending(false);
-                             }
-                           }}
-                           disabled={isSending}
-                           className="px-4 py-2 text-sm font-medium text-white bg-[#2D4485] hover:bg-[#3D56A6] rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+                           onClick={() => setShowDeleteConfirm(!showDeleteConfirm)} 
+                           className={`p-2 rounded-full transition-colors ${showDeleteConfirm ? 'bg-red-100 text-red-600' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`} 
+                           title="Discard Draft"
                          >
-                           {isSending ? (
-                             <>
-                               <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                               </svg>
-                               Sending...
-                             </>
-                           ) : (
-                             "Send Now"
-                           )}
+                           <Trash2 size={18} />
                          </button>
-                       )}
+                         
+                         {/* Delete Confirmation Popup */}
+                         {showDeleteConfirm && (
+                           <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-3 z-50 animate-in fade-in zoom-in-95 duration-200">
+                             <h4 className="text-sm font-semibold text-slate-800 mb-1">Discard draft?</h4>
+                             <p className="text-xs text-slate-500 mb-3">This will clear all content and close the email editor.</p>
+                             <div className="flex justify-end gap-2">
+                               <button 
+                                 onClick={() => setShowDeleteConfirm(false)}
+                                 className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                               >
+                                 Cancel
+                               </button>
+                               <button 
+                                 onClick={() => {
+                                   setOpenEmail(null)
+                                   setEmailSubject("")
+                                   setEmailBody("")
+                                   setAttachments([])
+                                   setEmailHistory([])
+                                   setHistoryStep(0)
+                                   setShowDeleteConfirm(false)
+                                 }}
+                                 className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded transition-colors"
+                               >
+                                 Discard
+                               </button>
+                             </div>
+                           </div>
+                         )}
+                       </div>
                      </div>
                    </>
+                 )}
+                 {showLinkPopup && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl border border-slate-200 p-4 w-80 z-50 animate-in fade-in zoom-in-95 duration-200">
+                        <h4 className="text-sm font-semibold text-slate-800 mb-3">Insert Link</h4>
+                        <div className="flex flex-col gap-3">
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium text-slate-500">Text to display</label>
+                            <div className="flex items-center gap-2 border border-slate-300 rounded-md px-3 py-2 focus-within:ring-2 focus-within:ring-[#2D4485]/20 focus-within:border-[#2D4485] bg-slate-50">
+                                <Type size={14} className="text-slate-400 shrink-0" />
+                                <input 
+                                type="text" 
+                                placeholder="Text" 
+                                className="text-sm outline-none w-full text-slate-700 bg-transparent placeholder:text-slate-400"
+                                value={linkValues.text}
+                                onChange={e => setLinkValues({...linkValues, text: e.target.value})}
+                                autoFocus
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium text-slate-500">Link URL</label>
+                            <div className="flex items-center gap-2 border border-slate-300 rounded-md px-3 py-2 focus-within:ring-2 focus-within:ring-[#2D4485]/20 focus-within:border-[#2D4485] bg-slate-50">
+                                <LinkIcon size={14} className="text-slate-400 shrink-0" />
+                                <input 
+                                type="text" 
+                                placeholder="https://example.com" 
+                                className="text-sm outline-none w-full text-slate-700 bg-transparent placeholder:text-slate-400"
+                                value={linkValues.url}
+                                onChange={e => setLinkValues({...linkValues, url: e.target.value})}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') applyLink()
+                                }}
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-slate-100">
+                            <button 
+                                onClick={() => setShowLinkPopup(false)}
+                                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={applyLink}
+                                className="px-3 py-1.5 text-xs font-medium bg-[#2D4485] text-white rounded-md hover:bg-[#1a2e66] transition-colors shadow-sm"
+                            >
+                                Apply
+                            </button>
+                        </div>
+                        </div>
+                    </div>
                  )}
               </div>
             </div>
