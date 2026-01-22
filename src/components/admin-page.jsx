@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
 import { 
   LayoutDashboard, 
   FileText, 
@@ -10,7 +10,8 @@ import {
   Download,
   Trash2,
   ExternalLink,
-  Lock
+  Lock,
+  ClipboardList
 } from "lucide-react"
 import PurchaseOrderPage from "./purchase-order-page.jsx"
 import { API_BASE_URL } from "../config"
@@ -87,7 +88,7 @@ function Dashboard({ data }) {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-500 text-sm font-medium">Total Quotations</h3>
             <div className="p-2 bg-blue-50 rounded-lg">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <ClipboardList className="w-5 h-5 text-blue-600" />
             </div>
           </div>
           <div className="text-2xl font-bold text-gray-900">{data.quotations.length}</div>
@@ -707,7 +708,7 @@ export default function AdminPage() {
               activeTab === "quotations" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
             }`}
           >
-            <FileText className="w-5 h-5" />
+            <ClipboardList className="w-5 h-5" />
             Quotations
           </button>
           <button

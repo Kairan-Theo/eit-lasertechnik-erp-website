@@ -138,6 +138,7 @@ class ActivitySchedule(models.Model):
     activity_name = models.TextField(blank=True)
     salesperson = models.CharField(max_length=100, blank=True)
     customer = models.CharField(max_length=200, blank=True)
+    completed = models.BooleanField(default=False)
     reminder_sent = models.BooleanField(default=False)
     reminder_day_sent = models.BooleanField(default=False)
     reminder_week_sent = models.BooleanField(default=False)
