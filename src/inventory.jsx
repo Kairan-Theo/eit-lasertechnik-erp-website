@@ -190,7 +190,7 @@ function useInventory() {
     logMove({ type: "purchase_receipt", sku, qty: Number(qty), ref, company })
     setShowReceive(null)
   }
-  const deliverQty = (sku, qty, ref, status, company, warehouse, bin, lot, tracking, courier) => {
+  const deliverQty = (sku, qty, ref, status, company, warehouse, bin, lot, tracking, courier, trackingUrl) => {
     if (!qty || qty <= 0) {
       setShowDeliver(null)
       return
@@ -262,12 +262,13 @@ function useInventory() {
         deliveryCompany: company || "",
         trackingNumber: tracking || "",
         courier: courier || "",
+        trackingUrl: trackingUrl || "",
         updatedAt: new Date().toISOString().slice(0, 10) 
       }
     })
     
     saveItems(next)
-    logMove({ type: "sales_delivery", sku, qty: Number(qty), ref, company, status: status || "Delivered", tracking: tracking || "", courier })
+    logMove({ type: "sales_delivery", sku, qty: Number(qty), ref, company, status: status || "Delivered", tracking: tracking || "", courier, trackingUrl })
     setShowDeliver(null)
   }
   const transferQty = (sku, qty, fromWarehouse, toWarehouse, ref) => {
@@ -405,6 +406,25 @@ function useInventory() {
   }
 }
 
+const getTrackingLink = (courier, number) => {
+  if (!number) return null
+  if (String(number).startsWith("http")) return number
+  switch (courier) {
+    case "Kerry": return `https://th.kerryexpress.com/th/track/?track=${number}`
+    case "Flash": return `https://www.flashexpress.co.th/tracking/?se=${number}`
+    case "ThaiPost": return `https://track.thailandpost.co.th/?trackNumber=${number}`
+    case "J&T": return `https://www.jtexpress.co.th/tracking?billcode=${number}`
+    case "DHL": return `https://www.dhl.com/th-en/home/tracking.html?tracking-id=${number}`
+    case "SCG": return `https://www.scgexpress.co.th/tracking/detail/${number}`
+    case "NinjaVan": return `https://www.ninjavan.co/th-th/tracking?id=${number}`
+    case "Best": return `https://www.best-inc.co.th/track?billcode=${number}`
+    case "Shopee": return `https://spx.co.th/`
+    case "Lazada": return `https://tracker.lel.asia/tracker?trackingNumber=${number}`
+    case "Nim": return `https://www.nimexpress.com/web/p/tracking?i=${number}`
+    default: return `https://t.17track.net/en#nums=${number}`
+  }
+}
+
 function InventoryTable({ inv }) {
   const fmtTHB = (n) => `฿ ${Number(n).toLocaleString("th-TH")}`
   const [editingId, setEditingId] = React.useState(null)
@@ -431,39 +451,7 @@ function InventoryTable({ inv }) {
   }
 
   const [openStatusId, setOpenStatusId] = React.useState(null)
-  const [openTrackingMenuId, setOpenTrackingMenuId] = React.useState(null)
 
-  const getTrackingLink = (courier, number) => {
-    if (!number) return null
-    switch (courier) {
-      case "Kerry": return `https://th.kerryexpress.com/th/track/?track=${number}`
-      case "Flash": return `https://www.flashexpress.co.th/tracking/?se=${number}`
-      case "ThaiPost": return `https://track.thailandpost.co.th/?trackNumber=${number}`
-      case "J&T": return `https://www.jtexpress.co.th/tracking?billcode=${number}`
-      case "DHL": return `https://www.dhl.com/th-en/home/tracking.html?tracking-id=${number}`
-      case "SCG": return `https://www.scgexpress.co.th/tracking/detail/${number}`
-      case "NinjaVan": return `https://www.ninjavan.co/th-th/tracking?id=${number}`
-      case "Best": return `https://www.best-inc.co.th/track?billcode=${number}`
-      case "Shopee": return `https://spx.co.th/`
-      case "Lazada": return `https://tracker.lel.asia/tracker?trackingNumber=${number}`
-      case "Nim": return `https://www.nimexpress.com/web/p/tracking?i=${number}`
-      default: return null
-    }
-  }
-
-  const checkStatus = async (p) => {
-    if (!p.trackingNumber || !p.courier) return
-
-    try {
-      const res = await fetch(`http://127.0.0.1:8000/api/tracking/check/?courier=${encodeURIComponent(p.courier)}&number=${encodeURIComponent(p.trackingNumber)}`)
-      const data = await res.json()
-      if (data.status && data.status !== "Unknown" && data.status !== "Error") {
-         inv.updateItem(p, { trackingStatus: data.status })
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }
 
   const deliveryStatusClass = (s) => {
     switch (s) {
@@ -499,7 +487,6 @@ function InventoryTable({ inv }) {
                 <th className="p-3 text-left">Delivery Status</th>
                 <th className="p-3 text-left">Customer</th>
                 <th className="p-3 text-left">Tracking #</th>
-                <th className="p-3 text-left">Tracking Status</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Last Updated</th>
               </tr>
             </thead>
@@ -627,12 +614,12 @@ function InventoryTable({ inv }) {
                     </td>
                     <td className="p-3 text-gray-600 font-mono text-xs">
                       {p.trackingNumber ? (
-                         getTrackingLink(p.courier, p.trackingNumber) ? (
+                         (p.trackingUrl || getTrackingLink(p.courier, p.trackingNumber)) ? (
                            <button 
                              onClick={(e) => { 
                                 e.stopPropagation(); 
                                 navigator.clipboard.writeText(p.trackingNumber);
-                                const url = getTrackingLink(p.courier, p.trackingNumber);
+                                const url = p.trackingUrl || getTrackingLink(p.courier, p.trackingNumber);
                                 if(url) window.open(url, '_blank');
                               }}
                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer max-w-[140px]"
@@ -649,149 +636,7 @@ function InventoryTable({ inv }) {
                          )
                       ) : "-"}
                     </td>
-                    <td className="p-3">
-                  <div className="flex items-center gap-1">
-                    <div className={`relative flex items-center border rounded overflow-hidden transition-colors ${
-                        p.trackingStatus === "Delivered" ? "bg-green-50 text-green-700 border-green-200" :
-                        p.trackingStatus === "In Transit" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                        p.trackingStatus === "Out for Delivery" ? "bg-purple-50 text-purple-700 border-purple-200" :
-                        p.trackingStatus === "Exception" ? "bg-red-50 text-red-700 border-red-200" :
-                        "bg-gray-50 text-gray-600 border-gray-200"
-                    }`}>
-                      {/* Link / Text Section */}
-                      <span className="px-2 py-1 text-xs font-medium truncate max-w-[80px]">
-                        {p.trackingStatus || "Check"}
-                      </span>
 
-                      {/* Vertical Divider */}
-                      <div className="w-[1px] h-4 bg-current opacity-20"></div>
-
-                      {/* Explicit Action Buttons */}
-                      <div className="flex items-center">
-                          {/* Auto Check / Refresh */}
-                          <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              const url = getTrackingLink(p.courier, p.trackingNumber);
-                              if(url) window.open(url, '_blank');
-                              checkStatus(p); 
-                            }}
-                            className="px-1.5 py-1 hover:bg-black/5 transition-colors focus:outline-none text-current"
-                            title="Check on Website"
-                          >
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                             </svg>
-                          </button>
-                          
-                          {/* Open External Link / Menu */}
-                          {p.trackingNumber && (
-                              <div className="relative">
-                                <button
-                                  onClick={(e) => { 
-                                      e.stopPropagation(); 
-                                      setOpenTrackingMenuId(openTrackingMenuId === rowId ? null : rowId);
-                                      setOpenTrackingStatusId(null); // Close other menu if open
-                                  }}
-                                  className="px-1.5 py-1 hover:bg-black/5 transition-colors focus:outline-none text-current border-l border-current/10"
-                                  title="Tracking Options"
-                                >
-                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                   </svg>
-                                </button>
-                                {openTrackingMenuId === rowId && (
-                                  <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-md shadow-lg z-50 overflow-hidden">
-                                    <div className="bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b">View On</div>
-                                    {getTrackingLink(p.courier, p.trackingNumber) && (
-                                        <a 
-                                          href={getTrackingLink(p.courier, p.trackingNumber)} 
-                                          target="_blank" 
-                                          rel="noopener noreferrer"
-                                          className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                          onClick={(e) => { e.stopPropagation(); setOpenTrackingMenuId(null); }}
-                                        >
-                                          <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                                          Official Site
-                                        </a>
-                                    )}
-                                    <a 
-                                      href={`https://www.google.com/search?q=${p.courier}+tracking+${p.trackingNumber}`} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer"
-                                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                      onClick={(e) => { e.stopPropagation(); setOpenTrackingMenuId(null); }}
-                                    >
-                                      <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                      Google Search
-                                    </a>
-                                    <a 
-                                      href={`https://t.17track.net/en#nums=${p.trackingNumber}`} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer"
-                                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                      onClick={(e) => { e.stopPropagation(); setOpenTrackingMenuId(null); }}
-                                    >
-                                      <svg className="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                      17TRACK
-                                    </a>
-
-                                    <div className="bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider border-y mt-1">Update Status</div>
-                                    {["In Transit", "Out for Delivery", "Delivered", "Exception"].map((status) => (
-                                      <button
-                                        key={status}
-                                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700 flex items-center gap-2"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          setOpenTrackingMenuId(null)
-                                          inv.updateItem(p, { trackingStatus: status })
-                                        }}
-                                      >
-                                        <div className={`w-2 h-2 rounded-full ${
-                                            status === "Delivered" ? "bg-green-500" :
-                                            status === "In Transit" ? "bg-blue-500" :
-                                            status === "Out for Delivery" ? "bg-purple-500" :
-                                            "bg-red-500"
-                                        }`}></div>
-                                        {status}
-                                      </button>
-                                    ))}
-                                    <button
-                                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-500 flex items-center gap-2 border-t"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          setOpenTrackingMenuId(null)
-                                          inv.updateItem(p, { trackingStatus: "" })
-                                        }}
-                                      >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                        Clear Status
-                                      </button>
-                                  </div>
-                                )}
-                              </div>
-                          )}
-                      </div>
-                    </div>
-
-                    {/* Auto Check Refresh Button */}
-                    <button
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        navigator.clipboard.writeText(p.trackingNumber);
-                        const url = getTrackingLink(p.courier, p.trackingNumber);
-                        if(url) window.open(url, '_blank');
-                        checkStatus(p) 
-                      }}
-                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                      title="Copy Number & Check on Website"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </button>
-                  </div>
-                </td>
                     <td className="p-3">{p.updatedAt}</td>
                   </tr>
                 )
@@ -850,7 +695,7 @@ function InventoryTable({ inv }) {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowDeliver(null)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-4 text-gray-900">Deliver Products</div>
-            <DeliverForm sku={inv.showDeliver.sku} items={inv.items} onCancel={() => inv.setShowDeliver(null)} onConfirm={(qty, ref, status, company, tracking, courier) => inv.deliverQty(inv.showDeliver.sku, qty, ref, status, company, inv.showDeliver.warehouse, inv.showDeliver.bin, inv.showDeliver.lot, tracking, courier)} />
+            <DeliverForm sku={inv.showDeliver.sku} items={inv.items} onCancel={() => inv.setShowDeliver(null)} onConfirm={(qty, ref, status, company, tracking, courier, trackingUrl) => inv.deliverQty(inv.showDeliver.sku, qty, ref, status, company, inv.showDeliver.warehouse, inv.showDeliver.bin, inv.showDeliver.lot, tracking, courier, trackingUrl)} />
           </div>
         </div>
       )}
@@ -1057,12 +902,14 @@ function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
               <th className="p-2 text-left">Reason</th>
               <th className="p-2 text-left">Ref</th>
               <th className="p-2 text-left">Company</th>
+              <th className="p-2 text-left">Tracking</th>
+              <th className="p-2 text-left">Status</th>
               <th className="p-2 text-left">User</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td className="p-3 text-gray-600" colSpan={8}>No movements found</td></tr>
+              <tr><td className="p-3 text-gray-600" colSpan={10}>No movements found</td></tr>
             ) : (
               rows.map((e, i) => (
                 <tr key={i} className="border-t">
@@ -1073,6 +920,32 @@ function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
                   <td className="p-2">{e.reason || ""}</td>
                   <td className="p-2">{e.ref || e.from || e.to || ""}</td>
                   <td className="p-2">{e.company || "-"}</td>
+                  <td className="p-2">
+                     {e.tracking ? (
+                       <a 
+                         href={e.trackingUrl || getTrackingLink(e.courier, e.tracking)} 
+                         target="_blank" 
+                         rel="noopener noreferrer" 
+                         className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                         title={`Track via ${e.courier || "17TRACK"}`}
+                         onClick={(evt) => evt.stopPropagation()}
+                       >
+                         <span className="truncate max-w-[100px] inline-block align-bottom">{e.tracking}</span>
+                         <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                       </a>
+                     ) : "-"}
+                  </td>
+                  <td className="p-2">
+                    {e.type === 'sales_delivery' ? (
+                       <span className={`px-2 py-0.5 rounded text-xs ${
+                         e.status === 'Delivered' ? 'bg-emerald-100 text-emerald-800' :
+                         e.status === 'Shipped' ? 'bg-blue-100 text-blue-800' :
+                         'bg-gray-100 text-gray-800'
+                       }`}>
+                         {e.status || "Shipped"}
+                       </span>
+                    ) : "-"}
+                  </td>
                   <td className="p-2">{e.user || ""}</td>
                 </tr>
               ))
@@ -1112,6 +985,12 @@ function DeliverForm({ sku, onCancel, onConfirm, items = [] }) {
   const [status, setStatus] = React.useState("Delivered")
   const [tracking, setTracking] = React.useState("")
   const [courier, setCourier] = React.useState("Other")
+  
+  // Custom courier fields
+  const [customCourier, setCustomCourier] = React.useState("")
+  const [customUrl, setCustomUrl] = React.useState("")
+  
+  const isOther = courier === "Other"
 
   return (
     <div className="space-y-3">
@@ -1139,6 +1018,24 @@ function DeliverForm({ sku, onCancel, onConfirm, items = [] }) {
         </select>
         <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking No." className="w-full rounded-md border border-gray-300 px-3 py-2" />
       </div>
+
+      {isOther && (
+        <div className="grid grid-cols-2 gap-3 animate-fadeIn">
+          <input 
+            value={customCourier} 
+            onChange={(e) => setCustomCourier(e.target.value)} 
+            placeholder="Specify Courier Name" 
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
+          <input 
+            value={customUrl} 
+            onChange={(e) => setCustomUrl(e.target.value)} 
+            placeholder="Tracking Link (Optional)" 
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            title="Paste the full tracking URL if available"
+          />
+        </div>
+      )}
       
       {/* Customer Info */}
       <input 
@@ -1156,7 +1053,15 @@ function DeliverForm({ sku, onCancel, onConfirm, items = [] }) {
       
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="btn-pill">Cancel</button>
-        <button onClick={() => onConfirm(qty, ref, status, company, tracking, courier)} className="btn-pill">Deliver</button>
+        <button 
+          onClick={() => {
+            const finalCourier = isOther ? (customCourier || "Other") : courier
+            onConfirm(qty, ref, status, company, tracking, finalCourier, customUrl)
+          }} 
+          className="btn-pill"
+        >
+          Deliver
+        </button>
       </div>
     </div>
   )
