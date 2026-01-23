@@ -431,8 +431,7 @@ function InventoryTable({ inv }) {
   }
 
   const [openStatusId, setOpenStatusId] = React.useState(null)
-  const [openTrackingStatusId, setOpenTrackingStatusId] = React.useState(null)
-  const [viewingTracking, setViewingTracking] = React.useState(null)
+  const [openTrackingMenuId, setOpenTrackingMenuId] = React.useState(null)
 
   const getTrackingLink = (courier, number) => {
     if (!number) return null
@@ -453,31 +452,29 @@ function InventoryTable({ inv }) {
   }
 
   const checkStatus = async (p) => {
-    if (!p.trackingNumber || !p.courier) {
-        alert("Missing courier or tracking number")
-        return
-    }
+    if (!p.trackingNumber || !p.courier) return
+
     try {
-      const res = await fetch(`http://localhost:8000/api/tracking/check/?courier=${p.courier}&number=${p.trackingNumber}`)
+      const res = await fetch(`http://127.0.0.1:8000/api/tracking/check/?courier=${encodeURIComponent(p.courier)}&number=${encodeURIComponent(p.trackingNumber)}`)
       const data = await res.json()
-      if (data.status && data.status !== "Unknown" && data.status !== "Manual Check Needed") {
+      if (data.status && data.status !== "Unknown" && data.status !== "Error") {
          inv.updateItem(p, { trackingStatus: data.status })
-         alert(`Status updated: ${data.status}`)
-      } else {
-         alert(`Status check result: ${data.status || "Unknown"}. Please check manually.`)
       }
     } catch (e) {
       console.error(e)
-      alert("Failed to check status automatically. Backend might be down.")
     }
   }
 
   const deliveryStatusClass = (s) => {
     switch (s) {
       case "Pending": return "bg-amber-100 text-amber-800 border border-amber-200"
-      case "Shipped": return "bg-blue-100 text-blue-800 border border-blue-200"
+      case "Shipped": 
+      case "In Transit": return "bg-blue-100 text-blue-800 border border-blue-200"
+      case "Out for Delivery": return "bg-purple-100 text-purple-800 border border-purple-200"
       case "Delivered": return "bg-emerald-100 text-emerald-800 border border-emerald-200"
-      case "Returned": return "bg-rose-100 text-rose-800 border border-rose-200"
+      case "Returned": 
+      case "Exception": return "bg-rose-100 text-rose-800 border border-rose-200"
+      case "Manual Check Needed": return "bg-orange-100 text-orange-800 border border-orange-200"
       default: return "bg-gray-100 text-gray-800 border border-gray-200"
     }
   }
@@ -632,14 +629,19 @@ function InventoryTable({ inv }) {
                       {p.trackingNumber ? (
                          getTrackingLink(p.courier, p.trackingNumber) ? (
                            <button 
-                             onClick={(e) => { e.stopPropagation(); setViewingTracking({ url: getTrackingLink(p.courier, p.trackingNumber), courier: p.courier, number: p.trackingNumber }) }}
+                             onClick={(e) => { 
+                                e.stopPropagation(); 
+                                navigator.clipboard.writeText(p.trackingNumber);
+                                const url = getTrackingLink(p.courier, p.trackingNumber);
+                                if(url) window.open(url, '_blank');
+                              }}
                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer max-w-[140px]"
                              title={`Track ${p.trackingNumber} on ${p.courier} website`}
                            >
                              <span className="truncate">{p.trackingNumber}</span>
                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                              </svg>
                            </button>
                          ) : (
@@ -657,60 +659,132 @@ function InventoryTable({ inv }) {
                         "bg-gray-50 text-gray-600 border-gray-200"
                     }`}>
                       {/* Link / Text Section */}
-                      {p.trackingNumber && getTrackingLink(p.courier, p.trackingNumber) ? (
-                          <button
-                             onClick={(e) => { e.stopPropagation(); setViewingTracking({ url: getTrackingLink(p.courier, p.trackingNumber), courier: p.courier, number: p.trackingNumber }) }}
-                             className="px-2 py-1 text-xs font-medium flex items-center gap-1 hover:brightness-95 hover:underline focus:outline-none"
-                             title={`Preview ${p.courier || 'Courier'} tracking`}
-                           >
-                             <span className="truncate max-w-[80px]">{p.trackingStatus || "Check"}</span>
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                             </svg>
-                           </button>
-                      ) : (
-                          <span className="px-2 py-1 text-xs font-medium truncate max-w-[80px]">
-                            {p.trackingStatus || "Set Status"}
-                          </span>
-                      )}
+                      <span className="px-2 py-1 text-xs font-medium truncate max-w-[80px]">
+                        {p.trackingStatus || "Check"}
+                      </span>
 
                       {/* Vertical Divider */}
                       <div className="w-[1px] h-4 bg-current opacity-20"></div>
 
-                      {/* Dropdown Trigger */}
-                      <button
-                        className="px-1 py-1 hover:bg-black/5 transition-colors focus:outline-none"
-                        onClick={(e) => { e.stopPropagation(); setOpenTrackingStatusId(openTrackingStatusId === rowId ? null : rowId) }}
-                      >
-                        <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                      </button>
+                      {/* Explicit Action Buttons */}
+                      <div className="flex items-center">
+                          {/* Auto Check / Refresh */}
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              const url = getTrackingLink(p.courier, p.trackingNumber);
+                              if(url) window.open(url, '_blank');
+                              checkStatus(p); 
+                            }}
+                            className="px-1.5 py-1 hover:bg-black/5 transition-colors focus:outline-none text-current"
+                            title="Check on Website"
+                          >
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                             </svg>
+                          </button>
+                          
+                          {/* Open External Link / Menu */}
+                          {p.trackingNumber && (
+                              <div className="relative">
+                                <button
+                                  onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      setOpenTrackingMenuId(openTrackingMenuId === rowId ? null : rowId);
+                                      setOpenTrackingStatusId(null); // Close other menu if open
+                                  }}
+                                  className="px-1.5 py-1 hover:bg-black/5 transition-colors focus:outline-none text-current border-l border-current/10"
+                                  title="Tracking Options"
+                                >
+                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                   </svg>
+                                </button>
+                                {openTrackingMenuId === rowId && (
+                                  <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-md shadow-lg z-50 overflow-hidden">
+                                    <div className="bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b">View On</div>
+                                    {getTrackingLink(p.courier, p.trackingNumber) && (
+                                        <a 
+                                          href={getTrackingLink(p.courier, p.trackingNumber)} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                          onClick={(e) => { e.stopPropagation(); setOpenTrackingMenuId(null); }}
+                                        >
+                                          <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                          Official Site
+                                        </a>
+                                    )}
+                                    <a 
+                                      href={`https://www.google.com/search?q=${p.courier}+tracking+${p.trackingNumber}`} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                      onClick={(e) => { e.stopPropagation(); setOpenTrackingMenuId(null); }}
+                                    >
+                                      <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                      Google Search
+                                    </a>
+                                    <a 
+                                      href={`https://t.17track.net/en#nums=${p.trackingNumber}`} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                      onClick={(e) => { e.stopPropagation(); setOpenTrackingMenuId(null); }}
+                                    >
+                                      <svg className="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                      17TRACK
+                                    </a>
 
-                      {/* Dropdown Menu */}
-                      {openTrackingStatusId === rowId && (
-                        <div className="absolute top-full right-0 mt-1 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-50">
-                          {["In Transit", "Out for Delivery", "Delivered", "Exception", ""].map((status) => (
-                            <button
-                              key={status}
-                              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setOpenTrackingStatusId(null)
-                                inv.updateItem(p, { trackingStatus: status })
-                              }}
-                            >
-                              {status || "Clear Status"}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                                    <div className="bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider border-y mt-1">Update Status</div>
+                                    {["In Transit", "Out for Delivery", "Delivered", "Exception"].map((status) => (
+                                      <button
+                                        key={status}
+                                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700 flex items-center gap-2"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setOpenTrackingMenuId(null)
+                                          inv.updateItem(p, { trackingStatus: status })
+                                        }}
+                                      >
+                                        <div className={`w-2 h-2 rounded-full ${
+                                            status === "Delivered" ? "bg-green-500" :
+                                            status === "In Transit" ? "bg-blue-500" :
+                                            status === "Out for Delivery" ? "bg-purple-500" :
+                                            "bg-red-500"
+                                        }`}></div>
+                                        {status}
+                                      </button>
+                                    ))}
+                                    <button
+                                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-500 flex items-center gap-2 border-t"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setOpenTrackingMenuId(null)
+                                          inv.updateItem(p, { trackingStatus: "" })
+                                        }}
+                                      >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        Clear Status
+                                      </button>
+                                  </div>
+                                )}
+                              </div>
+                          )}
+                      </div>
                     </div>
 
                     {/* Auto Check Refresh Button */}
                     <button
-                      onClick={(e) => { e.stopPropagation(); checkStatus(p) }}
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        navigator.clipboard.writeText(p.trackingNumber);
+                        const url = getTrackingLink(p.courier, p.trackingNumber);
+                        if(url) window.open(url, '_blank');
+                        checkStatus(p) 
+                      }}
                       className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                      title="Auto Check Status"
+                      title="Copy Number & Check on Website"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -785,44 +859,6 @@ function InventoryTable({ inv }) {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-4 text-gray-900">Import CSV</div>
             <ImportForm onCancel={() => inv.setShowImport(false)} onFile={(f) => inv.importCsv(f)} />
-          </div>
-        </div>
-      )}
-      {viewingTracking && (
-        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={() => setViewingTracking(null)}>
-          <div className="bg-white w-full max-w-4xl h-[80vh] rounded-xl shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-             <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
-               <div className="flex items-center gap-2">
-                 <span className="font-semibold text-gray-800">{viewingTracking.courier} Tracking</span>
-                 <span className="text-sm text-gray-500 bg-gray-200 px-2 py-0.5 rounded font-mono">{viewingTracking.number}</span>
-                 <span className="text-xs text-gray-400 ml-2">(Powered by 17TRACK)</span>
-               </div>
-               <div className="flex items-center gap-2">
-                 <a 
-                   href={viewingTracking.url} 
-                   target="_blank" 
-                   rel="noopener noreferrer"
-                   className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                 >
-                   <span>Open Official Site</span>
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                 </a>
-                 <button 
-                   onClick={() => setViewingTracking(null)}
-                   className="p-1 hover:bg-gray-200 rounded-full transition-colors text-gray-500"
-                 >
-                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                 </button>
-               </div>
-             </div>
-             <div className="flex-1 bg-gray-100 relative">
-               <iframe 
-                 src={`https://t.17track.net/en#nums=${viewingTracking.number}`}
-                 className="w-full h-full border-0"
-                 title="Tracking Info"
-                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-               />
-             </div>
           </div>
         </div>
       )}
