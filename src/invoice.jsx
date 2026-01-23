@@ -195,7 +195,7 @@ function useInvoiceState() {
         }))
         
         setItems(Array.isArray(q.items) && q.items.length ? q.items.map(i => ({ ...i, unit: i.unit || "pcs" })) : [{ product: "", description: "", qty: 1, price: 0, tax: 0, unit: "pcs" }])
-        
+
         setDetails((prev) => {
           const date = q.details?.date || prev.date
           const paymentTermsDays = Number(q.details?.paymentTermsDays ?? prev.paymentTermsDays)

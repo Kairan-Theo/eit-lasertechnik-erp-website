@@ -129,7 +129,8 @@ export default function Navigation() {
         let count = 0
         keys.forEach((k) => {
           const h = JSON.parse(localStorage.getItem(k) || "{}")
-          ;(h.invoices || []).forEach((inv) => {
+          const invoices = Array.isArray(h.invoices) ? h.invoices : []
+          invoices.forEach((inv) => {
             const due = inv.details?.dueDate
             if (due) {
               const d = new Date(due).getTime()
@@ -147,7 +148,8 @@ export default function Navigation() {
         const nowTs = Date.now()
         if (nowTs < (nextProbeTimeRef.current || 0)) {
           try {
-            const local = JSON.parse(localStorage.getItem("notifications") || "[]")
+            const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+            const local = Array.isArray(raw) ? raw : []
             const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
             setNotificationsCount(unread)
           } catch {
@@ -202,7 +204,8 @@ export default function Navigation() {
               return
             }
             try {
-              const local = JSON.parse(localStorage.getItem("notifications") || "[]")
+              const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+              const local = Array.isArray(raw) ? raw : []
               const unread = local.reduce((acc, n) => acc + (n && n.unread === true ? 1 : 0), 0)
               setNotificationsCount(unread)
             } catch {
@@ -214,7 +217,8 @@ export default function Navigation() {
             // Backoff 60s before probing backend again to prevent repeated console errors
             nextProbeTimeRef.current = Date.now() + 60 * 1000
             try {
-              const local = JSON.parse(localStorage.getItem("notifications") || "[]")
+              const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+              const local = Array.isArray(raw) ? raw : []
               const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
               setNotificationsCount(unread)
             } catch {

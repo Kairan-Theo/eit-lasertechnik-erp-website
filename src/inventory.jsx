@@ -72,6 +72,11 @@ function useInventory() {
           valuationMethod: p.valuationMethod || "FIFO",
           serials: Array.isArray(p.serials) ? p.serials : [],
           manufactureDate: p.manufactureDate || "",
+          deliveryStatus: p.deliveryStatus || "",
+          deliveryCompany: p.deliveryCompany || "",
+          trackingNumber: p.trackingNumber || "",
+          courier: p.courier || "",
+          trackingStatus: p.trackingStatus || "",
         }))
         let max = nextWhIvNumber(norm)
         const fixed = norm.map((it) => {
@@ -148,8 +153,9 @@ function useInventory() {
   }
   const logMove = (entry) => {
     try {
-      const logs = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
-      logs.push({ ...entry, ts: new Date().toISOString(), user: role })
+      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
+      const logs = Array.isArray(raw) ? raw : []
+      logs.push({ ...entry, id: entry.id || Date.now().toString(36) + Math.random().toString(36).substr(2), ts: new Date().toISOString(), user: role })
       localStorage.setItem("inventoryMovements", JSON.stringify(logs))
     } catch {}
   }
@@ -174,24 +180,94 @@ function useInventory() {
     logMove({ type: "adjustment", sku, warehouse: warehouse || "Main", bin: bin || "A-01-01", lot: lot || "", delta: finalQty - prevQty, newQty: finalQty, reason, ref })
     setShowAdjust(null)
   }
-  const receiveQty = (sku, qty, ref) => {
+  const receiveQty = (sku, qty, ref, company) => {
     if (!qty || qty <= 0) {
       setShowReceive(null)
       return
     }
-    const next = items.map((it) => (it.sku === sku ? { ...it, stockQty: Number(it.stockQty || 0) + Number(qty || 0), incomingQty: Math.max(0, Number(it.incomingQty || 0) - Number(qty || 0)), updatedAt: new Date().toISOString().slice(0, 10) } : it))
+    const next = items.map((it) => (it.sku === sku ? { ...it, stockQty: Number(it.stockQty || 0) + Number(qty || 0), incomingQty: Math.max(0, Number(it.incomingQty || 0) - Number(qty || 0)), deliveryStatus: "Delivered", updatedAt: new Date().toISOString().slice(0, 10) } : it))
     saveItems(next)
-    logMove({ type: "purchase_receipt", sku, qty: Number(qty), ref })
+    logMove({ type: "purchase_receipt", sku, qty: Number(qty), ref, company })
     setShowReceive(null)
   }
-  const deliverQty = (sku, qty, ref) => {
+  const deliverQty = (sku, qty, ref, status, company, warehouse, bin, lot, tracking, courier) => {
     if (!qty || qty <= 0) {
       setShowDeliver(null)
       return
     }
-    const next = items.map((it) => (it.sku === sku ? { ...it, stockQty: Math.max(0, Number(it.stockQty || 0) - Number(qty || 0)), outgoingQty: Math.max(0, Number(it.outgoingQty || 0) - Number(qty || 0)), updatedAt: new Date().toISOString().slice(0, 10) } : it))
+
+    // Check stock availability before proceeding
+    const item = items.find((it) => 
+      it.sku === sku && 
+      (it.warehouse || "Main") === (warehouse || "Main") && 
+      (it.bin || "") === (bin || "") && 
+      (it.lot || "") === (lot || "")
+    )
+
+    if (item) {
+      const currentStock = Number(item.stockQty || 0)
+      if (qty > currentStock) {
+        alert(`Insufficient stock! You only have ${currentStock} units available.`)
+        return
+      }
+    }
+    
+    // Status Logic:
+    // 1. "Shipped" or "Delivered" means the goods have physically left the warehouse.
+    //    We deduct stockQty immediately.
+    // 2. "Pending" or "Ready" means goods are reserved but still in the warehouse.
+    //    We increase reserved/outgoingQty but do NOT deduct stockQty yet.
+    
+    const isShipped = ["Shipped", "Delivered"].includes(status || "Delivered")
+    const isPending = ["Pending", "Ready"].includes(status)
+    
+    const next = items.map((it) => {
+      // Must match SKU
+      if (it.sku !== sku) return it
+
+      // If specific location provided, strict match required to avoid reducing stock from multiple locations
+      if (warehouse !== undefined && (it.warehouse || "Main") !== (warehouse || "Main")) return it
+      if (bin !== undefined && (it.bin || "") !== (bin || "")) return it
+      if (lot !== undefined && (it.lot || "") !== (lot || "")) return it
+      
+      let newStock = Number(it.stockQty || 0)
+      let newReserved = Number(it.reserved || 0)
+      let newOutgoing = Number(it.outgoingQty || 0)
+      
+      if (isShipped) {
+        // Reduce actual stock
+        newStock = Math.max(0, newStock - Number(qty))
+        
+        // If it was previously reserved, we might want to reduce reserved count too?
+        // But here we are creating a NEW delivery record. 
+        // Usually, if we deliver from "Reserved" stock, we should decrease reserved.
+        // However, this function `deliverQty` seems to handle new ad-hoc deliveries.
+        // Let's assume this delivery consumes available stock directly.
+        // If the user workflow is "Reserve -> Deliver", that's a status update, not a new delivery call.
+        
+        // For a NEW delivery that is immediately Shipped/Delivered:
+        // We just reduce stock. We don't touch reserved unless specified.
+      } else if (isPending) {
+        // Reserve stock for future delivery
+        newReserved = newReserved + Number(qty)
+        newOutgoing = newOutgoing + Number(qty)
+      }
+      
+      return { 
+        ...it, 
+        stockQty: newStock, 
+        reserved: newReserved, 
+        outgoingQty: newOutgoing, 
+        deliveryStatus: status || "Delivered", 
+        deliveryCompany: company || "",
+        trackingNumber: tracking || "",
+        courier: courier || "",
+        updatedAt: new Date().toISOString().slice(0, 10) 
+      }
+    })
+    
     saveItems(next)
-    logMove({ type: "sales_delivery", sku, qty: Number(qty), ref })
+    logMove({ type: "sales_delivery", sku, qty: Number(qty), ref, company, status: status || "Delivered", tracking: tracking || "", courier })
     setShowDeliver(null)
   }
   const transferQty = (sku, qty, fromWarehouse, toWarehouse, ref) => {
@@ -354,13 +430,62 @@ function InventoryTable({ inv }) {
     setEditingField(null)
   }
 
+  const [openStatusId, setOpenStatusId] = React.useState(null)
+  const [openTrackingMenuId, setOpenTrackingMenuId] = React.useState(null)
+
+  const getTrackingLink = (courier, number) => {
+    if (!number) return null
+    switch (courier) {
+      case "Kerry": return `https://th.kerryexpress.com/th/track/?track=${number}`
+      case "Flash": return `https://www.flashexpress.co.th/tracking/?se=${number}`
+      case "ThaiPost": return `https://track.thailandpost.co.th/?trackNumber=${number}`
+      case "J&T": return `https://www.jtexpress.co.th/tracking?billcode=${number}`
+      case "DHL": return `https://www.dhl.com/th-en/home/tracking.html?tracking-id=${number}`
+      case "SCG": return `https://www.scgexpress.co.th/tracking/detail/${number}`
+      case "NinjaVan": return `https://www.ninjavan.co/th-th/tracking?id=${number}`
+      case "Best": return `https://www.best-inc.co.th/track?billcode=${number}`
+      case "Shopee": return `https://spx.co.th/`
+      case "Lazada": return `https://tracker.lel.asia/tracker?trackingNumber=${number}`
+      case "Nim": return `https://www.nimexpress.com/web/p/tracking?i=${number}`
+      default: return null
+    }
+  }
+
+  const checkStatus = async (p) => {
+    if (!p.trackingNumber || !p.courier) return
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/tracking/check/?courier=${encodeURIComponent(p.courier)}&number=${encodeURIComponent(p.trackingNumber)}`)
+      const data = await res.json()
+      if (data.status && data.status !== "Unknown" && data.status !== "Error") {
+         inv.updateItem(p, { trackingStatus: data.status })
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const deliveryStatusClass = (s) => {
+    switch (s) {
+      case "Pending": return "bg-amber-100 text-amber-800 border border-amber-200"
+      case "Shipped": 
+      case "In Transit": return "bg-blue-100 text-blue-800 border border-blue-200"
+      case "Out for Delivery": return "bg-purple-100 text-purple-800 border border-purple-200"
+      case "Delivered": return "bg-emerald-100 text-emerald-800 border border-emerald-200"
+      case "Returned": 
+      case "Exception": return "bg-rose-100 text-rose-800 border border-rose-200"
+      case "Manual Check Needed": return "bg-orange-100 text-orange-800 border border-orange-200"
+      default: return "bg-gray-100 text-gray-800 border border-gray-200"
+    }
+  }
+
   return (
     <div className="">
       {inv.pageItems.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
           <div className="text-lg font-semibold text-gray-900">No items found</div>
           <div className="text-sm text-gray-600 mt-1">Try adjusting your search or add a new item</div>
-          <button onClick={() => inv.setShowAdd(true)} className="mt-4 btn-pill">Add Item</button>
+          <button onClick={() => inv.setShowAdd(true)} className="mt-4 inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm">Add Item</button>
         </div>
       ) : (
         <div className="overflow-x-auto bg-white rounded-xl shadow-sm border">
@@ -371,9 +496,11 @@ function InventoryTable({ inv }) {
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>Product Number</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
-                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("price")}>Price</th>
+                <th className="p-3 text-left">Delivery Status</th>
+                <th className="p-3 text-left">Customer</th>
+                <th className="p-3 text-left">Tracking #</th>
+                <th className="p-3 text-left">Tracking Status</th>
                 <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Last Updated</th>
-                <th className="p-3 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -406,7 +533,11 @@ function InventoryTable({ inv }) {
                         />
                       )}
                     </td>
-                    <td className="p-3 text-gray-900">{p.sku}</td>
+                    <td className="p-3">
+                      <a href={`/inventory-detail.html?sku=${encodeURIComponent(p.sku)}`} className="text-[#3D56A6] hover:underline font-medium">
+                        {p.sku}
+                      </a>
+                    </td>
                     <td className="p-3 text-gray-700">
                       {isEditing("name") ? (
                         <input
@@ -430,13 +561,51 @@ function InventoryTable({ inv }) {
                         </span>
                       )}
                     </td>
-                    <td className="p-3">{Number(p.stockQty).toLocaleString("en-US")}</td>
-                    <td className="p-3 text-[#2D4485] font-medium">
-                      {isEditing("price") ? (
+                    <td className="p-3">
+                      <span
+                        className="cursor-pointer hover:text-[#2D4485] hover:underline font-medium"
+                        title="Click to update stock"
+                        onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })}
+                      >
+                        {Number(p.stockQty).toLocaleString("en-US")}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="relative inline-block">
+                        <button
+                          className={`${deliveryStatusClass(p.deliveryStatus)} px-2 py-1 rounded-full text-xs font-medium min-w-[80px]`}
+                          onClick={(e) => { e.stopPropagation(); setOpenStatusId(openStatusId === rowId ? null : rowId) }}
+                        >
+                          {p.deliveryStatus || "Set Status"}
+                        </button>
+                        {openStatusId === rowId && (
+                          <div className="absolute z-20 mt-1 w-32 bg-white border border-gray-200 rounded-md shadow-lg left-0">
+                            {["Pending", "Delivered", ""].map((status) => (
+                              <button
+                                key={status}
+                                className={`block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${status === "Pending" ? "text-amber-700" : status === "Delivered" ? "text-emerald-700" : "text-gray-500"}`}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setOpenStatusId(null)
+                                  if (status === "Delivered") {
+                                    inv.setShowDeliver(p)
+                                  } else {
+                                    inv.updateItem(p, { deliveryStatus: status })
+                                  }
+                                }}
+                              >
+                                {status || "Clear"}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-3 text-gray-600">
+                      {isEditing("deliveryCompany") ? (
                         <input
                           autoFocus
-                          type="number"
-                          className="w-24 rounded-md border border-gray-300 px-2 py-1"
+                          className="w-full rounded-md border border-gray-300 px-2 py-1"
                           value={editingValue}
                           onChange={(e) => setEditingValue(e.target.value)}
                           onBlur={() => handleBlur(p)}
@@ -444,23 +613,186 @@ function InventoryTable({ inv }) {
                         />
                       ) : (
                         <span
-                          className="cursor-pointer hover:text-[#2D4485] hover:underline"
+                          className="cursor-pointer hover:text-[#2D4485] hover:underline truncate max-w-[120px] inline-block align-middle"
+                          title={p.deliveryCompany || "Click to edit"}
                           onClick={() => {
                             setEditingId(rowId)
-                            setEditingField("price")
-                            setEditingValue(p.price)
+                            setEditingField("deliveryCompany")
+                            setEditingValue(p.deliveryCompany || "")
                           }}
                         >
-                          {fmtTHB(p.price)}
+                          {p.deliveryCompany || "-"}
                         </span>
                       )}
                     </td>
-                    <td className="p-3">{p.updatedAt}</td>
-                    <td className="p-3">
-                      <div className="flex gap-2">
-                        <button disabled={!(inv.role === "Inventory Admin" || inv.role === "Warehouse Staff")} onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })} className="px-2 py-1 text-xs rounded-full border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white disabled:opacity-50">Update Stock</button>
-                      </div>
+                    <td className="p-3 text-gray-600 font-mono text-xs">
+                      {p.trackingNumber ? (
+                         getTrackingLink(p.courier, p.trackingNumber) ? (
+                           <button 
+                             onClick={(e) => { 
+                                e.stopPropagation(); 
+                                navigator.clipboard.writeText(p.trackingNumber);
+                                const url = getTrackingLink(p.courier, p.trackingNumber);
+                                if(url) window.open(url, '_blank');
+                              }}
+                             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer max-w-[140px]"
+                             title={`Track ${p.trackingNumber} on ${p.courier} website`}
+                           >
+                             <span className="truncate">{p.trackingNumber}</span>
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                             </svg>
+                           </button>
+                         ) : (
+                           <span className="truncate max-w-[140px] inline-block" title={p.trackingNumber}>{p.trackingNumber}</span>
+                         )
+                      ) : "-"}
                     </td>
+                    <td className="p-3">
+                  <div className="flex items-center gap-1">
+                    <div className={`relative flex items-center border rounded overflow-hidden transition-colors ${
+                        p.trackingStatus === "Delivered" ? "bg-green-50 text-green-700 border-green-200" :
+                        p.trackingStatus === "In Transit" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                        p.trackingStatus === "Out for Delivery" ? "bg-purple-50 text-purple-700 border-purple-200" :
+                        p.trackingStatus === "Exception" ? "bg-red-50 text-red-700 border-red-200" :
+                        "bg-gray-50 text-gray-600 border-gray-200"
+                    }`}>
+                      {/* Link / Text Section */}
+                      <span className="px-2 py-1 text-xs font-medium truncate max-w-[80px]">
+                        {p.trackingStatus || "Check"}
+                      </span>
+
+                      {/* Vertical Divider */}
+                      <div className="w-[1px] h-4 bg-current opacity-20"></div>
+
+                      {/* Explicit Action Buttons */}
+                      <div className="flex items-center">
+                          {/* Auto Check / Refresh */}
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              const url = getTrackingLink(p.courier, p.trackingNumber);
+                              if(url) window.open(url, '_blank');
+                              checkStatus(p); 
+                            }}
+                            className="px-1.5 py-1 hover:bg-black/5 transition-colors focus:outline-none text-current"
+                            title="Check on Website"
+                          >
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                             </svg>
+                          </button>
+                          
+                          {/* Open External Link / Menu */}
+                          {p.trackingNumber && (
+                              <div className="relative">
+                                <button
+                                  onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      setOpenTrackingMenuId(openTrackingMenuId === rowId ? null : rowId);
+                                      setOpenTrackingStatusId(null); // Close other menu if open
+                                  }}
+                                  className="px-1.5 py-1 hover:bg-black/5 transition-colors focus:outline-none text-current border-l border-current/10"
+                                  title="Tracking Options"
+                                >
+                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                   </svg>
+                                </button>
+                                {openTrackingMenuId === rowId && (
+                                  <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-md shadow-lg z-50 overflow-hidden">
+                                    <div className="bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b">View On</div>
+                                    {getTrackingLink(p.courier, p.trackingNumber) && (
+                                        <a 
+                                          href={getTrackingLink(p.courier, p.trackingNumber)} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                          onClick={(e) => { e.stopPropagation(); setOpenTrackingMenuId(null); }}
+                                        >
+                                          <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                          Official Site
+                                        </a>
+                                    )}
+                                    <a 
+                                      href={`https://www.google.com/search?q=${p.courier}+tracking+${p.trackingNumber}`} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                      onClick={(e) => { e.stopPropagation(); setOpenTrackingMenuId(null); }}
+                                    >
+                                      <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                      Google Search
+                                    </a>
+                                    <a 
+                                      href={`https://t.17track.net/en#nums=${p.trackingNumber}`} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                      onClick={(e) => { e.stopPropagation(); setOpenTrackingMenuId(null); }}
+                                    >
+                                      <svg className="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                      17TRACK
+                                    </a>
+
+                                    <div className="bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider border-y mt-1">Update Status</div>
+                                    {["In Transit", "Out for Delivery", "Delivered", "Exception"].map((status) => (
+                                      <button
+                                        key={status}
+                                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700 flex items-center gap-2"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setOpenTrackingMenuId(null)
+                                          inv.updateItem(p, { trackingStatus: status })
+                                        }}
+                                      >
+                                        <div className={`w-2 h-2 rounded-full ${
+                                            status === "Delivered" ? "bg-green-500" :
+                                            status === "In Transit" ? "bg-blue-500" :
+                                            status === "Out for Delivery" ? "bg-purple-500" :
+                                            "bg-red-500"
+                                        }`}></div>
+                                        {status}
+                                      </button>
+                                    ))}
+                                    <button
+                                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-500 flex items-center gap-2 border-t"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setOpenTrackingMenuId(null)
+                                          inv.updateItem(p, { trackingStatus: "" })
+                                        }}
+                                      >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        Clear Status
+                                      </button>
+                                  </div>
+                                )}
+                              </div>
+                          )}
+                      </div>
+                    </div>
+
+                    {/* Auto Check Refresh Button */}
+                    <button
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        navigator.clipboard.writeText(p.trackingNumber);
+                        const url = getTrackingLink(p.courier, p.trackingNumber);
+                        if(url) window.open(url, '_blank');
+                        checkStatus(p) 
+                      }}
+                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="Copy Number & Check on Website"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+                    <td className="p-3">{p.updatedAt}</td>
                   </tr>
                 )
               })}
@@ -518,7 +850,7 @@ function InventoryTable({ inv }) {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowDeliver(null)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-4 text-gray-900">Deliver Products</div>
-            <DeliverForm sku={inv.showDeliver.sku} onCancel={() => inv.setShowDeliver(null)} onConfirm={(qty, ref) => inv.deliverQty(inv.showDeliver.sku, qty, ref)} />
+            <DeliverForm sku={inv.showDeliver.sku} items={inv.items} onCancel={() => inv.setShowDeliver(null)} onConfirm={(qty, ref, status, company, tracking, courier) => inv.deliverQty(inv.showDeliver.sku, qty, ref, status, company, inv.showDeliver.warehouse, inv.showDeliver.bin, inv.showDeliver.lot, tracking, courier)} />
           </div>
         </div>
       )}
@@ -724,12 +1056,13 @@ function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
               <th className="p-2 text-left">New Qty</th>
               <th className="p-2 text-left">Reason</th>
               <th className="p-2 text-left">Ref</th>
+              <th className="p-2 text-left">Company</th>
               <th className="p-2 text-left">User</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td className="p-3 text-gray-600" colSpan={7}>No movements found</td></tr>
+              <tr><td className="p-3 text-gray-600" colSpan={8}>No movements found</td></tr>
             ) : (
               rows.map((e, i) => (
                 <tr key={i} className="border-t">
@@ -739,6 +1072,7 @@ function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
                   <td className="p-2">{e.newQty != null ? e.newQty : ""}</td>
                   <td className="p-2">{e.reason || ""}</td>
                   <td className="p-2">{e.ref || e.from || e.to || ""}</td>
+                  <td className="p-2">{e.company || "-"}</td>
                   <td className="p-2">{e.user || ""}</td>
                 </tr>
               ))
@@ -769,17 +1103,60 @@ function ReceiveForm({ sku, onCancel, onConfirm }) {
   )
 }
 
-function DeliverForm({ sku, onCancel, onConfirm }) {
+function DeliverForm({ sku, onCancel, onConfirm, items = [] }) {
+  // Simple delivery form to record outgoing items
+  // Fields: Quantity, Reference (SO/DO), Courier info, and Customer
   const [qty, setQty] = React.useState(0)
   const [ref, setRef] = React.useState("")
+  const [company, setCompany] = React.useState("")
+  const [status, setStatus] = React.useState("Delivered")
+  const [tracking, setTracking] = React.useState("")
+  const [courier, setCourier] = React.useState("Other")
+
   return (
     <div className="space-y-3">
-      <div className="text-sm text-gray-700">Reference: <span className="font-semibold">{sku}</span></div>
-      <input type="number" min={0} value={qty} onChange={(e) => setQty(Math.max(0, Number(e.target.value)))} placeholder="Qty delivered" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-      <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="SO/DO Reference" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      <div className="text-sm text-gray-700">Product: <span className="font-semibold">{sku}</span></div>
+      
+      {/* Quantity & Reference */}
+      <input type="number" min={0} value={qty} onChange={(e) => setQty(Math.max(0, Number(e.target.value)))} placeholder="Quantity" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Reference No." className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      
+      {/* Courier & Tracking */}
+      <div className="grid grid-cols-2 gap-3">
+        <select value={courier} onChange={(e) => setCourier(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
+          <option value="Other">Other Courier</option>
+          <option value="Kerry">Kerry Express</option>
+          <option value="Flash">Flash Express</option>
+          <option value="ThaiPost">Thai Post</option>
+          <option value="J&T">J&T Express</option>
+          <option value="DHL">DHL</option>
+          <option value="SCG">SCG Express</option>
+          <option value="NinjaVan">Ninja Van</option>
+          <option value="Best">Best Express</option>
+          <option value="Shopee">Shopee Xpress (SPX)</option>
+          <option value="Lazada">Lazada Express (LEX)</option>
+          <option value="Nim">Nim Express</option>
+        </select>
+        <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking No." className="w-full rounded-md border border-gray-300 px-3 py-2" />
+      </div>
+      
+      {/* Customer Info */}
+      <input 
+        value={company} 
+        onChange={(e) => setCompany(e.target.value)} 
+        placeholder="Customer Name" 
+        className="w-full rounded-md border border-gray-300 px-3 py-2" 
+      />
+
+      {/* Delivery Status */}
+      <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
+        <option value="Pending">Pending</option>
+        <option value="Delivered">Delivered</option>
+      </select>
+      
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="btn-pill">Cancel</button>
-        <button onClick={() => onConfirm(qty, ref)} className="btn-pill">Deliver</button>
+        <button onClick={() => onConfirm(qty, ref, status, company, tracking, courier)} className="btn-pill">Deliver</button>
       </div>
     </div>
   )
@@ -796,7 +1173,7 @@ function InventoryPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Inventory Control Tower</h1>
               <button
-                className="inline-flex items-center justify-center min-w-[150px] btn-pill"
+                className="inline-flex items-center justify-center min-w-[150px] px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm"
                 title="Add Item"
                 onClick={() => inv.setShowAdd(true)}
               >
@@ -804,30 +1181,47 @@ function InventoryPage() {
               </button>
               <button
                 onClick={() => inv.setShowImport(true)}
-                className="btn-pill"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
               >
                 Import
               </button>
               <button
                 onClick={inv.exportCsv}
-                className="btn-pill"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
               >
                 Export
               </button>
             </div>
             <div className="flex items-center gap-3">
-                 <input
-                  value={inv.query}
-                  onChange={(e) => inv.setQuery(e.target.value)}
-                  className="w-64 rounded-md border border-gray-300 px-3 py-2"
-                  placeholder="Search by name or product number"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={inv.query}
+                    onChange={(e) => inv.setQuery(e.target.value)}
+                    placeholder="Search by name or product number"
+                    className="pl-10 pr-10 py-2 border border-slate-300 rounded-lg text-sm w-80 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all"
+                  />
+                  <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  {inv.query && (
+                    <button
+                      onClick={() => inv.setQuery("")}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                      title="Clear Search"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
                  <button
                     onClick={() => {
                       inv.setHistoryFilter(null)
                       inv.setView(inv.view === "history" ? "inventory" : "history")
                     }}
-                    className="btn-pill"
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
                   >
                     {inv.view === "history" ? "Inventory" : "History"}
                   </button>

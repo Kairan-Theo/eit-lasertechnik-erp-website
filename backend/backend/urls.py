@@ -66,6 +66,7 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/bom/', list_boms),
     path('api/bom/import/', import_bom),
+    path('api/tracking/check/', check_tracking_status),
     path('api/send-email/', send_email_api),
     path('api/crm/analytics/', get_crm_analytics),
     path('api/auth/signup/', signup),
