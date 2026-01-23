@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer
 from datetime import date, timedelta
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -14,6 +14,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 import os
+from django.core.files.base import ContentFile
 
 
 
@@ -62,12 +63,27 @@ def send_email_api(request):
         
         msg.attach(MIMEText(body, "html", _charset="utf-8"))
 
+        # Log the email first
+        email_log = EmailLog.objects.create(
+            recipient=recipient_email,
+            subject=subject,
+            body=body
+        )
+
         for f in files:
+            content = f.read()
+            
+            # Email attachment
             part = MIMEBase("application", "octet-stream")
-            part.set_payload(f.read())
+            part.set_payload(content)
             encoders.encode_base64(part)
             part.add_header("Content-Disposition", f"attachment; filename={f.name}")
             msg.attach(part)
+            
+            # Save to DB
+            attachment = EmailAttachment(email_log=email_log)
+            attachment.file.save(f.name, ContentFile(content))
+            attachment.save()
         
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
@@ -162,6 +178,22 @@ class DealViewSet(viewsets.ModelViewSet):
                 message=f"CRM  {updated_instance.customer} ({old_stage} -> {updated_instance.stage})",
                 type="crm_move"
             )
+            # Log deal history
+            DealHistory.objects.create(
+                deal=updated_instance,
+                from_stage=old_stage,
+                to_stage=updated_instance.stage
+            )
+
+class EmailLogViewSet(viewsets.ModelViewSet):
+    queryset = EmailLog.objects.all().order_by('-sent_at')
+    serializer_class = EmailLogSerializer
+    permission_classes = [AllowAny]
+
+class DealHistoryViewSet(viewsets.ModelViewSet):
+    queryset = DealHistory.objects.all().order_by('-changed_at')
+    serializer_class = DealHistorySerializer
+    permission_classes = [AllowAny]
 
 class ActivityScheduleViewSet(viewsets.ModelViewSet):
     queryset = ActivitySchedule.objects.all().order_by('due_at')

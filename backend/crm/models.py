@@ -339,3 +339,38 @@ class ComponentEntry(models.Model):
 
     def __str__(self):
         return self.component_name
+
+class EmailLog(models.Model):
+    recipient = models.EmailField()
+    subject = models.CharField(max_length=255)
+    body = models.TextField()
+    sent_at = models.DateTimeField(auto_now_add=True)
+    # Optional: link to a deal if relevant
+    # deal = models.ForeignKey(Deal, null=True, blank=True, on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return f"To: {self.recipient} - {self.subject}"
+
+class EmailAttachment(models.Model):
+    email_log = models.ForeignKey(EmailLog, related_name='attachments', on_delete=models.CASCADE)
+    file = models.FileField(upload_to='email_attachments/')
+    filename = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.filename and self.file:
+            self.filename = self.file.name
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.filename or "Attachment"
+
+class DealHistory(models.Model):
+    deal = models.ForeignKey(Deal, related_name='history', on_delete=models.CASCADE)
+    from_stage = models.CharField(max_length=50)
+    to_stage = models.CharField(max_length=50)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    # Optional: changed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return f"{self.deal.title}: {self.from_stage} -> {self.to_stage}"

@@ -3,14 +3,13 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
-import { Mail, Trash2, FileText, Undo, Redo, ChevronDown, Paperclip, Link as LinkIcon, Type, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Indent, Baseline, X } from "lucide-react"
+import { Mail, Trash2, FileText, Undo, Redo, ChevronDown, Paperclip, Link as LinkIcon, Type, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Indent, Baseline, X, Check } from "lucide-react"
 import "./index.css"
 import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
 import CRMActivities from "./crm-activities.jsx"
-import CRMTickets from "./crm-tickets.jsx"
-import CRMLeads from "./crm-leads.jsx"
 import CRMAnalytics from "./crm-analytics.jsx"
+import CRMHistory from "./components/crm/CRMHistory.jsx"
 import { Toaster } from "../components/ui/toaster"
 
 const initialPipeline = {
@@ -264,6 +263,7 @@ function CRMPage() {
   const [openScheduleMenuKey, setOpenScheduleMenuKey] = React.useState(null) // { stageIndex, cardIndex, idx }
   const [editingScheduleKey, setEditingScheduleKey] = React.useState(null) // { stageIndex, cardIndex, idx }
   const [notification, setNotification] = React.useState({ show: false, message: "" })
+  const [emailSuccess, setEmailSuccess] = React.useState(false)
   const [sortBy, setSortBy] = React.useState(null) // 'createdAt' | 'lastActivity' | 'expectedClose'
   const [sortAsc, setSortAsc] = React.useState(false)
   const [showCompanySuggestions, setShowCompanySuggestions] = React.useState(false)
@@ -1006,10 +1006,14 @@ function CRMPage() {
   const onCardDragStart = (stageIndex, cardIndex, e) => {
     e.dataTransfer.setData("card", JSON.stringify({ stageIndex, cardIndex }))
   }
+  // Handle dropping a deal card into a new stage
   const onCardDrop = async (toStageIndex, e) => {
+    // Retrieve the dragged card's origin data
     const payload = e.dataTransfer.getData("card")
     if (!payload) return
     const { stageIndex: fromStageIndex, cardIndex } = JSON.parse(payload)
+    
+    // If dropped in the same stage, do nothing
     if (fromStageIndex === toStageIndex) return
     
     const card = stages[fromStageIndex].deals[cardIndex]
@@ -1018,11 +1022,19 @@ function CRMPage() {
       const stageName = stages[toStageIndex].name
       const sname = String(stageName || "").toLowerCase()
       const isClosedWon = sname.includes("close") && sname.includes("won")
+      
+      // Construct notification message for the move
       const baseMsg = `CRM: Moved "${card.title}" from ${fromStageName} --> ${stageName}`
       const msg = isClosedWon ? `${baseMsg} — Create PO or Receive PO` : baseMsg
+      
+      // Show local UI notification and notify team
       showNotification(msg)
       notifyTeam(msg, isClosedWon ? "success" : "info", card.customer || "", "CRM")
+      
+      // Dispatch event to update other components (like CRMHistory) immediately
       window.dispatchEvent(new Event("notificationUpdated"))
+
+      // Persist the change to the backend
       try {
         const token = localStorage.getItem("authToken")
         await fetch(`${API_BASE}/deals/${card.id}/`, {
@@ -1033,15 +1045,19 @@ function CRMPage() {
           },
           body: JSON.stringify({ stage: stageName })
         })
+        // Trigger another update after successful persistence to ensure data consistency
         window.dispatchEvent(new Event("notificationUpdated"))
       } catch (err) {
         console.error("Failed to persist stage change", err)
       }
     }
 
+    // Update local state for immediate UI feedback (Optimistic Update)
     setStages((prev) => {
       const next = prev.map((s) => ({ ...s, deals: [...s.deals] }))
+      // Remove from old stage
       const [movedCard] = next[fromStageIndex].deals.splice(cardIndex, 1)
+      // Add to new stage
       next[toStageIndex].deals.push(movedCard)
       return next
     })
@@ -1297,7 +1313,7 @@ function CRMPage() {
             </h1>
             <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
             <div className="flex items-center gap-2">
-              {["Deals", "Customers", "Activities", "Tickets", "Leads", "Analytics"].map((tab) => (
+              {["Deals", "Customers", "Activities", "History", "Analytics"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -1531,7 +1547,7 @@ function CRMPage() {
                 
                 if (cleanContent.length > 0 || (hasAttachments && hasAttachments.length > 0)) {
                     hasNonEmptyContent = true;
-                    if (dateMatch) {
+                    if (dateMatch && !validDateMatch) {
                         validDateMatch = dateMatch;
                     }
                 }
@@ -2330,14 +2346,13 @@ function CRMPage() {
                                     fullContent += `\n${att.fullMatch}`;
                                   });
                                   
-                                  // Logic for date: only exist if there is content
+                                  // Logic for date: update on any change if content exists
                                   let finalDateDisplay = dateDisplay;
                                   const hasContent = newText.trim().length > 0 || attachments.length > 0;
                                   
                                   if (hasContent) {
-                                    if (!finalDateDisplay) {
-                                      finalDateDisplay = new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
-                                    }
+                                    // Always update to current time on edit
+                                    finalDateDisplay = new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
                                   } else {
                                     finalDateDisplay = "";
                                   }
@@ -3127,16 +3142,18 @@ function CRMPage() {
                                    });
 
                                    if (!response.ok) {
-                                       const errorData = await response.json();
-                                       throw new Error(errorData.error || 'Failed to send email');
-                                   }
+                                      const errorData = await response.json();
+                                      throw new Error(errorData.error || 'Failed to send email');
+                                  }
 
-                                   showNotification(`Email sent successfully to ${openEmail.to}`);
-                                   setOpenEmail(null);
-                                   setAttachments([]);
-                                   setEmailSubject("");
-                                   setEmailBody("");
-                                 } catch (error) {
+                                  setOpenEmail(null);
+                                  setAttachments([]);
+                                  setEmailSubject("");
+                                  setEmailBody("");
+                                  
+                                  setEmailSuccess(true);
+                                  setTimeout(() => setEmailSuccess(false), 5000);
+                                } catch (error) {
                                    console.error("Email failed:", error);
                                    showNotification(`Failed to send: ${error.message}`);
                                  } finally {
@@ -3144,39 +3161,12 @@ function CRMPage() {
                                  }
                                }}
                                disabled={isSending}
-                               className="px-6 py-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-slate-400 text-white text-sm font-bold rounded-l-full border-r border-white/20 transition-colors flex items-center gap-2"
+                               className="px-6 py-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-slate-400 text-white text-sm font-bold rounded-full transition-colors flex items-center gap-2"
                              >
                                {isSending ? "Sending..." : "Send"}
                              </button>
                              
-                             {/* Dropdown Trigger */}
-                             <div className="relative group">
-                               <button className="px-2 py-2.5 bg-[#1a73e8] hover:bg-[#1557b0] text-white rounded-r-full transition-colors flex items-center h-full">
-                                 <ChevronDown size={16} />
-                               </button>
-                               {/* Dropdown Menu Options */}
-                               <div className="absolute bottom-full left-0 mb-1 w-56 bg-white rounded-lg shadow-xl border border-slate-200 hidden group-hover:block overflow-hidden">
-                                  <button 
-                                    onClick={() => {
-                                      const subject = encodeURIComponent(emailSubject);
-                                      // Strip HTML tags for mailto
-                                      const plainBody = emailBody.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ");
-                                      const body = encodeURIComponent(plainBody);
-                                      // Open system default mail client
-                                      const link = document.createElement('a');
-                                      link.href = `mailto:${openEmail.to}?subject=${subject}&body=${body}`;
-                                      link.target = '_blank';
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                      setOpenEmail(null);
-                                    }}
-                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                  >
-                                    <Mail size={14} className="text-slate-400" /> Open in Mail App
-                                  </button>
-                               </div>
-                             </div>
+
                           </div>
                           
                           {/* Formatting & Attachment Icons */}
@@ -3329,17 +3319,13 @@ function CRMPage() {
             onActivityUpdate={fetchDeals}
           />
         </div>
-      ) : activeTab === "Tickets" ? (
-        <div className="min-h-screen bg-white">
-          <CRMTickets />
-        </div>
-      ) : activeTab === "Leads" ? (
-        <div className="min-h-screen bg-white">
-          <CRMLeads />
-        </div>
       ) : activeTab === "Analytics" ? (
         <div className="min-h-screen bg-white">
           <CRMAnalytics />
+        </div>
+      ) : activeTab === "History" ? (
+        <div className="p-6 bg-slate-50 min-h-screen">
+          <CRMHistory />
         </div>
       ) : (
         <div className="p-6 text-slate-600">Coming soon</div>
@@ -3372,6 +3358,11 @@ function CRMPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+      {emailSuccess && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[#323232] text-white px-6 py-3 rounded shadow-lg z-[100] flex items-center animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <span className="text-sm font-medium">Message sent</span>
         </div>
       )}
       <Toaster />
