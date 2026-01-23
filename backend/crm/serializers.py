@@ -1,6 +1,28 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry
+from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory
+
+class EmailAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailAttachment
+        fields = ['id', 'file', 'filename', 'created_at']
+
+class EmailLogSerializer(serializers.ModelSerializer):
+    attachments = EmailAttachmentSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = EmailLog
+        fields = '__all__'
+
+class DealHistorySerializer(serializers.ModelSerializer):
+    deal_title = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DealHistory
+        fields = '__all__'
+
+    def get_deal_title(self, obj):
+        return obj.deal.title if obj.deal else ""
 
 class LeadSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
