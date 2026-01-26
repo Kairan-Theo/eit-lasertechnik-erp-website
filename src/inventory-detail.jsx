@@ -57,6 +57,26 @@ function InventoryDetailPage() {
     setLoading(false)
   }, [])
 
+  const getTrackingLink = (courier, number) => {
+    if (!number) return null
+    if (String(number).startsWith("http")) return number
+    
+    switch (courier) {
+      case "Kerry": return `https://th.kerryexpress.com/th/track/?track=${number}`
+      case "Flash": return `https://www.flashexpress.co.th/tracking/?se=${number}`
+      case "ThaiPost": return `https://track.thailandpost.co.th/?trackNumber=${number}`
+      case "J&T": return `https://www.jtexpress.co.th/tracking?billcode=${number}`
+      case "DHL": return `https://www.dhl.com/th-en/home/tracking.html?tracking-id=${number}`
+      case "SCG": return `https://www.scgexpress.co.th/tracking/detail/${number}`
+      case "NinjaVan": return `https://www.ninjavan.co/th-th/tracking?id=${number}`
+      case "Best": return `https://www.best-inc.co.th/track?billcode=${number}`
+      case "Shopee": return `https://spx.co.th/`
+      case "Lazada": return `https://tracker.lel.asia/tracker?trackingNumber=${number}`
+      case "Nim": return `https://www.nimexpress.com/web/p/tracking?i=${number}`
+      default: return `https://t.17track.net/en#nums=${number}`
+    }
+  }
+
   if (loading) return <div className="p-8 text-gray-400 font-mono text-sm">Loading...</div>
   
   if (!item) {
@@ -162,6 +182,41 @@ function InventoryDetailPage() {
     setHistory(filtered)
   }
 
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    if (file.size > 1024 * 1024) { // 1MB limit
+        alert("Image size too large. Please upload an image smaller than 1MB.")
+        return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+        const base64 = ev.target.result
+        
+        // Update local state
+        const updatedItem = { ...item, photo: base64 }
+        setItem(updatedItem)
+        
+        // Update localStorage
+        try {
+            const rawProducts = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
+            if (Array.isArray(rawProducts)) {
+                const index = rawProducts.findIndex(i => i.sku === item.sku)
+                if (index !== -1) {
+                    rawProducts[index] = { ...rawProducts[index], photo: base64 }
+                    localStorage.setItem("inventoryProducts", JSON.stringify(rawProducts))
+                }
+            }
+        } catch (err) {
+            console.error("Failed to save image", err)
+            alert("Failed to save image. Local storage might be full.")
+        }
+    }
+    reader.readAsDataURL(file)
+  }
+
   const stockStatus = item.stockQty <= 0 ? "Out of Stock" : item.stockQty < (item.minStock || 0) ? "Low Stock" : "In Stock"
   const statusColor = stockStatus === "Out of Stock" ? "text-red-600" : stockStatus === "Low Stock" ? "text-amber-600" : "text-emerald-600"
 
@@ -186,38 +241,75 @@ function InventoryDetailPage() {
           </a>
         </div>
 
-        {/* Minimal Header */}
-        <div className="mb-8">
-          <div className="flex items-baseline gap-4">
-            <h1 className="text-2xl font-bold text-gray-900">{item.name}</h1>
-            <span className="text-sm font-mono text-gray-500">{item.sku}</span>
+        {/* Header Section with Photo and Key Stats */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 mb-8 animate-fadeIn">
+          <div className="flex flex-col md:flex-row gap-8 items-start">
+            {/* Photo Column */}
+            <div className="shrink-0 group relative">
+              <div 
+                className="w-32 h-32 rounded-xl border-2 border-gray-100 shadow-md overflow-hidden bg-gray-50 cursor-pointer relative transition-transform transform group-hover:scale-105"
+                onClick={() => document.getElementById('photo-upload').click()}
+                title="Click to upload product photo"
+              >
+                <img 
+                  src={item.photo || "/eit-icon.png"} 
+                  alt={item.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => e.target.src = "/eit-icon.png"} 
+                />
+                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <svg className="w-8 h-8 text-white mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  <span className="text-white text-xs font-medium">Change Photo</span>
+                </div>
+              </div>
+              <input 
+                type="file" 
+                id="photo-upload" 
+                accept="image/*" 
+                className="hidden" 
+                onChange={handleImageUpload}
+              />
+            </div>
+            
+            {/* Info Column */}
+            <div className="flex-1 w-full">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div>
+                   <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-3">{item.name}</h1>
+                   <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-gray-600 mb-6">
+                     <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200">
+                       <span className="text-gray-400">SKU:</span>
+                       <span className="font-mono text-gray-900">{item.sku}</span>
+                     </div>
+                     {item.barcode && (
+                       <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200">
+                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+                         <span className="font-mono text-gray-900">{item.barcode}</span>
+                       </div>
+                     )}
+                   </div>
+                   
+                   <div className="flex items-center gap-4">
+                      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold border ${stockStatus === "Out of Stock" ? "bg-red-50 text-red-700 border-red-100" : stockStatus === "Low Stock" ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
+                        <span className={`w-2.5 h-2.5 rounded-full ${stockStatus === "Out of Stock" ? "bg-red-500" : stockStatus === "Low Stock" ? "bg-amber-500" : "bg-emerald-500"}`}></span>
+                        {stockStatus}
+                      </div>
+                      <div className="px-4 py-2 rounded-full text-sm font-semibold bg-gray-50 text-gray-600 border border-gray-200">
+                        {item.status || "Active"}
+                      </div>
+                   </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-sm mt-1">
-             <span className={statusColor}>{stockStatus}</span>
-             <span className="text-gray-300">|</span>
-             <span>{item.stockQty} {item.uom || "units"}</span>
-             <span className="text-gray-300">|</span>
-             <span className="text-gray-500">{item.reserved || 0} reserved</span>
-          </div>
-        </div>
-
-        {/* Item Details Table */}
-        <div className="mb-12">
-          <table className="w-full text-sm text-left">
-            <tbody>
-              {detailRows.map((row, i) => (
-                <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
-                  <td className="py-3 pr-4 font-medium text-gray-500 w-1/3 align-top">{row.label}</td>
-                  <td className="py-3 text-gray-900 align-top">{row.value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
 
         {/* Inventory Activities */}
         <div>
-          <div className="overflow-x-auto">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-900">Activity History</h2>
+          </div>
+          <div className="overflow-hidden bg-white rounded-xl border border-gray-200 shadow-sm">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-600 text-xs uppercase tracking-wider">
@@ -225,6 +317,7 @@ function InventoryDetailPage() {
                   <th className="py-3 font-medium">Activity</th>
                   <th className="py-3 font-medium">Reference</th>
                   <th className="py-3 font-medium">Company</th>
+                  <th className="py-3 font-medium">Tracking</th>
                   <th className="py-3 font-medium text-right">Qty</th>
                   <th className="py-3 font-medium pl-4">Status</th>
                 </tr>
@@ -255,6 +348,23 @@ function InventoryDetailPage() {
                         </td>
                         <td className="py-4 text-gray-600">
                           {log.company || "-"}
+                        </td>
+                        <td className="py-4 text-gray-600">
+                           {log.tracking ? (
+                             <a 
+                               href={log.trackingUrl || getTrackingLink(log.courier, log.tracking)} 
+                               target="_blank" 
+                               rel="noopener noreferrer" 
+                               className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 max-w-[140px]"
+                               title={`Track via ${log.courier || "17TRACK"}`}
+                               onClick={(e) => e.stopPropagation()}
+                             >
+                               <span className="truncate">{log.tracking}</span>
+                               <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                             </a>
+                           ) : (
+                             "-"
+                           )}
                         </td>
                         <td className={`py-4 text-right font-medium ${isIn ? 'text-emerald-700' : isOut ? 'text-red-700' : 'text-gray-900'}`}>
                           {isIn ? '+' : isOut ? '-' : ''}{Math.abs(log.qty || log.delta || 0)}
@@ -287,7 +397,7 @@ function InventoryDetailPage() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="6" className="py-8 text-center text-gray-400 italic">
+                    <td colSpan="7" className="py-8 text-center text-gray-400 italic">
                       No inventory activities recorded.
                     </td>
                   </tr>
@@ -301,5 +411,10 @@ function InventoryDetailPage() {
   )
 }
 
-const root = ReactDOM.createRoot(document.getElementById("root"))
-root.render(<InventoryDetailPage />)
+export default InventoryDetailPage
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <InventoryDetailPage />
+  </React.StrictMode>,
+)
