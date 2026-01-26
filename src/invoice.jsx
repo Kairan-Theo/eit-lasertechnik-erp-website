@@ -160,8 +160,38 @@ function useInvoiceState() {
     email: ""
   })
 
+  // Helper to get next invoice number
+  const getNextInvoiceNumber = () => {
+    const invoices = []
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith("history:")) {
+          try {
+            const item = JSON.parse(localStorage.getItem(key))
+            if (item && Array.isArray(item.invoices)) {
+              invoices.push(...item.invoices)
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      console.error("Error reading localStorage", e)
+    }
+
+    const nums = invoices
+      .map(n => String(n.number || n.details?.number || ""))
+      .map(s => {
+        const m = s.match(/^IV[-/ ]?(\d{1,5})$/i)
+        return m ? parseInt(m[1], 10) : null
+      })
+      .filter(n => Number.isFinite(n))
+    const next = (nums.length ? Math.max(...nums) + 1 : 1)
+    return `IV-${String(next).padStart(3, "0")}`
+  }
+
   const [details, setDetails] = React.useState({
-    number: "",
+    number: getNextInvoiceNumber(),
     date: new Date().toISOString().slice(0, 10),
     dueDate: "",
     poNo: "",
@@ -203,13 +233,7 @@ function useInvoiceState() {
           const due = new Date(base)
           if (!Number.isNaN(paymentTermsDays)) due.setDate(due.getDate() + paymentTermsDays)
 
-          const number =
-            prev.number ||
-            q.details?.number ||
-            (() => {
-              const d = new Date()
-              return `INV-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`
-            })()
+          const number = prev.number || getNextInvoiceNumber()
 
           return {
             ...prev,
@@ -219,7 +243,7 @@ function useInvoiceState() {
             paymentTermsDays,
             number,
             dueDate: due.toISOString().slice(0, 10),
-            sourceQuotationNumber: q.details?.sourceQuotationNumber || prev.sourceQuotationNumber || "",
+            sourceQuotationNumber: q.details?.number || prev.sourceQuotationNumber || "", // Use quotation number as source
           }
         })
         localStorage.removeItem("confirmedQuotation")
@@ -232,9 +256,7 @@ function useInvoiceState() {
     // default when no quotation loaded: ensure number and dueDate exist
     setDetails((prev) => {
       const d = new Date(prev.date || new Date().toISOString().slice(0, 10))
-      const number =
-        prev.number ||
-        `INV-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`
+      const number = prev.number || getNextInvoiceNumber()
       const due = new Date(d)
       due.setDate(due.getDate() + Number(prev.paymentTermsDays || 0))
       return { ...prev, number, dueDate: due.toISOString().slice(0, 10) }

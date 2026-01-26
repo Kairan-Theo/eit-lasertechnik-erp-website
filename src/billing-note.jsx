@@ -160,8 +160,38 @@ function useBillingNoteState() {
     email: ""
   })
 
+  // Helper to get next billing note number
+  const getNextBillingNoteNumber = () => {
+    const notes = []
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith("history:")) {
+          try {
+            const item = JSON.parse(localStorage.getItem(key))
+            if (item && Array.isArray(item.billingNotes)) {
+              notes.push(...item.billingNotes)
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      console.error("Error reading localStorage", e)
+    }
+
+    const nums = notes
+      .map(n => String(n.details?.number || ""))
+      .map(s => {
+        const m = s.match(/^BN[-/ ]?(\d{1,5})$/i)
+        return m ? parseInt(m[1], 10) : null
+      })
+      .filter(n => Number.isFinite(n))
+    const next = (nums.length ? Math.max(...nums) + 1 : 1)
+    return `BN-${String(next).padStart(3, "0")}`
+  }
+
   const [details, setDetails] = React.useState({
-    number: "",
+    number: getNextBillingNoteNumber(),
     date: new Date().toISOString().slice(0, 10),
     validUntil: "",
     currency: "THB",
