@@ -101,9 +101,16 @@ function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
   )
 }
 
+const parseNumber = (val) => {
+  if (typeof val === 'number') return val
+  if (!val) return 0
+  return parseFloat(String(val).replace(/,/g, ''))
+}
+
 function useQuotationState() {
   const [customer, setCustomer] = React.useState({
     company: "",
+    taxId: "",
     address: "",
     telephone: "",
     fax: "",
@@ -113,8 +120,38 @@ function useQuotationState() {
     email: ""
   })
 
+  // Helper to get next quotation number
+  const getNextQuotationNumber = () => {
+    const quotations = []
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith("history:")) {
+          try {
+            const item = JSON.parse(localStorage.getItem(key))
+            if (item && Array.isArray(item.quotations)) {
+              quotations.push(...item.quotations)
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      console.error("Error reading localStorage", e)
+    }
+
+    const nums = quotations
+      .map(q => String(q.number || ""))
+      .map(s => {
+        const m = s.match(/^QT[-/ ]?(\d{1,5})$/i)
+        return m ? parseInt(m[1], 10) : null
+      })
+      .filter(n => Number.isFinite(n))
+    const next = (nums.length ? Math.max(...nums) + 1 : 1)
+    return `QT-${String(next).padStart(3, "0")}`
+  }
+
   const [details, setDetails] = React.useState({
-    number: "",
+    number: getNextQuotationNumber(),
     date: new Date().toISOString().slice(0, 10),
     validUntil: "",
     currency: "THB",
@@ -127,25 +164,110 @@ function useQuotationState() {
     validity: "",
     delivery: "",
     shipmentLocation: "",
-    invoiceDate: new Date().toISOString().slice(0, 10),
-    remark: "",
+    invoiceDate: "SAME AS DELIVERY DATE",
+    remark: "IN CASE OF PURCHASING THERE IS NO EXCHANGE GOODS AFTER PURCHASED PLEASE SEE WARRANTY CONDITION\nTHE INFORMATION ARE SUBJECT TO CHANGE WITH OUT NOTICE",
     paymentTerms: ": "
   })
 
   const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0 }])
+  const [sourceKey, setSourceKey] = React.useState(null)
+  const [sourceIndex, setSourceIndex] = React.useState(null)
 
-  const total = items.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.price) || 0), 0)
+  const total = items.reduce((sum, it) => sum + (parseNumber(it.qty) || 0) * (parseNumber(it.price) || 0), 0)
 
   const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0 }])
   const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, value) =>
     setItems((prev) =>
       prev.map((row, idx) =>
-        idx === i ? { ...row, [field]: field === "qty" || field === "price" ? (value === "" ? "" : Number(value)) : value } : row,
+        idx === i ? { ...row, [field]: value } : row,
       ),
     )
 
-  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total }
+  // Load from URL params if present
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const key = params.get("key")
+    const index = params.get("index")
+
+    if (key && index !== null) {
+      setSourceKey(key)
+      setSourceIndex(parseInt(index, 10))
+
+      if (key === 'api') {
+        // Load from API
+        fetch(`${API_BASE_URL}/api/quotations/${index}/`)
+          .then(res => {
+            if (!res.ok) throw new Error("Failed to fetch")
+            return res.json()
+          })
+          .then(data => {
+            // Map API data to state
+            setCustomer({
+              company: data.customer_details?.company_name || "",
+              taxId: data.customer_details?.tax_id || "",
+              address: data.customer_details?.address || "",
+              telephone: data.customer_details?.phone || "",
+              fax: data.customer_details?.cus_fax || "",
+              attn: data.cus_respon_attn || "",
+              div: data.cus_respon_div || "",
+              mobile: data.cus_respon_mobile || "",
+              email: data.customer_details?.email || ""
+            })
+            setDetails({
+              number: data.qo_code,
+              date: data.created_date,
+              validUntil: "",
+              currency: "THB",
+              deliveryTerms: "Ex-Works",
+              salesPerson: "", // Need to handle if this is stored
+              eitMobile: "",
+              eitTelephone: "",
+              eitFax: "",
+              tradeTerms: data.trade_terms || "",
+              validity: data.validity || "",
+              delivery: data.delivery || "",
+              shipmentLocation: data.shipment_location || "",
+              invoiceDate: data.invoice_date || "SAME AS DELIVERY DATE",
+              remark: data.remark || "",
+              paymentTerms: data.payment_terms || ""
+            })
+            if (data.quotation_items && data.quotation_items.length > 0) {
+              setItems(data.quotation_items.map(i => {
+                const qty = i.quantity || 1
+                const total = parseFloat(i.quo_total || 0)
+                return {
+                  item: i.quo_item || "",
+                  model: i.quo_model || "",
+                  description: i.quo_description || "",
+                  qty: qty,
+                  price: qty > 0 ? total / qty : 0
+                }
+              }))
+            }
+          })
+          .catch(err => console.error("Error loading from API", err))
+      } else {
+        try {
+          const storedItem = JSON.parse(localStorage.getItem(key))
+          if (storedItem) {
+            if (storedItem.quotations && storedItem.quotations[index]) {
+              const qData = storedItem.quotations[index]
+              setDetails(prev => ({ ...prev, ...qData.details }))
+              setItems(qData.items || [])
+              if (storedItem.customer) {
+                 setCustomer(storedItem.customer)
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error loading quotation", e)
+        }
+      }
+    }
+  }, [])
+
+  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total, sourceKey, sourceIndex }
 }
 
 function QuotationPage() {
@@ -230,6 +352,10 @@ function QuotationPage() {
                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
                <input value={q.customer.company} onChange={(e) => q.setCustomer({ ...q.customer, company: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Company name" />
              </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
+               <input value={q.customer.taxId} onChange={(e) => q.setCustomer({ ...q.customer, taxId: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Tax ID" />
+             </div>
           </div>
 
           {/* Telephone / Fax / Address */}
@@ -304,13 +430,24 @@ function QuotationPage() {
                       <input value={item.description} onChange={(e) => q.updateItem(i, "description", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Description" />
                     </td>
                     <td className="p-3">
-                      <input type="number" value={item.price} onChange={(e) => q.updateItem(i, "price", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
+                      <input 
+                        type="text" 
+                        value={item.price} 
+                        onChange={(e) => q.updateItem(i, "price", e.target.value)} 
+                        onBlur={(e) => {
+                          const val = parseNumber(e.target.value)
+                          if (!isNaN(val)) {
+                            q.updateItem(i, "price", val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                          }
+                        }}
+                        className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" 
+                      />
                     </td>
                     <td className="p-3">
                       <input type="number" value={item.qty} onChange={(e) => q.updateItem(i, "qty", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
                     </td>
                      <td className="p-3 text-right text-sm text-gray-700">
-                       {(Number(item.qty || 0) * Number(item.price || 0)).toFixed(2)}
+                       {(parseNumber(item.qty || 0) * parseNumber(item.price || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                      </td>
                      <td className="p-3 text-right">
                        <button onClick={() => q.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete"><Trash className="w-4 h-4" /></button>
@@ -322,9 +459,9 @@ function QuotationPage() {
            </div>
            <div className="flex justify-end mt-4">
              <div className="w-64 space-y-2">
-               <div className="flex justify-between text-base font-bold text-gray-900"><span>Total:</span> <span>{q.total.toFixed(2)}</span></div>
-               <div className="flex justify-between text-base font-bold text-gray-900"><span>VAT 7%:</span> <span>{(q.total * 0.07).toFixed(2)}</span></div>
-               <div className="flex justify-between text-base font-bold text-[#2D4485] pt-2 border-t"><span>Grand Total:</span> <span>{(q.total * 1.07).toFixed(2)}</span></div>
+               <div className="flex justify-between text-base font-bold text-gray-900"><span>Total:</span> <span>{q.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+               <div className="flex justify-between text-base font-bold text-gray-900"><span>VAT 7%:</span> <span>{(q.total * 0.07).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+               <div className="flex justify-between text-base font-bold text-[#2D4485] pt-2 border-t"><span>Grand Total:</span> <span>{(q.total * 1.07).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
              </div>
            </div>
         </div>
@@ -400,7 +537,7 @@ function QuotationPage() {
                   </div>
                   <div>
                      <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
-                     <DateField value={q.details.invoiceDate} onChange={(val) => q.setDetails({ ...q.details, invoiceDate: val })} />
+                     <input value={q.details.invoiceDate} onChange={(e) => q.setDetails({ ...q.details, invoiceDate: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Invoice Date" />
                   </div>
                 </div>
 
@@ -439,20 +576,162 @@ function QuotationPage() {
                 <button
                   className="w-full px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] min-w-[140px]"
                   onClick={() => {
-                    // Mock save functionality
-                    alert("Changes saved!")
-                    setOpenCreateConfirm(false)
-                    window.location.href = "/crm.html"
+                    const handleSave = async () => {
+                      try {
+                        // --- 1. LocalStorage Save (Legacy/Backup) ---
+                        const company = q.customer.company || "Unknown"
+                        const targetKey = `history:${company}`
+                        
+                        if (q.sourceKey && q.sourceKey !== targetKey && q.sourceIndex !== null) {
+                            try {
+                                const oldDataStr = localStorage.getItem(q.sourceKey)
+                                if (oldDataStr) {
+                                    const oldData = JSON.parse(oldDataStr)
+                                    if (oldData && Array.isArray(oldData.quotations)) {
+                                        oldData.quotations.splice(q.sourceIndex, 1)
+                                        localStorage.setItem(q.sourceKey, JSON.stringify(oldData))
+                                    }
+                                }
+                            } catch(e) { console.error("Error removing old record", e) }
+                        }
+
+                        let data = { customer: q.customer, quotations: [], invoices: [], billingNotes: [] }
+                        try {
+                          const existing = localStorage.getItem(targetKey)
+                          if (existing) {
+                            const parsed = JSON.parse(existing)
+                            if (parsed) data = { ...data, ...parsed }
+                          }
+                        } catch (e) { console.error("Error parsing localStorage", e) }
+
+                        if (!Array.isArray(data.quotations)) data.quotations = []
+                        if (!data.customer || !data.customer.company) data.customer = q.customer
+
+                        const newQuotation = {
+                          id: Date.now(),
+                          savedAt: new Date().toISOString(),
+                          number: q.details.number,
+                          details: q.details,
+                          items: q.items,
+                          total: q.total,
+                          totals: { total: q.total },
+                          customerName: company
+                        }
+
+                        let updateIndex = -1
+                        if (q.sourceKey === targetKey && q.sourceIndex !== null) {
+                             updateIndex = q.sourceIndex
+                        } else {
+                             updateIndex = data.quotations.findIndex(x => x.number === q.details.number)
+                        }
+
+                        if (updateIndex >= 0 && updateIndex < data.quotations.length) {
+                          data.quotations[updateIndex] = newQuotation
+                        } else {
+                          data.quotations.push(newQuotation)
+                        }
+
+                        localStorage.setItem(targetKey, JSON.stringify(data))
+                        
+                        // --- 2. Backend Database Save ---
+                        const backendPayload = {
+                            qo_code: q.details.number,
+                            created_date: q.details.date,
+                            customer_name: q.customer.company || "Unknown",
+                            cus_respon_attn: q.customer.attn || "",
+                            cus_respon_div: q.customer.div || "",
+                            cus_respon_mobile: q.customer.mobile || "",
+                            trade_terms: q.details.tradeTerms || "",
+                            validity: q.details.validity || "",
+                            delivery: q.details.delivery || "",
+                            payment_terms: q.details.paymentTerms || "",
+                            shipment_location: q.details.shipmentLocation || "",
+                            invoice_date: (q.details.invoiceDate && q.details.invoiceDate !== "SAME AS DELIVERY DATE") ? q.details.invoiceDate : null,
+                            remark: q.details.remark || "",
+                            items: q.items.map(item => ({
+                                item: item.item || "",
+                                model: item.model || "",
+                                description: item.description || "",
+                                qty: item.qty || 1,
+                                price: item.price || 0
+                            }))
+                        }
+                        
+                        // Validate date format for backend
+                        if (backendPayload.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(backendPayload.invoice_date)) {
+                             backendPayload.invoice_date = null
+                        }
+
+                        console.log("Saving to backend...", backendPayload)
+                        
+                        let url = `${API_BASE_URL}/api/quotations/`
+                        let method = 'POST'
+                        
+                        if (q.sourceKey === 'api' && q.sourceIndex) {
+                            url = `${API_BASE_URL}/api/quotations/${q.sourceIndex}/`
+                            method = 'PUT'
+                        }
+
+                        const response = await fetch(url, {
+                            method: method,
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(backendPayload)
+                        })
+
+                        if (!response.ok) {
+                            const errText = await response.text()
+                            console.error("Backend save error:", errText)
+                            throw new Error("Failed to save to database: " + errText)
+                        }
+                        
+                        alert("Quotation saved successfully!")
+                        setOpenCreateConfirm(false)
+                        window.location.href = "/admin.html"
+                      } catch (error) {
+                        console.error(error)
+                        alert("Error saving quotation: " + error.message)
+                      }
+                    }
+                    handleSave()
                   }}
                 >
                   Save Changes
                 </button>
                 <button
                   className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
-                  onClick={() => {
-                    // Mock download functionality
-                    alert("Downloading form...")
-                    setOpenCreateConfirm(false)
+                  onClick={async () => {
+                    try {
+                      const payload = {
+                          details: q.details,
+                          customer: q.customer,
+                          items: q.items,
+                          totals: { total: q.total }
+                      }
+                      
+                      // Show loading state if needed, or just alert
+                      const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
+                          method: 'POST',
+                          headers: {
+                              'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify(payload)
+                      })
+                      
+                      if (!response.ok) throw new Error('Failed to generate PDF')
+                      
+                      const blob = await response.blob()
+                      const url = window.URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `Quotation_${q.details.number}.pdf`
+                      document.body.appendChild(a)
+                      a.click()
+                      a.remove()
+                      setOpenCreateConfirm(false)
+                    } catch (error) {
+                      console.error("Error downloading PDF:", error)
+                      alert("Error downloading PDF")
+                    }
                   }}
                 >
                   Download Form

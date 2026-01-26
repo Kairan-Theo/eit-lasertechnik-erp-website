@@ -1,6 +1,16 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory
+from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT
+
+class EITSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EIT
+        fields = '__all__'
+
+class QuotationItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuotationItem
+        fields = '__all__'
 
 class EmailAttachmentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -135,9 +145,83 @@ class DealSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class QuotationSerializer(serializers.ModelSerializer):
+    quotation_items = QuotationItemSerializer(many=True, read_only=True)
+    customer_details = CustomerSerializer(source='customer', read_only=True)
+    customer_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    items = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
+
     class Meta:
         model = Quotation
         fields = '__all__'
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        customer_name = validated_data.pop('customer_name', None)
+        
+        if customer_name:
+            customer, _ = Customer.objects.get_or_create(company_name=customer_name)
+            validated_data['customer'] = customer
+            
+        quotation = Quotation.objects.create(**validated_data)
+        
+        for item in items_data:
+            try:
+                qty = float(item.get('qty', 1))
+                price = float(str(item.get('price', 0)).replace(',', ''))
+                total = qty * price
+            except:
+                qty = 1
+                total = 0
+            
+            QuotationItem.objects.create(
+                quotation=quotation,
+                quo_item=str(item.get('item', '')),
+                quo_model=str(item.get('model', '')),
+                quo_description=str(item.get('description', '')),
+                quantity=int(qty),
+                quo_total=total
+            )
+            
+        return quotation
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', [])
+        customer_name = validated_data.pop('customer_name', None)
+        
+        if customer_name:
+            customer, _ = Customer.objects.get_or_create(company_name=customer_name)
+            instance.customer = customer
+            
+        # Update instance fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Handle items: Delete old and create new
+        # Only if items_data is provided (meaning we want to update items)
+        # Since items is required=False, it might be empty list if cleared, or not present.
+        # But pop returns [] default. If frontend sends empty list, it means clear items.
+        if items_data is not None:
+            instance.quotation_items.all().delete()
+            for item in items_data:
+                try:
+                    qty = float(item.get('qty', 1))
+                    price = float(str(item.get('price', 0)).replace(',', ''))
+                    total = qty * price
+                except:
+                    qty = 1
+                    total = 0
+                
+                QuotationItem.objects.create(
+                    quotation=instance,
+                    quo_item=str(item.get('item', '')),
+                    quo_model=str(item.get('model', '')),
+                    quo_description=str(item.get('description', '')),
+                    quantity=int(qty),
+                    quo_total=total
+                )
+        
+        return instance
 
 class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:

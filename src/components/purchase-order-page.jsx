@@ -222,21 +222,16 @@ export default function PurchaseOrderPage() {
   }, [])
 
   const generatePoNumber = React.useCallback(() => {
-    try {
-      const d = new Date()
-      const yyyy = d.getFullYear()
-      const mm = String(d.getMonth() + 1).padStart(2, "0")
-      const dd = String(d.getDate()).padStart(2, "0")
-      const dateKey = `${yyyy}${mm}${dd}`
-      const k = `poSeq:${dateKey}`
-      const seq = Number(localStorage.getItem(k) || "0") + 1
-      localStorage.setItem(k, String(seq))
-      return `PO-${dateKey}-${String(seq).padStart(3, "0")}`
-    } catch {
-      const r = Math.floor(Math.random() * 1000)
-      return `PO-${Date.now()}-${String(r).padStart(3, "0")}`
-    }
-  }, [])
+    const nums = poList
+      .map(po => String(po.poNumber || po.details?.poNumber || ""))
+      .map(s => {
+        const m = s.match(/^PO[-/ ]?(\d{1,5})$/i)
+        return m ? parseInt(m[1], 10) : null
+      })
+      .filter(n => Number.isFinite(n))
+    const next = (nums.length ? Math.max(...nums) + 1 : 1)
+    return `PO-${String(next).padStart(3, "0")}`
+  }, [poList])
   React.useEffect(() => {
     if (!showForm) return
     if (!q.details.poNumber) {
