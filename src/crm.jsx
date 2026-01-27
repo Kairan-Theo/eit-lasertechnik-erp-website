@@ -3370,10 +3370,4 @@ function CRMPage() {
   )
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <LanguageProvider>
-      <CRMPage />
-    </LanguageProvider>
-  </React.StrictMode>,
-)
+export default CRMPage
