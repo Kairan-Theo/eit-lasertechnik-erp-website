@@ -186,6 +186,12 @@ class DealViewSet(viewsets.ModelViewSet):
                 to_stage=updated_instance.stage
             )
 
+class QuotationViewSet(viewsets.ModelViewSet):
+    queryset = Quotation.objects.all().order_by('-id')
+    serializer_class = QuotationSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
 class EmailLogViewSet(viewsets.ModelViewSet):
     queryset = EmailLog.objects.all().order_by('-sent_at')
     serializer_class = EmailLogSerializer

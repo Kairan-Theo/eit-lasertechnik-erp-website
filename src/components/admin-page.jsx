@@ -1,4 +1,5 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
 import { 
   LayoutDashboard, 
   FileText, 
@@ -47,8 +48,8 @@ const getAllData = () => {
               data.customers.push(item.customer)
             }
             if (Array.isArray(item.quotations)) {
-              item.quotations.forEach(q => {
-                data.quotations.push({ ...q, customerName: item.customer?.name || item.customer?.company })
+              item.quotations.forEach((q, idx) => {
+                data.quotations.push({ ...q, customerName: item.customer?.name || item.customer?.company, sourceKey: key, sourceIndex: idx })
               })
             }
             if (Array.isArray(item.billingNotes)) {
@@ -71,8 +72,14 @@ const getAllData = () => {
     console.error("Error accessing localStorage", e)
   }
 
-  // Sort by date descending
-  data.quotations.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
+  // Sort by QT Code ascending
+  data.quotations.sort((a, b) => {
+    const getNum = (str) => {
+       const m = (str || "").match(/QT[-/ ]?(\d+)/i)
+       return m ? parseInt(m[1], 10) : 0
+    }
+    return getNum(a.details?.number) - getNum(b.details?.number)
+  })
   data.invoices.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
   data.billingNotes.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
   data.purchaseOrders.sort((a, b) => new Date(b.updatedAt || b.extraFields?.orderDate) - new Date(a.updatedAt || a.extraFields?.orderDate))
@@ -129,20 +136,20 @@ function Dashboard({ data }) {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b">
-                  <th className="pb-2">Number</th>
+                  <th className="pb-2">QT Code</th>
                   <th className="pb-2">Customer</th>
                   <th className="pb-2">Date</th>
                   <th className="pb-2 text-right">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {data.quotations.slice(0, 5).map((q, i) => (
+                {[...data.quotations].sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date)).slice(0, 5).map((q, i) => (
                   <tr key={i}>
                     <td className="py-3 font-medium text-blue-600">{q.details?.number}</td>
                     <td className="py-3">{q.customerName || "-"}</td>
                     <td className="py-3">{q.details?.date}</td>
                     <td className="py-3 text-right">
-                      {q.details?.currency} {q.totals?.total?.toFixed(2)}
+                      {q.details?.currency} {q.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                 ))}
@@ -223,11 +230,82 @@ function Dashboard({ data }) {
   )
 }
 
-function QuotationList({ list }) {
+function QuotationList({ list, refreshData }) {
+  const [selectedRows, setSelectedRows] = React.useState([])
+  const [openDeleteConfirm, setOpenDeleteConfirm] = React.useState(false)
+
+  const getUid = (q) => `${q.sourceKey}-${q.sourceIndex}`
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedRows(list.map(getUid))
+    } else {
+      setSelectedRows([])
+    }
+  }
+
+  const handleSelectRow = (uid) => {
+    if (selectedRows.includes(uid)) {
+      setSelectedRows(prev => prev.filter(x => x !== uid))
+    } else {
+      setSelectedRows(prev => [...prev, uid])
+    }
+  }
+
+  const handleDelete = async () => {
+    const itemsToDelete = list.filter(q => selectedRows.includes(getUid(q)))
+    
+    // API Deletion
+    const apiItems = itemsToDelete.filter(q => q.sourceKey === 'api')
+    for (const item of apiItems) {
+      try {
+        await fetch(`${API_BASE_URL}/api/quotations/${item.id}/`, { method: 'DELETE' })
+      } catch (e) {
+        console.error("Error deleting API item", e)
+      }
+    }
+
+    // LocalStorage Deletion
+    const localItems = itemsToDelete.filter(q => q.sourceKey !== 'api')
+    const groupedByKey = {}
+    localItems.forEach(q => {
+      if (!groupedByKey[q.sourceKey]) groupedByKey[q.sourceKey] = []
+      groupedByKey[q.sourceKey].push(q.sourceIndex)
+    })
+
+    Object.keys(groupedByKey).forEach(key => {
+      try {
+        const item = JSON.parse(localStorage.getItem(key))
+        if (item && Array.isArray(item.quotations)) {
+          const indicesToDelete = groupedByKey[key]
+          item.quotations = item.quotations.filter((_, idx) => !indicesToDelete.includes(idx))
+          localStorage.setItem(key, JSON.stringify(item))
+        }
+      } catch (e) {
+        console.error("Error updating localStorage", e)
+      }
+    })
+
+    if (refreshData) refreshData()
+    setSelectedRows([])
+    setOpenDeleteConfirm(false)
+  }
+
   return (
-    <div className="bg-white rounded-xl border shadow-sm p-6">
+    <div className="bg-white rounded-xl border shadow-sm p-6 relative">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Quotations</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">Quotations</h2>
+          {selectedRows.length > 0 && (
+            <button 
+              onClick={() => setOpenDeleteConfirm(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete ({selectedRows.length})
+            </button>
+          )}
+        </div>
         <a href="/quotation.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
           New Quotation
@@ -237,36 +315,81 @@ function QuotationList({ list }) {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-gray-700 border-b">
-              <th className="p-3 text-left">Number</th>
+              <th className="p-3 w-10">
+                <input 
+                  type="checkbox" 
+                  className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                  checked={list.length > 0 && selectedRows.length === list.length}
+                  onChange={handleSelectAll}
+                />
+              </th>
+              <th className="p-3 text-left w-16">Index</th>
+              <th className="p-3 text-left">QT Code</th>
               <th className="p-3 text-left">Customer</th>
               <th className="p-3 text-left">Date</th>
-              <th className="p-3 text-left">Items</th>
-              <th className="p-3 text-right">Total</th>
-              <th className="p-3 text-right">Actions</th>
+              <th className="p-3 text-left">Item</th>
+              <th className="p-3 text-right">Grand Total</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {list.map((q, i) => (
-              <tr key={i} className="hover:bg-gray-50">
-                <td className="p-3 font-medium text-[#2D4485]">{q.details?.number}</td>
-                <td className="p-3">{q.customerName || "-"}</td>
-                <td className="p-3">{q.details?.date}</td>
-                <td className="p-3">{q.items?.length || 0}</td>
-                <td className="p-3 text-right font-medium">
-                  {q.details?.currency} {q.totals?.total?.toFixed(2)}
-                </td>
-                <td className="p-3 text-right">
-                   {/* In a real app, we'd have edit/view logic here. For now, just placeholder or load into edit page */}
-                   <span className="text-xs text-gray-400">View in History</span>
-                </td>
-              </tr>
-            ))}
+            {list.map((q, i) => {
+              const uid = getUid(q)
+              return (
+                <tr key={uid} className={`hover:bg-gray-50 ${selectedRows.includes(uid) ? 'bg-blue-50' : ''}`}>
+                  <td className="p-3">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                      checked={selectedRows.includes(uid)}
+                      onChange={() => handleSelectRow(uid)}
+                    />
+                  </td>
+                  <td className="p-3 text-gray-500">{i + 1}</td>
+                  <td className="p-3 font-medium">
+                    <a href={`/quotation.html?key=${encodeURIComponent(q.sourceKey)}&index=${q.sourceIndex}`} className="text-[#2D4485] hover:underline">
+                      {q.details?.number}
+                    </a>
+                  </td>
+                  <td className="p-3">{q.customerName || "-"}</td>
+                  <td className="p-3">{q.details?.date}</td>
+                  <td className="p-3">{q.items?.length || 0}</td>
+                  <td className="p-3 text-right font-medium">
+                    {q.details?.currency} {q.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              )
+            })}
             {list.length === 0 && (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No quotations found</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-gray-500">No quotations found</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {openDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setOpenDeleteConfirm(false)}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <div className="p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Quotations</h3>
+                    <p className="text-gray-600 mb-6">Are you sure you want to delete {selectedRows.length} selected quotations?</p>
+                    <div className="flex justify-end gap-3">
+                        <button 
+                            onClick={() => setOpenDeleteConfirm(false)}
+                            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleDelete}
+                            className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors font-medium"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -429,7 +552,7 @@ function CustomerHistory({ data }) {
                      {(h.quotations || []).slice(0, 3).map((q, j) => (
                        <div key={j} className="text-sm flex justify-between bg-gray-50 p-2 rounded">
                          <span>{q.details?.number}</span>
-                         <span className="font-medium">{q.details?.currency} {q.totals?.total?.toFixed(2)}</span>
+                         <span className="font-medium">{q.details?.currency} {q.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                        </div>
                      ))}
                      {(h.quotations?.length || 0) > 3 && <div className="text-xs text-gray-400 italic">...and {h.quotations.length - 3} more</div>}
@@ -672,9 +795,55 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = React.useState("dashboard")
   const [data, setData] = React.useState({ quotations: [], invoices: [], billingNotes: [], customers: [], purchaseOrders: [] })
 
+  const fetchQuotations = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/`)
+      if (response.ok) {
+        const apiQuotations = await response.json()
+        return apiQuotations.map(q => ({
+          id: q.id,
+          sourceKey: 'api',
+          sourceIndex: q.id,
+          details: {
+            number: q.qo_code,
+            date: q.created_date,
+            currency: q.currency || 'THB', 
+          },
+          customerName: q.customer_details?.company_name || 'Unknown',
+          items: q.quotation_items || [],
+          totals: {
+            total: (q.quotation_items || []).reduce((sum, item) => sum + parseFloat(item.quo_total || 0), 0)
+          }
+        }))
+      }
+    } catch (e) {
+      console.error("Failed to fetch quotations from API", e)
+    }
+    return []
+  }
+
+  const loadData = async () => {
+    const localData = getAllData()
+    const apiQuotations = await fetchQuotations()
+    
+    if (apiQuotations.length > 0) {
+      // Create a Set of API quotation numbers for efficient lookup
+      const apiNumbers = new Set(apiQuotations.map(q => q.details.number))
+      
+      // Filter out LocalStorage items that exist in API
+      // We prefer the API version as the source of truth
+      localData.quotations = localData.quotations.filter(q => !apiNumbers.has(q.details.number))
+      
+      // Merge the lists
+      localData.quotations = [...localData.quotations, ...apiQuotations]
+    }
+    
+    setData(localData)
+  }
+
   // Refresh data when tab changes or periodically
   React.useEffect(() => {
-    setData(getAllData())
+    loadData()
   }, [activeTab])
 
   // Handle URL params for direct navigation (e.g. from create page)
@@ -774,7 +943,7 @@ export default function AdminPage() {
         </header>
 
         {activeTab === "dashboard" && <Dashboard data={data} />}
-        {activeTab === "quotations" && <QuotationList list={data.quotations} />}
+        {activeTab === "quotations" && <QuotationList list={data.quotations} refreshData={loadData} />}
         {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} />}
         {activeTab === "invoices" && <InvoiceList list={data.invoices} />}
         {activeTab === "purchase-orders" && <PurchaseOrderPage />}

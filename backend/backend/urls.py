@@ -22,9 +22,12 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, google_login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom, send_email_api, EmailLogViewSet, DealHistoryViewSet, check_tracking_status
+from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom, send_email_api, EmailLogViewSet, DealHistoryViewSet, check_tracking_status, QuotationViewSet
+from crm.pdf_views import generate_quotation_pdf
 
 router = DefaultRouter()
 router.register(r'deals', DealViewSet)
+router.register(r'quotations', QuotationViewSet)
 router.register(r'customers', CustomerViewSet)
 router.register(r'tickets', SupportTicketViewSet)
 router.register(r'leads', LeadViewSet)
@@ -69,6 +72,7 @@ urlpatterns = [
     path('api/tracking/check/', check_tracking_status),
     path('api/send-email/', send_email_api),
     path('api/crm/analytics/', get_crm_analytics),
+    path('api/generate-quotation-pdf/', generate_quotation_pdf),
     path('api/auth/signup/', signup),
     path('api/auth/login/', login),
     path('api/auth/google/', google_login),

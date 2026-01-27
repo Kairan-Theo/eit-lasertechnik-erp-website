@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -75,10 +75,19 @@ class NotificationAdmin(admin.ModelAdmin):
     list_filter = ("type", "is_read")
     search_fields = ("message",)
 
+@admin.register(EIT)
+class EITAdmin(admin.ModelAdmin):
+    list_display = ("organization_name", "eit_mobile", "eit_telephone")
+
+class QuotationItemInline(admin.TabularInline):
+    model = QuotationItem
+    extra = 1
+
 @admin.register(Quotation)
 class QuotationAdmin(admin.ModelAdmin):
-    list_display = ("number", "created_by", "updated_at")
-    search_fields = ("number", "customer__name", "customer__email")
+    list_display = ("qo_code", "created_by", "updated_at")
+    search_fields = ("qo_code", "customer__company_name", "customer__email")
+    inlines = [QuotationItemInline]
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):

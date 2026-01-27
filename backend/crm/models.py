@@ -10,12 +10,22 @@ class Customer(models.Model):
     address = models.TextField(blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
+    cus_fax = models.CharField(max_length=50, blank=True)
     industry = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.company_name
+
+class EIT(models.Model):
+    organization_name = models.CharField(max_length=255)
+    eit_mobile = models.CharField(max_length=50, blank=True)
+    eit_telephone = models.CharField(max_length=50, blank=True)
+    eit_fax = models.CharField(max_length=50, blank=True)
+
+    def __str__(self):
+        return self.organization_name
 
 class SupportTicket(models.Model):
     STATUS_CHOICES = [
@@ -70,18 +80,41 @@ class Lead(models.Model):
         return f"{self.first_name} {self.last_name}"
 
 class Quotation(models.Model):
-    number = models.CharField(max_length=100, unique=True)
-    customer = models.JSONField(default=dict, blank=True)
-    items = models.JSONField(default=list, blank=True)
-    details = models.JSONField(default=dict, blank=True)
-    totals = models.JSONField(default=dict, blank=True)
+    qo_code = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
+    created_date = models.DateField(default=timezone.now)
+    
+    cus_respon_attn = models.CharField(max_length=255, blank=True)
+    cus_respon_div = models.CharField(max_length=255, blank=True)
+    cus_respon_mobile = models.CharField(max_length=50, blank=True)
+    
+    trade_terms = models.CharField(max_length=255, blank=True)
+    validity = models.CharField(max_length=255, blank=True)
+    delivery = models.CharField(max_length=255, blank=True)
+    payment_terms = models.CharField(max_length=255, blank=True)
+    shipment_location = models.CharField(max_length=255, blank=True)
+    invoice_date = models.DateField(null=True, blank=True)
+    remark = models.TextField(blank=True)
+    
+    # Legacy/System fields
     doc_type = models.CharField(max_length=50, default="Quotation")
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="quotations")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Quotation {self.number}"
+        return f"Quotation {self.qo_code}"
+
+class QuotationItem(models.Model):
+    quotation = models.ForeignKey(Quotation, related_name='quotation_items', on_delete=models.CASCADE)
+    quo_item = models.CharField(max_length=255, blank=True)
+    quo_model = models.CharField(max_length=255, blank=True)
+    quo_description = models.TextField(blank=True)
+    quantity = models.IntegerField(default=1)
+    quo_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    def __str__(self):
+        return f"{self.quo_item} ({self.quotation.qo_code})"
 
 class Invoice(models.Model):
     number = models.CharField(max_length=100, unique=True)
