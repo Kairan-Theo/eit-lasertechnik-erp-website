@@ -2,6 +2,7 @@ import React from "react"
 import { createPortal } from "react-dom"
 import { PurchaseOrderTemplate } from "./purchase-order-template.jsx"
 import Navigation from "./navigation.jsx"
+import { API_BASE_URL } from "../config"
 import { 
   ArrowLeft, 
   FileText, 
@@ -176,16 +177,40 @@ function usePurchaseOrderState() {
     refQuotation: "",
     paymentTerms: "",
     deliveryTo: "",
+    eit: null,
     eitName: "EIT LASERTECHNIK CO.,LTD",
-    eitAddress: "",
-    eitPhone: "",
-    eitFax: "",
+    eitAddress: "1/120 ซอยรามคําแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510",
+    eitPhone: "02-052-9544",
+    eitFax: "02-052 9544",
+    eitMobile: "000-000-0000",
     salesPerson: "",
     remark: "",
     currency: "THB"
   })
 
+  const [eitOptions, setEitOptions] = React.useState([])
+
+  // Load EIT options
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/eits/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setEitOptions(data)
+        } else {
+          console.error("EIT data is not an array:", data)
+          setEitOptions([])
+        }
+      })
+      .catch(err => {
+        console.error("Error loading EITs", err)
+        setEitOptions([])
+      })
+  }, [])
+
   const [items, setItems] = React.useState([{ product: "", description: "", note: "", qty: 1, price: 0, tax: 0, unit: "pcs" }])
+  const [sourceKey, setSourceKey] = React.useState(null)
+  const [sourceIndex, setSourceIndex] = React.useState(null)
 
   const subtotal = items.reduce((sum, it) => {
     const qty = Number(it.qty) || 0
@@ -199,7 +224,7 @@ function usePurchaseOrderState() {
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, value) => setItems(prev => prev.map((row, idx) => idx === i ? { ...row, [field]: value } : row))
 
-  return { vendor, setVendor, details, setDetails, items, setItems, addItem, removeItem, updateItem, subtotal, taxTotal, total }
+  return { vendor, setVendor, details, setDetails, eitOptions, items, setItems, addItem, removeItem, updateItem, subtotal, taxTotal, total }
 }
 
 export default function PurchaseOrderPage() {
@@ -219,6 +244,61 @@ export default function PurchaseOrderPage() {
       const data = JSON.parse(localStorage.getItem("poList") || "[]")
       if (Array.isArray(data)) setPoList(data)
     } catch {}
+  }, [])
+
+  // Load from API if query params present
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const key = params.get("key")
+    const index = params.get("index")
+
+    if (key && index) {
+      q.setSourceKey(key)
+      q.setSourceIndex(index)
+
+      if (key === "api") {
+        fetch(`${API_BASE_URL}/api/purchase_orders/${index}/`)
+          .then(res => res.json())
+          .then(data => {
+            q.setDetails(prev => ({
+              ...prev,
+              poNumber: data.po_code || "",
+              orderDate: data.order_date || new Date().toISOString().slice(0, 10),
+              deliveryDate: data.delivery_date || "",
+              refQuotation: data.ref_quotation || "",
+              paymentTerms: data.payment_terms || "",
+              deliveryTo: data.delivery_to || "",
+              
+              eit: data.eit_details?.id || null,
+              eitName: data.eit_details?.organization_name || "EIT LASERTECHNIK CO.,LTD",
+              eitAddress: data.eit_details?.address || "",
+              eitPhone: data.eit_details?.eit_telephone || "",
+              eitFax: data.eit_details?.eit_fax || "",
+              eitMobile: data.eit_details?.eit_mobile || "",
+              
+              salesPerson: data.sales_person || "",
+              remark: data.remark || "",
+              currency: data.currency || "THB"
+            }))
+            
+            q.setVendor({
+              company: data.vendor_company || "",
+              name: data.vendor_name || "",
+              email: data.vendor_email || "",
+              companyEmail: data.vendor_company_email || "",
+              phone: data.vendor_phone || "",
+              companyPhone: data.vendor_company_phone || "",
+              address: data.vendor_address || ""
+            })
+            
+            if (Array.isArray(data.items)) {
+               q.setItems(data.items)
+            }
+            setShowForm(true)
+          })
+          .catch(err => console.error("Error loading PO from API:", err))
+      }
+    }
   }, [])
 
   const generatePoNumber = React.useCallback(() => {
@@ -610,6 +690,7 @@ export default function PurchaseOrderPage() {
         refQuotation: first.extraFields?.refQuotation || "",
         paymentTerms: first.extraFields?.paymentTerms || "",
         deliveryTo: first.extraFields?.deliveryTo || "",
+        eit: null,
         eitName: "EIT LASERTECHNIK CO.,LTD",
         eitAddress: "",
         eitPhone: "",
@@ -642,10 +723,12 @@ export default function PurchaseOrderPage() {
       refQuotation: "",
       paymentTerms: "",
       deliveryTo: "",
+      eit: null,
       eitName: "EIT LASERTECHNIK CO.,LTD",
-      eitAddress: "",
-      eitPhone: "",
-      eitFax: "",
+      eitAddress: "1/120 ซอยรามคําแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510",
+      eitPhone: "02-052-9544",
+      eitFax: "02-052 9544",
+      eitMobile: "000-000-0000",
       salesPerson: "",
       remark: "",
       currency: "THB"
@@ -674,10 +757,12 @@ export default function PurchaseOrderPage() {
        refQuotation: p.extraFields?.refQuotation || "",
        paymentTerms: p.extraFields?.paymentTerms || "",
        deliveryTo: p.extraFields?.deliveryTo || "",
+       eit: p.details?.eit || null,
        eitName: "EIT LASERTECHNIK CO.,LTD", // Defaults
-       eitAddress: "",
-       eitPhone: "",
-       eitFax: "",
+       eitAddress: "1/120 ซอยรามคําแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510",
+       eitPhone: "02-052-9544",
+       eitFax: "02-052 9544",
+       eitMobile: "000-000-0000",
        salesPerson: "",
        remark: "",
        currency: "THB",
@@ -688,7 +773,69 @@ export default function PurchaseOrderPage() {
     setShowForm(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // API Save if source is API
+    if (q.sourceKey === 'api' && q.sourceIndex) {
+       try {
+          const payload = {
+              po_code: q.details.poNumber,
+              order_date: q.details.orderDate,
+              delivery_date: q.details.deliveryDate,
+              ref_quotation: q.details.refQuotation,
+              payment_terms: q.details.paymentTerms,
+              delivery_to: q.details.deliveryTo,
+              
+              // EIT
+              eit: q.details.eit,
+              eit_name: q.details.eitName,
+              eit_address: q.details.eitAddress,
+              eit_phone: q.details.eitPhone,
+              eit_fax: q.details.eitFax,
+              eit_mobile: q.details.eitMobile,
+              
+              remark: q.details.remark,
+              currency: q.details.currency,
+              
+              // Vendor
+              vendor_company: q.vendor.company,
+              vendor_name: q.vendor.name,
+              vendor_email: q.vendor.email,
+              vendor_company_email: q.vendor.companyEmail,
+              vendor_phone: q.vendor.phone,
+              vendor_company_phone: q.vendor.companyPhone,
+              vendor_address: q.vendor.address,
+              
+              items: q.items.map(it => ({
+                  description: it.description,
+                  product: it.product,
+                  quantity: it.qty,
+                  unit_price: it.price,
+                  unit: it.unit,
+                  tax: it.tax,
+                  note: it.note
+              }))
+          }
+
+          const response = await fetch(`${API_BASE_URL}/api/purchase_orders/${q.sourceIndex}/`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+          })
+
+          if (response.ok) {
+              alert("Purchase Order saved successfully!")
+              window.location.href = "/admin.html"
+          } else {
+              const err = await response.json()
+              alert("Error saving Purchase Order: " + JSON.stringify(err))
+          }
+       } catch (e) {
+          console.error(e)
+          alert("Error saving Purchase Order")
+       }
+       return
+    }
+
     try {
       const newPo = {
         poNumber: q.details.poNumber,
@@ -798,9 +945,41 @@ export default function PurchaseOrderPage() {
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-                 <select value={q.details.eitName} onChange={(e) => q.setDetails({ ...q.details, eitName: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none">
-                   <option value="EIT LASERTECHNIK CO.,LTD">EIT LASERTECHNIK CO.,LTD</option>
-                   <option value="EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD">EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD</option>
+                 <select 
+                   value={q.details.eit || ""} 
+                   onChange={(e) => {
+                     const val = e.target.value
+                     if (!val) {
+                       q.setDetails({
+                         ...q.details,
+                         eit: null,
+                         eitName: "",
+                         eitAddress: "",
+                         eitPhone: "",
+                         eitFax: "",
+                         eitMobile: ""
+                       })
+                       return
+                     }
+                     const selected = q.eitOptions.find(o => String(o.id) === val)
+                     if (selected) {
+                       q.setDetails({
+                         ...q.details,
+                         eit: selected.id,
+                         eitName: selected.organization_name,
+                         eitAddress: selected.address || "",
+                         eitPhone: selected.eit_telephone || "",
+                         eitFax: selected.eit_fax || "",
+                         eitMobile: selected.eit_mobile || ""
+                       })
+                     }
+                   }} 
+                   className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                 >
+                   <option value="">Select Organization</option>
+                   {q.eitOptions.map(opt => (
+                     <option key={opt.id} value={opt.id}>{opt.organization_name}</option>
+                   ))}
                  </select>
                </div>
                <div>
@@ -808,7 +987,11 @@ export default function PurchaseOrderPage() {
                  <textarea value={q.details.eitAddress} onChange={(e) => q.setDetails({ ...q.details, eitAddress: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
                </div>
              </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                 <input value={q.details.eitMobile} onChange={(e) => q.setDetails({ ...q.details, eitMobile: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+               </div>
                <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
                  <input value={q.details.eitPhone} onChange={(e) => q.setDetails({ ...q.details, eitPhone: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Telephone" />

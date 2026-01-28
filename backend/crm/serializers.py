@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT
+from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote
 
 class EITSerializer(serializers.ModelSerializer):
     class Meta:
@@ -101,7 +101,6 @@ class DealSerializer(serializers.ModelSerializer):
             'write_customer_name',
             'amount',
             'currency',
-            'po_number',
             'priority',
             'contact',
             'email',
@@ -110,23 +109,28 @@ class DealSerializer(serializers.ModelSerializer):
             'tax_id',
             'items',
             'notes',
+            'stage',
             'created_at',
             'expected_close',
-            'stage',
-            'activity_schedules',
+            'po_number',
             'salesperson',
+            'activity_schedules'
         ]
-        read_only_fields = ['created_at', 'customer_name', 'activity_schedules']
 
     def get_customer_name(self, obj):
         return obj.customer.company_name if obj.customer else ""
-    
+
     def create(self, validated_data):
-        write_name = self.initial_data.get('write_customer_name') or self.initial_data.get('customer_name') or None
-        if write_name and not validated_data.get('customer'):
-            name = write_name.strip()
-            if name:
-                cust, _ = Customer.objects.get_or_create(
+        cust_id = validated_data.pop('customer_id', None)
+        name = validated_data.pop('write_customer_name', None)
+        if cust_id:
+            validated_data['customer'] = cust_id
+        elif name:
+            try:
+                cust = Customer.objects.get(company_name=name)
+                validated_data['customer'] = cust
+            except Customer.DoesNotExist:
+                cust = Customer.objects.create(
                     company_name=name,
                     defaults={
                         'contact_name': '',
@@ -147,8 +151,23 @@ class DealSerializer(serializers.ModelSerializer):
 class QuotationSerializer(serializers.ModelSerializer):
     quotation_items = QuotationItemSerializer(many=True, read_only=True)
     customer_details = CustomerSerializer(source='customer', read_only=True)
+    eit_details = EITSerializer(source='eit', read_only=True)
+    eit = serializers.PrimaryKeyRelatedField(queryset=EIT.objects.all(), write_only=True, required=False)
+    
     customer_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     items = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
+    
+    # Write-only fields for backward compatibility/payload handling
+    cus_respon_attn = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_respon_div = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_respon_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    # EIT extra fields (legacy support, but ignored for update)
+    eit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_address = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_fax = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Quotation
@@ -157,10 +176,34 @@ class QuotationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
         customer_name = validated_data.pop('customer_name', None)
+        eit_name = validated_data.pop('eit_name', None)
+        
+        # Extract customer details
+        attn = validated_data.pop('cus_respon_attn', '')
+        div = validated_data.pop('cus_respon_div', '')
+        mobile = validated_data.pop('cus_respon_mobile', '')
+
+        # Extract EIT details (and ignore them to prevent overwriting)
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
         
         if customer_name:
-            customer, _ = Customer.objects.get_or_create(company_name=customer_name)
+            customer, created = Customer.objects.get_or_create(company_name=customer_name)
+            # Update customer details if provided
+            if attn: customer.attn = attn
+            if div: customer.division = div
+            if mobile: customer.mobile = mobile
+            customer.save()
             validated_data['customer'] = customer
+        
+        # If eit (ID) is not provided but eit_name is, try to find it
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            validated_data['eit'] = eit
             
         quotation = Quotation.objects.create(**validated_data)
         
@@ -187,10 +230,32 @@ class QuotationSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', [])
         customer_name = validated_data.pop('customer_name', None)
+        eit_name = validated_data.pop('eit_name', None)
         
+        # Extract customer details
+        attn = validated_data.pop('cus_respon_attn', '')
+        div = validated_data.pop('cus_respon_div', '')
+        mobile = validated_data.pop('cus_respon_mobile', '')
+        
+        # Extract EIT details (and ignore them to prevent overwriting)
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
+
         if customer_name:
             customer, _ = Customer.objects.get_or_create(company_name=customer_name)
+            if attn: customer.attn = attn
+            if div: customer.division = div
+            if mobile: customer.mobile = mobile
+            customer.save()
             instance.customer = customer
+
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            instance.eit = eit
             
         # Update instance fields
         for attr, value in validated_data.items():
@@ -198,9 +263,6 @@ class QuotationSerializer(serializers.ModelSerializer):
         instance.save()
         
         # Handle items: Delete old and create new
-        # Only if items_data is provided (meaning we want to update items)
-        # Since items is required=False, it might be empty list if cleared, or not present.
-        # But pop returns [] default. If frontend sends empty list, it means clear items.
         if items_data is not None:
             instance.quotation_items.all().delete()
             for item in items_data:
@@ -223,14 +285,202 @@ class QuotationSerializer(serializers.ModelSerializer):
         
         return instance
 
+class BillingNoteSerializer(serializers.ModelSerializer):
+    customer_details = CustomerSerializer(source='customer', read_only=True)
+    eit_details = EITSerializer(source='eit', read_only=True)
+    eit = serializers.PrimaryKeyRelatedField(queryset=EIT.objects.all(), write_only=True, required=False)
+    
+    # Write-only fields for creation
+    customer_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    
+    # Customer extra fields
+    cus_address = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_fax = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_attn = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_div = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    # EIT extra fields
+    eit_address = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_fax = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = BillingNote
+        fields = '__all__'
+
+    def create(self, validated_data):
+        customer_name = validated_data.pop('customer_name', None)
+        eit_name = validated_data.pop('eit_name', None)
+        
+        # Extract customer details
+        cus_address = validated_data.pop('cus_address', '')
+        cus_phone = validated_data.pop('cus_phone', '')
+        cus_fax = validated_data.pop('cus_fax', '')
+        cus_attn = validated_data.pop('cus_attn', '')
+        cus_div = validated_data.pop('cus_div', '')
+        cus_mobile = validated_data.pop('cus_mobile', '')
+        
+        # Extract EIT details (ignore to prevent overwrite)
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
+
+        if customer_name:
+            customer, _ = Customer.objects.get_or_create(company_name=customer_name)
+            if cus_address: customer.address = cus_address
+            if cus_phone: customer.phone = cus_phone
+            if cus_fax: customer.cus_fax = cus_fax
+            if cus_attn: customer.attn = cus_attn
+            if cus_div: customer.division = cus_div
+            if cus_mobile: customer.mobile = cus_mobile
+            customer.save()
+            validated_data['customer'] = customer
+
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            validated_data['eit'] = eit
+            
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        customer_name = validated_data.pop('customer_name', None)
+        eit_name = validated_data.pop('eit_name', None)
+        
+        # Extract customer details
+        cus_address = validated_data.pop('cus_address', '')
+        cus_phone = validated_data.pop('cus_phone', '')
+        cus_fax = validated_data.pop('cus_fax', '')
+        cus_attn = validated_data.pop('cus_attn', '')
+        cus_div = validated_data.pop('cus_div', '')
+        cus_mobile = validated_data.pop('cus_mobile', '')
+        
+        # Extract EIT details (ignore)
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
+
+        if customer_name:
+            customer, _ = Customer.objects.get_or_create(company_name=customer_name)
+            if cus_address: customer.address = cus_address
+            if cus_phone: customer.phone = cus_phone
+            if cus_fax: customer.cus_fax = cus_fax
+            if cus_attn: customer.attn = cus_attn
+            if cus_div: customer.division = cus_div
+            if cus_mobile: customer.mobile = cus_mobile
+            customer.save()
+            instance.customer = customer
+
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            instance.eit = eit
+            
+        return super().update(instance, validated_data)
+
 class InvoiceSerializer(serializers.ModelSerializer):
+    eit_details = EITSerializer(source='eit', read_only=True)
+    eit = serializers.PrimaryKeyRelatedField(queryset=EIT.objects.all(), write_only=True, required=False)
+    
+    eit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_address = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_fax = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
     class Meta:
         model = Invoice
         fields = '__all__'
 
+    def create(self, validated_data):
+        eit_name = validated_data.pop('eit_name', None)
+        # Ignore EIT details
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
+
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            validated_data['eit'] = eit
+            
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        eit_name = validated_data.pop('eit_name', None)
+        # Ignore EIT details
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
+
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            instance.eit = eit
+            
+        return super().update(instance, validated_data)
+
 class PurchaseOrderSerializer(serializers.ModelSerializer):
+    eit_details = EITSerializer(source='eit', read_only=True)
+    eit = serializers.PrimaryKeyRelatedField(queryset=EIT.objects.all(), write_only=True, required=False)
+    
+    eit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_address = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_fax = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
     class Meta:
         model = PurchaseOrder
+        fields = '__all__'
+
+    def create(self, validated_data):
+        eit_name = validated_data.pop('eit_name', None)
+        # Ignore EIT details
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
+
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            validated_data['eit'] = eit
+            
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        eit_name = validated_data.pop('eit_name', None)
+        # Ignore EIT details
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
+
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            instance.eit = eit
+            
+        return super().update(instance, validated_data)
+
+class ProjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Project
         fields = '__all__'
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -238,140 +488,10 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = '__all__'
 
-class ProjectSerializer(serializers.ModelSerializer):
-    tasks = TaskSerializer(many=True, read_only=True)
-    customer_name = serializers.SerializerMethodField()
-    customer_id = serializers.PrimaryKeyRelatedField(source='customer', queryset=Customer.objects.all(), write_only=True, required=False)
-    write_customer_name = serializers.CharField(write_only=True, required=False)
-
-    class Meta:
-        model = Project
-        fields = [
-            'id',
-            'name',
-            'description',
-            'customer',
-            'customer_name',
-            'customer_id',
-            'write_customer_name',
-            'start_date',
-            'end_date',
-            'status',
-            'priority',
-            'created_at',
-            'updated_at',
-            'tasks',
-        ]
-
-    def get_customer_name(self, obj):
-        return obj.customer.company_name if obj.customer else ""
-
-    def create(self, validated_data):
-        # Support creating customer by name if provided
-        write_name = self.initial_data.get('write_customer_name') or self.initial_data.get('customer_name') or None
-        if write_name and not validated_data.get('customer'):
-            name = write_name.strip()
-            if name:
-                cust, _ = Customer.objects.get_or_create(
-                    company_name=name,
-                    defaults={
-                        'contact_name': '',
-                        'email': '',
-                        'phone': '',
-                        'industry': '',
-                        'address': ''
-                    }
-                )
-                validated_data['customer'] = cust
-        return super().create(validated_data)
-
 class ManufacturingOrderSerializer(serializers.ModelSerializer):
-    customer_name = serializers.SerializerMethodField()
-    customer_id = serializers.PrimaryKeyRelatedField(source='customer', queryset=Customer.objects.all(), write_only=True, required=False)
-    po_id = serializers.PrimaryKeyRelatedField(source='po', queryset=PurchaseOrder.objects.all(), write_only=True, required=False)
-
     class Meta:
         model = ManufacturingOrder
-        fields = [
-            'id',
-            'job_order_code',
-            'po',
-            'po_id',
-            'po_number',
-            'customer',
-            'customer_id',
-            'customer_name',
-            'product',
-            'product_no',
-            'quantity',
-            'start_date',
-            'complete_date',
-            'production_time',
-            'responsible_sales_person',
-            'responsible_production_person',
-            'supplier',
-            'supplier_date',
-            'recipient',
-            'recipient_date',
-            'component_status',
-            'state',
-            'items',
-            'item_description',
-            'item_quantity',
-            'item_unit',
-            'created_at',
-            'updated_at',
-        ]
-        read_only_fields = ['created_at', 'updated_at', 'customer_name']
-
-    def get_customer_name(self, obj):
-        return obj.customer.company_name if obj.customer else ""
-
-class ComponentEntrySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ComponentEntry
         fields = '__all__'
-
-    def _normalize_items(self, items):
-        result = []
-        for x in items or []:
-            item = str((x.get('item') or x.get('itemCode') or '')).strip()
-            item_description = str((x.get('item_description') or x.get('description') or '')).strip()
-            item_quantity = str((x.get('item_quantity') or x.get('qty') or '')).strip()
-            item_unit = str((x.get('item_unit') or x.get('unit') or 'Unit')).strip()
-            result.append({
-                'item': item,
-                'item_description': item_description,
-                'item_quantity': item_quantity,
-                'item_unit': item_unit,
-            })
-        return result
-
-    def create(self, validated_data):
-        # If explicit PO is provided, mirror its number into po_number
-        if validated_data.get('po') and not validated_data.get('po_number'):
-            validated_data['po_number'] = validated_data['po'].number
-        if 'items' in validated_data:
-            validated_data['items'] = self._normalize_items(validated_data.get('items') or [])
-            if validated_data['items']:
-                first = validated_data['items'][0]
-                validated_data.setdefault('item_description', first.get('item_description') or '')
-                validated_data.setdefault('item_quantity', first.get('item_quantity') or '')
-                validated_data.setdefault('item_unit', first.get('item_unit') or '')
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        # If explicit PO is provided, mirror its number into po_number
-        if validated_data.get('po') and not validated_data.get('po_number'):
-            validated_data['po_number'] = validated_data['po'].number
-        if 'items' in validated_data:
-            validated_data['items'] = self._normalize_items(validated_data.get('items') or [])
-            if validated_data['items']:
-                first = validated_data['items'][0]
-                validated_data.setdefault('item_description', first.get('item_description') or '')
-                validated_data.setdefault('item_quantity', first.get('item_quantity') or '')
-                validated_data.setdefault('item_unit', first.get('item_unit') or '')
-        return super().update(instance, validated_data)
 
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
@@ -401,4 +521,9 @@ class ComponentSerializer(serializers.ModelSerializer):
 class SystemComponentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemComponent
+        fields = '__all__'
+
+class ComponentEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ComponentEntry
         fields = '__all__'

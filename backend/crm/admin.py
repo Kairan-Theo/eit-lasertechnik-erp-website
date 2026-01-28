@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -88,6 +88,12 @@ class QuotationAdmin(admin.ModelAdmin):
     list_display = ("qo_code", "created_by", "updated_at")
     search_fields = ("qo_code", "customer__company_name", "customer__email")
     inlines = [QuotationItemInline]
+
+@admin.register(BillingNote)
+class BillingNoteAdmin(admin.ModelAdmin):
+    list_display = ("bn_code", "bn_created_date", "bn_total", "updated_at")
+    search_fields = ("bn_code", "customer__company_name")
+
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
