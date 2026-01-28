@@ -209,11 +209,15 @@ function CRMPage() {
             salespersonName: d.salesperson_name || "",
             activitySchedules: (d.activity_schedules || []).map(s => ({
               id: s.id,
+              startAt: s.start_at ? s.start_at.slice(0, 16) : "",
               dueAt: s.due_at ? s.due_at.slice(0, 16) : "",
               activityName: s.activity_name || "",
               salesperson: s.salesperson || "",
               customer: s.customer || "",
-              completed: s.completed || false
+              completed: s.completed || false,
+              linked_task: s.linked_task,
+              linked_task_title: s.linked_task_title,
+              linked_task_due_date: s.linked_task_due_date
             }))
           }
           const stageIndex = newStages.findIndex(s => s.name === d.stage)

@@ -80,9 +80,18 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 class ActivityScheduleSerializer(serializers.ModelSerializer):
+    linked_task_title = serializers.SerializerMethodField()
+    linked_task_due_date = serializers.SerializerMethodField()
+
     class Meta:
         model = ActivitySchedule
         fields = '__all__'
+
+    def get_linked_task_title(self, obj):
+        return obj.linked_task.title if obj.linked_task else None
+
+    def get_linked_task_due_date(self, obj):
+        return obj.linked_task.due_date if obj.linked_task else None
 
 class DealSerializer(serializers.ModelSerializer):
     activity_schedules = ActivityScheduleSerializer(many=True, read_only=True)
