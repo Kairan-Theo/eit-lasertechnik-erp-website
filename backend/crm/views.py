@@ -708,8 +708,14 @@ def update_profile(request):
         
     # Handle profile picture
     if 'profile_picture' in request.FILES:
-        user.profile.profile_picture = request.FILES['profile_picture']
-        user.profile.save()
+        try:
+            print(f"DEBUG: Received profile picture: {request.FILES['profile_picture'].name}")
+            user.profile.profile_picture = request.FILES['profile_picture']
+            user.profile.save()
+            print("DEBUG: Profile picture saved successfully")
+        except Exception as e:
+            print(f"ERROR saving profile picture: {e}")
+            return Response({'error': f'Failed to save image: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Construct image URL
     profile_pic_url = None
