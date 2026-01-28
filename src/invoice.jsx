@@ -3,6 +3,7 @@ import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
 import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, Receipt } from "lucide-react"
+import html2pdf from "html2pdf.js"
 import Navigation from "./components/navigation.jsx"
 import "./index.css"
 
@@ -179,15 +180,16 @@ function useInvoiceState() {
       console.error("Error reading localStorage", e)
     }
 
+    const currentYear = new Date().getFullYear()
     const nums = invoices
       .map(n => String(n.number || n.details?.number || ""))
       .map(s => {
-        const m = s.match(/^IV[-/ ]?(\d{1,5})$/i)
+        const m = s.match(new RegExp(`^VOI ${currentYear}-(\\d{4})$`, 'i'))
         return m ? parseInt(m[1], 10) : null
       })
       .filter(n => Number.isFinite(n))
     const next = (nums.length ? Math.max(...nums) + 1 : 1)
-    return `IV-${String(next).padStart(3, "0")}`
+    return `VOI ${currentYear}-${String(next).padStart(4, "0")}`
   }
 
   const [details, setDetails] = React.useState({
@@ -200,7 +202,7 @@ function useInvoiceState() {
     notes: "",
     paymentTermsDays: 7,
     sourceQuotationNumber: "",
-    salesPerson: "",
+    salesPerson: "EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD",
     eitAddress: "",
     eitTelephone: "",
     eitFax: "",
@@ -211,6 +213,28 @@ function useInvoiceState() {
 
   // Initialization: load confirmedQuotation if present
   React.useEffect(() => {
+    // 1. Check URL params
+    const params = new URLSearchParams(window.location.search)
+    const key = params.get("key")
+    const index = params.get("index")
+    
+    if (key && index !== null) {
+      try {
+        const historyItem = JSON.parse(localStorage.getItem(key))
+        if (historyItem && Array.isArray(historyItem.invoices)) {
+          const inv = historyItem.invoices[parseInt(index, 10)]
+          if (inv) {
+            setCustomer(inv.customer || {})
+            setDetails(inv.details || {})
+            setItems(Array.isArray(inv.items) ? inv.items : [])
+            return
+          }
+        }
+      } catch (e) {
+        console.error("Error loading invoice from URL", e)
+      }
+    }
+
     try {
       const fromQuotation = localStorage.getItem("confirmedQuotation")
       if (fromQuotation) {
@@ -322,7 +346,7 @@ function useInvoiceState() {
   const exportPdf = async () => {
     const el = document.getElementById("invoice-document")
     if (!el) return
-    const opt = { margin: 10, filename: `Invoice_${details.number}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }
+    const opt = { margin: 0, filename: `Invoice_${details.number}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }
     const clone = el.cloneNode(true)
     clone.style.position = "fixed"
     clone.style.left = "-10000px"
@@ -331,23 +355,66 @@ function useInvoiceState() {
     clone.style.background = "#ffffff"
     clone.classList.remove("hidden")
     clone.removeAttribute("aria-hidden")
+    
+    // Force PDF layout to match Print layout
+    const printPage = clone.querySelector(".print-page")
+    if (printPage) {
+      printPage.style.width = "210mm"
+      printPage.style.height = "297mm"
+      printPage.style.padding = "0"
+      printPage.style.margin = "0"
+      printPage.style.overflow = "hidden"
+      printPage.style.backgroundColor = "white"
+    }
+
     document.body.appendChild(clone)
-    try {
-      const loadLib = () =>
-        new Promise((resolve) => {
-          if (window.html2pdf) return resolve(window.html2pdf)
-          const s = document.createElement("script")
-          s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"
-          s.onload = () => resolve(window.html2pdf)
-          s.onerror = () => resolve(null)
-          document.head.appendChild(s)
+    
+    // Wait for images to load
+    const images = clone.querySelectorAll('img')
+    await Promise.all(Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve()
+        return new Promise(resolve => {
+            img.onload = resolve
+            img.onerror = resolve
         })
-      const lib = await loadLib()
-      if (typeof lib === "function") {
-        await lib().set(opt).from(clone).save()
-      } else {
-        window.print()
-      }
+    }))
+
+    try {
+      const all = clone.querySelectorAll("*")
+      all.forEach((node) => {
+        const cs = window.getComputedStyle(node)
+        const props = [
+          "color",
+          "backgroundColor",
+          "background",
+          "borderColor",
+          "borderTopColor",
+          "borderRightColor",
+          "borderBottomColor",
+          "borderLeftColor",
+          "boxShadow",
+        ]
+        props.forEach((prop) => {
+          const val = cs[prop]
+          if (typeof val === "string" && val.includes("oklch")) {
+            if (prop.toLowerCase().includes("background")) {
+              node.style[prop] = "#ffffff"
+            } else if (prop.toLowerCase().includes("border")) {
+              node.style[prop] = "#000000"
+            } else {
+              node.style[prop] = "#000000"
+            }
+          }
+        })
+      })
+    } catch (e) {
+      console.error("Failed to sanitize colors for PDF", e)
+    }
+    try {
+      await html2pdf().set(opt).from(clone).save()
+    } catch (err) {
+      console.error("PDF generation failed", err)
+      window.print()
     } finally {
       document.body.removeChild(clone)
     }
@@ -395,110 +462,243 @@ function useInvoiceState() {
 
 function InvoiceDocument({ inv }) {
   const sym = inv.details.currency === "THB" ? "฿" : inv.details.currency === "USD" ? "$" : inv.details.currency === "EUR" ? "€" : inv.details.currency === "GBP" ? "£" : inv.details.currency
+  const orgName = inv.details.onBehalfOf || "EIT LASERTECHNIK CO.,LTD"
+  const isEinstein = orgName.toUpperCase().includes("EINSTEIN")
+  
+  const orgThaiName = isEinstein 
+    ? "บริษัท ไอน์สไตน์ อินดัสเตรียล เทคนิค คอร์ปอเรชั่น จำกัด" 
+    : "บริษัท อีไอที เลเซอร์เทคนิค จำกัด"
+  
+  const orgAddressLine1 = isEinstein
+    ? "1/120 Soi Ramkhamhaeng 184, Minburi, Minburi, Bangkok 10510 Thailand"
+    : "118/20 Soi Ramkhamhaeng 184, Minburi, Minburi, Bangkok 10510 Thailand"
+  
+  const orgThaiAddress = isEinstein
+    ? "1/120 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510"
+    : "118/20 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510"
+
+  const orgTel = isEinstein ? "02-052-9544" : "02-xxx-xxxx"
+  const orgFax = isEinstein ? "02-052-9544" : "02-xxx-xxxx"
+  const orgTaxId = isEinstein ? "0105547001928" : "010555xxxxxxx"
+  
+  const customerName = inv.customer.company || inv.customer.name || ""
+  const customerTaxId = inv.customer.taxId || ""
+  const customerAddress = inv.customer.address || inv.customer.billingAddress1 || ""
+  const paymentType = inv.details.paymentType || ""
+  const poNo = inv.details.poNo || ""
+  const issueDate = inv.details.date ? format(parseISO(inv.details.date), "dd/MM/yyyy") : ""
+  const dueDate = inv.details.dueDate ? format(parseISO(inv.details.dueDate), "dd/MM/yyyy") : ""
+
+  const headerImgSrc = window.location.origin + (isEinstein ? "/Einstein%20header.png" : "/EIT%20header.png")
+
   return (
-    <div className="relative bg-white rounded-xl border shadow-sm p-8 print:shadow-none print:border-0 overflow-hidden">
-      <div className="absolute -left-10 -top-10 w-56 h-56 bg-[#2D4485] opacity-90 rotate-12" />
-      <div className="absolute -right-24 -bottom-24 w-80 h-80 bg-[#2D4485] opacity-90 -rotate-12" />
-      <div className="relative">
-        <div className="flex items-start justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white rounded flex items-center justify-center overflow-hidden">
-              <img src="/eit-icon.png" alt="EIT" className="w-10 h-10 object-contain" />
+    <div className="mx-auto bg-white text-black font-sans p-[10px] w-full h-auto relative text-[10px] leading-tight">
+      {/* Header Image */}
+      <div className="mb-1 flex items-center justify-center">
+        <img src={headerImgSrc} alt="Header" className="w-full h-auto object-contain" />
+      </div>
+
+      {/* Row 1: Company Info & Doc Info */}
+      <div className="flex justify-between items-start mb-1">
+         {/* Left: Company Info Box */}
+         <div className="border border-black p-2 w-[60%] min-h-[80px]">
+            <div className="font-bold text-xs">{orgThaiName}</div>
+            <div className="font-bold text-xs">{orgName}</div>
+            <div className="mt-1">{orgAddressLine1}</div>
+            <div className="mt-1">TEL : {orgTel}    Fax : {orgFax}</div>
+            <div className="mt-1 flex justify-between">
+               <div className="flex gap-1">
+                  <span className="font-bold">เลขประจำตัวผู้เสียภาษีอากร :</span>
+                  <span>{orgTaxId}</span>
+               </div>
+               <span className="font-bold">สำนักงานใหญ่</span>
             </div>
-            <div className="leading-tight">
-              <div className="text-[#2D4485] font-bold text-lg">EIT Lasertechnik</div>
-              <div className="text-gray-500 text-sm">Invoice</div>
+         </div>
+
+         {/* Right: Doc Info */}
+         <div className="w-[38%] pl-4">
+            <div className="flex justify-between mb-4">
+               <div>
+                  <div className="font-bold text-sm">ใบแจ้งหนี้</div>
+                  <div className="font-bold text-sm">INVOICE</div>
+                  <div className="text-[10px]">ไม่ใช่ใบกำกับภาษี</div>
+               </div>
+               <div className="text-right">
+                  <div className="font-bold text-sm">ต้นฉบับ</div>
+                  <div className="font-bold text-sm">Original</div>
+               </div>
             </div>
-          </div>
-
-          <div className="text-right">
-            <div className="text-2xl font-bold text-[#2D4485] tracking-wide">INVOICE</div>
-            <div className="mt-2 text-sm text-gray-700">Invoice Number : <span className="font-semibold">{inv.details.number}</span></div>
-            <div className="text-sm text-gray-700">Due Date : <span className="font-semibold">{inv.details.dueDate || "-"}</span></div>
-            <div className="text-sm text-gray-700">Invoice Date : <span className="font-semibold">{inv.details.date}</span></div>
-            <div className="text-sm text-gray-700">From Quotation : <a href="/quotation.html" className="font-semibold text-[#2D4485] hover:underline">{inv.details.sourceQuotationNumber || "-"}</a></div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <div className="text-sm text-gray-600">Invoice to:</div>
-            <div className="text-[#2D4485] font-semibold text-lg">{inv.customer.company || inv.customer.name || "-"}</div>
-            <div className="text-gray-600 text-sm">{inv.customer.attn ? `Attn: ${inv.customer.attn}` : ""}</div>
-            <div className="text-gray-600 text-sm whitespace-pre-wrap">{inv.customer.address || inv.customer.billingAddress1 || ""}</div>
-            <div className="text-gray-600 text-sm">{inv.customer.email || ""}</div>
-            <div className="text-gray-600 text-sm">{inv.customer.telephone || inv.customer.phone || ""}</div>
-          </div>
-          <div className="md:text-right">
-            <div className="text-sm text-gray-600">Currency:</div>
-            <div className="text-gray-900 font-semibold">{inv.details.currency}</div>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto mb-6">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="bg-gray-100 text-gray-700">
-                <th className="p-2 text-left w-12">No.</th>
-                <th className="p-2 text-left">Description</th>
-                <th className="p-2 text-left">Sales (ex. Vat)</th>
-                <th className="p-2 text-left">Quantity</th>
-                <th className="p-2 text-left">Unit</th>
-                <th className="p-2 text-left">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inv.items.map((it, i) => {
-                const amount = (Number(it.qty) || 0) * (Number(it.price) || 0)
-                return (
-                  <tr key={i} className="border-t">
-                    <td className="p-2">{i + 1}</td>
-                    <td className="p-2">{it.description || it.product}</td>
-                    <td className="p-2">{sym} {Number(it.price || 0).toFixed(2)}</td>
-                    <td className="p-2">{it.qty}</td>
-                    <td className="p-2">{it.unit}</td>
-                    <td className="p-2">{sym} {amount.toFixed(2)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div>
-            <div className="text-sm font-semibold text-gray-900 mb-2">Payment Method :</div>
-            <div className="text-sm text-gray-700">Account Name : EIT Lasertechnik</div>
-            <div className="text-sm text-gray-700">Bank/Credit Card</div>
-            <div className="text-sm text-gray-700">Paypal : hello@eitlasertechnik.com</div>
-          </div>
-          <div className="md:text-right">
-            <div className="flex justify-end">
-              <div className="w-auto min-w-[250px] space-y-2">
-                <div className="flex justify-between text-sm gap-8"><span className="text-gray-700">Net amount :</span><span className="font-semibold">{sym} {inv.subtotal.toFixed(2)}</span></div>
-                <div className="flex justify-between text-sm gap-8"><span className="text-gray-700">Vat 7% :</span><span className="font-semibold">{sym} {inv.taxTotal.toFixed(2)}</span></div>
-                <div className="flex justify-between text-base mt-1 pt-2 border-t gap-8"><span className="text-gray-900 font-semibold">Total of sales :</span><span className="font-bold text-[#2D4485]">{sym} {inv.total.toFixed(2)}</span></div>
-                <div className="text-right text-base font-bold text-[#2D4485] mt-1">{THBText(inv.total)}</div>
-              </div>
+            <div className="text-right text-xs">
+               <div className="flex justify-end gap-2 mb-1">
+                  <span className="w-24 font-bold">เลขที่ (No.)</span>
+                  <span>EIT {inv.details.number}</span>
+               </div>
+               <div className="flex justify-end gap-2">
+                  <span className="w-24 font-bold">วันที่ (Issue Date)</span>
+                  <span>{issueDate}</span>
+               </div>
             </div>
-          </div>
-        </div>
+         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <div className="text-sm font-semibold text-gray-900 mb-2">Terms & Conditions :</div>
-            <div className="text-sm text-gray-700">Please send payment within 30 days of receiving this invoice.</div>
-            <div className="text-sm text-gray-700">There will be a 1.5% interest charge per month on late invoices.</div>
-          </div>
-          <div className="md:text-right">
-            <div className="inline-block">
-              <div className="text-3xl text-gray-700">EIT</div>
-              <div className="text-sm text-gray-700">EIT Lasertechnik</div>
+      {/* Row 2: Customer & Payment Info */}
+      <div className="border border-black border-b-0 flex">
+         {/* Left: Customer */}
+         <div className="w-[70%] border-r border-black p-2 min-h-[90px]">
+            <div className="flex mb-1">
+               <div className="font-bold w-32">สำนักงานใหญ่</div>
+               <div className="flex-1 flex gap-2">
+                  <span className="font-bold">เลขประจำตัวผู้เสียภาษี</span>
+                  <span>{customerTaxId}</span>
+               </div>
             </div>
-          </div>
-        </div>
+            <div className="flex mb-1">
+               <div className="w-32 font-bold">ลูกค้า (customer)</div>
+               <div className="flex-1">{customerName}</div>
+            </div>
+            <div className="flex mb-1">
+               <div className="w-32 font-bold">ชื่อ</div>
+               <div>{inv.customer.attn || ""}</div>
+            </div>
+            <div className="flex">
+               <div className="w-32 font-bold">ที่อยู่</div>
+               <div className="w-2/3 break-words">{customerAddress}</div>
+            </div>
+         </div>
 
-        <div className="mt-10 text-[#2D4485] font-bold">Thank for your business with us!</div>
+         {/* Right: Payment */}
+         <div className="w-[30%] flex flex-col">
+            <div className="flex-1 border-b border-black p-1 text-center flex flex-col justify-center">
+               <div className="font-bold">ประเภทการจ่ายเงิน (Payment Type)</div>
+               <div className="mt-1">{paymentType || "-"}</div>
+            </div>
+            <div className="flex-1 border-b border-black p-1 text-center flex flex-col justify-center">
+               <div className="font-bold">วันครบกำหนดชำระเงิน( Due date)</div>
+               <div className="mt-1">{dueDate}</div>
+            </div>
+            <div className="flex-1 p-1 text-center flex flex-col justify-center">
+               <div className="font-bold">เลขที่ใบสั่งซื้อ (PO.NO)</div>
+               <div className="mt-1">{poNo || "-"}</div>
+            </div>
+         </div>
+      </div>
+
+      {/* Row 3: Table Header */}
+      <div className="border border-black border-b-0 flex text-center font-bold text-xs bg-gray-100 mt-[6mm]">
+         <div className="w-[55%] border-r border-black p-1">
+            <div>รายการ</div>
+            <div>Description</div>
+         </div>
+         <div className="w-[15%] border-r border-black p-1">
+            <div>ราคาขายไม่รวมภาษี</div>
+            <div>Sales (ex.Vat)</div>
+         </div>
+         <div className="w-[8%] border-r border-black p-1">
+            <div>จำนวน</div>
+            <div>Qty</div>
+         </div>
+         <div className="w-[7%] border-r border-black p-1">
+            <div>หน่วยนับ</div>
+            <div>Unit</div>
+         </div>
+         <div className="w-[15%] p-1">
+            <div>จำนวนเงิน (บาท)</div>
+            <div>Amount</div>
+         </div>
+      </div>
+
+      {/* Row 4: Table Content */}
+      <div className="border border-black flex flex-col relative"> 
+         {/* Loop Items */}
+         {inv.items.map((item, i) => (
+            <div key={i} className="flex text-xs z-10">
+               <div className="w-[55%] p-1 pl-2 text-left">{i+1}. {item.description || item.product}</div>
+               <div className="w-[15%] p-1 text-right">{Number(item.price).toFixed(2)}</div>
+               <div className="w-[8%] p-1 text-center">{item.qty}</div>
+               <div className="w-[7%] p-1 text-center">{item.unit}</div>
+               <div className="w-[15%] p-1 text-right">{ (Number(item.qty) * Number(item.price)).toFixed(2) }</div>
+            </div>
+         ))}
+         
+         {/* Vertical Lines (Background) */}
+         <div className="absolute inset-0 flex pointer-events-none">
+            <div className="w-[55%] border-r border-black"></div>
+            <div className="w-[15%] border-r border-black"></div>
+            <div className="w-[8%] border-r border-black"></div>
+            <div className="w-[7%] border-r border-black"></div>
+            <div className="w-[15%]"></div>
+         </div>
+      </div>
+
+      {/* Row 5: Totals */}
+      <div className="flex border border-black border-t-0">
+         <div className="flex-1 border-r border-black"></div> 
+         <div className="w-[30%]">
+            <div className="flex border-b border-black">
+               <div className="w-[60%] border-r border-black p-1 text-right font-bold text-[10px]">
+                  <div>จำนวนเงินสุทธิ</div>
+                  <div>Net Amount</div>
+               </div>
+               <div className="w-[40%] p-1 text-right">{inv.subtotal.toFixed(2)}</div>
+            </div>
+            <div className="flex border-b border-black">
+               <div className="w-[60%] border-r border-black p-1 text-right font-bold text-[10px]">
+                  <div>ภาษีมูลค่าเพิ่ม</div>
+                  <div>VAT 7%</div>
+               </div>
+               <div className="w-[40%] p-1 text-right">{inv.taxTotal.toFixed(2)}</div>
+            </div>
+            <div className="flex">
+               <div className="w-[60%] border-r border-black p-1 text-right font-bold text-[10px]">
+                  <div>รวมเป็นมูลค่า</div>
+                  <div>Total of sales</div>
+               </div>
+               <div className="w-[40%] p-1 text-right">{inv.total.toFixed(2)}</div>
+            </div>
+         </div>
+      </div>
+
+      {/* Row 6: Text Amount */}
+      <div className="border border-black border-t-0 flex">
+         <div className="w-[25%] border-r border-black p-1 text-center font-bold flex flex-col justify-center">
+            <div>จำนวนเงินรวมทั้งสิ้น</div>
+            <div>(The sum of bath)</div>
+         </div>
+         <div className="flex-1 p-1 text-center flex items-center justify-center bg-gray-100">
+            {THBText(inv.total)}
+         </div>
+      </div>
+
+      {/* Row 7: Signatures */}
+      <div className="border border-black border-t-0 p-2 pt-2 pb-2 flex justify-between text-center text-xs">
+         <div className="w-[30%] flex flex-col">
+            <div className="border border-black mb-1 font-bold p-1 w-full">ชำระเงินโดย</div>
+            <div className="mt-2 font-bold">ผู้รับสินค้า Reciever</div>
+            <div className="mt-4 border-b border-dotted border-black w-3/4 mx-auto"></div>
+            <div className="mt-1 flex justify-center gap-1">
+               <span>วันที่</span>
+               <span className="border-b border-dotted border-black w-20"></span>
+            </div>
+            <div className="mt-1 text-[10px] text-gray-500">(........................................................)</div>
+         </div>
+         <div className="w-[30%] pt-2">
+            <div className="mt-2 font-bold">ผู้ส่งสินค้า Deliverer</div>
+            <div className="mt-4 border-b border-dotted border-black w-3/4 mx-auto"></div>
+            <div className="mt-1 flex justify-center gap-1">
+               <span>วันที่</span>
+               <span className="border-b border-dotted border-black w-20"></span>
+            </div>
+            <div className="mt-1 text-[10px] text-gray-500">(........................................................)</div>
+         </div>
+         <div className="w-[30%] pt-2">
+            <div className="mt-2 font-bold">ผู้มีอำนาจลงนาม Authorized Signature</div>
+            <div className="mt-4 border-b border-dotted border-black w-3/4 mx-auto"></div>
+            <div className="mt-1 flex justify-center gap-1">
+               <span>วันที่</span>
+               <span className="border-b border-dotted border-black w-20"></span>
+            </div>
+            <div className="mt-1 text-[10px] text-gray-500">(........................................................)</div>
+         </div>
       </div>
     </div>
   )
@@ -524,6 +724,7 @@ function InvoicePage() {
   }
 
   return (
+    <>
     <main className="min-h-screen bg-gray-50">
       <Navigation />
       <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
@@ -672,7 +873,6 @@ function InvoicePage() {
                    <th className="p-3 border-b">Quantity</th>
                    <th className="p-3 border-b">Unit</th>
                    <th className="p-3 border-b text-right">Amount</th>
-                   <th className="p-3 border-b w-12"></th>
                  </tr>
                </thead>
                <tbody className="divide-y divide-gray-100">
@@ -682,7 +882,13 @@ function InvoicePage() {
                         {i + 1}
                       </td>
                       <td className="p-3">
-                        <input value={it.description} onChange={(e) => inv.updateItem(i, "description", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Description" />
+                        <textarea 
+                          value={it.description} 
+                          onChange={(e) => inv.updateItem(i, "description", e.target.value)} 
+                          className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none resize-y min-h-[32px]"
+                          rows={1}
+                          placeholder="Description"
+                        />
                       </td>
                       <td className="p-3">
                         <input type="number" min="0" step="0.01" value={it.price} onChange={(e) => inv.updateItem(i, "price", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
@@ -695,11 +901,6 @@ function InvoicePage() {
                       </td>
                       <td className="p-3 text-right text-sm text-gray-700">
                         {((Number(it.qty) || 0) * (Number(it.price) || 0)).toFixed(2)}
-                      </td>
-                      <td className="p-3">
-                        <button onClick={() => inv.removeItem(i)} className="text-red-500 hover:text-red-700 p-1">
-                          <Trash className="w-4 h-4" />
-                        </button>
                       </td>
                    </tr>
                  ))}
@@ -774,12 +975,18 @@ function InvoicePage() {
         )}
 
         {/* Hidden Document for PDF */}
-        <div className="mt-8 print:mt-0 hidden print:block" id="invoice-document" aria-hidden="true">
-          <InvoiceDocument inv={inv} />
-        </div>
-
       </div>
     </main>
+    <div id="invoiceArea">
+      <div className="hidden print:block" id="invoice-document" aria-hidden="true">
+        <div className="print-page">
+           <div className="invoice">
+              <InvoiceDocument inv={inv} />
+           </div>
+        </div>
+      </div>
+    </div>
+    </>
   )
 }
 

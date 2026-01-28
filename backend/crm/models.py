@@ -185,6 +185,7 @@ class UserProfile(models.Model):
     # "all" means access to everything.
     allowed_apps = models.TextField(default="all", blank=True)
     profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
+    company = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         return f"{self.user.username}'s Profile"

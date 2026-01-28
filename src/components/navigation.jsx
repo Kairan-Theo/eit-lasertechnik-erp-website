@@ -57,12 +57,51 @@ export default function Navigation() {
     }
   }, [user])
 
-  const handleEditProfileSubmit = (e) => {
+  const handleEditProfileSubmit = async (e) => {
     e.preventDefault()
-    const updatedUser = { ...user, name: profileName, company: profileCompany, email: profileEmail }
-    setUser(updatedUser)
-    localStorage.setItem("currentUser", JSON.stringify(updatedUser))
-    setIsEditProfileOpen(false)
+    
+    try {
+      const token = localStorage.getItem("authToken")
+      const formData = new FormData()
+      formData.append("name", profileName)
+      formData.append("email", profileEmail)
+      formData.append("company", profileCompany)
+      if (profileImage) {
+        formData.append("profile_picture", profileImage)
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/auth/profile/update/`, {
+        method: "POST",
+        headers: {
+          ...(token ? { "Authorization": `Token ${token}` } : {})
+        },
+        body: formData
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const updatedUser = { 
+          ...user, 
+          name: data.name, 
+          email: data.email, 
+          profile_picture: data.profile_picture,
+          company: data.company
+        }
+        setUser(updatedUser)
+        localStorage.setItem("currentUser", JSON.stringify(updatedUser))
+        setIsEditProfileOpen(false)
+        toast({
+          title: "Profile updated",
+          description: "Your profile has been successfully updated.",
+        })
+      } else {
+        const errorData = await response.json()
+        alert(errorData.error || "Failed to update profile")
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      alert("An error occurred while updating profile")
+    }
   }
 
   const handleChangePasswordSubmit = (e) => {
@@ -288,15 +327,15 @@ export default function Navigation() {
                   className="flex items-center gap-2 hover:bg-white/10 rounded-full pl-1 pr-3 py-1 transition"
                 >
                   <img
-                    src="/jn.jpg"
+                    src={user.profile_picture}
                     alt="Profile"
-                    className="w-8 h-8 rounded-full object-cover bg-white shadow-sm"
+                    className={`w-8 h-8 rounded-full object-cover bg-white shadow-sm ${!user.profile_picture ? 'hidden' : ''}`}
                     onError={(e) => {
                       e.target.style.display = 'none';
                       e.target.nextSibling.style.display = 'flex';
                     }}
                   />
-                  <div className="w-8 h-8 rounded-full bg-white text-[#2D4485] flex items-center justify-center font-bold text-sm shadow-sm hidden">
+                  <div className={`w-8 h-8 rounded-full bg-white text-[#2D4485] flex items-center justify-center font-bold text-sm shadow-sm ${user.profile_picture ? 'hidden' : 'flex'}`}>
                     {user.name ? user.name.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : "U")}
                   </div>
                   <div className="hidden sm:block text-left">

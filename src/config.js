@@ -11,15 +11,23 @@ if (envUrl && typeof envUrl === "string" && envUrl.trim().length > 0) {
   resolved = envUrl.trim();
 } else if (!host) {
   // Handle file:// pages where hostname is empty
-  resolved = "http://127.0.0.1:8005";
+  resolved = "http://127.0.0.1:8000";
 } else if (isLocalHost) {
-  resolved = "http://127.0.0.1:8005";
+  resolved = "http://127.0.0.1:8000";
 } else {
   // Use current protocol to avoid mixed-content blocks when the page is https
-  resolved = `${proto}://${host}:8005`;
+  resolved = `${proto}://${host}:8000`;
 }
 
 export const API_BASE_URL = resolved;
+
+// Google OAuth Client ID
+// TODO: Replace this with your actual Google Client ID from Google Cloud Console
+// 1. Go to https://console.cloud.google.com/
+// 2. Create a project > APIs & Services > Credentials > Create Credentials > OAuth client ID
+// 3. Select "Web application", add "http://localhost:5173" to Authorized JavaScript origins
+// 4. Copy the Client ID and paste it below
+export const GOOGLE_CLIENT_ID = "122374743685-j97ful000l2a6snsgbmdqrg4jataipsk.apps.googleusercontent.com";
 
 console.log("🔌 Connected to Backend at:", API_BASE_URL);
 

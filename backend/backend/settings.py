@@ -64,6 +64,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'authorization',
+    'cache-control',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -89,7 +90,8 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DB_ENGINE = os.getenv('DB_ENGINE', 'postgresql').lower()
+# DB_ENGINE = os.getenv('DB_ENGINE', 'sqlite').lower()
+DB_ENGINE = 'sqlite'
 if DB_ENGINE == 'sqlite':
     DATABASES = {
         'default': {
@@ -105,7 +107,7 @@ else:
             'USER': os.getenv('DB_USER', 'postgres'),
             'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
             'HOST': os.getenv('DB_HOST', 'localhost'),
-            'PORT': os.getenv('DB_PORT', '5432'),
+            'PORT': os.getenv('DB_PORT', '5433'),
         }
     }
 

@@ -19,33 +19,26 @@ class CrmConfig(AppConfig):
             # Wait a bit for the server to fully start
             time.sleep(5)
             # Log startup
-            with open("debug_thread.log", "a") as f:
-                f.write(f"[{time.ctime()}] Thread started\n")
+            # print(f"[{time.ctime()}] Reminder thread started")
             
             try:
                 from crm.utils import check_and_send_reminders
             except Exception as e:
-                with open("debug_thread.log", "a") as f:
-                    f.write(f"[{time.ctime()}] Import failed: {e}\n")
+                print(f"[{time.ctime()}] Reminder thread import failed: {e}")
                 return
 
             print("Starting reminder check loop...")
             while True:
                 try:
-                    with open("debug_thread.log", "a") as f:
-                        f.write(f"[{time.ctime()}] Checking reminders...\n")
+                    # print(f"[{time.ctime()}] Checking reminders...")
                     
                     count = check_and_send_reminders()
                     
                     if count > 0:
                         msg = f"Sent {count} reminders."
                         print(msg)
-                        with open("debug_thread.log", "a") as f:
-                            f.write(f"[{time.ctime()}] {msg}\n")
                 except Exception as e:
                     print(f"Error in reminder loop: {e}")
-                    with open("debug_thread.log", "a") as f:
-                        f.write(f"[{time.ctime()}] Error: {e}\n")
                 
                 # Check every minute
                 time.sleep(60)

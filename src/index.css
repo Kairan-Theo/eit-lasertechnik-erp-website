@@ -194,14 +194,115 @@
   animation-name: slideUp;
 }
 
+/* ========== SCREEN (optional) ========== */
+.print-page {
+  background: white;
+  margin: 0 auto;
+}
+
+/* ========== PRINT ========== */
+@page {
+  size: A4;
+  margin: 0;              /* remove browser margin that causes blank page */
+}
+
 @media print {
+  /* Collapse the main content to remove phantom pages */
+  main {
+    display: none !important;
+  }
+
+  /* Hide everything else visually but keep layout if needed */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only invoice area */
+  #invoiceArea, #invoiceArea * {
+    visibility: visible !important;
+  }
+
+  #invoiceArea {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    z-index: 9999;
+  }
+
   html, body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;  /* avoid page 2 caused by overflow */
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     background: white !important;
   }
-  @page {
-    size: A4;
-    margin: 12mm;
+
+  /* IMPORTANT: make exactly 1 page */
+  .print-page {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;        /* Removed padding to maintain original size */
+    box-sizing: border-box;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: hidden !important;
   }
+
+  /* shrink content if it’s too large */
+  .invoice {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+  }
+
+  /* remove any shadows/borders from cards */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Anti-blank-page CSS */
+  .print-page * {
+    max-height: 297mm;
+  }
+
+  /* remove bottom margins that push content */
+  .print-page, .invoice, table {
+    margin-bottom: 0 !important;
+  }
+}
+
+.invoice-header {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.invoice-logo img {
+  max-height: 35mm;
+}
+
+/* User-defined invoice header styles */
+.invoice-header-right { 
+  width: 220px;        /* adjust to your design */ 
+  height: 70px; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+} 
+
+.invoice-header-right img { 
+  max-width: 100%; 
+  max-height: 100%; 
+  object-fit: contain; /* 👈 keeps ONE image, no repeat */ 
+  display: block; 
 }

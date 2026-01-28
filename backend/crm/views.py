@@ -14,6 +14,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 import os
+import requests
 from django.core.files.base import ContentFile
 
 
@@ -424,8 +425,10 @@ def login(request):
         # Get allowed apps
         allowed_apps = ""
         profile_pic_url = None
+        company = ""
         if hasattr(user, 'profile'):
             allowed_apps = user.profile.allowed_apps
+            company = user.profile.company or ""
             if user.profile.profile_picture:
                 try:
                     profile_pic_url = request.build_absolute_uri(user.profile.profile_picture.url)
@@ -444,10 +447,116 @@ def login(request):
             'name': user.first_name or user.username,
             'role': 'Admin' if user.is_staff else 'User',
             'allowed_apps': allowed_apps,
-            'profile_picture': profile_pic_url
+            'profile_picture': profile_pic_url,
+            'company': company
         })
     else:
         return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def google_login(request):
+    """
+    Handle Google Sign-In.
+    Expects 'credential' (ID token) from frontend.
+    """
+    token_id = request.data.get('credential')
+    if not token_id:
+        return Response({'error': 'No token provided'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Verify token with Google
+    try:
+        email = None
+        google_data = {}
+        
+        # Development bypass for testing without valid Google Credentials
+        if token_id.startswith("mock_token_"):
+            email = "6531503143@lamduan.mfu.ac.th" # Default test user
+            google_data = {
+                'given_name': 'Test',
+                'family_name': 'User',
+                'picture': 'https://lh3.googleusercontent.com/a/default-user=s96-c'
+            }
+        else:
+            # Using Google's tokeninfo endpoint to verify the token
+            google_response = requests.get(f'https://oauth2.googleapis.com/tokeninfo?id_token={token_id}')
+            
+            if google_response.status_code != 200:
+                return Response({'error': 'Invalid Google token'}, status=status.HTTP_400_BAD_REQUEST)
+                
+            google_data = google_response.json()
+            
+            # Verify Audience (Client ID)
+            CLIENT_ID = "122374743685-j97ful000l2a6snsgbmdqrg4jataipsk.apps.googleusercontent.com"
+            if google_data.get('aud') != CLIENT_ID:
+                 return Response({'error': 'Token client ID mismatch'}, status=status.HTTP_400_BAD_REQUEST)
+                 
+            email = google_data.get('email')
+        
+        if not email:
+            return Response({'error': 'Google account has no email'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Check if user exists
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # Create new user
+            username = email # Use email as username
+            first_name = google_data.get('given_name', '')
+            last_name = google_data.get('family_name', '')
+            
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name
+            )
+            # Set unusable password since they use Google
+            user.set_unusable_password()
+            user.save()
+            
+            # Create profile (safely)
+            UserProfile.objects.get_or_create(user=user, defaults={'allowed_apps': ""})
+            
+            # Notify admins
+            Notification.objects.create(
+                message=f"New user registered via Google: {email}",
+                type="signup"
+            )
+            
+        # Log user in (generate token)
+        token, created = Token.objects.get_or_create(user=user)
+        
+        # Get allowed apps
+        allowed_apps = ""
+        profile_pic_url = None
+        company = ""
+        
+        # Ensure profile exists and access it
+        profile, _ = UserProfile.objects.get_or_create(user=user, defaults={'allowed_apps': ""})
+        allowed_apps = profile.allowed_apps
+        company = profile.company or ""
+        
+        if profile.profile_picture:
+            try:
+                profile_pic_url = request.build_absolute_uri(profile.profile_picture.url)
+            except:
+                pass
+            
+        return Response({
+            'token': token.key,
+            'user_id': user.pk,
+            'email': user.email,
+            'name': user.first_name or user.username,
+            'role': 'Admin' if user.is_staff else 'User',
+            'allowed_apps': allowed_apps,
+            'profile_picture': profile_pic_url,
+            'company': company
+        })
+        
+    except Exception as e:
+        print(f"Google login error: {e}")
+        return Response({'error': 'Google login failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdminUser])
@@ -603,11 +712,21 @@ def update_profile(request):
     # Update profile fields
     if not hasattr(user, 'profile'):
         UserProfile.objects.create(user=user)
+
+    if 'company' in data:
+        user.profile.company = data['company']
+        user.profile.save()
         
     # Handle profile picture
     if 'profile_picture' in request.FILES:
-        user.profile.profile_picture = request.FILES['profile_picture']
-        user.profile.save()
+        try:
+            print(f"DEBUG: Received profile picture: {request.FILES['profile_picture'].name}")
+            user.profile.profile_picture = request.FILES['profile_picture']
+            user.profile.save()
+            print("DEBUG: Profile picture saved successfully")
+        except Exception as e:
+            print(f"ERROR saving profile picture: {e}")
+            return Response({'error': f'Failed to save image: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Construct image URL
     profile_pic_url = None
@@ -620,7 +739,8 @@ def update_profile(request):
     return Response({
         'name': user.first_name,
         'email': user.email,
-        'profile_picture': profile_pic_url
+        'profile_picture': profile_pic_url,
+        'company': user.profile.company
     })
 
 @api_view(['GET'])

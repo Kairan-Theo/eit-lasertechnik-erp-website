@@ -1,16 +1,98 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { 
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, 
   eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, 
   isToday 
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, MoreHorizontal, Check } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, MoreHorizontal, Check, X } from "lucide-react"
 import { API_BASE_URL } from "./config"
 
 export default function CRMActivities({ deals = [], onDeleteActivity, onActivityUpdate }) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [optimisticUpdates, setOptimisticUpdates] = useState({})
-  
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingActivity, setEditingActivity] = useState(null)
+  const [formData, setFormData] = useState({
+    activityName: "",
+    dueAt: "",
+    dealId: ""
+  })
+
+  useEffect(() => {
+    if (isModalOpen) {
+      if (editingActivity) {
+        setFormData({
+          activityName: editingActivity.activityName || "",
+          dueAt: editingActivity.date ? format(editingActivity.date, "yyyy-MM-dd'T'HH:mm") : "",
+          dealId: editingActivity.dealId || ""
+        })
+      } else {
+        setFormData({
+          activityName: "",
+          dueAt: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+          dealId: ""
+        })
+      }
+    }
+  }, [isModalOpen, editingActivity])
+
+  const handleOpenNew = () => {
+    setEditingActivity(null)
+    setIsModalOpen(true)
+  }
+
+  const handleOpenEdit = (activity) => {
+    setEditingActivity(activity)
+    setIsModalOpen(true)
+  }
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      
+      const url = editingActivity 
+        ? `${API_BASE_URL}/api/activity_schedules/${editingActivity.id}/`
+        : `${API_BASE_URL}/api/activity_schedules/`
+        
+      const method = editingActivity ? "PATCH" : "POST"
+      
+      const body = {
+        activity_name: formData.activityName,
+        due_at: formData.dueAt,
+        deal: formData.dealId
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: JSON.stringify(body)
+      })
+
+      if (res.status === 401) {
+          localStorage.removeItem("isAuthenticated")
+          localStorage.removeItem("userRole")
+          localStorage.removeItem("currentUser")
+          localStorage.removeItem("authToken")
+          window.location.href = "/"
+          return
+      }
+
+      if (res.ok) {
+        setIsModalOpen(false)
+        if (onActivityUpdate) onActivityUpdate()
+      } else {
+        console.error("Failed to save activity")
+      }
+    } catch (err) {
+      console.error("Error saving activity", err)
+    }
+  }
+
   // Flatten and prepare activities
   const activities = deals.flatMap(deal => 
     (deal.activitySchedules || []).map(activity => ({
@@ -67,11 +149,20 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
         ...(token ? { "Authorization": `Token ${token}` } : {})
       }
       
-      const res = await fetch(`${API_BASE_URL}/activity_schedules/${activity.id}/`, {
+      const res = await fetch(`${API_BASE_URL}/api/activity_schedules/${activity.id}/`, {
         method: "PATCH",
         headers,
         body: JSON.stringify({ completed: newStatus })
       })
+
+      if (res.status === 401) {
+          localStorage.removeItem("isAuthenticated")
+          localStorage.removeItem("userRole")
+          localStorage.removeItem("currentUser")
+          localStorage.removeItem("authToken")
+          window.location.href = "/"
+          return
+      }
 
       if (res.ok) {
         if (onActivityUpdate) onActivityUpdate()
@@ -110,7 +201,10 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
             </h2>
         </div>
         <div className="flex items-center gap-3">
-            <button className="p-2 hover:bg-gray-50 rounded-full border border-gray-200 text-gray-600 shadow-sm transition-all hover:shadow-md">
+            <button 
+                onClick={handleOpenNew}
+                className="p-2 hover:bg-gray-50 rounded-full border border-gray-200 text-gray-600 shadow-sm transition-all hover:shadow-md"
+            >
                 <Plus className="w-5 h-5" />
             </button>
             
@@ -190,7 +284,7 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
                                     ${act.completed ? 'opacity-50' : ''}
                                 `}
                                 title={`${act.activityName} - ${format(act.date, "p")} - ${act.customer}`}
-                                onClick={(e) => handleToggleComplete(act, e)}
+                                onClick={(e) => handleOpenEdit(act)}
                             >
                                 <button
                                     type="button" 
@@ -211,6 +305,84 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
             )
         })}
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <h3 className="font-semibold text-lg text-gray-800">
+                {editingActivity ? "Edit Activity" : "New Activity"}
+              </h3>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="p-1 rounded-full hover:bg-gray-200 text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Activity Name</label>
+                <input 
+                  type="text" 
+                  required
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-colors"
+                  placeholder="e.g. Call customer"
+                  value={formData.activityName}
+                  onChange={e => setFormData({...formData, activityName: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Due Date & Time</label>
+                <input 
+                  type="datetime-local" 
+                  required
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-colors"
+                  value={formData.dueAt}
+                  onChange={e => setFormData({...formData, dueAt: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Deal / Customer</label>
+                <select 
+                  required
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-colors"
+                  value={formData.dealId}
+                  onChange={e => setFormData({...formData, dealId: e.target.value})}
+                  disabled={!!editingActivity} // Usually can't move activity between deals easily, or maybe we can?
+                >
+                  <option value="">Select a deal...</option>
+                  {deals.map(deal => (
+                    <option key={deal.id} value={deal.id}>
+                      {deal.title} {deal.customer ? `(${deal.customer})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {editingActivity && <p className="text-xs text-gray-500">Deal cannot be changed for existing activity</p>}
+              </div>
+
+              <div className="pt-2 flex justify-end gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-[#2D4485] hover:bg-[#1a2e66] rounded-lg shadow-sm transition-colors"
+                >
+                  {editingActivity ? "Save Changes" : "Create Activity"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
