@@ -179,15 +179,17 @@ function useBillingNoteState() {
       console.error("Error reading localStorage", e)
     }
 
+    const currentYear = new Date().getFullYear()
     const nums = notes
       .map(n => String(n.details?.number || ""))
       .map(s => {
-        const m = s.match(/^BN[-/ ]?(\d{1,5})$/i)
+        // Match BI YYYY-XXXX format for the current year
+        const m = s.match(new RegExp(`^BI ${currentYear}-(\\d{4})$`))
         return m ? parseInt(m[1], 10) : null
       })
       .filter(n => Number.isFinite(n))
     const next = (nums.length ? Math.max(...nums) + 1 : 1)
-    return `BN-${String(next).padStart(3, "0")}`
+    return `BI ${currentYear}-${String(next).padStart(4, "0")}`
   }
 
   const [details, setDetails] = React.useState({
@@ -196,10 +198,12 @@ function useBillingNoteState() {
     validUntil: "",
     currency: "THB",
     deliveryTerms: "Ex-Works",
+    eit: null,
     salesPerson: "",
-    eitAddress: "",
-    eitTelephone: "",
-    eitFax: "",
+    eitAddress: "1/120 ซอยรามคําแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510",
+    eitMobile: " 000-000-0000",
+    eitTelephone: " 02-052-9544",
+    eitFax: " 02-052 9544",
     tradeTerms: "",
     validity: "",
     delivery: "",
@@ -214,6 +218,9 @@ function useBillingNoteState() {
   })
 
   const [items, setItems] = React.useState([{ invoiceNo: "", date: "", dueDate: "", amount: 0, paid: 0 }])
+  const [sourceKey, setSourceKey] = React.useState(null)
+  const [sourceIndex, setSourceIndex] = React.useState(null)
+  const [eitOptions, setEitOptions] = React.useState([])
 
   const total = items.reduce((sum, it) => sum + ((Number(String(it.amount).replace(/,/g, '')) || 0) - (Number(String(it.paid).replace(/,/g, '')) || 0)), 0)
 
@@ -226,44 +233,217 @@ function useBillingNoteState() {
       ),
     )
 
-  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total }
+  // Load EIT options
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/eits/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setEitOptions(data)
+        } else {
+          console.error("EIT data is not an array:", data)
+          setEitOptions([])
+        }
+      })
+      .catch(err => {
+        console.error("Error loading EITs", err)
+        setEitOptions([])
+      })
+  }, [])
+
+  return { customer, setCustomer, details, setDetails, items, setItems, addItem, removeItem, updateItem, total, sourceKey, setSourceKey, sourceIndex, setSourceIndex, eitOptions }
 }
 
 function BillingNotePage() {
   const q = useBillingNoteState()
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
 
-  const handleSave = () => {
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const key = params.get("key")
+    const index = params.get("index")
+
+    if (key && index) {
+      q.setSourceKey(key)
+      q.setSourceIndex(index)
+
+      if (key === "api") {
+        fetch(`${API_BASE_URL}/api/billing_notes/${index}/`)
+          .then(res => res.json())
+          .then(data => {
+             q.setCustomer({
+               company: data.customer_name || "",
+               address: data.cus_address || "",
+               telephone: data.cus_phone || "",
+               fax: data.cus_fax || "",
+               attn: data.cus_attn || "",
+               div: data.cus_div || "",
+               mobile: data.cus_mobile || ""
+             })
+             q.setDetails(prev => ({
+               ...prev,
+               number: data.bn_code,
+               date: data.bn_created_date,
+               remark: data.bn_remark || "",
+               recipient: data.bn_recipient || "",
+               receivedDate: data.bn_recipient_receive_date || "",
+               chequeDate: data.bn_payee_date || "",
+               onBehalfOf: data.bn_behalf_of || "",
+               depositor: data.bn_name_biller || "",
+               salesPerson: data.eit_details?.organization_name || "",
+               eit: data.eit_details?.id || null,
+               eitAddress: data.eit_details?.address || "",
+               eitMobile: data.eit_details?.eit_mobile || "",
+               eitTelephone: data.eit_details?.eit_telephone || "",
+               eitFax: data.eit_details?.eit_fax || ""
+             }))
+             if (Array.isArray(data.items)) {
+                q.setItems(data.items)
+             }
+          })
+          .catch(err => console.error("Error loading BN:", err))
+      } else {
+        try {
+          const stored = JSON.parse(localStorage.getItem(key))
+          if (stored && stored.billingNotes && stored.billingNotes[index]) {
+            const bn = stored.billingNotes[index]
+            q.setCustomer(bn.customer || {})
+            q.setDetails(prev => ({ ...prev, ...bn.details }))
+            if (bn.items) {
+               q.setItems(bn.items)
+            }
+          }
+        } catch (e) {
+          console.error("Error loading from localStorage", e)
+        }
+      }
+    }
+  }, [])
+
+  const handleDownloadPdf = async () => {
+     try {
+       const itemsWithOutstanding = q.items.map(item => {
+          const amount = Number(String(item.amount).replace(/,/g, '')) || 0
+          const paid = Number(String(item.paid).replace(/,/g, '')) || 0
+          const outstanding = amount - paid
+          return {
+            ...item,
+            outstanding: outstanding
+          }
+       })
+
+       const detailsForPdf = {
+         ...q.details,
+         eit: null,
+         salesPerson: "",
+         eitAddress: "",
+         eitMobile: "",
+         eitTelephone: "",
+         eitFax: ""
+       }
+       const payload = {
+         customer: q.customer,
+         details: detailsForPdf,
+         items: itemsWithOutstanding,
+         totals: {
+           subtotal: q.total,
+           grandTotal: q.total,
+           thaiText: THBText(q.total)
+         }
+       }
+
+      const response = await fetch(`${API_BASE_URL}/api/generate-billing-note-pdf/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `BillingNote_${q.details.number || 'Draft'}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        setOpenCreateConfirm(false)
+      } else {
+        const errText = await response.text()
+        console.error("Error generating PDF", errText)
+        alert("Error generating PDF: " + errText)
+      }
+    } catch (error) {
+      console.error("Error downloading PDF:", error)
+      alert("Error downloading PDF")
+    }
+  }
+
+  const handleSave = async () => {
     try {
       const company = q.customer.company || "Unknown"
-      const key = `history:${company}`
       
-      let data = { customer: q.customer, quotations: [], invoices: [], billingNotes: [] }
-      try {
-        const existing = localStorage.getItem(key)
-        if (existing) {
-          data = JSON.parse(existing)
-        }
-      } catch (e) {}
-
-      if (!data.billingNotes) data.billingNotes = []
-      if (!data.customer || !data.customer.company) data.customer = q.customer
-
-      const newNote = {
-        id: Date.now(),
-        savedAt: new Date().toISOString(),
-        details: q.details,
-        items: q.items,
-        total: q.total,
-        totals: { total: q.total },
-        customerName: company
+      // Prepare payload for API
+      const payload = {
+        bn_code: q.details.number,
+        bn_created_date: q.details.date || new Date().toISOString().slice(0, 10),
+        bn_due_date: q.items[0]?.dueDate || null,
+        bn_amount: q.total, 
+        bn_paid_amount: 0,
+        bn_outstanding_balance: q.total,
+        bn_total: q.total,
+        bn_remark: q.details.remark,
+        bn_recipient: q.details.recipient,
+        bn_recipient_receive_date: q.details.receivedDate || null,
+        bn_payee_date: q.details.chequeDate || null,
+        bn_behalf_of: q.details.onBehalfOf,
+        bn_name_biller: q.details.depositor,
+        
+        customer_name: q.customer.company,
+        cus_address: q.customer.address,
+        cus_phone: q.customer.telephone,
+        cus_fax: q.customer.fax,
+        cus_attn: q.customer.attn,
+        cus_div: q.customer.div,
+        cus_mobile: q.customer.mobile,
+        
+        eit: q.details.eit,
+        eit_name: q.details.salesPerson,
+        eit_address: q.details.eitAddress,
+        eit_mobile: q.details.eitMobile,
+        eit_phone: q.details.eitTelephone,
+        eit_fax: q.details.eitFax,
+        
+        items: q.items
+      }
+      
+      let url = `${API_BASE_URL}/api/billing_notes/`
+      let method = 'POST'
+      
+      if (q.sourceKey === 'api' && q.sourceIndex) {
+          url = `${API_BASE_URL}/api/billing_notes/${q.sourceIndex}/`
+          method = 'PUT'
       }
 
-      data.billingNotes.push(newNote)
-      localStorage.setItem(key, JSON.stringify(data))
-      
-      alert("Billing Note saved successfully!")
-      window.location.href = "/admin.html"
+      const response = await fetch(url, {
+          method: method,
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+          alert("Billing Note saved successfully!")
+          window.location.href = "/admin.html"
+      } else {
+          const errData = await response.json()
+          console.error("Error saving billing note:", errData)
+          alert("Error saving billing note: " + JSON.stringify(errData))
+      }
     } catch (error) {
       console.error(error)
       alert("Error saving billing note")
@@ -311,16 +491,53 @@ function BillingNotePage() {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-               <select value={q.details.salesPerson} onChange={(e) => q.setDetails({ ...q.details, salesPerson: e.target.value, onBehalfOf: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none">
+               <select 
+                 value={q.details.eit || ""} 
+                 onChange={(e) => {
+                   const val = e.target.value
+                   if (!val) {
+                     q.setDetails({
+                       ...q.details,
+                       eit: null,
+                       salesPerson: "",
+                       onBehalfOf: "",
+                       eitAddress: "",
+                       eitMobile: "",
+                       eitTelephone: "",
+                       eitFax: ""
+                     })
+                     return
+                   }
+                   const selected = q.eitOptions.find(o => String(o.id) === val)
+                   if (selected) {
+                     q.setDetails({
+                       ...q.details,
+                       eit: selected.id,
+                       salesPerson: selected.organization_name,
+                       onBehalfOf: selected.organization_name,
+                       eitAddress: selected.address || "",
+                       eitMobile: selected.eit_mobile || "",
+                       eitTelephone: selected.eit_telephone || "",
+                       eitFax: selected.eit_fax || ""
+                     })
+                   }
+                 }} 
+                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+               >
                  <option value="">Select Organization</option>
-                 <option value="EIT LASERTECHNIK CO.,LTD">EIT LASERTECHNIK CO.,LTD</option>
-                 <option value="EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD">EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD</option>
+                 {q.eitOptions.map(opt => (
+                   <option key={opt.id} value={opt.id}>{opt.organization_name}</option>
+                 ))}
                </select>
              </div>
              <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+               <input value={q.details.eitMobile} onChange={(e) => q.setDetails({ ...q.details, eitMobile: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+             </div>
+           </div>
+           <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                <textarea value={q.details.eitAddress} onChange={(e) => q.setDetails({ ...q.details, eitAddress: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
-             </div>
            </div>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
@@ -539,11 +756,7 @@ function BillingNotePage() {
                 </button>
                 <button
                   className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
-                  onClick={() => {
-                    // Mock download functionality
-                    alert("Downloading form...")
-                    setOpenCreateConfirm(false)
-                  }}
+                  onClick={handleDownloadPdf}
                 >
                   Download Form
                 </button>

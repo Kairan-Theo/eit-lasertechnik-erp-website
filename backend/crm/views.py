@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer
 from datetime import date, timedelta
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -185,9 +185,20 @@ class DealViewSet(viewsets.ModelViewSet):
                 to_stage=updated_instance.stage
             )
 
+class EITViewSet(viewsets.ModelViewSet):
+    queryset = EIT.objects.all()
+    serializer_class = EITSerializer
+    permission_classes = [AllowAny]
+
 class QuotationViewSet(viewsets.ModelViewSet):
     queryset = Quotation.objects.all().order_by('-id')
     serializer_class = QuotationSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+class BillingNoteViewSet(viewsets.ModelViewSet):
+    queryset = BillingNote.objects.all().order_by('-bn_created_date')
+    serializer_class = BillingNoteSerializer
     authentication_classes = []
     permission_classes = [AllowAny]
 
@@ -612,3 +623,23 @@ def update_profile(request):
         'profile_picture': profile_pic_url
     })
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_default_eit(request):
+    # Try to find EIT LASERTECHNIK CO.,LTD or first one
+    eit = EIT.objects.filter(organization_name__icontains="EIT LASERTECHNIK").first()
+    if not eit:
+        eit = EIT.objects.first()
+    
+    if eit:
+        serializer = EITSerializer(eit)
+        return Response(serializer.data)
+    else:
+        # Return default structure if no DB record (should not happen due to migration)
+        return Response({
+            "organization_name": "EIT LASERTECHNIK CO.,LTD",
+            "eit_mobile": "000-000-0000",
+            "eit_telephone": "02-052-9544",
+            "eit_fax": "02-052-9544",
+            "address": "1/120 ซอยรามคําแหง 184 \n แขวงมีนบุรี เขตมีนบุรี \n กรุงเทพมหานคร 10510"
+        })
