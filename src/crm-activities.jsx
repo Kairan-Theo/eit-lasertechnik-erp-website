@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react"
 import { 
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, 
   eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, 
-  isToday 
+  isToday, parseISO 
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, MoreHorizontal, Check, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, MoreHorizontal, Check, X, CheckSquare, Clock, AlertCircle, Edit2, Sparkles, Type, Briefcase, ChevronDown } from "lucide-react"
 import { API_BASE_URL } from "./config"
 
 export default function CRMActivities({ deals = [], onDeleteActivity, onActivityUpdate }) {
@@ -14,6 +14,7 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
   const [editingActivity, setEditingActivity] = useState(null)
   const [formData, setFormData] = useState({
     activityName: "",
+    startAt: "",
     dueAt: "",
     dealId: ""
   })
@@ -23,12 +24,14 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
       if (editingActivity) {
         setFormData({
           activityName: editingActivity.activityName || "",
+          startAt: editingActivity.startAt || (editingActivity.date ? format(editingActivity.date, "yyyy-MM-dd'T'HH:mm") : ""),
           dueAt: editingActivity.date ? format(editingActivity.date, "yyyy-MM-dd'T'HH:mm") : "",
           dealId: editingActivity.dealId || ""
         })
       } else {
         setFormData({
           activityName: "",
+          startAt: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
           dueAt: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
           dealId: ""
         })
@@ -48,6 +51,15 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
 
   const handleSave = async (e) => {
     e.preventDefault()
+    
+    // Optimistic update for "Done" action
+    if (editingActivity) {
+        setOptimisticUpdates(prev => ({
+            ...prev,
+            [editingActivity.id]: true
+        }))
+    }
+
     try {
       const token = localStorage.getItem("authToken")
       const headers = {
@@ -63,8 +75,10 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
       
       const body = {
         activity_name: formData.activityName,
+        start_at: formData.startAt || null,
         due_at: formData.dueAt,
-        deal: formData.dealId
+        deal: formData.dealId,
+        ...(editingActivity ? { completed: true } : {})
       }
 
       const res = await fetch(url, {
@@ -98,11 +112,14 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
     (deal.activitySchedules || []).map(activity => ({
       ...activity,
       dealId: deal.id,
+      startAt: activity.startAt || "",
       date: activity.dueAt ? new Date(activity.dueAt) : null,
       // Apply optimistic update if exists, otherwise use server state
       completed: optimisticUpdates[activity.id] !== undefined ? optimisticUpdates[activity.id] : activity.completed
     }))
-  ).filter(a => a.date) // Only showing activities with dates
+  ).filter(a => a.date && !isNaN(a.date.getTime())) // Only showing activities with valid dates
+
+  const isValidDate = (d) => d instanceof Date && !isNaN(d.getTime())
 
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1))
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1))
@@ -279,25 +296,29 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
                             <div 
                                 key={i}
                                 className={`
-                                    group/item text-xs px-2 py-1.5 rounded-md flex items-center gap-2 transition-all hover:shadow-sm hover:scale-[1.02] cursor-pointer
+                                    group/item text-xs px-2 py-1.5 rounded-md flex flex-col gap-0.5 transition-all hover:shadow-md cursor-pointer border border-transparent hover:border-gray-100
                                     ${getEventColor(act)}
                                     ${act.completed ? 'opacity-50' : ''}
                                 `}
                                 title={`${act.activityName} - ${format(act.date, "p")} - ${act.customer}`}
                                 onClick={(e) => handleOpenEdit(act)}
                             >
-                                <button
-                                    type="button" 
-                                    className={`w-5 h-5 rounded-[4px] border border-current flex items-center justify-center shrink-0 ${act.completed ? 'bg-current' : 'bg-white/50'} cursor-pointer hover:scale-110 transition-transform focus:outline-none focus:ring-1 focus:ring-current`}
-                                    onClick={(e) => handleToggleComplete(act, e)}
-                                >
-                                    {/* Checkbox imitation */}
-                                    <Check className={`w-3.5 h-3.5 pointer-events-none ${act.completed ? 'text-white' : 'text-current'} ${act.completed ? '' : 'opacity-0 group-hover/item:opacity-100'}`} strokeWidth={3} />
-                                </button>
-                                <span className={`truncate font-medium flex-1 ${act.completed ? 'line-through opacity-70' : ''}`}>
-                                    {act.activityName || "Untitled"}
-                                </span>
-                                {act.date && <span className="opacity-70 text-[10px] whitespace-nowrap">{format(act.date, "HH:mm")}</span>}
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button" 
+                                        className={`w-4 h-4 rounded-[4px] border border-current flex items-center justify-center shrink-0 ${act.completed ? 'bg-current' : 'bg-white/50'} cursor-pointer hover:scale-110 transition-transform focus:outline-none focus:ring-1 focus:ring-current`}
+                                        onClick={(e) => handleToggleComplete(act, e)}
+                                    >
+                                        <Check className={`w-3 h-3 pointer-events-none ${act.completed ? 'text-white' : 'text-current'} ${act.completed ? '' : 'opacity-0 group-hover/item:opacity-100'}`} strokeWidth={3} />
+                                    </button>
+                                    <span className={`truncate font-medium flex-1 ${act.completed ? 'line-through opacity-70' : ''}`}>
+                                        {act.activityName || "Untitled"}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2 pl-6 opacity-75">
+                                    {/* Due date removed from card view as requested */}
+                                    {/* Assigned date removed from card view as requested */}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -307,79 +328,157 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h3 className="font-semibold text-lg text-gray-800">
-                {editingActivity ? "Edit Activity" : "New Activity"}
-              </h3>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-full hover:bg-gray-200 text-gray-500 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+          <div className="relative w-full max-w-lg">
+            {/* Creative Decorative Glows */}
+            <div className="absolute -top-20 -left-20 w-60 h-60 bg-blue-500/20 rounded-full blur-[100px] pointer-events-none"></div>
+            <div className="absolute -bottom-20 -right-20 w-60 h-60 bg-purple-500/20 rounded-full blur-[100px] pointer-events-none"></div>
+
+            {/* Main Creative Box Frame */}
+            <div className="relative p-[1px] rounded-[2.5rem] bg-gradient-to-br from-white/80 via-white/40 to-white/60 shadow-2xl backdrop-blur-3xl overflow-hidden">
+                <div className="bg-white/95 backdrop-blur-3xl rounded-[2.5rem] overflow-hidden relative h-full flex flex-col">
+                    {/* Header */}
+                    <div className="px-8 py-8 bg-gradient-to-b from-gray-50/50 to-transparent">
+                        <div className="flex items-start justify-between">
+                            <div className="flex gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#2D4485] to-[#3D56A6] flex items-center justify-center shadow-lg shadow-blue-900/20 text-white">
+                                    {editingActivity ? <Edit2 className="w-6 h-6" /> : <Sparkles className="w-6 h-6" />}
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
+                                        {editingActivity ? "Edit Activity" : "New Activity"}
+                                    </h3>
+                                    <p className="text-sm font-medium text-gray-500 mt-1">
+                                        {editingActivity ? "Update the details below" : "Schedule something amazing"}
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setIsModalOpen(false)}
+                                className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Form Content */}
+                    <form onSubmit={handleSave} className="px-8 pb-8 space-y-6 overflow-y-auto custom-scrollbar">
+                        {/* Activity Name */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Activity Name</label>
+                            <div className="relative group">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#2D4485] transition-colors">
+                                    <Type className="w-5 h-5" />
+                                </div>
+                                <input 
+                                    type="text" 
+                                    required
+                                    className="w-full pl-12 pr-4 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:bg-white focus:border-[#2D4485]/20 focus:ring-4 focus:ring-[#2D4485]/10 transition-all font-semibold text-gray-900 placeholder-gray-400"
+                                    placeholder="e.g. Call with John Doe"
+                                    value={formData.activityName}
+                                    onChange={e => setFormData({...formData, activityName: e.target.value})}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Dates Grid */}
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Assign Date */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-blue-600 uppercase tracking-wider ml-1 flex items-center gap-1">
+                                    <CalendarIcon className="w-3 h-3" /> Assign Date
+                                </label>
+                                <div className="relative group">
+                                    <input 
+                                        type="datetime-local" 
+                                        required
+                                        className="w-full px-4 py-3.5 rounded-2xl bg-blue-50/50 border-2 border-blue-100 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-sm font-bold text-blue-900"
+                                        value={formData.startAt}
+                                        onChange={e => setFormData({...formData, startAt: e.target.value})}
+                                    />
+                                </div>
+                                {formData.startAt && (() => {
+                                    const d = parseISO(formData.startAt)
+                                    return isValidDate(d) ? (
+                                        <p className="text-[10px] text-blue-600 font-medium mt-1 ml-1 flex items-center gap-1.5 animate-in slide-in-from-top-1 fade-in duration-200">
+                                            <span className="w-1 h-1 rounded-full bg-blue-500"></span>
+                                            {format(d, "EEE, MMM d, h:mm a")}
+                                        </p>
+                                    ) : null
+                                })()}
+                            </div>
+
+                            {/* Due Date */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-red-600 uppercase tracking-wider ml-1 flex items-center gap-1">
+                                    <Clock className="w-3 h-3" /> Due Date
+                                </label>
+                                <div className="relative group">
+                                    <input 
+                                        type="datetime-local" 
+                                        required
+                                        className="w-full px-4 py-3.5 rounded-2xl bg-red-50/50 border-2 border-red-100 focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all text-sm font-bold text-red-900"
+                                        value={formData.dueAt}
+                                        onChange={e => setFormData({...formData, dueAt: e.target.value})}
+                                    />
+                                </div>
+                                {formData.dueAt && (() => {
+                                    const d = parseISO(formData.dueAt)
+                                    return isValidDate(d) ? (
+                                        <p className="text-[10px] text-red-600 font-medium mt-1 ml-1 flex items-center gap-1.5 animate-in slide-in-from-top-1 fade-in duration-200">
+                                            <span className="w-1 h-1 rounded-full bg-red-500"></span>
+                                            {format(d, "EEE, MMM d, h:mm a")}
+                                        </p>
+                                    ) : null
+                                })()}
+                            </div>
+                        </div>
+
+                        {/* Deal Select */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Related Deal</label>
+                            <div className="relative group">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#2D4485] transition-colors">
+                                    <Briefcase className="w-5 h-5" />
+                                </div>
+                                <select 
+                                    required
+                                    className="w-full pl-12 pr-10 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:bg-white focus:border-[#2D4485]/20 focus:ring-4 focus:ring-[#2D4485]/10 transition-all font-semibold text-gray-900 appearance-none cursor-pointer"
+                                    value={formData.dealId}
+                                    onChange={e => setFormData({...formData, dealId: e.target.value})}
+                                    disabled={!!editingActivity}
+                                >
+                                    <option value="">Select a deal...</option>
+                                    {deals.map(deal => (
+                                        <option key={deal.id} value={deal.id}>{deal.title}</option>
+                                    ))}
+                                </select>
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                    <ChevronDown className="w-5 h-5" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Buttons */}
+                        <div className="pt-4 flex items-center justify-end gap-3">
+                            <button 
+                                type="button"
+                                onClick={() => setIsModalOpen(false)}
+                                className="px-6 py-3 rounded-xl text-sm font-bold text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                type="submit"
+                                className="px-8 py-3 rounded-xl bg-[#2D4485] text-white text-sm font-bold shadow-lg shadow-blue-900/20 hover:shadow-blue-900/40 hover:scale-[1.02] active:scale-95 transition-all"
+                            >
+                                {editingActivity ? "Done" : "Create Activity"}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
-            
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-gray-700">Activity Name</label>
-                <input 
-                  type="text" 
-                  required
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-colors"
-                  placeholder="e.g. Call customer"
-                  value={formData.activityName}
-                  onChange={e => setFormData({...formData, activityName: e.target.value})}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-gray-700">Due Date & Time</label>
-                <input 
-                  type="datetime-local" 
-                  required
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-colors"
-                  value={formData.dueAt}
-                  onChange={e => setFormData({...formData, dueAt: e.target.value})}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-gray-700">Deal / Customer</label>
-                <select 
-                  required
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-colors"
-                  value={formData.dealId}
-                  onChange={e => setFormData({...formData, dealId: e.target.value})}
-                  disabled={!!editingActivity} // Usually can't move activity between deals easily, or maybe we can?
-                >
-                  <option value="">Select a deal...</option>
-                  {deals.map(deal => (
-                    <option key={deal.id} value={deal.id}>
-                      {deal.title} {deal.customer ? `(${deal.customer})` : ""}
-                    </option>
-                  ))}
-                </select>
-                {editingActivity && <p className="text-xs text-gray-500">Deal cannot be changed for existing activity</p>}
-              </div>
-
-              <div className="pt-2 flex justify-end gap-3">
-                <button 
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-[#2D4485] hover:bg-[#1a2e66] rounded-lg shadow-sm transition-colors"
-                >
-                  {editingActivity ? "Save Changes" : "Create Activity"}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

@@ -1,6 +1,32 @@
-from crm.models import ActivitySchedule, Notification
+from crm.models import ActivitySchedule, Notification, Task
 from django.utils import timezone
 from datetime import timedelta
+
+def check_task_reminders():
+    """
+    Checks for tasks due tomorrow (24 hours from now if run at midnight)
+    and sends notifications.
+    """
+    now = timezone.now()
+    today = now.date()
+    tomorrow = today + timedelta(days=1)
+    
+    # Find tasks due tomorrow that haven't been reminded yet
+    # Exclude completed tasks
+    tasks = Task.objects.filter(
+        due_date=tomorrow,
+        reminder_sent=False
+    ).exclude(status='done')
+    
+    count = 0
+    for task in tasks:
+        msg = f"Reminder: Task '{task.title}' is due tomorrow ({task.due_date})."
+        Notification.objects.create(message=msg, type="alert")
+        task.reminder_sent = True
+        task.save()
+        count += 1
+        
+    return count
 
 def check_and_send_reminders():
     now = timezone.now()

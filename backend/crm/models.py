@@ -202,6 +202,7 @@ class ActivitySchedule(models.Model):
     activity_name = models.TextField(blank=True)
     salesperson = models.CharField(max_length=100, blank=True)
     customer = models.CharField(max_length=200, blank=True)
+    linked_task = models.ForeignKey('Task', null=True, blank=True, on_delete=models.SET_NULL, related_name='activities')
     completed = models.BooleanField(default=False)
     reminder_sent = models.BooleanField(default=False)
     reminder_day_sent = models.BooleanField(default=False)
@@ -281,6 +282,7 @@ class Task(models.Model):
     due_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='none')
+    reminder_sent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     def __str__(self):

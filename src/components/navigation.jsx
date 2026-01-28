@@ -1,7 +1,8 @@
 "use client"
 import React from "react"
 import { API_BASE_URL } from "../config"
-import { User, LogOut, ChevronDown, Lock, Edit, Bell } from "lucide-react"
+import { User, LogOut, ChevronDown, Lock, Edit, Bell, Clock, AlertCircle, Check, Info } from "lucide-react"
+import { format } from "date-fns"
 import {
   Dialog,
   DialogContent,
@@ -30,7 +31,9 @@ export default function Navigation() {
 
   const [user, setUser] = React.useState(null)
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false)
+  const [isNotificationOpen, setIsNotificationOpen] = React.useState(false)
   const dropdownRef = React.useRef(null)
+  const notificationRef = React.useRef(null)
   const [isAuthenticated, setIsAuthenticated] = React.useState(false)
 
   const [isEditProfileOpen, setIsEditProfileOpen] = React.useState(false)
@@ -138,6 +141,9 @@ export default function Navigation() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false)
       }
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setIsNotificationOpen(false)
+      }
     }
 
     document.addEventListener("mousedown", handleClickOutside)
@@ -157,10 +163,84 @@ export default function Navigation() {
 
   const [dueCount, setDueCount] = React.useState(0)
   const [notificationsCount, setNotificationsCount] = React.useState(0)
+  const [notifications, setNotifications] = React.useState([])
+
+  const markAsRead = async (id, e) => {
+    if (e) e.stopPropagation()
+    
+    // Optimistic update
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+    setNotificationsCount(prev => Math.max(0, prev - 1))
+    
+    // Always try to update local storage if item exists
+    try {
+      const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const list = Array.isArray(raw) ? raw : []
+      if (list.some(n => n.id === id)) {
+        const next = list.map(n => n.id === id ? { ...n, unread: false } : n)
+        localStorage.setItem("notifications", JSON.stringify(next))
+      }
+    } catch {}
+
+    try {
+      const token = localStorage.getItem("authToken")
+      if (token) {
+        await fetch(`${API_BASE_URL}/api/notifications/read/`, {
+          method: "POST",
+          headers: { 
+              "Authorization": `Token ${token}`,
+              "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ id })
+        })
+      }
+      window.dispatchEvent(new Event("notificationUpdated"))
+    } catch (err) {
+      console.error("Failed to mark as read", err)
+    }
+  }
+
+  const markAllRead = async () => {
+    // Optimistic update
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    setNotificationsCount(0)
+
+    // Always update local storage
+    try {
+      const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+      const list = Array.isArray(raw) ? raw : []
+      const next = list.map(n => ({ ...n, unread: false }))
+      localStorage.setItem("notifications", JSON.stringify(next))
+    } catch {}
+
+    try {
+      const token = localStorage.getItem("authToken")
+      if (token) {
+        const unread = notifications.filter(n => !n.is_read)
+        if (unread.length > 0) {
+            await Promise.all(unread.map(n => 
+            fetch(`${API_BASE_URL}/api/notifications/read/`, {
+                method: "POST",
+                headers: { 
+                    "Authorization": `Token ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ id: n.id })
+            })
+            ))
+        }
+      }
+      window.dispatchEvent(new Event("notificationUpdated"))
+    } catch (err) {
+      console.error("Failed to mark all as read", err)
+    }
+  }
+
   React.useEffect(() => {
     if (!isAuthenticated) {
       setDueCount(0)
       setNotificationsCount(0)
+      setNotifications([])
     }
     const compute = () => {
       try {
@@ -191,8 +271,16 @@ export default function Navigation() {
             const local = Array.isArray(raw) ? raw : []
             const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
             setNotificationsCount(unread)
+            setNotifications(local.map(n => ({
+              id: n.id,
+              message: n.message,
+              created_at: n.timestamp || n.created_at,
+              is_read: !n.unread,
+              type: n.type || "info"
+            })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
           } catch {
             setNotificationsCount(0)
+            setNotifications([])
           }
           return
         }
@@ -240,6 +328,7 @@ export default function Navigation() {
 
               const unread = list.reduce((acc, n) => acc + (n && n.is_read === false ? 1 : 0), 0)
               setNotificationsCount(unread)
+              setNotifications(list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
               return
             }
             try {
@@ -247,8 +336,16 @@ export default function Navigation() {
               const local = Array.isArray(raw) ? raw : []
               const unread = local.reduce((acc, n) => acc + (n && n.unread === true ? 1 : 0), 0)
               setNotificationsCount(unread)
+              setNotifications(local.map(n => ({
+                id: n.id,
+                message: n.message,
+                created_at: n.timestamp || n.created_at,
+                is_read: !n.unread,
+                type: n.type || "info"
+              })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
             } catch {
               setNotificationsCount(0)
+              setNotifications([])
             }
           })
           .catch(() => {
@@ -260,13 +357,22 @@ export default function Navigation() {
               const local = Array.isArray(raw) ? raw : []
               const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
               setNotificationsCount(unread)
+              setNotifications(local.map(n => ({
+                id: n.id,
+                message: n.message,
+                created_at: n.timestamp || n.created_at,
+                is_read: !n.unread,
+                type: n.type || "info"
+              })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
             } catch {
               setNotificationsCount(0)
+              setNotifications([])
             }
           })
       } catch {
         setDueCount(0)
         setNotificationsCount(0)
+        setNotifications([])
       }
     }
     compute()
@@ -303,21 +409,88 @@ export default function Navigation() {
             </a>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-4">
             {isAuthenticated && (
-              <button
-                onClick={() => (window.location.href = "/notification.html")}
-                className="relative inline-flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition"
-                aria-label="Due notifications"
-                title={notificationsCount > 0 ? `${notificationsCount} notifications` : "No notifications"}
-              >
-                <Bell className="w-6 h-6" />
-                {notificationsCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white font-bold ring-2 ring-red-300">
-                    {notificationsCount}
-                  </span>
+              <div className="relative" ref={notificationRef}>
+                <button
+                  onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                  className={`relative inline-flex items-center justify-center w-10 h-10 rounded-full transition ${isNotificationOpen ? 'bg-white/20' : 'hover:bg-white/10'}`}
+                  aria-label="Due notifications"
+                  title={notificationsCount > 0 ? `${notificationsCount} notifications` : "No notifications"}
+                >
+                  <Bell className="w-6 h-6" />
+                  {notificationsCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white font-bold ring-2 ring-red-300">
+                      {notificationsCount}
+                    </span>
+                  )}
+                </button>
+
+                {isNotificationOpen && (
+                    <div className="absolute right-0 mt-2 w-[400px] bg-white rounded-xl shadow-2xl overflow-hidden ring-1 ring-black/5 z-50 origin-top-right animate-in fade-in zoom-in-95 duration-200">
+                         {/* Header */}
+                         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                             <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
+                             <div className="flex items-center gap-2">
+                                 <button onClick={markAllRead} className="text-xs text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed" disabled={notificationsCount === 0}>
+                                    Mark all as read
+                                 </button>
+                             </div>
+                         </div>
+                         
+                         {/* List */}
+                         <div className="max-h-[400px] overflow-y-auto">
+                            {notifications.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                                    <div className="bg-gray-100 p-3 rounded-full mb-3">
+                                         <Bell className="w-6 h-6 text-gray-400" />
+                                    </div>
+                                    <p className="text-sm text-gray-500 font-medium">No notifications yet</p>
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-gray-50">
+                                    {notifications.map(n => (
+                                        <div 
+                                          key={n.id} 
+                                          className={`flex gap-4 p-4 hover:bg-gray-50 transition-colors cursor-pointer group ${!n.is_read ? 'bg-blue-50/30' : ''}`} 
+                                          onClick={(e) => markAsRead(n.id, e)}
+                                        >
+                                            {/* Icon */}
+                                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${n.type === 'alert' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                 {n.type === 'alert' ? <AlertCircle className="w-5 h-5" /> : <Info className="w-5 h-5" />}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                 <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+                                                    {n.message}
+                                                 </p>
+                                                 <p className="text-xs text-gray-400 mt-1">
+                                                    {(() => {
+                                                        try {
+                                                            return format(new Date(n.created_at), "MMM d, h:mm a")
+                                                        } catch {
+                                                            return "Just now"
+                                                        }
+                                                    })()}
+                                                 </p>
+                                            </div>
+                                            {!n.is_read && (
+                                                <div className="flex-shrink-0 self-center">
+                                                    <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                         </div>
+
+                         {/* Footer */}
+                         <div className="p-2 border-t border-gray-100 bg-gray-50 text-center">
+                             <a href="/notification.html" className="text-xs font-medium text-blue-600 hover:text-blue-700 block w-full py-1">View all notifications</a>
+                         </div>
+                    </div>
                 )}
-              </button>
+              </div>
             )}
             
             {user ? (

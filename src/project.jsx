@@ -665,122 +665,150 @@ function ProjectApp() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white w-[500px] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h3 className="font-bold text-lg text-gray-800">{editingId ? 'Edit Project' : draftParentId ? 'New Subtask' : 'New Project'}</h3>
-                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                        <X size={20} />
-                    </button>
-                </div>
-                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Name</label>
-                        <input 
-                            autoFocus
-                            type="text" 
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium"
-                            placeholder="e.g. Design Phase"
-                            value={draft.name}
-                            onChange={e => setDraft({...draft, name: e.target.value})}
-                        />
-                    </div>
-                    
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Description</label>
-                        <textarea 
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium min-h-[80px] resize-none"
-                            placeholder="Add project details..."
-                            value={draft.description}
-                            onChange={e => setDraft({...draft, description: e.target.value})}
-                        />
-                    </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4 animate-in fade-in duration-200">
+            <div className="relative w-full max-w-md group">
+                {/* Creative Decorative Glows */}
+                <div className="absolute -top-12 -left-12 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-all duration-700"></div>
+                <div className="absolute -bottom-12 -right-12 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl group-hover:bg-purple-500/30 transition-all duration-700"></div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Priority</label>
-                            <select 
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium"
-                                value={draft.priority}
-                                onChange={e => setDraft({...draft, priority: e.target.value})}
+                {/* Main Creative Box Frame */}
+                <div className="relative p-[2px] rounded-[2rem] bg-gradient-to-br from-white/80 via-white/20 to-white/60 shadow-2xl backdrop-blur-3xl">
+                    <div className="bg-white/90 backdrop-blur-2xl rounded-[1.9rem] overflow-hidden relative h-full">
+                        {/* Inner Bevel Border */}
+                        <div className="absolute inset-0 rounded-[1.9rem] border border-white/50 pointer-events-none z-10"></div>
+
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-gray-100/50 flex justify-between items-center relative z-20 bg-gradient-to-r from-white/50 to-transparent">
+                            <h3 className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
+                                {editingId ? 'Edit Project' : draftParentId ? 'New Subtask' : 'New Project'}
+                            </h3>
+                            <button 
+                                onClick={() => setIsModalOpen(false)} 
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white/80 hover:shadow-sm transition-all duration-300"
                             >
-                                <option value="low">Low</option>
-                                <option value="medium">Medium</option>
-                                <option value="high">High</option>
-                            </select>
+                                <X size={20} />
+                            </button>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Budget</label>
-                            <input 
-                                type="number" 
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium"
-                                placeholder="0.00"
-                                value={draft.budget}
-                                onChange={e => setDraft({...draft, budget: e.target.value})}
-                            />
-                        </div>
-                    </div>
 
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Assignee</label>
-                        <input 
-                            type="text" 
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium"
-                            placeholder="e.g. John Doe"
-                            value={draft.assignee}
-                            onChange={e => setDraft({...draft, assignee: e.target.value})}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Start Date</label>
-                            <input 
-                                type="date" 
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium"
-                                value={draft.start}
-                                onChange={e => setDraft({...draft, start: e.target.value})}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">End Date</label>
-                            <input 
-                                type="date" 
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm font-medium"
-                                value={draft.end}
-                                onChange={e => setDraft({...draft, end: e.target.value})}
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Color</label>
-                        <div className="flex gap-2">
-                            {COLORS.map(c => (
-                                <button 
-                                    key={c.hex}
-                                    className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${draft.color === c.hex ? 'border-gray-900 scale-110' : 'border-transparent'}`}
-                                    style={{ backgroundColor: c.hex }}
-                                    onClick={() => setDraft({...draft, color: c.hex})}
-                                    title={c.name}
+                        {/* Content */}
+                        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar relative z-20">
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Name</label>
+                                <input 
+                                    autoFocus
+                                    type="text" 
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
+                                    placeholder="e.g. Design Phase"
+                                    value={draft.name}
+                                    onChange={e => setDraft({...draft, name: e.target.value})}
                                 />
-                            ))}
+                            </div>
+                            
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Description</label>
+                                <textarea 
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium min-h-[60px] resize-none shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
+                                    placeholder="Add project details..."
+                                    value={draft.description}
+                                    onChange={e => setDraft({...draft, description: e.target.value})}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Priority</label>
+                                    <div className="relative">
+                                        <select 
+                                            className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium appearance-none shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] cursor-pointer"
+                                            value={draft.priority}
+                                            onChange={e => setDraft({...draft, priority: e.target.value})}
+                                        >
+                                            <option value="low">Low</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="high">High</option>
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <ChevronDown size={14} />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Budget</label>
+                                    <input 
+                                        type="number" 
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
+                                        placeholder="0.00"
+                                        value={draft.budget}
+                                        onChange={e => setDraft({...draft, budget: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Assignee</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
+                                    placeholder="e.g. John Doe"
+                                    value={draft.assignee}
+                                    onChange={e => setDraft({...draft, assignee: e.target.value})}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Start Date</label>
+                                    <input 
+                                        type="date" 
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
+                                        value={draft.start}
+                                        onChange={e => setDraft({...draft, start: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">End Date</label>
+                                    <input 
+                                        type="date" 
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
+                                        value={draft.end}
+                                        onChange={e => setDraft({...draft, end: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Color Tag</label>
+                                <div className="flex gap-3 p-2 bg-white/50 rounded-xl border border-gray-200/60 w-fit">
+                                    {COLORS.map(c => (
+                                        <button 
+                                            key={c.hex}
+                                            className={`w-6 h-6 rounded-full border-2 transition-all duration-300 hover:scale-110 shadow-sm ${draft.color === c.hex ? 'border-gray-900 scale-110 shadow-md ring-2 ring-gray-100' : 'border-transparent'}`}
+                                            style={{ backgroundColor: c.hex }}
+                                            onClick={() => setDraft({...draft, color: c.hex})}
+                                            title={c.name}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-100/50 flex justify-end gap-3 relative z-20 backdrop-blur-sm">
+                            <button 
+                                onClick={() => setIsModalOpen(false)}
+                                className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700 hover:bg-white rounded-xl transition-all border border-transparent hover:border-gray-200 hover:shadow-sm"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={saveProject}
+                                disabled={!draft.name || !draft.start || !draft.end}
+                                className="relative overflow-hidden px-6 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none group/btn"
+                            >
+                                <span className="relative z-10">{editingId ? 'Update Changes' : draftParentId ? 'Add Task' : 'Create Project'}</span>
+                                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
+                            </button>
                         </div>
                     </div>
-                </div>
-                <div className="p-4 bg-gray-50 flex justify-end gap-3">
-                    <button 
-                        onClick={() => setIsModalOpen(false)}
-                        className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-200/50 rounded-lg transition-colors"
-                    >
-                        Cancel
-                    </button>
-                    <button 
-                        onClick={saveProject}
-                        disabled={!draft.name || !draft.start || !draft.end}
-                        className="px-6 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                        {editingId ? 'Update' : draftParentId ? 'Add Task' : 'Create Project'}
-                    </button>
                 </div>
             </div>
         </div>

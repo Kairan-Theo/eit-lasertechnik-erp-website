@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
 import { Trash, CheckCheck } from "lucide-react"
+import { format } from "date-fns"
 import "./index.css"
 import { API_BASE_URL } from "./config"
 import { Toaster } from "../components/ui/toaster"
@@ -304,7 +305,13 @@ function NotificationsPage() {
                         {n.message}
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
-                        {new Date(n.created_at).toLocaleString()}
+                        {(() => {
+                            try {
+                                return format(new Date(n.created_at), "MMM d, h:mm a")
+                            } catch {
+                                return "Just now"
+                            }
+                        })()}
                       </p>
                     </div>
 
