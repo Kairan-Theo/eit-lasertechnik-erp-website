@@ -15,6 +15,7 @@ from datetime import datetime
 
 # Define BASE_DIR
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PUBLIC_DIR = os.path.join(BASE_DIR, '..', 'public')
 
 # Font Configuration
 FONT_PATH = os.path.join(BASE_DIR, 'Prompt-Regular.ttf')
@@ -114,9 +115,9 @@ def generate_quotation_pdf(request):
     # Try to load logo
     organization = details.get('salesPerson', '')
     if "EINSTEIN" in str(organization).upper():
-        logo_path = r'd:\EIT_ERT_s\eit-lasertechnik-erp-website\public\Einstein header.png'
+        logo_path = os.path.join(PUBLIC_DIR, 'Einstein header.png')
     else:
-        logo_path = r'd:\EIT_ERT_s\eit-lasertechnik-erp-website\public\EIT header.png'
+        logo_path = os.path.join(PUBLIC_DIR, 'EIT header.png')
 
     if os.path.exists(logo_path):
         # Adjust width/height as needed. A4 width is ~595 points.
