@@ -195,13 +195,56 @@
 }
 
 @media print {
+  /* hide everything */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* show only invoice area */
+  #invoiceArea,
+  #invoiceArea * {
+    visibility: visible !important;
+  }
+
+  /* move invoice to top-left for printing */
+  #invoiceArea {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* optional: remove shadows/borders that look bad on paper */
+  #invoiceArea {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Ensure background colors print */
   html, body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     background: white !important;
   }
-  @page {
-    size: A4;
-    margin: 12mm;
-  }
+}
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+/* User-defined invoice header styles */
+.invoice-header-right { 
+  width: 220px;        /* adjust to your design */ 
+  height: 70px; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+} 
+
+.invoice-header-right img { 
+  max-width: 100%; 
+  max-height: 100%; 
+  object-fit: contain; /* 👈 keeps ONE image, no repeat */ 
+  display: block; 
 }

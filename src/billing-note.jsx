@@ -5,6 +5,7 @@ import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
 import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText } from "lucide-react"
+import html2pdf from "html2pdf.js"
 import "./index.css"
 
 function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
@@ -217,6 +218,29 @@ function useBillingNoteState() {
 
   const total = items.reduce((sum, it) => sum + ((Number(String(it.amount).replace(/,/g, '')) || 0) - (Number(String(it.paid).replace(/,/g, '')) || 0)), 0)
 
+  // Load from URL
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const key = params.get("key")
+    const index = params.get("index")
+
+    if (key && index !== null) {
+      try {
+        const historyItem = JSON.parse(localStorage.getItem(key))
+        if (historyItem && Array.isArray(historyItem.billingNotes)) {
+          const bn = historyItem.billingNotes[parseInt(index, 10)]
+          if (bn) {
+            setCustomer(bn.customer || {})
+            setDetails(bn.details || {})
+            setItems(Array.isArray(bn.items) ? bn.items : [])
+          }
+        }
+      } catch (e) {
+        console.error("Error loading billing note from URL", e)
+      }
+    }
+  }, [])
+
   const addItem = () => setItems((prev) => [...prev, { invoiceNo: "", date: "", dueDate: "", amount: 0, paid: 0 }])
   const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, value) =>
@@ -226,7 +250,30 @@ function useBillingNoteState() {
       ),
     )
 
-  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total }
+  const exportPdf = async () => {
+    const el = document.getElementById("billing-note-document")
+    if (!el) return
+    const opt = { margin: 10, filename: `BillingNote_${details.number}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }
+    const clone = el.cloneNode(true)
+    clone.style.position = "fixed"
+    clone.style.left = "-10000px"
+    clone.style.top = "0"
+    clone.style.display = "block"
+    clone.style.background = "#ffffff"
+    clone.classList.remove("hidden")
+    clone.removeAttribute("aria-hidden")
+    document.body.appendChild(clone)
+    try {
+      await html2pdf().set(opt).from(clone).save()
+    } catch (err) {
+      console.error("PDF generation failed", err)
+      window.print()
+    } finally {
+      document.body.removeChild(clone)
+    }
+  }
+
+  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total, exportPdf }
 }
 
 function BillingNotePage() {
@@ -540,8 +587,7 @@ function BillingNotePage() {
                 <button
                   className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
                   onClick={() => {
-                    // Mock download functionality
-                    alert("Downloading form...")
+                    q.exportPdf()
                     setOpenCreateConfirm(false)
                   }}
                 >
@@ -553,9 +599,187 @@ function BillingNotePage() {
         </div>
       )}
 
+      {/* Hidden printable document */}
+      <div id="billing-note-document" className="hidden" aria-hidden="true">
+        <BillingNoteDocument bn={{ customer: q.customer, details: q.details, items: q.items, total: q.total }} />
+      </div>
 
       </div>
     </main>
+  )
+}
+
+function BillingNoteDocument({ bn }) {
+  const orgName = bn.details.salesPerson || "EIT LASERTECHNIK CO.,LTD"
+  const orgAddress = bn.details.eitAddress || ""
+  const orgTel = bn.details.eitTelephone || ""
+  const orgFax = bn.details.eitFax || ""
+  const customerName = bn.customer.company || ""
+  const customerAddress = bn.customer.address || ""
+  const issueDate = bn.details.date || ""
+  const recipient = bn.details.recipient || ""
+  const receivedDate = bn.details.receivedDate || ""
+  const chequeDate = bn.details.chequeDate || ""
+  const onBehalfOf = bn.details.onBehalfOf || ""
+  const depositor = bn.details.depositor || ""
+
+  return (
+    <div className="mx-auto bg-white text-[11px] leading-snug text-black border border-black p-4 w-[794px] h-[1123px] relative">
+      <div className="flex">
+        <div className="w-2/3 pr-2">
+          <div className="flex items-start gap-3">
+            <div className="w-16 h-16 border border-black flex items-center justify-center overflow-hidden">
+              <img src="/eit-icon.png" alt="EIT" className="w-12 h-12 object-contain" />
+            </div>
+            <div className="flex-1">
+              <div className="font-bold text-[12px]">{orgName}</div>
+              <div className="whitespace-pre-line">{orgAddress}</div>
+              <div>{orgTel && `TEL.: ${orgTel}`}</div>
+              <div>{orgFax && `FAX.: ${orgFax}`}</div>
+            </div>
+          </div>
+        </div>
+        <div className="w-1/3 pl-2">
+          <div className="border border-black text-center py-2">
+            <div className="font-bold text-[12px]">ใบวางบิล</div>
+            <div className="font-bold text-[12px]">BILLING NOTE</div>
+          </div>
+          <div className="border border-black border-t-0 px-2 py-1 flex justify-between">
+            <div className="text-[11px]">ต้นฉบับ</div>
+            <div className="text-[11px] font-semibold">Original</div>
+          </div>
+          <div className="border border-black border-t-0 px-2 py-1 text-[11px]">
+            <div className="flex justify-between">
+              <span>เลขที่ (No.)</span>
+              <span className="font-semibold">{bn.details.number}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>วันที่ (Date)</span>
+              <span className="font-semibold">{issueDate}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2 border border-black">
+        <div className="flex">
+          <div className="w-full px-2 py-1">
+            <div className="flex">
+              <div className="w-24 text-[11px]">ชื่อลูกค้า (Customer)</div>
+              <div className="font-semibold">{customerName}</div>
+            </div>
+            <div className="flex">
+              <div className="w-24 text-[11px]">ที่อยู่ (Address)</div>
+              <div className="whitespace-pre-line flex-1">{customerAddress}</div>
+            </div>
+            <div className="flex mt-1">
+              <div className="w-1/2 flex">
+                 <div className="w-24 text-[11px]">โทรศัพท์ (Tel)</div>
+                 <div>{bn.customer.telephone}</div>
+              </div>
+              <div className="w-1/2 flex">
+                 <div className="w-24 text-[11px]">แฟกซ์ (Fax)</div>
+                 <div>{bn.customer.fax}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2 min-h-[400px]">
+        <table className="w-full border-collapse text-[11px]">
+          <thead>
+            <tr>
+              <th className="border border-black px-1 py-1 w-10 text-center">ลำดับ<br/>No.</th>
+              <th className="border border-black px-1 py-1 text-center">เลขที่ใบกำกับ<br/>Invoice No.</th>
+              <th className="border border-black px-1 py-1 text-center w-24">วันที่<br/>Date</th>
+              <th className="border border-black px-1 py-1 text-center w-24">ครบกำหนด<br/>Due Date</th>
+              <th className="border border-black px-1 py-1 text-right w-28">จำนวนเงิน<br/>Amount</th>
+              <th className="border border-black px-1 py-1 text-right w-28">ยอดคงค้าง<br/>Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bn.items.map((item, i) => {
+               const amt = Number(String(item.amount).replace(/,/g, '')) || 0
+               const paid = Number(String(item.paid).replace(/,/g, '')) || 0
+               const balance = amt - paid
+               return (
+              <tr key={i}>
+                <td className="border-l border-r border-black px-1 py-1 text-center">{i + 1}</td>
+                <td className="border-l border-r border-black px-1 py-1">{item.invoiceNo}</td>
+                <td className="border-l border-r border-black px-1 py-1 text-center">{item.date}</td>
+                <td className="border-l border-r border-black px-1 py-1 text-center">{item.dueDate}</td>
+                <td className="border-l border-r border-black px-1 py-1 text-right">{amt.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                <td className="border-l border-r border-black px-1 py-1 text-right">{balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+              </tr>
+            )})}
+            {/* Fill empty rows */}
+            {Array.from({ length: Math.max(0, 15 - bn.items.length) }).map((_, i) => (
+              <tr key={`empty-${i}`}>
+                <td className="border-l border-r border-black px-1 py-1 text-center">&nbsp;</td>
+                <td className="border-l border-r border-black px-1 py-1">&nbsp;</td>
+                <td className="border-l border-r border-black px-1 py-1">&nbsp;</td>
+                <td className="border-l border-r border-black px-1 py-1">&nbsp;</td>
+                <td className="border-l border-r border-black px-1 py-1">&nbsp;</td>
+                <td className="border-l border-r border-black px-1 py-1">&nbsp;</td>
+              </tr>
+            ))}
+            <tr className="border-t border-black">
+              <td colSpan={4} className="border border-black px-1 py-1 text-right font-bold">รวมเงิน (Total)</td>
+              <td colSpan={2} className="border border-black px-1 py-1 text-right font-bold">
+                 {bn.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={6} className="border border-black px-1 py-1 bg-gray-100 font-bold text-center">
+                 ({THBText(bn.total)})
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-4 border border-black p-2 flex">
+         <div className="w-1/2 pr-2 border-r border-black">
+            <div className="font-bold mb-2 underline">สำหรับลูกค้า (For Customer)</div>
+            <div className="flex mb-1">
+               <div className="w-24">ชื่อผู้รับวางบิล:</div>
+               <div className="border-b border-black border-dotted flex-1 text-center">{recipient}</div>
+            </div>
+            <div className="flex mb-1">
+               <div className="w-24">วันที่รับ:</div>
+               <div className="border-b border-black border-dotted flex-1 text-center">{receivedDate ? format(parseISO(receivedDate), "dd/MM/yyyy") : ""}</div>
+            </div>
+            <div className="flex mb-1">
+               <div className="w-24">วันที่นัดรับเช็ค:</div>
+               <div className="border-b border-black border-dotted flex-1 text-center">{chequeDate ? format(parseISO(chequeDate), "dd/MM/yyyy") : ""}</div>
+            </div>
+            <div className="flex mb-1">
+               <div className="w-24">ในนาม:</div>
+               <div className="border-b border-black border-dotted flex-1 text-center">{onBehalfOf}</div>
+            </div>
+            <div className="mt-8 text-center">
+               (......................................................)
+               <div className="text-[10px]">ผู้รับวางบิล / Receiver</div>
+            </div>
+         </div>
+         <div className="w-1/2 pl-2">
+            <div className="font-bold mb-2 underline">สำหรับบริษัท (For Company)</div>
+            <div className="flex mb-1">
+               <div className="w-24">ชื่อผู้วางบิล:</div>
+               <div className="border-b border-black border-dotted flex-1 text-center">{depositor}</div>
+            </div>
+            <div className="flex mb-1">
+               <div className="w-24">วันที่:</div>
+               <div className="border-b border-black border-dotted flex-1 text-center">{issueDate ? format(parseISO(issueDate), "dd/MM/yyyy") : ""}</div>
+            </div>
+            <div className="mt-12 text-center">
+               (......................................................)
+               <div className="text-[10px]">ผู้วางบิล / Collector</div>
+            </div>
+         </div>
+      </div>
+    </div>
   )
 }
 

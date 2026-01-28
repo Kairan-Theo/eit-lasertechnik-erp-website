@@ -327,15 +327,15 @@ export default function Navigation() {
                   className="flex items-center gap-2 hover:bg-white/10 rounded-full pl-1 pr-3 py-1 transition"
                 >
                   <img
-                    src={user.profile_picture || "/jn.jpg"}
+                    src={user.profile_picture}
                     alt="Profile"
-                    className="w-8 h-8 rounded-full object-cover bg-white shadow-sm"
+                    className={`w-8 h-8 rounded-full object-cover bg-white shadow-sm ${!user.profile_picture ? 'hidden' : ''}`}
                     onError={(e) => {
                       e.target.style.display = 'none';
                       e.target.nextSibling.style.display = 'flex';
                     }}
                   />
-                  <div className="w-8 h-8 rounded-full bg-white text-[#2D4485] flex items-center justify-center font-bold text-sm shadow-sm hidden">
+                  <div className={`w-8 h-8 rounded-full bg-white text-[#2D4485] flex items-center justify-center font-bold text-sm shadow-sm ${user.profile_picture ? 'hidden' : 'flex'}`}>
                     {user.name ? user.name.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : "U")}
                   </div>
                   <div className="hidden sm:block text-left">
