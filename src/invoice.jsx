@@ -355,6 +355,18 @@ function useInvoiceState() {
     clone.style.background = "#ffffff"
     clone.classList.remove("hidden")
     clone.removeAttribute("aria-hidden")
+    
+    // Force PDF layout to match Print layout
+    const printPage = clone.querySelector(".print-page")
+    if (printPage) {
+      printPage.style.width = "210mm"
+      printPage.style.height = "297mm"
+      printPage.style.padding = "0"
+      printPage.style.margin = "0"
+      printPage.style.overflow = "hidden"
+      printPage.style.backgroundColor = "white"
+    }
+
     document.body.appendChild(clone)
     
     // Wait for images to load
@@ -480,7 +492,7 @@ function InvoiceDocument({ inv }) {
   const headerImgSrc = window.location.origin + (isEinstein ? "/Einstein%20header.png" : "/EIT%20header.png")
 
   return (
-    <div className="mx-auto bg-white text-black font-sans p-[15px] w-[794px] h-auto relative text-[11px] leading-tight">
+    <div className="mx-auto bg-white text-black font-sans p-[10px] w-full h-auto relative text-[10px] leading-tight">
       {/* Header Image */}
       <div className="mb-1 flex items-center justify-center">
         <img src={headerImgSrc} alt="Header" className="w-full h-auto object-contain" />
@@ -489,7 +501,7 @@ function InvoiceDocument({ inv }) {
       {/* Row 1: Company Info & Doc Info */}
       <div className="flex justify-between items-start mb-1">
          {/* Left: Company Info Box */}
-         <div className="border border-black p-2 w-[60%] min-h-[90px]">
+         <div className="border border-black p-2 w-[60%] min-h-[80px]">
             <div className="font-bold text-xs">{orgThaiName}</div>
             <div className="font-bold text-xs">{orgName}</div>
             <div className="mt-1">{orgAddressLine1}</div>
@@ -572,7 +584,7 @@ function InvoiceDocument({ inv }) {
       </div>
 
       {/* Row 3: Table Header */}
-      <div className="border border-black border-b-0 flex text-center font-bold text-xs bg-gray-100">
+      <div className="border border-black border-b-0 flex text-center font-bold text-xs bg-gray-100 mt-[6mm]">
          <div className="w-[55%] border-r border-black p-1">
             <div>รายการ</div>
             <div>Description</div>
@@ -596,7 +608,7 @@ function InvoiceDocument({ inv }) {
       </div>
 
       {/* Row 4: Table Content */}
-      <div className="border border-black flex flex-col min-h-[150px] relative"> 
+      <div className="border border-black flex flex-col relative"> 
          {/* Loop Items */}
          {inv.items.map((item, i) => (
             <div key={i} className="flex text-xs z-10">
@@ -712,6 +724,7 @@ function InvoicePage() {
   }
 
   return (
+    <>
     <main className="min-h-screen bg-gray-50">
       <Navigation />
       <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
@@ -962,14 +975,18 @@ function InvoicePage() {
         )}
 
         {/* Hidden Document for PDF */}
-        <div id="invoiceArea">
-          <div className="mt-8 print:mt-0 hidden print:block" id="invoice-document" aria-hidden="true">
-            <InvoiceDocument inv={inv} />
-          </div>
-        </div>
-
       </div>
     </main>
+    <div id="invoiceArea">
+      <div className="hidden print:block" id="invoice-document" aria-hidden="true">
+        <div className="print-page">
+           <div className="invoice">
+              <InvoiceDocument inv={inv} />
+           </div>
+        </div>
+      </div>
+    </div>
+    </>
   )
 }
 
