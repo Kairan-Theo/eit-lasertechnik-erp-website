@@ -202,17 +202,23 @@ function useInvoiceState() {
     notes: "",
     paymentTermsDays: 7,
     sourceQuotationNumber: "",
+<<<<<<< Updated upstream
     salesPerson: "EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD",
+=======
+    salesPerson: "",
+    eit: null,
+>>>>>>> Stashed changes
     eitAddress: "",
     eitTelephone: "",
     eitFax: "",
     onBehalfOf: ""
   })
 
-  const [items, setItems] = React.useState([{ product: "", description: "", qty: 1, price: 0, tax: 0, unit: "pcs" }])
+  const [eitOptions, setEitOptions] = React.useState([])
 
-  // Initialization: load confirmedQuotation if present
+  // Load EIT options
   React.useEffect(() => {
+<<<<<<< Updated upstream
     // 1. Check URL params
     const params = new URLSearchParams(window.location.search)
     const key = params.get("key")
@@ -233,6 +239,105 @@ function useInvoiceState() {
       } catch (e) {
         console.error("Error loading invoice from URL", e)
       }
+=======
+    fetch(`${API_BASE_URL}/api/eits/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setEitOptions(data)
+        } else {
+          console.error("EIT data is not an array:", data)
+          setEitOptions([])
+        }
+      })
+      .catch(err => {
+        console.error("Error loading EITs", err)
+        setEitOptions([])
+      })
+  }, [])
+
+  const [items, setItems] = React.useState([{ product: "", description: "", qty: 1, price: 0, tax: 0, unit: "pcs" }])
+  const [sourceKey, setSourceKey] = React.useState(null)
+  const [sourceIndex, setSourceIndex] = React.useState(null)
+
+  // Initialization: load from URL or confirmedQuotation
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const key = params.get("key")
+    const index = params.get("index")
+
+    if (key && index) {
+      setSourceKey(key)
+      setSourceIndex(index)
+
+      if (key === 'api') {
+        fetch(`${API_BASE_URL}/api/invoices/${index}/`)
+          .then(res => {
+            if (!res.ok) throw new Error("Failed to fetch")
+            return res.json()
+          })
+          .then(data => {
+            setCustomer({
+              company: data.customer_details?.company_name || "",
+              address: data.customer_details?.address || "",
+              taxId: data.customer_details?.tax_id || "",
+              telephone: data.customer_details?.phone || "",
+              fax: data.customer_details?.cus_fax || "",
+              attn: data.customer_details?.attn || "",
+              div: data.customer_details?.division || "",
+              mobile: data.customer_details?.mobile || "",
+              email: data.customer_details?.email || ""
+            })
+            setDetails(prev => ({
+              ...prev,
+              number: data.inv_code,
+              date: data.inv_date,
+              dueDate: data.inv_due_date,
+              poNo: data.inv_po_no || "",
+              paymentType: "", // Map if available
+              currency: "THB", // Map if available
+              notes: data.inv_remark || "",
+              paymentTermsDays: 7, // Default or calc
+              sourceQuotationNumber: data.inv_quo_ref || "",
+              salesPerson: data.eit_details?.organization_name || "",
+              eit: data.eit_details?.id || null,
+              eitAddress: data.eit_details?.address || "",
+              eitTelephone: data.eit_details?.eit_telephone || "",
+              eitFax: data.eit_details?.eit_fax || "",
+              eitMobile: data.eit_details?.eit_mobile || ""
+            }))
+            if (data.invoice_items && data.invoice_items.length > 0) {
+              setItems(data.invoice_items.map(i => ({
+                product: i.inv_item || "",
+                description: i.inv_description || "",
+                qty: i.quantity || 1,
+                price: parseFloat(i.unit_price || 0),
+                tax: 0,
+                unit: "pcs"
+              })))
+            }
+          })
+          .catch(err => console.error("Error loading invoice from API", err))
+      } else {
+        // Load from localStorage history
+        try {
+          const storedItem = JSON.parse(localStorage.getItem(key))
+          if (storedItem) {
+             const invList = storedItem.invoices || []
+             // If key is history:..., index is likely the array index
+             if (invList[index]) {
+               const inv = invList[index]
+               setCustomer(inv.customer)
+               setDetails(inv.details)
+               setItems(inv.items)
+             }
+          }
+        } catch (e) {
+          console.error("Error loading from localStorage", e)
+        }
+      }
+      return
+>>>>>>> Stashed changes
     }
 
     try {
@@ -330,10 +435,24 @@ function useInvoiceState() {
           customer,
           items,
           details,
-          totals: { subtotal, taxTotal, total }
+          totals: { subtotal, taxTotal, total },
+          eit: details.eit,
+          eit_name: details.salesPerson,
+          eit_address: details.eitAddress,
+          eit_phone: details.eitTelephone,
+          eit_fax: details.eitFax,
+          eit_mobile: details.eitMobile
         }
-        fetch(`${API_BASE_URL}/api/invoices/`, {
-          method: "POST",
+        let url = `${API_BASE_URL}/api/invoices/`
+        let method = "POST"
+
+        if (sourceKey === 'api' && sourceIndex) {
+            url = `${API_BASE_URL}/api/invoices/${sourceIndex}/`
+            method = "PUT"
+        }
+
+        fetch(url, {
+          method: method,
           headers: { "Authorization": `Token ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify(body)
         }).catch(() => {})
@@ -446,6 +565,7 @@ function useInvoiceState() {
     setCustomer,
     details,
     setDetails,
+    eitOptions,
     items,
     addItem,
     removeItem,
@@ -786,11 +906,44 @@ function InvoicePage() {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-               <select value={inv.details.salesPerson} onChange={(e) => inv.setDetails({ ...inv.details, salesPerson: e.target.value, onBehalfOf: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none">
-                 <option value="">Select Organization</option>
-                 <option value="EIT LASERTECHNIK CO.,LTD">EIT LASERTECHNIK CO.,LTD</option>
-                 <option value="EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD">EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD</option>
-               </select>
+              <select 
+                value={inv.details.eit || ""} 
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (!val) {
+                    inv.setDetails({ 
+                      ...inv.details, 
+                      eit: null, 
+                      salesPerson: "", 
+                      onBehalfOf: "",
+                      eitAddress: "",
+                      eitTelephone: "",
+                      eitFax: "",
+                      eitMobile: ""
+                    })
+                    return
+                  }
+                  const selected = inv.eitOptions.find(o => String(o.id) === val)
+                  if (selected) {
+                    inv.setDetails({ 
+                      ...inv.details, 
+                      eit: selected.id, 
+                      salesPerson: selected.organization_name, 
+                      onBehalfOf: selected.organization_name, 
+                      eitAddress: selected.address || "", 
+                      eitTelephone: selected.eit_telephone || "", 
+                      eitFax: selected.eit_fax || "", 
+                      eitMobile: selected.eit_mobile || ""
+                    })
+                  }
+                }} 
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+              >
+                <option value="">Select Organization</option>
+                {inv.eitOptions.map(opt => (
+                  <option key={opt.id} value={opt.id}>{opt.organization_name}</option>
+                ))}
+              </select>
              </div>
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>

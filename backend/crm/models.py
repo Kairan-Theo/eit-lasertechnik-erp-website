@@ -11,6 +11,9 @@ class Customer(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
     cus_fax = models.CharField(max_length=50, blank=True)
+    mobile = models.CharField(max_length=50, blank=True)
+    attn = models.CharField(max_length=255, blank=True)
+    division = models.CharField(max_length=255, blank=True)
     industry = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -20,9 +23,10 @@ class Customer(models.Model):
 
 class EIT(models.Model):
     organization_name = models.CharField(max_length=255)
-    eit_mobile = models.CharField(max_length=50, blank=True)
-    eit_telephone = models.CharField(max_length=50, blank=True)
-    eit_fax = models.CharField(max_length=50, blank=True)
+    eit_mobile = models.CharField(max_length=50, blank=True, default="000-000-0000")
+    eit_telephone = models.CharField(max_length=50, blank=True, default="02-052-9544")
+    eit_fax = models.CharField(max_length=50, blank=True, default="02-052-9544")
+    address = models.TextField(blank=True, default="1/120 ซอยรามคําแหง 184 \n แขวงมีนบุรี เขตมีนบุรี \n กรุงเทพมหานคร 10510")
 
     def __str__(self):
         return self.organization_name
@@ -82,11 +86,8 @@ class Lead(models.Model):
 class Quotation(models.Model):
     qo_code = models.CharField(max_length=100, unique=True, null=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
+    eit = models.ForeignKey(EIT, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
     created_date = models.DateField(default=timezone.now)
-    
-    cus_respon_attn = models.CharField(max_length=255, blank=True)
-    cus_respon_div = models.CharField(max_length=255, blank=True)
-    cus_respon_mobile = models.CharField(max_length=50, blank=True)
     
     trade_terms = models.CharField(max_length=255, blank=True)
     validity = models.CharField(max_length=255, blank=True)
@@ -116,9 +117,38 @@ class QuotationItem(models.Model):
     def __str__(self):
         return f"{self.quo_item} ({self.quotation.qo_code})"
 
+class BillingNote(models.Model):
+    bn_code = models.CharField(max_length=100, unique=True)
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='billing_notes')
+    eit = models.ForeignKey(EIT, on_delete=models.SET_NULL, null=True, blank=True, related_name='billing_notes')
+    
+    bn_created_date = models.DateField(default=timezone.now)
+    bn_due_date = models.DateField(null=True, blank=True)
+    
+    bn_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    bn_paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    bn_outstanding_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    bn_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    bn_remark = models.TextField(blank=True)
+    bn_recipient = models.CharField(max_length=255, blank=True)
+    bn_recipient_receive_date = models.DateField(null=True, blank=True)
+    bn_payee_date = models.DateField(null=True, blank=True)
+    bn_behalf_of = models.CharField(max_length=255, blank=True)
+    bn_name_biller = models.CharField(max_length=255, blank=True)
+    
+    items = models.JSONField(default=list, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Billing Note {self.bn_code}"
+
 class Invoice(models.Model):
     number = models.CharField(max_length=100, unique=True)
     customer = models.JSONField(default=dict, blank=True)
+    eit = models.ForeignKey(EIT, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
     items = models.JSONField(default=list, blank=True)
     details = models.JSONField(default=dict, blank=True)
     totals = models.JSONField(default=dict, blank=True)
@@ -132,6 +162,7 @@ class Invoice(models.Model):
 class PurchaseOrder(models.Model):
     number = models.CharField(max_length=100, unique=True)
     customer = models.JSONField(default=dict, blank=True)
+    eit = models.ForeignKey(EIT, on_delete=models.SET_NULL, null=True, blank=True, related_name='purchase_orders')
     extra_fields = models.JSONField(default=dict, blank=True)
     items = models.JSONField(default=list, blank=True)
     totals = models.JSONField(default=dict, blank=True)

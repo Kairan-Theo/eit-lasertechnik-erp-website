@@ -139,15 +139,17 @@ function useQuotationState() {
       console.error("Error reading localStorage", e)
     }
 
+    const currentYear = new Date().getFullYear()
     const nums = quotations
       .map(q => String(q.number || ""))
       .map(s => {
-        const m = s.match(/^QT[-/ ]?(\d{1,5})$/i)
+        // Match EIT QUO YYYY-XXXX format for the current year
+        const m = s.match(new RegExp(`^QUO ${currentYear}-(\\d{4})$`))
         return m ? parseInt(m[1], 10) : null
       })
       .filter(n => Number.isFinite(n))
     const next = (nums.length ? Math.max(...nums) + 1 : 1)
-    return `QT-${String(next).padStart(3, "0")}`
+    return `QUO ${currentYear}-${String(next).padStart(4, "0")}`
   }
 
   const [details, setDetails] = React.useState({
@@ -156,10 +158,12 @@ function useQuotationState() {
     validUntil: "",
     currency: "THB",
     deliveryTerms: "Ex-Works",
+    eit: null,
     salesPerson: "",
-    eitMobile: "",
-    eitTelephone: "",
-    eitFax: "",
+    eitMobile: " 000-000-0000",
+    eitTelephone: " 02-052-9544",
+    eitFax: " 02-052 9544",
+    eitAddress: "1/120 ซอยรามคําแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510",
     tradeTerms: "",
     validity: "",
     delivery: "",
@@ -172,6 +176,24 @@ function useQuotationState() {
   const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0 }])
   const [sourceKey, setSourceKey] = React.useState(null)
   const [sourceIndex, setSourceIndex] = React.useState(null)
+  const [eitOptions, setEitOptions] = React.useState([])
+
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/eits/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setEitOptions(data)
+        } else {
+          console.error("EIT data is not an array:", data)
+          setEitOptions([])
+        }
+      })
+      .catch(err => {
+        console.error("Error loading EITs", err)
+        setEitOptions([])
+      })
+  }, [])
 
   const total = items.reduce((sum, it) => sum + (parseNumber(it.qty) || 0) * (parseNumber(it.price) || 0), 0)
 
@@ -209,9 +231,9 @@ function useQuotationState() {
               address: data.customer_details?.address || "",
               telephone: data.customer_details?.phone || "",
               fax: data.customer_details?.cus_fax || "",
-              attn: data.cus_respon_attn || "",
-              div: data.cus_respon_div || "",
-              mobile: data.cus_respon_mobile || "",
+              attn: data.customer_details?.attn || "",
+              div: data.customer_details?.division || "",
+              mobile: data.customer_details?.mobile || "",
               email: data.customer_details?.email || ""
             })
             setDetails({
@@ -220,10 +242,12 @@ function useQuotationState() {
               validUntil: "",
               currency: "THB",
               deliveryTerms: "Ex-Works",
-              salesPerson: "", // Need to handle if this is stored
-              eitMobile: "",
-              eitTelephone: "",
-              eitFax: "",
+              salesPerson: data.eit_details?.organization_name || "",
+              eit: data.eit_details?.id || null,
+              eitMobile: data.eit_details?.eit_mobile || "",
+              eitTelephone: data.eit_details?.eit_telephone || "",
+              eitFax: data.eit_details?.eit_fax || "",
+              eitAddress: data.eit_details?.address || "",
               tradeTerms: data.trade_terms || "",
               validity: data.validity || "",
               delivery: data.delivery || "",
@@ -267,7 +291,7 @@ function useQuotationState() {
     }
   }, [])
 
-  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total, sourceKey, sourceIndex }
+  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total, sourceKey, sourceIndex, eitOptions }
 }
 
 function QuotationPage() {
@@ -315,10 +339,41 @@ function QuotationPage() {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-               <select value={q.details.salesPerson} onChange={(e) => q.setDetails({ ...q.details, salesPerson: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none">
+               <select 
+                 value={q.details.eit || ""} 
+                 onChange={(e) => {
+                   const val = e.target.value
+                   if (!val) {
+                      q.setDetails({ 
+                        ...q.details, 
+                        eit: null,
+                        salesPerson: "",
+                        eitMobile: "",
+                        eitTelephone: "",
+                        eitFax: "",
+                        eitAddress: "" 
+                      })
+                      return
+                   }
+                   const selected = q.eitOptions.find(o => String(o.id) === val)
+                   if (selected) {
+                     q.setDetails({ 
+                       ...q.details, 
+                       eit: selected.id,
+                       salesPerson: selected.organization_name,
+                       eitMobile: selected.eit_mobile || "",
+                       eitTelephone: selected.eit_telephone || "",
+                       eitFax: selected.eit_fax || "",
+                       eitAddress: selected.address || "" 
+                     })
+                   }
+                 }} 
+                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+               >
                  <option value="">Select Organization</option>
-                 <option value="EIT LASERTECHNIK CO.,LTD">EIT LASERTECHNIK CO.,LTD</option>
-                 <option value="EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD">EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD</option>
+                 {q.eitOptions.map(opt => (
+                   <option key={opt.id} value={opt.id}>{opt.organization_name}</option>
+                 ))}
                </select>
              </div>
              <div>
@@ -641,6 +696,12 @@ function QuotationPage() {
                             cus_respon_attn: q.customer.attn || "",
                             cus_respon_div: q.customer.div || "",
                             cus_respon_mobile: q.customer.mobile || "",
+                            eit: q.details.eit,
+                            eit_name: q.details.salesPerson || "",
+                            eit_address: q.details.eitAddress || "",
+                            eit_mobile: q.details.eitMobile || "",
+                            eit_phone: q.details.eitTelephone || "",
+                            eit_fax: q.details.eitFax || "",
                             trade_terms: q.details.tradeTerms || "",
                             validity: q.details.validity || "",
                             delivery: q.details.delivery || "",
@@ -701,8 +762,17 @@ function QuotationPage() {
                   className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
                   onClick={async () => {
                     try {
+                      const detailsForPdf = {
+                        ...q.details,
+                        eit: null,
+                        salesPerson: "",
+                        eitAddress: "",
+                        eitMobile: "",
+                        eitTelephone: "",
+                        eitFax: ""
+                      }
                       const payload = {
-                          details: q.details,
+                          details: detailsForPdf,
                           customer: q.customer,
                           items: q.items,
                           totals: { total: q.total }
