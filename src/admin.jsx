@@ -430,11 +430,71 @@ function QuotationList({ list, refreshData }) {
   )
 }
 
-function InvoiceList({ list }) {
+function InvoiceList({ list, refreshData }) {
+  const [selectedRows, setSelectedRows] = React.useState([])
+  const [openDeleteConfirm, setOpenDeleteConfirm] = React.useState(false)
+
+  const getUid = (inv) => `${inv.sourceKey}-${inv.sourceIndex}`
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedRows(list.map(getUid))
+    } else {
+      setSelectedRows([])
+    }
+  }
+
+  const handleSelectRow = (uid) => {
+    if (selectedRows.includes(uid)) {
+      setSelectedRows(prev => prev.filter(x => x !== uid))
+    } else {
+      setSelectedRows(prev => [...prev, uid])
+    }
+  }
+
+  const handleDelete = async () => {
+    const itemsToDelete = list.filter(inv => selectedRows.includes(getUid(inv)))
+    
+    // LocalStorage Deletion
+    const groupedByKey = {}
+    itemsToDelete.forEach(inv => {
+      if (!groupedByKey[inv.sourceKey]) groupedByKey[inv.sourceKey] = []
+      groupedByKey[inv.sourceKey].push(inv.sourceIndex)
+    })
+
+    Object.keys(groupedByKey).forEach(key => {
+      try {
+        const item = JSON.parse(localStorage.getItem(key))
+        if (item && Array.isArray(item.invoices)) {
+          const indicesToDelete = groupedByKey[key]
+          item.invoices = item.invoices.filter((_, idx) => !indicesToDelete.includes(idx))
+          localStorage.setItem(key, JSON.stringify(item))
+        }
+      } catch (e) {
+        console.error("Error updating localStorage", e)
+      }
+    })
+
+    if (refreshData) refreshData()
+    setSelectedRows([])
+    setOpenDeleteConfirm(false)
+  }
+
   return (
-    <div className="bg-white rounded-xl border shadow-sm p-6">
+    <div className="bg-white rounded-xl border shadow-sm p-6 relative">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Invoices</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">Invoices</h2>
+          {selectedRows.length > 0 && (
+            <button 
+              onClick={() => setOpenDeleteConfirm(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete ({selectedRows.length})
+            </button>
+          )}
+        </div>
         <a href="/invoice.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
           New Invoice
@@ -444,6 +504,15 @@ function InvoiceList({ list }) {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-gray-700 border-b">
+              <th className="p-3 w-10">
+                <input 
+                  type="checkbox" 
+                  className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                  checked={list.length > 0 && selectedRows.length === list.length}
+                  onChange={handleSelectAll}
+                />
+              </th>
+              <th className="p-3 text-left w-16">Index</th>
               <th className="p-3 text-left">Number</th>
               <th className="p-3 text-left">Customer</th>
               <th className="p-3 text-left">Date</th>
@@ -453,39 +522,136 @@ function InvoiceList({ list }) {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {list.map((inv, i) => (
-              <tr key={i} className="hover:bg-gray-50">
-                <td className="p-3 font-medium">
-                  <a href={`/invoice.html?key=${encodeURIComponent(inv.sourceKey)}&index=${inv.sourceIndex}`} className="text-green-600 hover:underline">
-                    {inv.details?.number}
-                  </a>
-                </td>
-                <td className="p-3">{inv.customerName || "-"}</td>
-                <td className="p-3">{inv.details?.date}</td>
-                <td className="p-3">{inv.details?.dueDate}</td>
-                <td className="p-3 text-right font-medium">
-                  {inv.details?.currency} {inv.totals?.total?.toFixed(2)}
-                </td>
-                <td className="p-3 text-right">
-                   <span className="text-xs text-gray-400">View in History</span>
-                </td>
-              </tr>
-            ))}
+            {list.map((inv, i) => {
+              const uid = getUid(inv)
+              return (
+                <tr key={uid} className={`hover:bg-gray-50 ${selectedRows.includes(uid) ? 'bg-blue-50' : ''}`}>
+                  <td className="p-3">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                      checked={selectedRows.includes(uid)}
+                      onChange={() => handleSelectRow(uid)}
+                    />
+                  </td>
+                  <td className="p-3 text-gray-500">{i + 1}</td>
+                  <td className="p-3 font-medium">
+                    <a href={`/invoice.html?key=${encodeURIComponent(inv.sourceKey)}&index=${inv.sourceIndex}`} className="text-green-600 hover:underline">
+                      {inv.details?.number}
+                    </a>
+                  </td>
+                  <td className="p-3">{inv.customerName || "-"}</td>
+                  <td className="p-3">{inv.details?.date}</td>
+                  <td className="p-3">{inv.details?.dueDate}</td>
+                  <td className="p-3 text-right font-medium">
+                    {inv.details?.currency} {inv.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="p-3 text-right">
+                     <span className="text-xs text-gray-400">View in History</span>
+                  </td>
+                </tr>
+              )
+            })}
             {list.length === 0 && (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No invoices found</td></tr>
+              <tr><td colSpan={8} className="p-8 text-center text-gray-500">No invoices found</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {openDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setOpenDeleteConfirm(false)}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <div className="p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Invoices</h3>
+                    <p className="text-gray-600 mb-6">Are you sure you want to delete {selectedRows.length} selected invoices?</p>
+                    <div className="flex justify-end gap-3">
+                        <button 
+                            onClick={() => setOpenDeleteConfirm(false)}
+                            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleDelete}
+                            className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors font-medium"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function BillingNoteList({ list }) {
+function BillingNoteList({ list, refreshData }) {
+  const [selectedRows, setSelectedRows] = React.useState([])
+  const [openDeleteConfirm, setOpenDeleteConfirm] = React.useState(false)
+
+  const getUid = (bn) => `${bn.sourceKey}-${bn.sourceIndex}`
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedRows(list.map(getUid))
+    } else {
+      setSelectedRows([])
+    }
+  }
+
+  const handleSelectRow = (uid) => {
+    if (selectedRows.includes(uid)) {
+      setSelectedRows(prev => prev.filter(x => x !== uid))
+    } else {
+      setSelectedRows(prev => [...prev, uid])
+    }
+  }
+
+  const handleDelete = async () => {
+    const itemsToDelete = list.filter(bn => selectedRows.includes(getUid(bn)))
+    
+    // LocalStorage Deletion
+    const groupedByKey = {}
+    itemsToDelete.forEach(bn => {
+      if (!groupedByKey[bn.sourceKey]) groupedByKey[bn.sourceKey] = []
+      groupedByKey[bn.sourceKey].push(bn.sourceIndex)
+    })
+
+    Object.keys(groupedByKey).forEach(key => {
+      try {
+        const item = JSON.parse(localStorage.getItem(key))
+        if (item && Array.isArray(item.billingNotes)) {
+          const indicesToDelete = groupedByKey[key]
+          item.billingNotes = item.billingNotes.filter((_, idx) => !indicesToDelete.includes(idx))
+          localStorage.setItem(key, JSON.stringify(item))
+        }
+      } catch (e) {
+        console.error("Error updating localStorage", e)
+      }
+    })
+
+    if (refreshData) refreshData()
+    setSelectedRows([])
+    setOpenDeleteConfirm(false)
+  }
+
   return (
-    <div className="bg-white rounded-xl border shadow-sm p-6">
+    <div className="bg-white rounded-xl border shadow-sm p-6 relative">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Billing Notes</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">Billing Notes</h2>
+          {selectedRows.length > 0 && (
+            <button 
+              onClick={() => setOpenDeleteConfirm(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete ({selectedRows.length})
+            </button>
+          )}
+        </div>
         <a href="/billing-note.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
           New Billing Note
@@ -495,39 +661,81 @@ function BillingNoteList({ list }) {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-gray-700 border-b">
+              <th className="p-3 w-10">
+                <input 
+                  type="checkbox" 
+                  className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                  checked={list.length > 0 && selectedRows.length === list.length}
+                  onChange={handleSelectAll}
+                />
+              </th>
+              <th className="p-3 text-left w-16">Index</th>
               <th className="p-3 text-left">Number</th>
               <th className="p-3 text-left">Customer</th>
               <th className="p-3 text-left">Date</th>
               <th className="p-3 text-left">Due Date</th>
               <th className="p-3 text-right">Total</th>
-              <th className="p-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {list.map((bn, i) => (
-              <tr key={i} className="hover:bg-gray-50">
-                <td className="p-3 font-medium">
-                  <a href={`/billing-note.html?key=${encodeURIComponent(bn.sourceKey)}&index=${bn.sourceIndex}`} className="text-purple-600 hover:underline">
-                    {bn.details?.number}
-                  </a>
-                </td>
-                <td className="p-3">{bn.customerName || "-"}</td>
-                <td className="p-3">{bn.details?.date}</td>
-                <td className="p-3">{bn.details?.dueDate}</td>
-                <td className="p-3 text-right font-medium">
-                  {bn.details?.currency} {bn.totals?.total?.toFixed(2)}
-                </td>
-                <td className="p-3 text-right">
-                   <span className="text-xs text-gray-400">View in History</span>
-                </td>
-              </tr>
-            ))}
+            {list.map((bn, i) => {
+              const uid = getUid(bn)
+              return (
+                <tr key={uid} className={`hover:bg-gray-50 ${selectedRows.includes(uid) ? 'bg-blue-50' : ''}`}>
+                  <td className="p-3">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                      checked={selectedRows.includes(uid)}
+                      onChange={() => handleSelectRow(uid)}
+                    />
+                  </td>
+                  <td className="p-3 text-gray-500">{i + 1}</td>
+                  <td className="p-3 font-medium">
+                    <a href={`/billing-note.html?key=${encodeURIComponent(bn.sourceKey)}&index=${bn.sourceIndex}`} className="text-purple-600 hover:underline">
+                      {bn.details?.number}
+                    </a>
+                  </td>
+                  <td className="p-3">{bn.customerName || "-"}</td>
+                  <td className="p-3">{bn.details?.date}</td>
+                  <td className="p-3">{bn.details?.dueDate}</td>
+                  <td className="p-3 text-right font-medium">
+                    {bn.details?.currency} {bn.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              )
+            })}
             {list.length === 0 && (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No billing notes found</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-gray-500">No billing notes found</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {openDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setOpenDeleteConfirm(false)}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <div className="p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Billing Notes</h3>
+                    <p className="text-gray-600 mb-6">Are you sure you want to delete {selectedRows.length} selected billing notes?</p>
+                    <div className="flex justify-end gap-3">
+                        <button 
+                            onClick={() => setOpenDeleteConfirm(false)}
+                            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleDelete}
+                            className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors font-medium"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1057,8 +1265,8 @@ function AdminPage() {
 
         {activeTab === "dashboard" && <Dashboard data={data} />}
         {activeTab === "quotations" && <QuotationList list={data.quotations} refreshData={loadData} />}
-        {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} />}
-        {activeTab === "invoices" && <InvoiceList list={data.invoices} />}
+        {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} refreshData={loadData} />}
+        {activeTab === "invoices" && <InvoiceList list={data.invoices} refreshData={loadData} />}
         {activeTab === "purchase-orders" && <PurchaseOrderPage />}
         {activeTab === "customers" && <CustomerHistory data={data} />}
         {activeTab === "permissions" && <PermissionsManager />}
