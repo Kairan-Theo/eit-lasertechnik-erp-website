@@ -402,13 +402,22 @@ function BillingNotePage() {
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `BillingNote_${q.details.number || 'Draft'}.pdf`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
+        
+        const iframe = document.createElement('iframe')
+        iframe.style.display = 'none'
+        iframe.src = url
+        document.body.appendChild(iframe)
+        
+        setTimeout(() => {
+          iframe.contentWindow.focus()
+          iframe.contentWindow.print()
+        }, 500)
+
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          window.URL.revokeObjectURL(url)
+        }, 60000)
+        
         setOpenCreateConfirm(false)
       } else {
         const errText = await response.text()

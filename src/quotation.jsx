@@ -1,5 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
+import { createPortal } from "react-dom"
+import { QuotationTemplate } from "./components/quotation-template.jsx"
 import Navigation from "./components/navigation.jsx"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
@@ -297,6 +299,43 @@ function useQuotationState() {
 function QuotationPage() {
   const q = useQuotationState()
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
+
+  const handlePrintPdf = async () => {
+    try {
+      const payload = {
+        details: q.details,
+        customer: q.customer,
+        items: q.items,
+        totals: { total: q.total }
+      }
+      const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) throw new Error('Failed to generate PDF')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      }, 500)
+
+      setTimeout(() => {
+        document.body.removeChild(iframe)
+        window.URL.revokeObjectURL(url)
+      }, 60000)
+    } catch (error) {
+      console.error("Error generating PDF:", error)
+      alert("Failed to generate PDF")
+    }
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -760,48 +799,9 @@ function QuotationPage() {
                 </button>
                 <button
                   className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
-                  onClick={async () => {
-                    try {
-                      const detailsForPdf = {
-                        ...q.details,
-                        eit: null,
-                        salesPerson: "",
-                        eitAddress: "",
-                        eitMobile: "",
-                        eitTelephone: "",
-                        eitFax: ""
-                      }
-                      const payload = {
-                          details: detailsForPdf,
-                          customer: q.customer,
-                          items: q.items,
-                          totals: { total: q.total }
-                      }
-                      
-                      // Show loading state if needed, or just alert
-                      const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
-                          method: 'POST',
-                          headers: {
-                              'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify(payload)
-                      })
-                      
-                      if (!response.ok) throw new Error('Failed to generate PDF')
-                      
-                      const blob = await response.blob()
-                      const url = window.URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = `Quotation_${q.details.number}.pdf`
-                      document.body.appendChild(a)
-                      a.click()
-                      a.remove()
-                      setOpenCreateConfirm(false)
-                    } catch (error) {
-                      console.error("Error downloading PDF:", error)
-                      alert("Error downloading PDF")
-                    }
+                  onClick={() => {
+                    setOpenCreateConfirm(false)
+                    handlePrintPdf()
                   }}
                 >
                   Download Form
@@ -811,6 +811,7 @@ function QuotationPage() {
           </div>
         </div>
       )}
+      {/* Modal removed */}
 
 
       </div>
