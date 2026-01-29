@@ -90,8 +90,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# DB_ENGINE = os.getenv('DB_ENGINE', 'sqlite').lower()
-DB_ENGINE = 'sqlite'
+DB_ENGINE = os.getenv('DB_ENGINE', 'sqlite').lower()
 if DB_ENGINE == 'sqlite':
     DATABASES = {
         'default': {

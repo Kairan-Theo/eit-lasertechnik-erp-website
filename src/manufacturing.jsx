@@ -197,7 +197,9 @@ function ManufacturingOrderPage() {
   }
 
   React.useEffect(() => {
-    fetch(`${API_BASE_URL}/api/component_entries/`)
+    const token = localStorage.getItem("authToken")
+    const headers = token ? { "Authorization": `Token ${token}` } : {}
+    fetch(`${API_BASE_URL}/api/component_entries/`, { headers })
       .then(res => res.json())
       .then(data => {
         const map = {}
@@ -225,7 +227,9 @@ function ManufacturingOrderPage() {
   React.useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`)
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { "Authorization": `Token ${token}` } : {}
+        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`, { headers })
         if (!res.ok) return
         const data = await res.json()
         const mapped = (Array.isArray(data) ? data : []).map((m) => {
@@ -278,7 +282,9 @@ function ManufacturingOrderPage() {
     if (!openJobFormId) return
     ;(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${openJobFormId}/`)
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { "Authorization": `Token ${token}` } : {}
+        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${openJobFormId}/`, { headers })
         if (!res.ok) return
         const m = await res.json()
         setJobForm({
@@ -416,9 +422,14 @@ function ManufacturingOrderPage() {
   }
   const patchOrder = async (id, data) => {
     try {
+      const token = localStorage.getItem("authToken")
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
       const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${id}/`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(data),
       })
       if (!res.ok) return
@@ -514,7 +525,12 @@ function ManufacturingOrderPage() {
     try {
       await Promise.all(ids.map(async (id) => {
         try {
-          const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${id}/`, { method: "DELETE" })
+          const token = localStorage.getItem("authToken")
+          const headers = token ? { "Authorization": `Token ${token}` } : {}
+          const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${id}/`, { 
+            method: "DELETE",
+            headers 
+          })
           if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
         } catch {}
       }))

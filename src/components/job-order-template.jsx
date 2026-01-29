@@ -24,213 +24,323 @@ export function JobOrderTemplate({ order }) {
   const displaySupplierDate = supplierDateRaw ? new Date(supplierDateRaw).toLocaleDateString() : ""
   const displayRecipientDate = recipientDateRaw ? new Date(recipientDateRaw).toLocaleDateString() : ""
 
+  // Fill empty rows to ensure the table looks like the template
+  const MIN_ROWS = 14
+  const emptyRowsCount = Math.max(MIN_ROWS - items.length, 0)
+
+  React.useEffect(() => {
+    const style = document.createElement("style")
+    style.innerHTML = `
+      @media print {
+        body * {
+          visibility: hidden !important;
+        }
+        .job-order-container,
+        .job-order-container * {
+          visibility: visible !important;
+        }
+        .job-order-container {
+          position: fixed !important;
+          left: 0;
+          top: 0;
+          width: 190mm;
+        }
+        @page { size: A4; margin: 10mm; }
+      }
+    `
+    document.head.appendChild(style)
+    return () => document.head.removeChild(style)
+  }, [])
+
   return (
-    <div className="bg-white p-12 text-black font-sans min-h-[29.7cm] w-[21cm] mx-auto select-text">
+    <div className="job-order-container">
       <style>{`
-        @media print {
-          * {
-            -webkit-user-select: text !important;
-            user-select: text !important;
-          }
+        .job-order-container {
+          font-family: "Sarabun", sans-serif;
+          width: 190mm;
+          margin: 0 auto;
+          background: white;
+          color: black;
+        }
+        .header-section {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 10px;
+        }
+        .logo-box {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .eit-box {
+          width: 50px;
+          height: 50px;
+          background-color: #3D56A6;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 18px;
+        }
+        .logo-text {
+          font-size: 24px;
+        }
+        .title-section {
+          text-align: right;
+        }
+        .main-title {
+          font-size: 20px;
+          font-weight: bold;
+          font-family: serif;
+        }
+        .sub-title {
+          font-size: 16px;
+          font-weight: bold;
+          font-family: serif;
+          margin-top: 5px;
+        }
+        .doc-id-box {
+          border: 2px solid black;
+          display: flex;
+          margin-top: 5px;
+        }
+        .doc-id-label {
+          border-right: 2px solid black;
+          padding: 2px 5px;
+          font-size: 12px;
+          font-weight: bold;
+          background: #f0f0f0;
+          display: flex;
+          align-items: center;
+        }
+        .doc-id-value {
+          padding: 2px 10px;
+          font-weight: bold;
+          min-width: 120px;
+          text-align: center;
+        }
+
+        /* Table Styles */
+        .info-table, .items-table, .footer-table {
+          width: 100%;
+          border-collapse: collapse;
+          border: 2px solid black;
+        }
+        .info-table td, .items-table th, .items-table td, .footer-table td {
+          border: 1px solid black;
+          padding: 6px;
+          vertical-align: top;
+        }
+        /* Thick borders for outer edges are handled by the table border */
+        
+        .label-th {
+          font-size: 11px;
+          font-weight: bold;
+        }
+        .value-text {
+          font-size: 14px;
+          min-height: 20px;
+        }
+        .label-en {
+          font-size: 10px;
+          color: #333;
+        }
+        
+        .items-table {
+          border-top: none; /* Connect with info table */
+          border-bottom: none;
+        }
+        .items-table th {
+          border-bottom: 2px solid black;
+          background-color: #fff;
+          text-align: center;
+        }
+        .items-table td {
+          border-bottom: 1px dashed black;
+          border-top: none;
+        }
+        .items-table tr:last-child td {
+          border-bottom: 2px solid black; /* Close the section */
+        }
+        
+        .footer-table {
+          border-top: none;
+        }
+        
+        .dotted-line {
+          border-bottom: 1px dotted black;
+          display: inline-block;
+          min-width: 100px;
         }
       `}</style>
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-[#3D56A6] text-white flex items-center justify-center font-bold text-lg">EIT</div>
-          <div className="text-3xl font-normal leading-none">Lasertechnik</div>
+
+      {/* Header */}
+      <div className="header-section">
+        <div className="logo-box">
+          <div className="eit-box">EIT</div>
+          <div className="logo-text">Lasertechnik</div>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="text-xl font-bold leading-none tracking-wide font-serif">JOB ORDER</div>
-          <div className="text-base font-bold mt-1 font-serif">ใบรับงาน</div>
-          <div className="flex border-2 border-black">
-            <div className="px-2 py-1 text-xs font-bold border-r-2 border-black flex items-center">เลขที่เอกสาร</div>
-            <div className="px-5 py-1 min-w-[130px] text-center font-bold">{o.jobOrderCode || o.ref || ""}</div>
+        <div className="title-section">
+          <div className="main-title">JOB ORDER</div>
+          <div className="sub-title">ใบรับงาน</div>
+          <div className="doc-id-box">
+            <div className="doc-id-label">เลขที่เอกสาร</div>
+            <div className="doc-id-value">{o.jobOrderCode || o.ref || ""}</div>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 border-2 border-black">
-        <table className="w-full border-collapse text-sm">
-          <tbody>
-            <tr>
-              <td className="border-r-2 border-black p-2 w-[45%]">
-                <div className="grid grid-cols-[auto_1fr] items-center min-h-[60px] gap-x-2">
-                  <div className="text-[11px] font-bold">ชื่อลูกค้า :</div>
-                  <div className="text-sm">{o.customer || ""}</div>
-                  <div className="col-span-2 text-[10px]">Customer Name</div>
+      {/* Info Section Table */}
+      <table className="info-table">
+        <tbody>
+          <tr>
+            <td style={{ width: "45%", borderRight: "2px solid black" }}>
+              <div className="label-th">ชื่อลูกค้า :</div>
+              <div className="value-text">{o.customer || ""}</div>
+              <div className="label-en">Customer Name</div>
+            </td>
+            <td style={{ width: "30%", borderRight: "2px solid black" }}>
+              <div className="label-th">วันที่เริ่มทำชิ้นงาน</div>
+              <div className="value-text">{displayStart}</div>
+              <div className="label-en">Start Date</div>
+            </td>
+            <td style={{ width: "25%" }}>
+              <div className="label-th">จำนวนที่ส่งทำชิ้นงาน</div>
+              <div className="value-text">{String(o.totalQuantity ?? o.quantity ?? "")}</div>
+              <div className="label-en">Order Quantity</div>
+            </td>
+          </tr>
+          <tr>
+            <td style={{ borderTop: "2px solid black", borderRight: "2px solid black" }}>
+              <div className="label-th">สินค้าที่รับงาน</div>
+              <div className="value-text">{o.productNo || ""}</div>
+              <div className="label-en">Product No.</div>
+            </td>
+            <td colSpan={2} style={{ borderTop: "2px solid black" }}>
+              <div className="label-th">วันที่ทำชิ้นงานเสร็จ</div>
+              <div className="value-text">{displayCompleted}</div>
+              <div className="label-en">Completed Date</div>
+            </td>
+          </tr>
+          <tr>
+            <td style={{ borderTop: "2px solid black", borderRight: "2px solid black" }}>
+              <div className="label-th">ผู้รับผิดชอบ</div>
+              <div className="label-en" style={{ marginBottom: "5px" }}>Responsible</div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <div style={{ flex: 1 }}>
+                  <div className="label-th">ฝ่ายขาย</div>
+                  <div>{o.responsibleSales || ""}</div>
+                  <div className="dotted-line" style={{ width: "100%" }}></div>
                 </div>
-              </td>
-              <td className="border-r-2 border-black p-2 w-[30%]">
-                <div className="grid grid-cols-[auto_1fr] items-center min-h-[60px] gap-x-2">
-                  <div className="text-[11px] font-bold">วันที่เริ่มทำชิ้นงาน</div>
-                  <div className="text-sm">{displayStart}</div>
-                  <div className="col-span-2 text-[10px]">Start Date</div>
+                <div style={{ flex: 1 }}>
+                  <div className="label-th">ฝ่ายผลิต</div>
+                  <div>{o.responsibleProduction || ""}</div>
+                  <div className="dotted-line" style={{ width: "100%" }}></div>
                 </div>
-              </td>
-              <td className="p-2 w-[25%]">
-                <div className="grid grid-cols-[auto_1fr] items-center min-h-[60px] gap-x-2">
-                  <div className="text-[11px] font-bold">จำนวนที่ส่งทำชิ้นงาน</div>
-                  <div className="text-sm">{String(o.totalQuantity ?? o.quantity ?? "")}</div>
-                  <div className="col-span-2 text-[10px]">Order Quantity</div>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td className="border-t-2 border-black border-r-2 border-black p-2">
-                <div className="grid grid-cols-[auto_1fr] items-center min-h-[60px] gap-x-2">
-                  <div className="text-[11px] font-bold">สินค้าที่รับงาน</div>
-                  <div className="text-sm">{o.productNo || ""}</div>
-                  <div className="col-span-2 text-[10px]">Product No.</div>
-                </div>
-              </td>
-              <td className="border-t-2 border-black p-2" colSpan={2}>
-                <div className="grid grid-cols-[auto_1fr] items-center min-h-[60px] gap-x-2">
-                  <div className="text-[11px] font-bold">วันที่ทำชิ้นงานเสร็จ</div>
-                  <div className="text-sm">{displayCompleted}</div>
-                  <div className="col-span-2 text-[10px]">Completed Date</div>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td className="border-t-2 border-black border-r-2 border-black p-2 align-top">
-                <div className="text-[11px] font-bold">ผู้รับผิดชอบ</div>
-                <div className="text-[10px] mb-2">Responsible</div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-start gap-2">
-                    <div className="text-[11px]">ฝ่ายขาย</div>
-                    <div className="flex flex-col">
-                      <div className="text-sm">{o.responsibleSales || "\u00A0"}</div>
-                      <div className="border-b border-dotted border-black w-24"></div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="text-[11px]">ฝ่ายผลิต</div>
-                    <div className="flex flex-col">
-                      <div className="text-sm">{o.responsibleProduction || "\u00A0"}</div>
-                      <div className="border-b border-dotted border-black w-24"></div>
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td className="border-t-2 border-black p-2 align-top" colSpan={2}>
-                <div className="grid grid-cols-[auto_1fr] items-center min-h-[60px] gap-x-2">
-                  <div className="text-[11px] font-bold">ระยะเวลาที่ใช้</div>
-                  <div className="text-sm">{o.productionTime || ""}</div>
-                  <div className="col-span-2 text-[10px]">Time of Production</div>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              </div>
+            </td>
+            <td colSpan={2} style={{ borderTop: "2px solid black" }}>
+              <div className="label-th">ระยะเวลาที่ใช้</div>
+              <div className="value-text">{o.productionTime || ""}</div>
+              <div className="label-en">Time of Production</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-      <div className="mt-3 border-2 border-black">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th className="border-b-2 border-black border-r-2 border-black p-2 text-center w-[15%]">
-                <div className="font-bold">รหัสสินค้า</div>
-                <div className="text-[10px] font-normal">Item Code</div>
-              </th>
-              <th className="border-b-2 border-black border-r-2 border-black p-2 text-center w-[55%]">
-                <div className="font-bold">รายละเอียด</div>
-                <div className="text-[10px] font-normal">Description</div>
-              </th>
-              <th className="border-b-2 border-black border-r-2 border-black p-2 text-center w-[15%]">
-                <div className="font-bold">จำนวน</div>
-                <div className="text-[10px] font-normal">Quantity</div>
-              </th>
-              <th className="border-b-2 border-black p-2 text-center w-[15%]">
-                <div className="font-bold">หน่วยนับ</div>
-                <div className="text-[10px] font-normal">Unit</div>
-              </th>
+      {/* Items Table */}
+      <table className="items-table">
+        <thead>
+          <tr>
+            <th style={{ width: "15%", borderRight: "2px solid black" }}>
+              <div className="label-th">รหัสสินค้า</div>
+              <div className="label-en">Item Code</div>
+            </th>
+            <th style={{ width: "55%", borderRight: "2px solid black" }}>
+              <div className="label-th">รายละเอียด</div>
+              <div className="label-en">Description</div>
+            </th>
+            <th style={{ width: "15%", borderRight: "2px solid black" }}>
+              <div className="label-th">จำนวน</div>
+              <div className="label-en">Quantity</div>
+            </th>
+            <th style={{ width: "15%" }}>
+              <div className="label-th">หน่วยนับ</div>
+              <div className="label-en">Unit</div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it, idx) => (
+            <tr key={idx}>
+              <td style={{ borderRight: "2px solid black" }}>{String(it.itemCode || it.item || "")}</td>
+              <td style={{ borderRight: "2px solid black" }}>{String(it.description || it.item_description || "")}</td>
+              <td style={{ borderRight: "2px solid black", textAlign: "center" }}>{String(it.qty ?? it.item_quantity ?? "")}</td>
+              <td style={{ textAlign: "center" }}>{String(it.unit || it.item_unit || "")}</td>
             </tr>
-          </thead>
-          <tbody>
-            {items.map((it, idx) => (
-              <tr key={`item-${idx}`} className="border-b border-dashed border-black">
-                <td className="border-r-2 border-black p-2 align-top">{String(it.itemCode || it.item || "")}</td>
-                <td className="border-r-2 border-black p-2 align-top">{String(it.description || it.item_description || "")}</td>
-                <td className="border-r-2 border-black p-2 text-left align-top">{String(it.qty ?? it.item_quantity ?? "")}</td>
-                <td className="p-2 text-center align-top">{String(it.unit || it.item_unit || "")}</td>
-              </tr>
-            ))}
-            {Array.from({ length: Math.max(14 - items.length, 0) }).map((_, i) => (
-              <tr key={`empty-${i}`} className="border-b border-dashed border-black last:border-b-0">
-                <td className="border-r-2 border-black p-2 h-7"></td>
-                <td className="border-r-2 border-black p-2"></td>
-                <td className="border-r-2 border-black p-2"></td>
-                <td className="p-2"></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+          {Array.from({ length: emptyRowsCount }).map((_, i) => (
+            <tr key={`empty-${i}`}>
+              <td style={{ borderRight: "2px solid black", height: "28px" }}>&nbsp;</td>
+              <td style={{ borderRight: "2px solid black" }}>&nbsp;</td>
+              <td style={{ borderRight: "2px solid black" }}>&nbsp;</td>
+              <td>&nbsp;</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-      <div className="border-2 border-t-0 border-black">
-        <div className="grid grid-cols-2">
-          <div className="border-r-2 border-black p-3">
-            <div className="mb-6">
-              <div className="mt-2">
-                <div className="flex items-start gap-2">
-                  <div className="text-[11px] font-bold">ผู้ส่งมอบ</div>
-                  <div className="flex flex-col">
-                    <div className="text-sm">{supplierName}</div>
-                    <div className="border-b border-dotted border-black w-40"></div>
-                  </div>
+      {/* Footer Table */}
+      <table className="footer-table">
+        <tbody>
+          <tr>
+            <td style={{ width: "50%", borderRight: "2px solid black", padding: "15px" }}>
+              {/* Supplier */}
+              <div style={{ marginBottom: "15px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+                  <span className="label-th" style={{ width: "60px" }}>ผู้ส่งมอบ</span>
+                  <div style={{ flex: 1, borderBottom: "1px dotted black", minHeight: "20px" }}>{supplierName}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginTop: "5px" }}>
+                  <span className="label-th" style={{ width: "60px" }}>วันที่</span>
+                  <div style={{ width: "120px", borderBottom: "1px dotted black", minHeight: "20px" }}>{displaySupplierDate}</div>
                 </div>
               </div>
-              <div className="mt-2">
-                <div className="flex items-start gap-2">
-                  <div className="text-[11px] font-bold">วันที่</div>
-                  <div className="flex flex-col">
-                    <div className="text-sm">{displaySupplierDate}</div>
-                    <div className="border-b border-dotted border-black w-28"></div>
-                  </div>
+              
+              {/* Recipient */}
+              <div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+                  <span className="label-th" style={{ width: "60px" }}>ผู้รับงาน</span>
+                  <div style={{ flex: 1, borderBottom: "1px dotted black", minHeight: "20px" }}>{recipientName}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginTop: "5px" }}>
+                  <span className="label-th" style={{ width: "60px" }}>วันที่</span>
+                  <div style={{ width: "120px", borderBottom: "1px dotted black", minHeight: "20px" }}>{displayRecipientDate}</div>
                 </div>
               </div>
-            </div>
-            <div>
-              <div className="mt-2">
-                <div className="flex items-start gap-2">
-                  <div className="text-[11px] font-bold">ผู้รับงาน</div>
-                  <div className="flex flex-col">
-                    <div className="text-sm">{recipientName}</div>
-                    <div className="border-b border-dotted border-black w-40"></div>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-2">
-                <div className="flex items-start gap-2">
-                  <div className="text-[11px] font-bold">วันที่</div>
-                  <div className="flex flex-col">
-                    <div className="text-sm">{displayRecipientDate}</div>
-                    <div className="border-b border-dotted border-black w-28"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="p-3">
-            <div className="flex items-start justify-between gap-6">
-              <div className="flex items-center gap-3">
+            </td>
+            <td style={{ width: "50%", padding: "15px", verticalAlign: "middle" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
-                  <div className="text-[11px] font-bold">รวมชิ้นงานทั้งหมด</div>
-                  <div className="text-[10px]">Total Quantity</div>
+                  <div className="label-th">รวมชิ้นงานทั้งหมด</div>
+                  <div className="label-en">Total Quantity</div>
                 </div>
-                <div className="flex flex-col items-center">
-                  <div className="text-sm leading-none">{displayTotalQty}</div>
-                  <div className="mt-[2px] border-b border-black w-20"></div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ borderBottom: "1px solid black", minWidth: "100px", fontSize: "16px", fontWeight: "bold" }}>
+                    {displayTotalQty}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div className="label-th">รายการ</div>
+                  <div className="label-en">Unit</div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-[11px] font-bold">รายการ</div>
-                <div className="text-[10px]">Unit</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   )
 }

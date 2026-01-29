@@ -202,12 +202,8 @@ function useInvoiceState() {
     notes: "",
     paymentTermsDays: 7,
     sourceQuotationNumber: "",
-<<<<<<< Updated upstream
-    salesPerson: "EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD",
-=======
     salesPerson: "",
     eit: null,
->>>>>>> Stashed changes
     eitAddress: "",
     eitTelephone: "",
     eitFax: "",
@@ -218,28 +214,6 @@ function useInvoiceState() {
 
   // Load EIT options
   React.useEffect(() => {
-<<<<<<< Updated upstream
-    // 1. Check URL params
-    const params = new URLSearchParams(window.location.search)
-    const key = params.get("key")
-    const index = params.get("index")
-    
-    if (key && index !== null) {
-      try {
-        const historyItem = JSON.parse(localStorage.getItem(key))
-        if (historyItem && Array.isArray(historyItem.invoices)) {
-          const inv = historyItem.invoices[parseInt(index, 10)]
-          if (inv) {
-            setCustomer(inv.customer || {})
-            setDetails(inv.details || {})
-            setItems(Array.isArray(inv.items) ? inv.items : [])
-            return
-          }
-        }
-      } catch (e) {
-        console.error("Error loading invoice from URL", e)
-      }
-=======
     fetch(`${API_BASE_URL}/api/eits/`)
       .then(res => res.json())
       .then(data => {
@@ -337,7 +311,6 @@ function useInvoiceState() {
         }
       }
       return
->>>>>>> Stashed changes
     }
 
     try {
