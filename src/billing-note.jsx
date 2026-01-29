@@ -256,7 +256,6 @@ function useBillingNoteState() {
         idx === i ? { ...row, [field]: value } : row,
       ),
     )
-<<<<<<< HEAD
   // Load EIT options
   React.useEffect(() => {
     fetch(`${API_BASE_URL}/api/eits/`)
@@ -275,7 +274,24 @@ function useBillingNoteState() {
       })
   }, [])
 
->>>>>>> origin/main
+  return {
+    customer,
+    setCustomer,
+    details,
+    setDetails,
+    items,
+    setItems,
+    sourceKey,
+    setSourceKey,
+    sourceIndex,
+    setSourceIndex,
+    eitOptions,
+    addItem,
+    removeItem,
+    updateItem,
+    total,
+  }
+}
 
 function BillingNotePage() {
   const q = useBillingNoteState()
