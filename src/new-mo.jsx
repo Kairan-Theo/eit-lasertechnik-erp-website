@@ -264,13 +264,15 @@ function NewMOPage() {
   }, [])
   React.useEffect(() => {
     if (printOrder) {
-      setTimeout(() => window.print(), 120)
+      setTimeout(() => window.print(), 500)
     }
   }, [printOrder])
   React.useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`)
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { "Authorization": `Token ${token}` } : {}
+        const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`, { headers })
         if (!res.ok) return
         const data = await res.json()
         const codes = (Array.isArray(data) ? data : []).map(d => String(d.job_order_code || "").trim()).filter(Boolean)
@@ -304,7 +306,9 @@ function NewMOPage() {
       if (id) {
         ;(async () => {
           try {
-            const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${id}/`)
+            const token = localStorage.getItem("authToken")
+            const headers = token ? { "Authorization": `Token ${token}` } : {}
+            const res = await fetch(`${API_BASE_URL}/api/manufacturing_orders/${id}/`, { headers })
             if (!res.ok) return
             const m = await res.json()
             setNewOrder(prev => ({
@@ -344,7 +348,9 @@ function NewMOPage() {
 
   React.useEffect(() => {
     // Fetch Inventory
-    fetch(`${API_BASE_URL}/api/component_entries/`)
+    const token = localStorage.getItem("authToken")
+    const headers = token ? { "Authorization": `Token ${token}` } : {}
+    fetch(`${API_BASE_URL}/api/component_entries/`, { headers })
       .then(res => res.json())
       .then(data => {
          const map = {}
@@ -399,8 +405,8 @@ function NewMOPage() {
       start_date: toDateOrNull(newOrder.scheduledDate),
       complete_date: toDateOrNull(newOrder.completedDate),
       production_time: String(newOrder.productionTime || "").trim(),
-      responsible_sales_person: String(newOrder.salesDepartment || "").trim(),
-      responsible_production_person: String(newOrder.productionDepartment || "").trim(),
+      responsible_sales_person: String(newOrder.responsibleSalesPerson || "").trim(),
+      responsible_production_person: String(newOrder.responsibleProductionPerson || "").trim(),
       supplier: String(newOrder.supplier || "").trim(),
       supplier_date: toDateOrNull(newOrder.supplierDate),
       recipient: String(newOrder.recipient || "").trim(),
@@ -495,7 +501,14 @@ function NewMOPage() {
         return orderData
       }
     } catch (e) {
-      alert("Failed to create Manufacturing Order: " + (e?.message || "Unknown error"))
+      const msg = e?.message || "Unknown error"
+      if (msg.includes("Invalid token") || msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
+        alert("Your session has expired. Please log in again.")
+        localStorage.removeItem("authToken")
+        window.location.href = "/login.html"
+        return null
+      }
+      alert("Failed to create Manufacturing Order: " + msg)
       return null
     }
   }
@@ -802,17 +815,9 @@ function NewMOPage() {
           <style>
             {`
               @media print {
-                body > *:not(.print-portal) { display: none !important; }
                 .print-portal {
                   display: block !important;
-                  position: absolute;
-                  top: 0;
-                  left: 0;
-                  width: 100%;
-                  background: white;
-                  z-index: 9999;
                 }
-                @page { margin: 0; size: A4 ${previewOrientation}; }
               }
               .print-portal { display: none; }
             `}
@@ -860,7 +865,7 @@ function NewMOPage() {
                       <option value="landscape">Landscape</option>
                     </select>
                   </div>
-                  <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => { setTimeout(()=>window.print(),100) }}>Print</button>
+                  <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => printJobOrder(previewOrder)}>Print</button>
                   <button className="text-gray-500 hover:text-gray-900" onClick={() => setPreviewOrder(null)}>✕</button>
                 </div>
               </div>
