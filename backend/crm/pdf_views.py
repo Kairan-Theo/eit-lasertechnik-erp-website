@@ -260,7 +260,8 @@ def generate_quotation_pdf(request):
     # Quotation Title (Centered above table)
     # Changed: Added "EIT QUO" prefix and using Calisto MT Bold (Header_Title)
     qt_number = details.get('number', '')
-    elements.append(Paragraph(f"QUOTATION No. : EIT QUO {qt_number}", styles['Header_Title']))
+    # Fix: qt_number already contains "QUO", so just add "EIT" prefix to avoid "EIT QUO QUO"
+    elements.append(Paragraph(f"QUOTATION No. : EIT {qt_number}", styles['Header_Title']))
     elements.append(Spacer(1, 5))
 
     # --- Items Table ---
