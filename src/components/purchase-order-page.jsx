@@ -716,11 +716,17 @@ export default function PurchaseOrderPage() {
                      }
                      const selected = q.eitOptions.find(o => String(o.id) === val)
                      if (selected) {
+                       // Fix: EIT Lasertechnik address is incorrect in API, use hardcoded one matching Einstein
+                       let addr = selected.address || ""
+                       if (selected.organization_name && (selected.organization_name.toLowerCase().includes("eit lasertechnik") || selected.organization_name.toLowerCase().includes("einstein"))) {
+                          addr = "1/120 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510"
+                       }
+
                        q.setDetails({
                          ...q.details,
                          eit: selected.id,
                          eitName: selected.organization_name,
-                         eitAddress: selected.address || "",
+                         eitAddress: addr,
                          eitPhone: selected.eit_telephone || "",
                          eitFax: selected.eit_fax || "",
                          eitMobile: selected.eit_mobile || ""
