@@ -129,6 +129,22 @@ class DealSerializer(serializers.ModelSerializer):
     def get_customer_name(self, obj):
         return obj.customer.company_name if obj.customer else ""
 
+    def to_internal_value(self, data):
+        # Handle JSON strings in FormData (e.g. for items)
+        if 'items' in data and isinstance(data['items'], str):
+            import json
+            try:
+                # We need a mutable copy if data is QueryDict
+                if hasattr(data, 'dict'):
+                    data = data.dict()
+                elif hasattr(data, 'copy'):
+                    data = data.copy()
+                
+                data['items'] = json.loads(data['items'])
+            except:
+                pass
+        return super().to_internal_value(data)
+
     def create(self, validated_data):
         cust_id = validated_data.pop('customer_id', None)
         name = validated_data.pop('write_customer_name', None)
@@ -500,26 +516,64 @@ class TaskSerializer(serializers.ModelSerializer):
 class ManufacturingOrderSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     write_customer_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    po_file = serializers.FileField(write_only=True, required=False)
 
     class Meta:
         model = ManufacturingOrder
-        fields = '__all__'
+        exclude = ['po_file_content']
 
     def get_customer_name(self, obj):
         return obj.customer.company_name if obj.customer else ""
 
+    def to_internal_value(self, data):
+        # Handle JSON strings in FormData (e.g. for items)
+        if 'items' in data and isinstance(data['items'], str):
+            import json
+            try:
+                # We need a mutable copy if data is QueryDict
+                if hasattr(data, 'dict'):
+                    data = data.dict()
+                elif hasattr(data, 'copy'):
+                    data = data.copy()
+                
+                data['items'] = json.loads(data['items'])
+            except:
+                pass
+        return super().to_internal_value(data)
+
     def create(self, validated_data):
         customer_name = validated_data.pop('write_customer_name', None)
+        po_file = validated_data.pop('po_file', None)
+        
         if customer_name:
             customer, _ = Customer.objects.get_or_create(company_name=customer_name)
             validated_data['customer'] = customer
+            
+        if po_file:
+            validated_data['po_file_name'] = po_file.name
+            validated_data['po_file_type'] = po_file.content_type
+            validated_data['po_file_content'] = po_file.read()
+            
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
         customer_name = validated_data.pop('write_customer_name', None)
+        po_file = validated_data.pop('po_file', None)
+        
         if customer_name:
             customer, _ = Customer.objects.get_or_create(company_name=customer_name)
             validated_data['customer'] = customer
+            
+        if po_file:
+            validated_data['po_file_name'] = po_file.name
+            validated_data['po_file_type'] = po_file.content_type
+            validated_data['po_file_content'] = po_file.read()
+            
+        # If po_file_name is explicitly cleared (empty string) and no new file is uploaded, clear the file content
+        if 'po_file_name' in validated_data and not validated_data.get('po_file_name') and not po_file:
+            validated_data['po_file_content'] = None
+            validated_data['po_file_type'] = ''
+            
         return super().update(instance, validated_data)
 
 class ProductSerializer(serializers.ModelSerializer):

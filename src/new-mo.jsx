@@ -71,7 +71,9 @@ function NewMOPage() {
     supplier: "",
     supplierDate: "",
     recipient: "",
-    recipientDate: ""
+    recipientDate: "",
+    poFile: null,
+    poFileName: ""
   })
   const [items, setItems] = React.useState([])
   const [itemsTouched, setItemsTouched] = React.useState(false)
@@ -79,6 +81,22 @@ function NewMOPage() {
   const [printOrder, setPrintOrder] = React.useState(null)
   const [previewZoom, setPreviewZoom] = React.useState(0.5)
   const [previewOrientation, setPreviewOrientation] = React.useState("portrait")
+  
+  const fileInputRef = React.useRef(null)
+  const filePreviewUrl = React.useMemo(() => {
+    if (newOrder.poFile) {
+      return URL.createObjectURL(newOrder.poFile)
+    }
+    return null
+  }, [newOrder.poFile])
+
+  React.useEffect(() => {
+    return () => {
+      if (filePreviewUrl) {
+        URL.revokeObjectURL(filePreviewUrl)
+      }
+    }
+  }, [filePreviewUrl])
 
   const printJobOrder = React.useCallback((orderData) => {
     setPrintOrder(orderData)
@@ -327,6 +345,7 @@ function NewMOPage() {
               supplierDate: m.supplier_date || prev.supplierDate,
               recipient: m.recipient || prev.recipient,
               recipientDate: m.recipient_date || prev.recipientDate,
+              poFileName: m.po_file_name || prev.poFileName,
             }))
             const its = Array.isArray(m.items)
               ? m.items.map(x => ({
@@ -387,59 +406,85 @@ function NewMOPage() {
 
   const createOrderData = async () => {
     const token = localStorage.getItem("authToken")
-    const headers = { "Content-Type": "application/json" }
+    const headers = {}
     if (token) headers["Authorization"] = `Token ${token}`
+
+    if (newOrder.poFile) {
+      const fileSizeMB = newOrder.poFile.size / (1024 * 1024)
+      if (fileSizeMB > 8) {
+        alert("File size exceeds 8 MB. Please upload a smaller file.")
+        return null
+      }
+    }
+
     const toDateOrNull = (s) => {
       const v = String(s || "").trim()
-      return v ? v : null
+      return v ? v : ""
     }
     const normalizedItems = items.map((x, i) => ({ ...x, itemCode: x.itemCode || String(i + 1) }))
     const componentStatus = computeComponentStatusFromItems(normalizedItems, inventory)
-    const payload = {
-      job_order_code: String(newOrder.jobOrderCode || "").trim(),
-      po_number: String(newOrder.purchaseOrder || "").trim(),
-      write_customer_name: String(newOrder.customer || "").trim(),
-      product: String(newOrder.product || "").trim(),
-      product_no: String(newOrder.productNo || "").trim(),
-      quantity: Number(newOrder.quantity) || 1,
-      start_date: toDateOrNull(newOrder.scheduledDate),
-      complete_date: toDateOrNull(newOrder.completedDate),
-      production_time: String(newOrder.productionTime || "").trim(),
-      responsible_sales_person: String(newOrder.responsibleSalesPerson || "").trim(),
-      responsible_production_person: String(newOrder.responsibleProductionPerson || "").trim(),
-      supplier: String(newOrder.supplier || "").trim(),
-      supplier_date: toDateOrNull(newOrder.supplierDate),
-      recipient: String(newOrder.recipient || "").trim(),
-      recipient_date: toDateOrNull(newOrder.recipientDate),
-      items: normalizedItems.map(it => ({
-        item: String(it.itemCode || "").trim(),
-        item_description: String(it.description || "").trim(),
-        item_quantity: String(it.qty || "").trim(),
-        item_unit: String(it.unit || "Unit").trim(),
-      })),
-      item_description: String((normalizedItems[0]?.description) || "").trim(),
-      item_quantity: String((normalizedItems[0]?.qty) || "").trim(),
-      item_unit: String((normalizedItems[0]?.unit) || "Unit").trim(),
-      component_status: componentStatus,
+    
+    const formData = new FormData()
+    formData.append("job_order_code", String(newOrder.jobOrderCode || "").trim())
+    formData.append("po_number", String(newOrder.purchaseOrder || "").trim())
+    formData.append("write_customer_name", String(newOrder.customer || "").trim())
+    formData.append("product", String(newOrder.product || "").trim())
+    formData.append("product_no", String(newOrder.productNo || "").trim())
+    formData.append("quantity", String(Number(newOrder.quantity) || 1))
+    
+    if (newOrder.scheduledDate) formData.append("start_date", newOrder.scheduledDate)
+    if (newOrder.completedDate) formData.append("complete_date", newOrder.completedDate)
+    
+    formData.append("production_time", String(newOrder.productionTime || "").trim())
+    formData.append("responsible_sales_person", String(newOrder.responsibleSalesPerson || "").trim())
+    formData.append("responsible_production_person", String(newOrder.responsibleProductionPerson || "").trim())
+    formData.append("supplier", String(newOrder.supplier || "").trim())
+    
+    if (newOrder.supplierDate) formData.append("supplier_date", newOrder.supplierDate)
+    
+    formData.append("recipient", String(newOrder.recipient || "").trim())
+    
+    if (newOrder.recipientDate) formData.append("recipient_date", newOrder.recipientDate)
+    
+    const itemsPayload = normalizedItems.map(it => ({
+      item: String(it.itemCode || "").trim(),
+      item_description: String(it.description || "").trim(),
+      item_quantity: String(it.qty || "").trim(),
+      item_unit: String(it.unit || "Unit").trim(),
+    }))
+    formData.append("items", JSON.stringify(itemsPayload))
+    
+    formData.append("item_description", String((normalizedItems[0]?.description) || "").trim())
+    formData.append("item_quantity", String((normalizedItems[0]?.qty) || "").trim())
+    formData.append("item_unit", String((normalizedItems[0]?.unit) || "Unit").trim())
+    formData.append("component_status", componentStatus)
+
+    if (newOrder.poFile) {
+      formData.append("po_file", newOrder.poFile)
     }
+    // Append po_file_name so backend knows if we cleared it
+    formData.append("po_file_name", String(newOrder.poFileName || ""))
+
     try {
       const params = new URLSearchParams(window.location.search)
       const editId = params.get('mfgId')
       let targetId = editId
-      if (!targetId && payload.job_order_code) {
+      // Check for existing if creating new
+      if (!targetId && newOrder.jobOrderCode) {
         try {
           const resList = await fetch(`${API_BASE_URL}/api/manufacturing_orders/`, { headers })
           if (resList.ok) {
             const dataList = await resList.json()
             const list = Array.isArray(dataList) ? dataList : []
-            const existing = list.find(d => String(d.job_order_code || "").trim() === payload.job_order_code)
+            const existing = list.find(d => String(d.job_order_code || "").trim() === String(newOrder.jobOrderCode || "").trim())
             if (existing) targetId = String(existing.id || "")
           }
         } catch {}
       }
       const endpoint = targetId ? `${API_BASE_URL}/api/manufacturing_orders/${targetId}/` : `${API_BASE_URL}/api/manufacturing_orders/`
       const method = targetId ? "PATCH" : "POST"
-      const res = await fetch(endpoint, { method, headers, body: JSON.stringify(payload) })
+      
+      const res = await fetch(endpoint, { method, headers, body: formData })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(typeof err === "object" && err ? JSON.stringify(err) : `HTTP ${res.status}`)
@@ -599,6 +644,82 @@ function NewMOPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
                   <input value={newOrder.customer} onChange={(e)=>setNewOrder({...newOrder, customer:e.target.value})} placeholder="Company name" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">PO File</label>
+                  <div className="flex items-center gap-3 h-[42px]">
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      className="hidden" 
+                      accept=".pdf,.xls,.xlsx"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setNewOrder({...newOrder, poFile: e.target.files[0]})
+                        }
+                      }}
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current.click()}
+                      className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded text-xs font-medium text-gray-700 hover:bg-gray-200"
+                    >
+                      Choose File
+                    </button>
+                    
+                    {newOrder.poFile ? (
+                      <div className="flex items-center gap-2 max-w-[calc(100%-120px)]">
+                        <a 
+                          href={filePreviewUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 text-sm underline hover:text-blue-800 truncate"
+                        >
+                          {newOrder.poFile.name}
+                        </a>
+                        <button 
+                            type="button"
+                            onClick={() => {
+                                setNewOrder({...newOrder, poFile: null})
+                                if (fileInputRef.current) fileInputRef.current.value = ""
+                            }}
+                            className="text-red-500 hover:text-red-700 shrink-0"
+                            title="Remove file"
+                        >
+                            <Trash className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : newOrder.poFileName ? (
+                       <div className="flex items-center gap-2 max-w-[calc(100%-120px)]">
+                        {(() => {
+                          const params = new URLSearchParams(window.location.search)
+                          const mfgId = params.get('mfgId')
+                          if (mfgId) {
+                             return (
+                               <a 
+                                 href={`${API_BASE_URL}/api/manufacturing_orders/${mfgId}/download_po_file/`}
+                                 target="_blank"
+                                 rel="noopener noreferrer"
+                                 className="text-blue-600 text-sm underline hover:text-blue-800 truncate"
+                               >
+                                 {newOrder.poFileName}
+                               </a>
+                             )
+                          }
+                          return <span className="text-sm text-gray-700 truncate">{newOrder.poFileName}</span>
+                        })()}
+                        <button 
+                            type="button"
+                            onClick={() => setNewOrder({...newOrder, poFileName: "", poFile: null})}
+                            className="text-red-500 hover:text-red-700 shrink-0"
+                            title="Remove file"
+                        >
+                            <Trash className="w-4 h-4" />
+                        </button>
+                       </div>
+                    ) : (
+                      <span className="text-sm text-gray-400 italic">No file chosen</span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
