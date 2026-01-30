@@ -612,9 +612,20 @@ function BillingNoteList({ list, refreshData }) {
   const handleDelete = async () => {
     const itemsToDelete = list.filter(bn => selectedRows.includes(getUid(bn)))
     
+    // API Deletion
+    const apiItems = itemsToDelete.filter(bn => bn.sourceKey === 'api')
+    for (const item of apiItems) {
+      try {
+        await fetch(`${API_BASE_URL}/api/billing_notes/${item.id}/`, { method: 'DELETE' })
+      } catch (e) {
+        console.error("Error deleting API item", e)
+      }
+    }
+
     // LocalStorage Deletion
+    const localItems = itemsToDelete.filter(bn => bn.sourceKey !== 'api')
     const groupedByKey = {}
-    itemsToDelete.forEach(bn => {
+    localItems.forEach(bn => {
       if (!groupedByKey[bn.sourceKey]) groupedByKey[bn.sourceKey] = []
       groupedByKey[bn.sourceKey].push(bn.sourceIndex)
     })
@@ -672,14 +683,18 @@ function BillingNoteList({ list, refreshData }) {
               <th className="p-3 text-left w-16">Index</th>
               <th className="p-3 text-left">Number</th>
               <th className="p-3 text-left">Customer</th>
-              <th className="p-3 text-left">Date</th>
               <th className="p-3 text-left">Due Date</th>
-              <th className="p-3 text-right">Total</th>
+              <th className="p-3 text-right">Amount</th>
+              <th className="p-3 text-right">Outstanding</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {list.map((bn, i) => {
               const uid = getUid(bn)
+              const amount = (bn.items || []).reduce((sum, item) => sum + (Number(String(item.amount).replace(/,/g, '')) || 0), 0)
+              const paid = (bn.items || []).reduce((sum, item) => sum + (Number(String(item.paid).replace(/,/g, '')) || 0), 0)
+              const outstanding = amount - paid
+
               return (
                 <tr key={uid} className={`hover:bg-gray-50 ${selectedRows.includes(uid) ? 'bg-blue-50' : ''}`}>
                   <td className="p-3">
@@ -697,10 +712,12 @@ function BillingNoteList({ list, refreshData }) {
                     </a>
                   </td>
                   <td className="p-3">{bn.customerName || "-"}</td>
-                  <td className="p-3">{bn.details?.date}</td>
                   <td className="p-3">{bn.details?.dueDate}</td>
-                  <td className="p-3 text-right font-medium">
-                    {bn.details?.currency} {bn.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <td className="p-3 text-right font-medium text-blue-600">
+                    {bn.details?.currency} {amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className={`p-3 text-right font-medium ${outstanding > 0 ? "text-red-600" : "text-green-600"}`}>
+                    {bn.details?.currency} {outstanding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                 </tr>
               )
@@ -1078,9 +1095,44 @@ function AdminPage() {
     return []
   }
 
+  const fetchBillingNotes = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/billing_notes/`)
+      if (response.ok) {
+        const apiBillingNotes = await response.json()
+        return apiBillingNotes.map(bn => ({
+          id: bn.id,
+          sourceKey: 'api',
+          sourceIndex: bn.id,
+          details: {
+            number: bn.bn_code,
+            date: bn.bn_created_date || bn.bn_date,
+            dueDate: bn.bn_due_date || bn.bn_invoice_date,
+            currency: bn.bn_currency || 'THB', 
+          },
+          customerName: bn.customer_details?.company_name || bn.customer_name || 'Unknown',
+          items: (bn.items || []).map(item => ({
+            ...item,
+            invoiceNo: item.invoice_no || item.invoiceNo,
+            dueDate: item.due_date || item.dueDate,
+            amount: item.amount,
+            paid: item.paid
+          })),
+          totals: {
+            total: (bn.items || []).reduce((sum, item) => sum + (parseFloat(String(item.amount || 0).replace(/,/g, '')) - parseFloat(String(item.paid || 0).replace(/,/g, ''))), 0)
+          }
+        }))
+      }
+    } catch (e) {
+      console.error("Failed to fetch billing notes from API", e)
+    }
+    return []
+  }
+
   const loadData = async () => {
     const localData = getAllData()
     const apiQuotations = await fetchQuotations()
+    const apiBillingNotes = await fetchBillingNotes()
     
     if (apiQuotations.length > 0) {
       // Create a Set of API quotation numbers for efficient lookup
@@ -1092,6 +1144,17 @@ function AdminPage() {
       
       // Merge the lists
       localData.quotations = [...localData.quotations, ...apiQuotations]
+    }
+
+    if (apiBillingNotes.length > 0) {
+      // Create a Set of API billing note numbers for efficient lookup
+      const apiNumbers = new Set(apiBillingNotes.map(bn => bn.details.number))
+      
+      // Filter out LocalStorage items that exist in API
+      localData.billingNotes = localData.billingNotes.filter(bn => !apiNumbers.has(bn.details.number))
+      
+      // Merge the lists
+      localData.billingNotes = [...localData.billingNotes, ...apiBillingNotes]
     }
     
     setData(localData)

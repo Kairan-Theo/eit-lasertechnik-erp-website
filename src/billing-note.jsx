@@ -311,13 +311,13 @@ function BillingNotePage() {
           .then(res => res.json())
           .then(data => {
              q.setCustomer({
-               company: data.customer_name || "",
-               address: data.cus_address || "",
-               telephone: data.cus_phone || "",
-               fax: data.cus_fax || "",
-               attn: data.cus_attn || "",
-               div: data.cus_div || "",
-               mobile: data.cus_mobile || ""
+               company: data.customer_details?.company_name || data.customer_name || "",
+               address: data.customer_details?.address || data.cus_address || "",
+               telephone: data.customer_details?.phone || data.cus_phone || "",
+               fax: data.customer_details?.cus_fax || data.cus_fax || "",
+               attn: data.customer_details?.attn || data.cus_attn || "",
+               div: data.customer_details?.division || data.cus_div || "",
+               mobile: data.customer_details?.mobile || data.cus_mobile || ""
              })
              q.setDetails(prev => ({
                ...prev,

@@ -134,6 +134,13 @@ function BOMPage() {
   const [query, setQuery] = React.useState("")
   const confirmBulkDelete = async () => {
     try {
+      if (selectedRows.length > 0) {
+        await Promise.all(selectedRows.map(async (id) => {
+          try {
+             await fetch(`${API_BASE_URL}/api/bom/${id}/`, { method: "DELETE" })
+          } catch {}
+        }))
+      }
       const next = boms.filter(x => !selectedRows.includes(x.id))
       setAndPersist(next)
     } finally {

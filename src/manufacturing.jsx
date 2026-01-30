@@ -128,6 +128,7 @@ function computeComponentStatusFromItems(items, inventory) {
 
 function ManufacturingOrderPage() {
   const [orders, setOrders] = React.useState([])
+  const setAndPersist = setOrders
   const [openStatusId, setOpenStatusId] = React.useState(null)
   const [openActivityId, setOpenActivityId] = React.useState(null)
   const [openScheduleForId, setOpenScheduleForId] = React.useState(null)
@@ -265,6 +266,7 @@ function ManufacturingOrderPage() {
             responsibleSales: String(m.responsible_sales_person || "").trim(),
             responsibleProduction: String(m.responsible_production_person || "").trim(),
             customer: m.customer_name || "",
+            poFileName: m.po_file_name || "",
             componentStatus: autoStatus || m.component_status || "",
             state: m.state || "",
             favorite: false,
@@ -549,6 +551,7 @@ function ManufacturingOrderPage() {
     { id: 'state', label: 'State' },
     { id: 'customer', label: 'Customer' },
     { id: 'jobOrderCode', label: 'PO Number' },
+    { id: 'poFile', label: 'PO File' },
     { id: 'responsible', label: 'Responsible' },
     { id: 'start', label: 'Start' },
     { id: 'completedDate', label: 'Completed Date' },
@@ -573,6 +576,21 @@ function ManufacturingOrderPage() {
         </button>
       )
       case 'jobOrderCode': return <span className="text-gray-800">{o.purchaseOrder || "-"}</span>
+      case 'poFile': return (
+        o.poFileName ? (
+          <div className="flex flex-col">
+            <a 
+              href={`${API_BASE_URL}/api/manufacturing_orders/${o.id}/download_po_file/`}
+              className="text-blue-600 underline hover:text-blue-800"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {o.poFileName}
+            </a>
+            <span className="text-[10px] text-gray-500">Click to open</span>
+          </div>
+        ) : <span className="text-gray-400">-</span>
+      )
       case 'productNo': return <span className="text-gray-800">{o.productNo || "-"}</span>
       case 'quantity': return <span className="text-gray-800">{String(parseInt(o.quantity, 10) || 0)}</span>
       case 'start': return <span className="text-gray-700">{o.start ? fmtFullDate(new Date(o.start).getTime()) : "-"}</span>

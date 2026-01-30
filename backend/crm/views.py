@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
@@ -16,6 +16,7 @@ from email import encoders
 import os
 import requests
 from django.core.files.base import ContentFile
+from django.http import HttpResponse
 
 
 
@@ -230,9 +231,20 @@ class TaskViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
 class ManufacturingOrderViewSet(viewsets.ModelViewSet):
-    queryset = ManufacturingOrder.objects.all().order_by('-created_at')
+    queryset = ManufacturingOrder.objects.defer('po_file_content').all().order_by('-created_at')
     serializer_class = ManufacturingOrderSerializer
+    authentication_classes = []
     permission_classes = [AllowAny]
+
+    @action(detail=True, methods=['get'])
+    def download_po_file(self, request, pk=None):
+        mo = self.get_object()
+        if not mo.po_file_content:
+            return Response({"error": "No file attached"}, status=status.HTTP_404_NOT_FOUND)
+            
+        response = HttpResponse(mo.po_file_content, content_type=mo.po_file_type)
+        response['Content-Disposition'] = f'inline; filename="{mo.po_file_name}"'
+        return response
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by('name')
@@ -267,6 +279,7 @@ class SystemComponentViewSet(viewsets.ModelViewSet):
 class ComponentEntryViewSet(viewsets.ModelViewSet):
     queryset = ComponentEntry.objects.all().order_by('component_name')
     serializer_class = ComponentEntrySerializer
+    authentication_classes = []
     permission_classes = [AllowAny]
 
 
@@ -763,3 +776,19 @@ def get_default_eit(request):
             "eit_fax": "02-052-9544",
             "address": "1/120 ซอยรามคําแหง 184 \n แขวงมีนบุรี เขตมีนบุรี \n กรุงเทพมหานคร 10510"
         })
+
+
+@api_view(['DELETE'])
+@permission_classes([AllowAny])
+def delete_bom(request, pk):
+    try:
+        pk = int(pk)
+        if pk > 0:
+            # Positive ID -> ProductType
+            ProductType.objects.filter(id=pk).delete()
+        elif pk < 0:
+            # Negative ID -> Product (the whole product)
+            Product.objects.filter(id=-pk).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -328,6 +328,12 @@ class ManufacturingOrder(models.Model):
     responsible_production_person = models.CharField(max_length=255, blank=True)
     customer = models.ForeignKey(Customer, related_name='manufacturing_orders', on_delete=models.SET_NULL, null=True, blank=True)
     po = models.ForeignKey(PurchaseOrder, related_name='manufacturing_orders', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # PO File Storage (Binary)
+    po_file_name = models.CharField(max_length=255, blank=True)
+    po_file_type = models.CharField(max_length=100, blank=True)
+    po_file_content = models.BinaryField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
