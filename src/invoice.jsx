@@ -789,7 +789,7 @@ function InvoiceDocument({ inv }) {
       <div className="border border-black border-t-0 p-2 pt-2 pb-2 flex justify-between text-center text-xs">
          <div className="w-[30%] flex flex-col">
             <div className="border border-black mb-1 font-bold p-1 w-full">ชำระเงินโดย</div>
-            <div className="mt-2 font-bold">ผู้รับสินค้า Reciever</div>
+            <div className="mt-2 font-bold">ผู้รับสินค้า Receiver</div>
             <div className="mt-4 border-b border-dotted border-black w-3/4 mx-auto"></div>
             <div className="mt-1 flex justify-center gap-1">
                <span>วันที่</span>
