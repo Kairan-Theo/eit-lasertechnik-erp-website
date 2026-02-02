@@ -22,7 +22,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, google_login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom, delete_bom, send_email_api, EmailLogViewSet, DealHistoryViewSet, check_tracking_status, QuotationViewSet, BillingNoteViewSet, get_default_eit, EITViewSet, CustomerPurchaseOrderViewSet, PurchaseOrderViewSet, InvoiceViewSet
-from crm.pdf_views import generate_quotation_pdf, generate_billing_note_pdf
+from crm.pdf_views import generate_quotation_pdf, generate_billing_note_pdf, generate_invoice_pdf
 
 router = DefaultRouter()
 router.register(r'eits', EITViewSet)
@@ -80,6 +80,7 @@ urlpatterns = [
     path('api/crm/analytics/', get_crm_analytics),
     path('api/generate-quotation-pdf/', generate_quotation_pdf),
     path('api/generate-billing-note-pdf/', generate_billing_note_pdf),
+    path('api/generate-invoice-pdf/', generate_invoice_pdf),
     path('api/auth/signup/', signup),
     path('api/auth/login/', login),
     path('api/auth/google/', google_login),
