@@ -811,3 +811,9 @@ def delete_bom(request, pk):
         return Response(status=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class PurchaseOrderViewSet(viewsets.ModelViewSet):
+    queryset = PurchaseOrder.objects.all().order_by('-created_at')
+    serializer_class = PurchaseOrderSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]

@@ -221,7 +221,7 @@ function usePurchaseOrderState() {
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, value) => setItems(prev => prev.map((row, idx) => idx === i ? { ...row, [field]: value } : row))
 
-  return { vendor, setVendor, details, setDetails, eitOptions, items, setItems, addItem, removeItem, updateItem, subtotal, taxTotal, total }
+  return { vendor, setVendor, details, setDetails, eitOptions, items, setItems, addItem, removeItem, updateItem, subtotal, taxTotal, total, sourceKey, setSourceKey, sourceIndex, setSourceIndex }
 }
 
 export default function PurchaseOrderPage() {
@@ -252,6 +252,17 @@ export default function PurchaseOrderPage() {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setCustomerOptions(data)
+      })
+      .catch(console.error)
+  }, [])
+  
+  // Load Quotations
+  const [quotationOptions, setQuotationOptions] = React.useState([])
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/quotations/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setQuotationOptions(data)
       })
       .catch(console.error)
   }, [])
@@ -373,7 +384,7 @@ export default function PurchaseOrderPage() {
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedRows(poList.map(po => po.poNumber))
+      setSelectedRows(poList.map(po => po.sourceIndex))
     } else {
       setSelectedRows([])
     }
@@ -387,21 +398,52 @@ export default function PurchaseOrderPage() {
     }
   }
 
-  const handleBatchDelete = () => {
-    const next = poList.filter(po => !selectedRows.includes(po.poNumber))
-    setPoList(next)
-    localStorage.setItem("poList", JSON.stringify(next))
-    setSelectedRows([])
-    setOpenDeleteConfirm(false)
+  const handleBatchDelete = async () => {
+    try {
+        await Promise.all(selectedRows.map(id => 
+            fetch(`${API_BASE_URL}/api/purchase_orders/${id}/`, { method: 'DELETE' })
+        ))
+        fetchPurchaseOrders()
+        setSelectedRows([])
+        setOpenDeleteConfirm(false)
+    } catch (e) {
+        console.error("Batch delete failed", e)
+        alert("Batch delete failed")
+    }
   }
+
+  const fetchPurchaseOrders = React.useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/purchase_orders/`)
+      if (res.ok) {
+        const data = await res.json()
+        const mapped = data.map(po => ({
+            poNumber: po.number,
+            customer: po.customer,
+            items: po.items,
+            details: {
+                poNumber: po.number,
+                eit: po.eit_details?.id || po.eit,
+                eitName: po.extra_fields?.eitName || po.eit_details?.organization_name || "",
+                eitAddress: po.extra_fields?.eitAddress || po.eit_details?.address || "",
+                ...po.extra_fields
+            },
+            extraFields: po.extra_fields,
+            updatedAt: po.updated_at,
+            sourceKey: 'api',
+            sourceIndex: po.id
+        }))
+        setPoList(mapped)
+      }
+    } catch (e) {
+      console.error("Failed to fetch POs", e)
+    }
+  }, [])
 
   // Load PO List
   React.useEffect(() => {
-    try {
-      const data = JSON.parse(localStorage.getItem("poList") || "[]")
-      if (Array.isArray(data)) setPoList(data)
-    } catch {}
-  }, [])
+    fetchPurchaseOrders()
+  }, [fetchPurchaseOrders])
 
   // Load from API if query params present
   React.useEffect(() => {
@@ -546,6 +588,8 @@ export default function PurchaseOrderPage() {
   }, [])
 
   const startNew = () => {
+    q.setSourceKey(null)
+    q.setSourceIndex(null)
     q.setDetails({
       poNumber: generatePoNumber(),
       orderDate: new Date().toISOString().slice(0, 10),
@@ -580,6 +624,8 @@ export default function PurchaseOrderPage() {
   const editPo = (idx) => {
     const p = poList[idx]
     if (!p) return
+    q.setSourceKey(p.sourceKey)
+    q.setSourceIndex(p.sourceIndex)
     q.setDetails({
        poNumber: p.poNumber || "",
        orderDate: p.extraFields?.orderDate || "",
@@ -604,96 +650,56 @@ export default function PurchaseOrderPage() {
   }
 
   const handleSave = async () => {
-    // API Save if source is API
-    if (q.sourceKey === 'api' && q.sourceIndex) {
-       try {
-          const payload = {
-              po_code: q.details.poNumber,
-              order_date: q.details.orderDate,
-              delivery_date: q.details.deliveryDate,
-              ref_quotation: q.details.refQuotation,
-              payment_terms: q.details.paymentTerms,
-              delivery_to: q.details.deliveryTo,
-              
-              // EIT
-              eit: q.details.eit,
-              eit_name: q.details.eitName,
-              eit_address: q.details.eitAddress,
-              eit_phone: q.details.eitPhone,
-              eit_fax: q.details.eitFax,
-              eit_mobile: q.details.eitMobile,
-              
-              remark: q.details.remark,
-              currency: q.details.currency,
-              
-              // Vendor
-              vendor_company: q.vendor.company,
-              vendor_name: q.vendor.name,
-              vendor_email: q.vendor.email,
-              vendor_company_email: q.vendor.companyEmail,
-              vendor_phone: q.vendor.phone,
-              vendor_company_phone: q.vendor.companyPhone,
-              vendor_address: q.vendor.address,
-              
-              items: q.items.map(it => ({
-                  description: it.description,
-                  product: it.product,
-                  quantity: it.qty,
-                  unit_price: it.price,
-                  unit: it.unit,
-                  tax: it.tax,
-                  note: it.note
-              }))
-          }
-
-          const response = await fetch(`${API_BASE_URL}/api/purchase_orders/${q.sourceIndex}/`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-          })
-
-          if (response.ok) {
-              alert("Purchase Order saved successfully!")
-              window.location.href = "/admin.html"
-          } else {
-              const err = await response.json()
-              alert("Error saving Purchase Order: " + JSON.stringify(err))
-          }
-       } catch (e) {
-          console.error(e)
-          alert("Error saving Purchase Order")
-       }
-       return
+    const payload = {
+        number: q.details.poNumber,
+        customer: q.vendor,
+        eit: q.details.eit,
+        eit_name: q.details.eitName,
+        items: q.items,
+        extra_fields: {
+            orderDate: q.details.orderDate,
+            deliveryDate: q.details.deliveryDate,
+            refQuotation: q.details.refQuotation,
+            paymentTerms: q.details.paymentTerms,
+            deliveryTo: q.details.deliveryTo,
+            remark: q.details.remark,
+            currency: q.details.currency,
+            salesPerson: q.details.salesPerson,
+            eitName: q.details.eitName,
+            eitAddress: q.details.eitAddress,
+            eitPhone: q.details.eitPhone,
+            eitFax: q.details.eitFax,
+            eitMobile: q.details.eitMobile
+        },
+        totals: {}
     }
 
     try {
-      const newPo = {
-        poNumber: q.details.poNumber,
-        customer: q.vendor, // Keeping 'customer' key for compatibility
-        extraFields: {
-          refQuotation: q.details.refQuotation,
-          orderDate: q.details.orderDate,
-          deliveryDate: q.details.deliveryDate,
-          paymentTerms: q.details.paymentTerms,
-          deliveryTo: q.details.deliveryTo
-        },
-        items: q.items,
-        details: q.details, // Save full details
-        updatedAt: new Date().toISOString()
-      }
+        let url = `${API_BASE_URL}/api/purchase_orders/`
+        let method = 'POST'
+        
+        if (q.sourceKey === 'api' && q.sourceIndex) {
+            url += `${q.sourceIndex}/`
+            method = 'PUT'
+        }
 
-      let next = [...poList]
-      const idx = next.findIndex(p => p.poNumber === newPo.poNumber)
-      if (idx >= 0) {
-        next[idx] = newPo
-      } else {
-        next.unshift(newPo)
-      }
-      setPoList(next)
-      localStorage.setItem("poList", JSON.stringify(next))
-      setShowForm(false)
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+
+        if (response.ok) {
+            alert("Purchase Order saved successfully!")
+            fetchPurchaseOrders()
+            setShowForm(false)
+        } else {
+            const err = await response.json()
+            alert("Error saving Purchase Order: " + JSON.stringify(err))
+        }
     } catch (e) {
-      console.error("Save error", e)
+        console.error(e)
+        alert("Error saving Purchase Order")
     }
   }
 
@@ -791,9 +797,7 @@ export default function PurchaseOrderPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-               <button onClick={handleSave} className="bg-[#2D4485] text-white px-6 py-2 rounded-lg font-semibold hover:bg-[#1E3A8A] transition-colors shadow-sm">
-                 Save Purchase Order
-               </button>
+               
             </div>
           </div>
 
@@ -807,7 +811,44 @@ export default function PurchaseOrderPage() {
                </div>
                <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">QO Number</label>
-                 <input value={q.details.refQuotation} onChange={(e) => q.setDetails({ ...q.details, refQuotation: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="QO Number" />
+                 <select 
+                    value={q.details.refQuotation} 
+                    onChange={(e) => {
+                        const val = e.target.value
+                        q.setDetails({ ...q.details, refQuotation: val })
+                        
+                        // Try to auto-fill if user selects a valid quotation (case-insensitive)
+                         const found = quotationOptions.find(qo => qo.qo_code?.toLowerCase() === val?.toLowerCase())
+                         if (found) {
+                             // Map quotation data to PO fields
+                             q.setDetails(prev => ({
+                                ...prev,
+                                refQuotation: found.qo_code,
+                                // paymentTerms: found.payment_terms || prev.paymentTerms, // Removed auto-fill per user request
+                                // deliveryTo: found.shipment_location || prev.deliveryTo, // Removed auto-fill per user request
+                                // Map EIT details if available
+                                 eit: found.eit || prev.eit,
+                                 eitName: found.eit_details?.organization_name || prev.eitName,
+                                 eitAddress: found.eit_details?.address || prev.eitAddress,
+                                 eitPhone: found.eit_details?.eit_telephone || prev.eitPhone,
+                                 eitFax: found.eit_details?.eit_fax || prev.eitFax,
+                                 eitMobile: found.eit_details?.eit_mobile || prev.eitMobile,
+                             }))
+                             
+                        }
+                    }} 
+                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
+                  >
+                     <option value="">Select QO Number</option>
+                     {q.details.refQuotation && !quotationOptions.find(o => o.qo_code === q.details.refQuotation) && (
+                        <option value={q.details.refQuotation}>{q.details.refQuotation} (Manual/Legacy)</option>
+                     )}
+                     {quotationOptions.map(qo => (
+                         <option key={qo.id} value={qo.qo_code}>
+                             {qo.qo_code}
+                         </option>
+                     ))}
+                  </select>
                </div>
                <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">Order Date</label>
@@ -1192,13 +1233,13 @@ export default function PurchaseOrderPage() {
                   const grandTotal = total + tax
                   
                   return (
-                    <tr key={po.poNumber} className={`hover:bg-gray-50 ${selectedRows.includes(po.poNumber) ? 'bg-blue-50' : ''}`}>
+                    <tr key={po.sourceIndex} className={`hover:bg-gray-50 ${selectedRows.includes(po.sourceIndex) ? 'bg-blue-50' : ''}`}>
                       <td className="p-3">
                         <input 
                           type="checkbox" 
                           className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
-                          checked={selectedRows.includes(po.poNumber)}
-                          onChange={() => handleSelectRow(po.poNumber)}
+                          checked={selectedRows.includes(po.sourceIndex)}
+                          onChange={() => handleSelectRow(po.sourceIndex)}
                         />
                       </td>
                       <td className="p-3 text-gray-500">{i + 1}</td>
