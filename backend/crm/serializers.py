@@ -186,6 +186,13 @@ class QuotationSerializer(serializers.ModelSerializer):
     cus_respon_attn = serializers.CharField(write_only=True, required=False, allow_blank=True)
     cus_respon_div = serializers.CharField(write_only=True, required=False, allow_blank=True)
     cus_respon_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    
+    # Customer extra fields
+    customer_tax_id = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    customer_address = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    customer_email = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    customer_phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    customer_fax = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     # EIT extra fields (legacy support, but ignored for update)
     eit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -207,6 +214,12 @@ class QuotationSerializer(serializers.ModelSerializer):
         attn = validated_data.pop('cus_respon_attn', '')
         div = validated_data.pop('cus_respon_div', '')
         mobile = validated_data.pop('cus_respon_mobile', '')
+        
+        tax_id = validated_data.pop('customer_tax_id', '')
+        address = validated_data.pop('customer_address', '')
+        email = validated_data.pop('customer_email', '')
+        phone = validated_data.pop('customer_phone', '')
+        fax = validated_data.pop('customer_fax', '')
 
         # Extract EIT details (and ignore them to prevent overwriting)
         validated_data.pop('eit_address', '')
@@ -220,6 +233,13 @@ class QuotationSerializer(serializers.ModelSerializer):
             if attn: customer.attn = attn
             if div: customer.division = div
             if mobile: customer.mobile = mobile
+            
+            if tax_id: customer.tax_id = tax_id
+            if address: customer.address = address
+            if email: customer.email = email
+            if phone: customer.phone = phone
+            if fax: customer.cus_fax = fax
+            
             customer.save()
             validated_data['customer'] = customer
         
@@ -262,6 +282,12 @@ class QuotationSerializer(serializers.ModelSerializer):
         div = validated_data.pop('cus_respon_div', '')
         mobile = validated_data.pop('cus_respon_mobile', '')
         
+        tax_id = validated_data.pop('customer_tax_id', '')
+        address = validated_data.pop('customer_address', '')
+        email = validated_data.pop('customer_email', '')
+        phone = validated_data.pop('customer_phone', '')
+        fax = validated_data.pop('customer_fax', '')
+        
         # Extract EIT details (and ignore them to prevent overwriting)
         validated_data.pop('eit_address', '')
         validated_data.pop('eit_mobile', '')
@@ -273,6 +299,13 @@ class QuotationSerializer(serializers.ModelSerializer):
             if attn: customer.attn = attn
             if div: customer.division = div
             if mobile: customer.mobile = mobile
+            
+            if tax_id: customer.tax_id = tax_id
+            if address: customer.address = address
+            if email: customer.email = email
+            if phone: customer.phone = phone
+            if fax: customer.cus_fax = fax
+            
             customer.save()
             instance.customer = customer
 
