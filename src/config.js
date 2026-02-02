@@ -10,11 +10,11 @@ let resolved;
 if (envUrl && typeof envUrl === "string" && envUrl.trim().length > 0) {
   resolved = envUrl.trim();
 } else if (!host) {
-  resolved = "http://127.0.0.1:8002";
+  resolved = "http://127.0.0.1:8001";
 } else if (isLocalHost) {
-  resolved = "http://127.0.0.1:8002";
+  resolved = "http://127.0.0.1:8001";
 } else {
-  resolved = `${proto}://${host}:8002`;
+  resolved = `${proto}://${host}:8001`;
 }
 
 export const API_BASE_URL = resolved;

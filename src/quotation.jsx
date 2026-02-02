@@ -7,6 +7,7 @@ import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
 import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText, ClipboardList } from "lucide-react"
+import { CustomerCombobox } from "./components/customer-combobox.jsx"
 import "./index.css"
 
 function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
@@ -172,13 +173,31 @@ function useQuotationState() {
     shipmentLocation: "",
     invoiceDate: "SAME AS DELIVERY DATE",
     remark: "IN CASE OF PURCHASING THERE IS NO EXCHANGE GOODS AFTER PURCHASED PLEASE SEE WARRANTY CONDITION\nTHE INFORMATION ARE SUBJECT TO CHANGE WITH OUT NOTICE",
-    paymentTerms: ": "
+    paymentTerms: ""
   })
 
   const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0 }])
   const [sourceKey, setSourceKey] = React.useState(null)
   const [sourceIndex, setSourceIndex] = React.useState(null)
   const [eitOptions, setEitOptions] = React.useState([])
+  const [customerOptions, setCustomerOptions] = React.useState([])
+
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/deals/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const unique = {}
+          data.forEach(d => {
+            if (d.customer_name && !unique[d.customer_name]) {
+              unique[d.customer_name] = d
+            }
+          })
+          setCustomerOptions(Object.values(unique))
+        }
+      })
+      .catch(err => console.error("Error loading deals for customers", err))
+  }, [])
 
   React.useEffect(() => {
     fetch(`${API_BASE_URL}/api/eits/`)
@@ -294,7 +313,7 @@ function useQuotationState() {
     }
   }, [])
 
-  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total, sourceKey, sourceIndex, eitOptions }
+  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total, sourceKey, sourceIndex, eitOptions, customerOptions }
 }
 
 function QuotationPage() {
@@ -308,8 +327,8 @@ function QuotationPage() {
         customer: q.customer,
         items: q.items.map(i => ({
           ...i,
-          qty: Number.isFinite(i.qty) ? i.qty : 0,
-          price: Number.isFinite(i.price) ? i.price : 0
+          qty: parseNumber(i.qty),
+          price: parseNumber(i.price)
         })),
         totals: { total: q.total }
       }
@@ -448,9 +467,28 @@ function QuotationPage() {
           {/* Company Name (50% width) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-               <input value={q.customer.company} onChange={(e) => q.setCustomer({ ...q.customer, company: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Company name" />
-             </div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                <CustomerCombobox
+                  value={q.customer.company}
+                  options={q.customerOptions}
+                  onChange={(val) => {
+                    const match = q.customerOptions.find(c => c.customer_name === val)
+                    if (match) {
+                      q.setCustomer({ 
+                        ...q.customer, 
+                        company: val,
+                        taxId: match.tax_id || q.customer.taxId,
+                        address: match.address || q.customer.address,
+                        telephone: match.phone || q.customer.telephone,
+                        attn: match.contact || q.customer.attn,
+                        email: match.email || q.customer.email
+                      })
+                    } else {
+                      q.setCustomer({ ...q.customer, company: val })
+                    }
+                  }}
+                />
+              </div>
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
                <input value={q.customer.taxId} onChange={(e) => q.setCustomer({ ...q.customer, taxId: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Tax ID" />
@@ -592,39 +630,10 @@ function QuotationPage() {
                    <textarea 
                      name="paymentTerms"
                      value={q.details.paymentTerms} 
-                     onChange={(e) => {
-                       let val = e.target.value
-                       if (!val.startsWith(": ")) {
-                         if (val.startsWith(":")) {
-                           val = ": " + val.substring(1)
-                         } else if (val.startsWith(" ")) {
-                           val = ":" + val
-                         } else {
-                           val = ": " + val
-                         }
-                       }
-                       q.setDetails({ ...q.details, paymentTerms: val })
-                     }} 
-                     onKeyDown={(e) => {
-                       if (e.key === 'Enter') {
-                         const val = e.target.value;
-                         const selectionStart = e.target.selectionStart;
-                         const currentLineStart = val.lastIndexOf('\n', selectionStart - 1) + 1;
-                         const currentLine = val.substring(currentLineStart, selectionStart);
-                         if (currentLine.trim().startsWith(':')) {
-                           e.preventDefault();
-                           const newValue = val.substring(0, selectionStart) + "\n: " + val.substring(e.target.selectionEnd);
-                           q.setDetails({ ...q.details, paymentTerms: newValue });
-                           setTimeout(() => {
-                             const ta = document.getElementsByName("paymentTerms")[0];
-                             if (ta) ta.setSelectionRange(selectionStart + 3, selectionStart + 3);
-                           }, 0);
-                         }
-                       }
-                     }}
+                     onChange={(e) => q.setDetails({ ...q.details, paymentTerms: e.target.value })} 
                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
                      rows="4" 
-                     placeholder=": Payment terms" 
+                     placeholder="Payment terms" 
                    />
                 </div>
 
@@ -737,6 +746,11 @@ function QuotationPage() {
                             qo_code: q.details.number,
                             created_date: q.details.date,
                             customer_name: q.customer.company || "Unknown",
+                            customer_tax_id: q.customer.taxId || "",
+                            customer_address: q.customer.address || "",
+                            customer_email: q.customer.email || "",
+                            customer_phone: q.customer.telephone || "",
+                            customer_fax: q.customer.fax || "",
                             cus_respon_attn: q.customer.attn || "",
                             cus_respon_div: q.customer.div || "",
                             cus_respon_mobile: q.customer.mobile || "",
