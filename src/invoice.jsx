@@ -5,6 +5,8 @@ import { DayPicker, getDefaultClassNames } from "react-day-picker"
 import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, Receipt } from "lucide-react"
 import html2pdf from "html2pdf.js"
 import Navigation from "./components/navigation.jsx"
+import { CustomerCombobox } from "./components/customer-combobox"
+import { Combobox } from "./components/combobox"
 import "./index.css"
 
 function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
@@ -211,6 +213,8 @@ function useInvoiceState() {
   })
 
   const [eitOptions, setEitOptions] = React.useState([])
+  const [customerOptions, setCustomerOptions] = React.useState([])
+  const [poOptions, setPoOptions] = React.useState([])
 
   // Load EIT options
   React.useEffect(() => {
@@ -228,6 +232,37 @@ function useInvoiceState() {
         console.error("Error loading EITs", err)
         setEitOptions([])
       })
+  }, [])
+
+  // Load Customer options from Deals
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/deals/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const unique = {}
+          data.forEach(d => {
+            if (d.customer_name && !unique[d.customer_name]) {
+              unique[d.customer_name] = d
+            }
+          })
+          setCustomerOptions(Object.values(unique))
+        }
+      })
+      .catch(err => console.error("Error loading deals for customers", err))
+  }, [])
+
+  // Load PO options from CustomerPurchaseOrder
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/customer_purchase_orders/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const uniquePos = [...new Set(data.map(item => item.po_number).filter(Boolean))]
+          setPoOptions(uniquePos)
+        }
+      })
+      .catch(err => console.error("Error loading customer purchase orders", err))
   }, [])
 
   const [items, setItems] = React.useState([{ product: "", description: "", qty: 1, price: 0, tax: 0, unit: "pcs" }])
@@ -251,44 +286,30 @@ function useInvoiceState() {
             return res.json()
           })
           .then(data => {
-            setCustomer({
-              company: data.customer_details?.company_name || "",
-              address: data.customer_details?.address || "",
-              taxId: data.customer_details?.tax_id || "",
-              telephone: data.customer_details?.phone || "",
-              fax: data.customer_details?.cus_fax || "",
-              attn: data.customer_details?.attn || "",
-              div: data.customer_details?.division || "",
-              mobile: data.customer_details?.mobile || "",
-              email: data.customer_details?.email || ""
+            setCustomer(data.customer || {
+              company: "",
+              address: "",
+              taxId: "",
+              telephone: "",
+              fax: "",
+              attn: "",
+              div: "",
+              mobile: "",
+              email: ""
             })
             setDetails(prev => ({
               ...prev,
-              number: data.inv_code,
-              date: data.inv_date,
-              dueDate: data.inv_due_date,
-              poNo: data.inv_po_no || "",
-              paymentType: "", // Map if available
-              currency: "THB", // Map if available
-              notes: data.inv_remark || "",
-              paymentTermsDays: 7, // Default or calc
-              sourceQuotationNumber: data.inv_quo_ref || "",
+              ...data.details,
+              number: data.number,
+              eit: data.eit,
               salesPerson: data.eit_details?.organization_name || "",
-              eit: data.eit_details?.id || null,
               eitAddress: data.eit_details?.address || "",
               eitTelephone: data.eit_details?.eit_telephone || "",
               eitFax: data.eit_details?.eit_fax || "",
               eitMobile: data.eit_details?.eit_mobile || ""
             }))
-            if (data.invoice_items && data.invoice_items.length > 0) {
-              setItems(data.invoice_items.map(i => ({
-                product: i.inv_item || "",
-                description: i.inv_description || "",
-                qty: i.quantity || 1,
-                price: parseFloat(i.unit_price || 0),
-                tax: 0,
-                unit: "pcs"
-              })))
+            if (Array.isArray(data.items) && data.items.length > 0) {
+              setItems(data.items)
             }
           })
           .catch(err => console.error("Error loading invoice from API", err))
@@ -539,6 +560,8 @@ function useInvoiceState() {
     details,
     setDetails,
     eitOptions,
+    customerOptions,
+    poOptions,
     items,
     addItem,
     removeItem,
@@ -942,7 +965,26 @@ function InvoicePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-               <input value={inv.customer.company} onChange={(e) => inv.setCustomer({ ...inv.customer, company: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Company name" />
+               <CustomerCombobox
+                  value={inv.customer.company}
+                  options={inv.customerOptions}
+                  onChange={(val) => {
+                    const match = inv.customerOptions.find(c => c.customer_name === val)
+                    if (match) {
+                      inv.setCustomer({
+                        ...inv.customer,
+                        company: val,
+                        taxId: match.tax_id || inv.customer.taxId,
+                        address: match.address || inv.customer.address,
+                        telephone: match.phone || inv.customer.telephone,
+                        attn: match.contact || inv.customer.attn,
+                        email: match.email || inv.customer.email
+                      })
+                    } else {
+                      inv.setCustomer({ ...inv.customer, company: val })
+                    }
+                  }}
+                />
              </div>
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Tax Code</label>
@@ -961,13 +1003,12 @@ function InvoicePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
-              <select value={inv.details.paymentType} onChange={(e) => inv.setDetails({ ...inv.details, paymentType: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none">
-                <option value="">Select Type</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-                <option value="Cash">Cash</option>
-                <option value="Cheque">Cheque</option>
-                <option value="Credit Card">Credit Card</option>
-              </select>
+              <input 
+                value={inv.details.paymentType} 
+                onChange={(e) => inv.setDetails({ ...inv.details, paymentType: e.target.value })} 
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
+                placeholder="Payment Type" 
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
@@ -975,7 +1016,12 @@ function InvoicePage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">PO No.</label>
-              <input value={inv.details.poNo} onChange={(e) => inv.setDetails({ ...inv.details, poNo: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="PO Number" />
+              <Combobox 
+                value={inv.details.poNo} 
+                onChange={(val) => inv.setDetails({ ...inv.details, poNo: val })} 
+                options={inv.poOptions} 
+                placeholder="PO Number" 
+              />
             </div>
           </div>
         </div>

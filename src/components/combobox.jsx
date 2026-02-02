@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { ChevronDown, Check } from "lucide-react"
 import { cn } from "../lib/utils"
 
-export function CustomerCombobox({ value, onChange, options = [] }) {
+export function Combobox({ value, onChange, options = [], placeholder = "Select or type..." }) {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState("")
   const containerRef = useRef(null)
@@ -28,8 +28,8 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
 
   const filteredOptions = query === "" 
     ? safeOptions 
-    : safeOptions.filter((customer) =>
-        customer.customer_name && customer.customer_name.toLowerCase().includes(query.toLowerCase())
+    : safeOptions.filter((option) =>
+        option && option.toLowerCase().includes(query.toLowerCase())
       )
 
   const handleInputChange = (e) => {
@@ -39,9 +39,9 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
     setIsOpen(true)
   }
 
-  const handleSelect = (customerName) => {
-    setQuery(customerName)
-    onChange(customerName)
+  const handleSelect = (option) => {
+    setQuery(option)
+    onChange(option)
     setIsOpen(false)
   }
 
@@ -61,7 +61,7 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
           ref={inputRef}
           type="text"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none placeholder:text-slate-500"
-          placeholder="Select or type company name..."
+          placeholder={placeholder}
           value={query}
           onChange={handleInputChange}
           onFocus={() => setIsOpen(true)}
@@ -78,22 +78,19 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
 
       {isOpen && filteredOptions.length > 0 && (
         <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none text-sm">
-          {/* Optional: Add "Select Customer" as a disabled header or placeholder if needed */}
-          {/* <li className="px-3 py-2 text-slate-400 cursor-default">Select Customer</li> */}
-          
-          {filteredOptions.map((customer) => (
+          {filteredOptions.map((option, index) => (
             <li
-              key={customer.id || customer.customer_name}
+              key={index}
               className={cn(
                 "relative cursor-pointer select-none py-2 pl-3 pr-9 hover:bg-slate-100 text-slate-900",
-                value === customer.customer_name ? "bg-blue-50 text-blue-900" : ""
+                value === option ? "bg-blue-50 text-blue-900" : ""
               )}
-              onClick={() => handleSelect(customer.customer_name)}
+              onClick={() => handleSelect(option)}
             >
               <span className="block truncate">
-                {customer.customer_name}
+                {option}
               </span>
-              {value === customer.customer_name && (
+              {value === option && (
                 <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-blue-600">
                   <Check className="h-4 w-4" />
                 </span>
@@ -105,7 +102,7 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
       
       {isOpen && filteredOptions.length === 0 && query !== "" && (
          <ul className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white py-2 shadow-lg text-sm text-center text-slate-500">
-            <li>No matching customers found</li>
+            <li>No matching options found</li>
          </ul>
       )}
     </div>
