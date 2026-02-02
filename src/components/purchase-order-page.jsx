@@ -235,6 +235,142 @@ export default function PurchaseOrderPage() {
   const [selectedRows, setSelectedRows] = React.useState([])
   const [openDeleteConfirm, setOpenDeleteConfirm] = React.useState(false)
 
+  // Customer Purchase Orders State
+  const [activeTab, setActiveTab] = React.useState("po") // 'po' or 'customer_po'
+  const [customerPoList, setCustomerPoList] = React.useState([])
+  const [newCustomerPo, setNewCustomerPo] = React.useState(null) // If adding new one
+  const [customerOptions, setCustomerOptions] = React.useState([])
+  
+  // Edit & Delete State
+  const [customerPoToDelete, setCustomerPoToDelete] = React.useState(null)
+  const [editingCustomerPoId, setEditingCustomerPoId] = React.useState(null)
+  const [editingCustomerPoData, setEditingCustomerPoData] = React.useState({})
+
+  // Load Customers
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/customers/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setCustomerOptions(data)
+      })
+      .catch(console.error)
+  }, [])
+  
+  // Load Customer PO List
+  const fetchCustomerPos = React.useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customer_purchase_orders/`)
+      if (res.ok) {
+        const data = await res.json()
+        setCustomerPoList(data)
+      }
+    } catch (e) {
+      console.error("Failed to load customer POs", e)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (activeTab === "customer_po") {
+      fetchCustomerPos()
+    }
+  }, [activeTab, fetchCustomerPos])
+
+  const handleCustomerPoFileUpload = async (id, file) => {
+    if (!file) return
+    const formData = new FormData()
+    formData.append("po_file", file)
+    
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customer_purchase_orders/${id}/`, {
+        method: "PATCH",
+        body: formData,
+      })
+      if (res.ok) {
+        fetchCustomerPos()
+      }
+    } catch (e) {
+      console.error("Upload failed", e)
+      alert("Upload failed")
+    }
+  }
+
+  const handleCreateCustomerPo = async (data) => {
+    try {
+      const formData = new FormData()
+      if (data.write_customer_name) formData.append('write_customer_name', data.write_customer_name)
+      if (data.po_number) formData.append('po_number', data.po_number)
+      if (data.po_file) formData.append('po_file', data.po_file)
+
+      const res = await fetch(`${API_BASE_URL}/api/customer_purchase_orders/`, {
+        method: "POST",
+        body: formData,
+      })
+      if (res.ok) {
+        setNewCustomerPo(null)
+        fetchCustomerPos()
+      } else {
+        const err = await res.json()
+        alert("Failed to create Customer Purchase Order: " + JSON.stringify(err))
+      }
+    } catch (e) {
+      console.error("Create failed", e)
+      alert("Failed to create Customer Purchase Order")
+    }
+  }
+
+  const handleDeleteCustomerPo = (id) => {
+    setCustomerPoToDelete(id)
+  }
+
+  const confirmDeleteCustomerPo = async () => {
+    if (!customerPoToDelete) return
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customer_purchase_orders/${customerPoToDelete}/`, {
+        method: "DELETE",
+      })
+      if (res.ok) {
+        fetchCustomerPos()
+        setCustomerPoToDelete(null)
+      }
+    } catch (e) {
+      console.error("Delete failed", e)
+    }
+  }
+
+  const startEditingCustomerPo = (po) => {
+    setEditingCustomerPoId(po.id)
+    setEditingCustomerPoData({
+      write_customer_name: po.customer_name || po.customer_details?.company_name || "",
+      po_number: po.po_number || ""
+    })
+  }
+
+  const saveEditingCustomerPo = async () => {
+    if (!editingCustomerPoId) return
+    try {
+      const formData = new FormData()
+      if (editingCustomerPoData.write_customer_name) formData.append('write_customer_name', editingCustomerPoData.write_customer_name)
+      if (editingCustomerPoData.po_number) formData.append('po_number', editingCustomerPoData.po_number)
+
+      const res = await fetch(`${API_BASE_URL}/api/customer_purchase_orders/${editingCustomerPoId}/`, {
+        method: "PATCH",
+        body: formData,
+      })
+      if (res.ok) {
+        fetchCustomerPos()
+        setEditingCustomerPoId(null)
+        setEditingCustomerPoData({})
+      } else {
+         const err = await res.json()
+         alert("Failed to update: " + JSON.stringify(err))
+      }
+    } catch (e) {
+      console.error("Update failed", e)
+      alert("Update failed")
+    }
+  }
+
+
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedRows(poList.map(po => po.poNumber))
@@ -992,6 +1128,18 @@ export default function PurchaseOrderPage() {
       )}
 
       <div className="max-w-7xl mx-auto">
+        <div className="flex items-center gap-6 border-b border-gray-200 mb-6">
+          <button onClick={()=>setActiveTab('po')} className={`pb-3 text-sm font-medium transition-colors relative ${activeTab==='po' ? 'text-[#2D4485]' : 'text-gray-500 hover:text-gray-700'}`}>
+            Purchase Orders
+            {activeTab==='po' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2D4485]" />}
+          </button>
+          <button onClick={()=>setActiveTab('customer_po')} className={`pb-3 text-sm font-medium transition-colors relative ${activeTab==='customer_po' ? 'text-[#2D4485]' : 'text-gray-500 hover:text-gray-700'}`}>
+            Customer Purchase Orders
+            {activeTab==='customer_po' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2D4485]" />}
+          </button>
+        </div>
+
+        {activeTab === 'po' && (
         <div className="bg-white rounded-xl border shadow-sm p-6 relative">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-4">
@@ -1061,7 +1209,7 @@ export default function PurchaseOrderPage() {
                       </td>
                       <td className="p-3">{po.customer?.company || po.customer?.name || "-"}</td>
                       <td className="p-3">{po.extraFields?.orderDate || "-"}</td>
-                      <td className="p-3">{po.extraFields?.deliveryDate || "-"}</td>
+                      <td className="p-3 text-green-600">{po.extraFields?.deliveryDate || "-"}</td>
                       <td className="p-3 text-right font-medium">
                         {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
@@ -1075,6 +1223,163 @@ export default function PurchaseOrderPage() {
             </table>
           </div>
         </div>
+        )}
+
+        {activeTab === 'customer_po' && (
+          <div className="bg-white rounded-xl border shadow-sm p-6 relative">
+             <div className="flex justify-between items-center mb-6">
+               <div className="flex items-center gap-4">
+                  <h1 className="text-xl font-bold text-[#2D4485]">Customer Purchase Orders</h1>
+               </div>
+               <button onClick={() => setNewCustomerPo({})} className="inline-flex items-center gap-2 px-3 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1E3A8A] transition-colors shadow-sm text-sm font-medium">
+                  <Plus className="w-4 h-4" />
+                  <span>New Customer PO</span>
+               </button>
+             </div>
+             
+             <div className="overflow-x-auto">
+               <table className="min-w-full text-sm">
+                 <thead>
+                   <tr className="bg-gray-50 text-gray-700 border-b">
+                     <th className="p-3 text-left w-10">No.</th>
+                     <th className="p-3 text-left">Customer Company</th>
+                     <th className="p-3 text-left">Customer PO Number</th>
+                     <th className="p-3 text-left">PO Form</th>
+                     <th className="p-3 w-12"></th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y">
+                   {newCustomerPo && (
+                     <tr className="bg-blue-50/50">
+                        <td className="p-3">-</td>
+                        <td className="p-3">
+                           <select 
+                              autoFocus
+                              className="w-full bg-white border border-gray-300 rounded px-2 py-1"
+                              value={newCustomerPo.write_customer_name || ""}
+                              onChange={e => setNewCustomerPo({...newCustomerPo, write_customer_name: e.target.value})}
+                           >
+                              <option value="">Select Customer</option>
+                              {customerOptions.map(c => (
+                                <option key={c.id} value={c.company_name}>{c.company_name}</option>
+                              ))}
+                           </select>
+                        </td>
+                        <td className="p-3">
+                           <input 
+                              placeholder="Customer PO Number"
+                              className="w-full bg-white border border-gray-300 rounded px-2 py-1"
+                              value={newCustomerPo.po_number || ""}
+                              onChange={e => setNewCustomerPo({...newCustomerPo, po_number: e.target.value})}
+                           />
+                        </td>
+                        <td className="p-3">
+                           <div className="flex items-center gap-2">
+                              <label className="cursor-pointer text-blue-600 hover:text-blue-800 text-xs font-medium px-2 py-1 bg-blue-50 rounded border border-blue-100 transition-colors">
+                                 {newCustomerPo.po_file ? "File Selected" : "Upload File"}
+                                 <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    onChange={(e) => setNewCustomerPo({...newCustomerPo, po_file: e.target.files[0]})} 
+                                 />
+                              </label>
+                              {newCustomerPo.po_file && (
+                                 <span className="text-xs text-gray-600 truncate max-w-[150px]">{newCustomerPo.po_file.name}</span>
+                              )}
+                           </div>
+                        </td>
+                        <td className="p-3 flex items-center gap-2">
+                           <button onClick={() => handleCreateCustomerPo(newCustomerPo)} className="text-green-600 hover:text-green-800 font-medium">Save</button>
+                           <button onClick={() => setNewCustomerPo(null)} className="text-gray-500 hover:text-gray-700">Cancel</button>
+                        </td>
+                     </tr>
+                   )}
+
+                   {customerPoList.map((po, i) => {
+                     const isEditing = editingCustomerPoId === po.id
+                     return (
+                     <tr key={po.id} className="hover:bg-gray-50">
+                       <td className="p-3 text-gray-500">{i + 1}</td>
+                       <td className="p-3 font-medium text-gray-900" onClick={() => !isEditing && startEditingCustomerPo(po)}>
+                          {isEditing ? (
+                             <select 
+                                autoFocus
+                                className="w-full bg-white border border-gray-300 rounded px-2 py-1"
+                                value={editingCustomerPoData.write_customer_name || ""}
+                                onChange={e => setEditingCustomerPoData({...editingCustomerPoData, write_customer_name: e.target.value})}
+                             >
+                                <option value="">Select Customer</option>
+                                {customerOptions.map(c => (
+                                  <option key={c.id} value={c.company_name}>{c.company_name}</option>
+                                ))}
+                             </select>
+                          ) : (
+                             <div className="cursor-pointer hover:bg-gray-100 rounded px-2 py-1 -ml-2">
+                               {po.customer_name || po.customer_details?.company_name || "-"}
+                             </div>
+                          )}
+                       </td>
+                       <td className="p-3 text-gray-600" onClick={() => !isEditing && startEditingCustomerPo(po)}>
+                          {isEditing ? (
+                             <input 
+                                className="w-full bg-white border border-gray-300 rounded px-2 py-1"
+                                value={editingCustomerPoData.po_number || ""}
+                                onChange={e => setEditingCustomerPoData({...editingCustomerPoData, po_number: e.target.value})}
+                             />
+                          ) : (
+                             <div className="cursor-pointer hover:bg-gray-100 rounded px-2 py-1 -ml-2">
+                               {po.po_number || "-"}
+                             </div>
+                          )}
+                       </td>
+                       <td className="p-3">
+                          <div className="flex items-center gap-3">
+                             {po.po_file_name ? (
+                               <>
+                                 <a 
+                                   href={`${API_BASE_URL}/api/customer_purchase_orders/${po.id}/download/`} 
+                                   target="_blank" 
+                                   rel="noopener noreferrer" 
+                                   className="text-blue-600 hover:underline font-medium text-sm truncate max-w-[200px]"
+                                 >
+                                   {po.po_file_name}
+                                 </a>
+                                 <label className="cursor-pointer text-blue-600 hover:text-blue-800 text-xs font-medium px-2 py-1 bg-blue-50 rounded border border-blue-100 transition-colors">
+                                    Replace
+                                    <input type="file" className="hidden" onChange={(e) => handleCustomerPoFileUpload(po.id, e.target.files[0])} />
+                                 </label>
+                               </>
+                             ) : (
+                               <label className="cursor-pointer text-blue-600 hover:text-blue-800 text-xs font-medium px-2 py-1 bg-blue-50 rounded border border-blue-100 transition-colors">
+                                  Upload
+                                  <input type="file" className="hidden" onChange={(e) => handleCustomerPoFileUpload(po.id, e.target.files[0])} />
+                               </label>
+                             )}
+                          </div>
+                       </td>
+                       <td className="p-3 text-center">
+                         {isEditing ? (
+                           <div className="flex items-center gap-2">
+                             <button onClick={saveEditingCustomerPo} className="text-green-600 hover:text-green-800 text-xs font-medium">Save</button>
+                             <button onClick={() => setEditingCustomerPoId(null)} className="text-gray-500 hover:text-gray-700 text-xs">Cancel</button>
+                           </div>
+                         ) : (
+                           <button onClick={() => handleDeleteCustomerPo(po.id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                             <Trash className="w-4 h-4" />
+                           </button>
+                         )}
+                       </td>
+                     </tr>
+                   )})}
+                   
+                   {!newCustomerPo && customerPoList.length === 0 && (
+                     <tr><td colSpan={5} className="p-8 text-center text-gray-500">No customer purchase orders found</td></tr>
+                   )}
+                 </tbody>
+               </table>
+             </div>
+          </div>
+        )}
       </div>
 
       {openDeleteConfirm && (
@@ -1092,6 +1397,31 @@ export default function PurchaseOrderPage() {
                         </button>
                         <button 
                             onClick={handleBatchDelete}
+                            className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors font-medium"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {customerPoToDelete && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setCustomerPoToDelete(null)}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <div className="p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Purchase Orders</h3>
+                    <p className="text-gray-600 mb-6">Are you sure you want to delete 1 selected purchase orders?</p>
+                    <div className="flex justify-end gap-3">
+                        <button 
+                            onClick={() => setCustomerPoToDelete(null)}
+                            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={confirmDeleteCustomerPo}
                             className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors font-medium"
                         >
                             Delete

@@ -447,3 +447,20 @@ class DealHistory(models.Model):
 
     def __str__(self):
         return f"{self.deal.title}: {self.from_stage} -> {self.to_stage}"
+
+class CustomerPurchaseOrder(models.Model):
+    po_number = models.CharField(max_length=100, blank=True)
+    customer = models.ForeignKey(Customer, related_name='customer_purchase_orders', on_delete=models.SET_NULL, null=True, blank=True)
+    description = models.TextField(blank=True)
+    
+    # PO File Storage (Binary)
+    po_file_name = models.CharField(max_length=255, blank=True)
+    po_file_type = models.CharField(max_length=100, blank=True)
+    po_file_content = models.BinaryField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.po_number} - {self.customer}"
+
