@@ -549,12 +549,15 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
             customer, _ = Customer.objects.get_or_create(company_name=customer_name)
             validated_data['customer'] = customer
             
+        instance = super().create(validated_data)
+
         if po_file:
-            validated_data['po_file_name'] = po_file.name
-            validated_data['po_file_type'] = po_file.content_type
-            validated_data['po_file_content'] = po_file.read()
+            instance.po_file_name = po_file.name
+            instance.po_file_type = po_file.content_type
+            instance.po_file_content = po_file.read()
+            instance.save()
             
-        return super().create(validated_data)
+        return instance
 
     def update(self, instance, validated_data):
         customer_name = validated_data.pop('write_customer_name', None)
@@ -564,17 +567,22 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
             customer, _ = Customer.objects.get_or_create(company_name=customer_name)
             validated_data['customer'] = customer
             
+        # Update other fields first
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
         if po_file:
-            validated_data['po_file_name'] = po_file.name
-            validated_data['po_file_type'] = po_file.content_type
-            validated_data['po_file_content'] = po_file.read()
+            instance.po_file_name = po_file.name
+            instance.po_file_type = po_file.content_type
+            instance.po_file_content = po_file.read()
             
         # If po_file_name is explicitly cleared (empty string) and no new file is uploaded, clear the file content
         if 'po_file_name' in validated_data and not validated_data.get('po_file_name') and not po_file:
-            validated_data['po_file_content'] = None
-            validated_data['po_file_type'] = ''
+            instance.po_file_content = None
+            instance.po_file_type = ''
             
-        return super().update(instance, validated_data)
+        instance.save()
+        return instance
 
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
