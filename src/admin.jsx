@@ -487,9 +487,27 @@ function InvoiceList({ list, refreshData }) {
   const handleDelete = async () => {
     const itemsToDelete = list.filter(inv => selectedRows.includes(getUid(inv)))
     
+    // API Deletion
+    const apiItems = itemsToDelete.filter(inv => inv.sourceKey === 'api')
+    for (const item of apiItems) {
+      try {
+        const token = localStorage.getItem('token')
+        await fetch(`${API_BASE_URL}/api/invoices/${item.id}/`, { 
+          method: 'DELETE',
+          headers: {
+            'Authorization': token ? `Token ${token}` : '',
+            'Content-Type': 'application/json'
+          }
+        })
+      } catch (e) {
+        console.error("Error deleting API item", e)
+      }
+    }
+
     // LocalStorage Deletion
+    const localItems = itemsToDelete.filter(inv => inv.sourceKey !== 'api')
     const groupedByKey = {}
-    itemsToDelete.forEach(inv => {
+    localItems.forEach(inv => {
       if (!groupedByKey[inv.sourceKey]) groupedByKey[inv.sourceKey] = []
       groupedByKey[inv.sourceKey].push(inv.sourceIndex)
     })
@@ -1066,10 +1084,38 @@ function AdminPage() {
     return []
   }
 
+  const fetchInvoices = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/invoices/`)
+      if (response.ok) {
+        const apiInvoices = await response.json()
+        return apiInvoices.map(inv => ({
+          id: inv.id,
+          sourceKey: 'api',
+          sourceIndex: inv.id,
+          details: {
+            number: inv.inv_code,
+            date: inv.created_date,
+            currency: inv.currency || 'THB',
+          },
+          customerName: inv.customer_details?.company_name || 'Unknown',
+          items: inv.invoice_items || [],
+          totals: {
+            total: (inv.invoice_items || []).reduce((sum, item) => sum + parseFloat(item.total_price || 0), 0)
+          }
+        }))
+      }
+    } catch (e) {
+      console.error("Failed to fetch invoices from API", e)
+    }
+    return []
+  }
+
   const loadData = async () => {
     const localData = getAllData()
     const apiQuotations = await fetchQuotations()
     const apiBillingNotes = await fetchBillingNotes()
+    const apiInvoices = await fetchInvoices()
     
     if (apiQuotations.length > 0) {
       // Create a Set of API quotation numbers for efficient lookup
@@ -1092,6 +1138,18 @@ function AdminPage() {
       
       // Merge the lists
       localData.billingNotes = [...localData.billingNotes, ...apiBillingNotes]
+    }
+    
+    if (apiInvoices.length > 0) {
+      // Create a Set of API invoice numbers for efficient lookup
+      const apiNumbers = new Set(apiInvoices.map(inv => inv.details.number))
+      
+      // Filter out LocalStorage items that exist in API
+      // We prefer the API version as the source of truth
+      localData.invoices = localData.invoices.filter(inv => !apiNumbers.has(inv.details.number))
+      
+      // Merge the lists
+      localData.invoices = [...localData.invoices, ...apiInvoices]
     }
     
     setData(localData)

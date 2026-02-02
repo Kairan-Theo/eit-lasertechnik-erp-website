@@ -820,3 +820,349 @@ def generate_billing_note_pdf(request):
     
     buffer.seek(0)
     return HttpResponse(buffer, content_type='application/pdf')
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def generate_invoice_pdf(request):
+    data = request.data
+    details = data.get('details', {})
+    customer = data.get('customer', {})
+    items = data.get('items', [])
+    totals = data.get('totals', {})
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=20, bottomMargin=20)
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name='Normal_Small', parent=styles['Normal'], fontName=font_name, fontSize=9))
+    styles.add(ParagraphStyle(name='Normal_Content', parent=styles['Normal'], fontName=font_name, fontSize=10))
+    styles.add(ParagraphStyle(name='Normal_Bold', parent=styles['Normal'], fontName=font_name_bold, fontSize=10))
+    # Header styles for Invoice/Original
+    styles.add(ParagraphStyle(name='Header_Title_Bold', parent=styles['Heading1'], fontName=font_name_bold, fontSize=14, alignment=TA_CENTER, leading=16))
+    styles.add(ParagraphStyle(name='Header_Subtitle_Bold', parent=styles['Heading1'], fontName=font_name_bold, fontSize=12, alignment=TA_CENTER))
+    
+    styles.add(ParagraphStyle(name='Table_Header', parent=styles['Normal'], fontName=font_name, fontSize=9, alignment=TA_CENTER))
+    styles.add(ParagraphStyle(name='Table_Data', parent=styles['Normal'], fontName=font_name, fontSize=9))
+    styles.add(ParagraphStyle(name='Table_Data_Right', parent=styles['Normal'], fontName=font_name, fontSize=9, alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(name='Table_Data_Center', parent=styles['Normal'], fontName=font_name, fontSize=9, alignment=TA_CENTER))
+
+    def txt(val): return str(val).replace('\n', '<br/>') if val else "-"
+    def label(text): return f"<font name='{font_name_eng}'>{text}</font>"
+
+    # --- Header Image ---
+    organization = details.get('onBehalfOf', 'EIT LASERTECHNIK CO.,LTD')
+    is_einstein = "EINSTEIN" in str(organization).upper()
+    
+    potential_roots = [os.path.dirname(BASE_DIR), BASE_DIR, r'd:\EIT_ERT_s\eit-lasertechnik-erp-website']
+    PUBLIC_DIR, DIST_DIR = None, None
+    for root in potential_roots:
+        p_dir, d_dir = os.path.join(root, 'public'), os.path.join(root, 'dist')
+        if os.path.exists(p_dir) and os.path.exists(d_dir):
+            PUBLIC_DIR, DIST_DIR = p_dir, d_dir
+            break
+    if not PUBLIC_DIR: PUBLIC_DIR, DIST_DIR = os.path.join(BASE_DIR, 'public'), os.path.join(BASE_DIR, 'dist')
+
+    candidates = [(os.path.join(PUBLIC_DIR, 'Einstein header.png'), 530, 80), (os.path.join(DIST_DIR, 'Einstein header.png'), 530, 80)] if is_einstein else [(os.path.join(PUBLIC_DIR, 'EIT header.png'), 530, 80), (os.path.join(DIST_DIR, 'EIT header.png'), 530, 80)]
+    
+    found_image = None
+    for path, w, h in candidates:
+        if os.path.exists(os.path.normpath(path)):
+            found_image = (os.path.normpath(path), w, h)
+            break
+    
+    if found_image:
+        try:
+            im = Image(found_image[0], width=found_image[1], height=found_image[2])
+            im.hAlign = 'CENTER'
+            elements.append(im)
+            elements.append(Spacer(1, 5))
+        except: pass
+
+    # --- Row 1: Org Info & Doc Info ---
+    org_name_th = "บริษัท ไอน์สไตน์ อินดัสเตรียล เทคนิค คอร์ปอเรชั่น จำกัด" if is_einstein else "บริษัท อีไอที เลเซอร์เทคนิค จำกัด"
+    org_name_en = "EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD." if is_einstein else "EIT LASERTECHNIK CO.,LTD."
+    org_addr = "1/120 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510" if is_einstein else "118/20 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510"
+    org_contact = "TEL : 02-052-9544    Fax : 02-052-9544" if is_einstein else "TEL : 02-xxx-xxxx    Fax : 02-xxx-xxxx"
+    org_tax = "0105547001928" if is_einstein else "010555xxxxxxx"
+
+    # Left Info: Tax ID and Head Office on the same line, separated
+    tax_row_data = [
+        [Paragraph(f"<b>เลขประจำตัวผู้เสียภาษีอากร :</b> {org_tax}", styles['Normal_Content']), 
+         Paragraph("<b>สำนักงานใหญ่</b>", styles['Normal_Content'])]
+    ]
+    tax_table = Table(tax_row_data, colWidths=[230, 90])
+    tax_table.setStyle(TableStyle([
+        ('ALIGN', (0,0), (0,0), 'LEFT'),
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'), # Align bottom
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+        ('TOPPADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+    ]))
+
+    left_info_content = [
+        [Paragraph(org_name_th, styles['Normal_Content'])],
+        [Paragraph(org_name_en, styles['Normal_Content'])],
+        [Paragraph(org_addr, styles['Normal_Content'])],
+        [Paragraph(org_contact, styles['Normal_Content'])],
+        [Spacer(1, 15)], # Push tax info down
+        [tax_table]
+    ]
+    
+    # Use a table for left info to control height/spacing better if needed, 
+    # but list of flowables in a cell is also fine. 
+    # Let's stick to list of flowables for the main cell, but added spacer.
+    
+    # Right Info (Redesigned to match reference 3rd image)
+    # 2 Columns: Left (Thai/Invoice/NotTax), Right (Original)
+    # Then Line
+    # Then Details
+    
+    # Header Title Table
+    header_table_data = [
+        [Paragraph("ใบแจ้งหนี้", styles['Header_Title_Bold']), Paragraph("ต้นฉบับ", styles['Header_Title_Bold'])],
+        [Paragraph("INVOICE", styles['Header_Title_Bold']), Paragraph("Original", styles['Header_Title_Bold'])],
+        [Paragraph("ไม่ใชใบกำกับภาษี", styles['Table_Data_Center']), ""]
+    ]
+    header_table = Table(header_table_data, colWidths=[100, 100])
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0,0), (0,-1), 'CENTER'), # Left Col Center
+        ('ALIGN', (1,0), (1,-1), 'CENTER'), # Right Col Center
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('TOPPADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+    ]))
+
+    # Details Table (No / Date)
+    inv_num = details.get('number', '')
+    if inv_num and not inv_num.startswith('EIT'):
+        inv_num = f"EIT {inv_num}"
+
+    details_table_data = [
+        [Paragraph("<b>เลขที่</b> (No.)", styles['Normal_Small']), Paragraph(inv_num, styles['Normal_Content'])],
+        [Paragraph("<b>วันที่</b> (Issue Date)", styles['Normal_Small']), Paragraph(details.get('date', ''), styles['Normal_Content'])]
+    ]
+    details_table = Table(details_table_data, colWidths=[80, 120])
+    details_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'), 
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('TOPPADDING', (0,0), (-1,-1), 1),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 1),
+    ]))
+    
+    # Combined Right Info Table
+    right_info_content = [
+        [header_table],
+        [Spacer(1, 5)],
+        [details_table] # We need a line above this
+    ]
+    
+    right_info = Table(right_info_content, colWidths=[200])
+    right_info.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('ALIGN', (0,2), (0,2), 'LEFT'), # Details left
+        ('TOPPADDING', (0,0), (-1,-1), 2),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+        ('LEFTPADDING', (0,2), (0,2), 10),
+        # Line above details (row 2)
+        ('LINEABOVE', (0,2), (0,2), 1, colors.black),
+    ]))
+
+    # Left Info as a Table to enforce height and bottom alignment of Tax ID?
+    # Actually, simpler to just put elements in the cell.
+    left_info_elements = []
+    left_info_elements.append(Paragraph(org_name_th, styles['Normal_Content']))
+    left_info_elements.append(Paragraph(org_name_en, styles['Normal_Content']))
+    left_info_elements.append(Paragraph(org_addr, styles['Normal_Content']))
+    left_info_elements.append(Paragraph(org_contact, styles['Normal_Content']))
+    left_info_elements.append(Spacer(1, 25)) # Explicit spacer to push bottom content
+    left_info_elements.append(tax_table)
+
+    row1 = Table([[left_info_elements, right_info]], colWidths=[330, 205])
+    row1.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, colors.black),
+        ('LINEBEFORE', (1,0), (1,0), 1, colors.black),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('LEFTPADDING', (0,0), (0,0), 5),
+    ]))
+    elements.append(row1)
+
+    # --- Row 2: Customer & Payment ---
+    cust_tax = customer.get('taxId', '')
+    cust_name = customer.get('name', '') or customer.get('company', '')
+    cust_addr = customer.get('address', '') or customer.get('billingAddress1', '')
+    
+    cust_col = [
+        Paragraph(f"<b>สำนักงานใหญ่</b>   <b>เลขประจำตัวผู้เสียภาษี</b> {cust_tax}", styles['Normal_Content']),
+        Paragraph("<b>ลูกค้า (customer)</b>", styles['Normal_Bold']),
+        Paragraph(f"<b>ชื่อ</b> {cust_name}", styles['Normal_Content']),
+        Paragraph(f"<b>ที่อยู่</b> {cust_addr}", styles['Normal_Content'])
+    ]
+
+    pay_col = [
+        Paragraph("ประเภทการจ่ายเงิน (Payment Type)", styles['Normal_Small']),
+        Paragraph(details.get('paymentType', '-'), styles['Normal_Content']),
+        Spacer(1, 5),
+        Paragraph("วันครบกำหนดชำระเงิน( Due date)", styles['Normal_Small']),
+        Paragraph(details.get('dueDate', ''), styles['Normal_Content']),
+        Spacer(1, 5),
+        Paragraph("เลขที่ใบสั่งซื้อ (PO.NO)", styles['Normal_Small']),
+        Paragraph(details.get('poNo', '-'), styles['Normal_Content'])
+    ]
+
+    row2 = Table([[cust_col, pay_col]], colWidths=[350, 185])
+    row2.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, colors.black),
+        ('LINEBEFORE', (1,0), (1,-1), 1, colors.black),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+    elements.append(row2)
+
+    # --- Row 3: Items Table ---
+    # Cols: No, Description, Qty, Unit, Unit Price, Amount
+    table_data = [[
+        Paragraph("ลำดับ<br/>No.", styles['Table_Header']),
+        Paragraph("รายการ<br/>Description", styles['Table_Header']),
+        Paragraph("จำนวน<br/>Qty", styles['Table_Header']),
+        Paragraph("หน่วยนับ<br/>Unit", styles['Table_Header']),
+        Paragraph("ราคาต่อหน่วย<br/>Unit Price", styles['Table_Header']),
+        Paragraph("จำนวนเงิน<br/>Amount", styles['Table_Header'])
+    ]]
+
+    for i, item in enumerate(items):
+        try:
+            qty = float(str(item.get('qty', 0)).replace(',', ''))
+            price = float(str(item.get('price', 0)).replace(',', ''))
+        except: qty, price = 0, 0
+        total = qty * price
+        
+        desc = item.get('description', '')
+        unit = item.get('unit', 'Pc.')
+        
+        table_data.append([
+            Paragraph(str(i+1), styles['Table_Data_Center']),
+            Paragraph(desc, styles['Table_Data']),
+            Paragraph(f"{qty:,.0f}", styles['Table_Data_Center']),
+            Paragraph(unit, styles['Table_Data_Center']),
+            Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
+            Paragraph(f"{total:,.2f}", styles['Table_Data_Right'])
+        ])
+
+    min_rows = 10
+    if len(items) < min_rows:
+        for _ in range(min_rows - len(items)):
+            table_data.append(["", "", "", "", "", ""])
+
+    # Widths: No(30), Desc(220), Qty(40), Unit(50), Price(90), Amount(105) -> Total 535
+    item_table = Table(table_data, colWidths=[30, 220, 40, 50, 90, 105])
+    item_table.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, colors.black),
+        ('GRID', (0,0), (-1,0), 1, colors.black), # Header grid
+        ('LINEBEFORE', (1,0), (-1,-1), 1, colors.black), # Vert lines
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('ALIGN', (0,0), (-1,0), 'CENTER'),
+        ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
+        ('VALIGN', (0,1), (-1,-1), 'TOP'),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+    ]))
+    elements.append(item_table)
+
+    # --- Row 4: Totals ---
+    subtotal = totals.get('subtotal', 0)
+    vat = totals.get('taxTotal', 0)
+    grand_total = totals.get('total', 0)
+    
+    total_data = [
+        ["", "จำนวนเงินสุทธิ\nNet Amount", f"{subtotal:,.2f}"],
+        ["", "ภาษีมูลค่าเพิ่ม\nVAT 7%", f"{vat:,.2f}"],
+        ["", "รวมเป็นมูลค่า\nTotal of sales", f"{grand_total:,.2f}"]
+    ]
+    # Adjust widths to match item table: 
+    # Total Width 535. Amount col is 105. Label col ~150. Rest empty.
+    total_table = Table(total_data, colWidths=[280, 150, 105])
+    total_table.setStyle(TableStyle([
+        ('BOX', (1,0), (-1,-1), 1, colors.black),
+        ('INNERGRID', (1,0), (-1,-1), 1, colors.black),
+        ('ALIGN', (2,0), (2,-1), 'RIGHT'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('FONTNAME', (0,0), (-1,-1), font_name),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+    ]))
+    elements.append(total_table)
+
+    # --- Row 5: Text Amount ---
+    text_amt = totals.get('thaiText', '-')
+    # text_amt = "ศูนย์บาทถ้วน" # Hardcoded to match reference as requested
+    text_row = Table([[
+        Paragraph("จำนวนเงินรวมทั้งสิ้น<br/>(The sum of baht)", styles['Table_Data_Center']),
+        Paragraph(text_amt, styles['Table_Data_Center'])
+    ]], colWidths=[150, 385])
+    text_row.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, colors.black),
+        ('LINEBEFORE', (1,0), (1,0), 1, colors.black),
+        ('BACKGROUND', (1,0), (1,0), colors.lightgrey),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    elements.append(text_row)
+
+    # --- Row 6: Payment By ---
+    pay_row = Table([[Paragraph("ชำระเงินโดย", styles['Normal_Content']), ""]], colWidths=[150, 385])
+    pay_row.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, colors.black),
+        ('LINEBEFORE', (1,0), (1,0), 1, colors.black),
+    ]))
+    elements.append(pay_row)
+
+    # --- Row 7: Signatures ---
+    # Combined into single row to avoid horizontal lines between text/signature/date
+    # Using <br/> for spacing
+    
+    # Define cell content for each column
+    def sig_cell(role_th, role_en):
+        return [
+            Paragraph(f"{role_th} {role_en}", styles['Table_Data_Center']),
+            Spacer(1, 35), # Space for signature
+            Paragraph("(.......................................)", styles['Table_Data_Center']),
+            Spacer(1, 2),
+            Paragraph("วันที่ .......................................", styles['Table_Data_Center'])
+        ]
+
+    sig_data = [[
+        sig_cell("ผู้รับสินค้า", "Reciever"),
+        sig_cell("ผู้ส่งสินค้า", "Deliverer"),
+        sig_cell("ผู้มีอำนาจลงนาม", "Authorized Signature")
+    ]]
+    
+    # Use Table of Tables or just content in cells? 
+    # ReportLab Table cells can contain lists of Flowables (like Paragraphs/Spacers)
+    
+    sig_table = Table(sig_data, colWidths=[178, 178, 179])
+    sig_table.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, colors.black),
+        ('GRID', (0,0), (-1,-1), 1, colors.black), # Vertical lines between columns (since only 1 row)
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+    ]))
+    elements.append(KeepTogether(sig_table))
+
+    try:
+        doc.build(elements)
+    except Exception as e:
+        print(f"PDF Build Error: {e}")
+        raise e
+    
+    buffer.seek(0)
+    return HttpResponse(buffer, content_type='application/pdf')
