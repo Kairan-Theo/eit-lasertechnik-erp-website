@@ -258,14 +258,15 @@ function useQuotationState() {
               remark: data.remark || "",
               paymentTerms: data.payment_terms || ""
             })
-            if (data.quotation_items && data.quotation_items.length > 0) {
-              setItems(data.quotation_items.map(i => {
-                const qty = i.quantity || 1
-                const total = parseFloat(i.quo_total || 0)
+            const apiItems = data.quotation_items || data.items || data.products || []
+            if (apiItems.length > 0) {
+              setItems(apiItems.map(i => {
+                const qty = i.quantity || i.qty || 1
+                const total = parseFloat(i.quo_total || i.total || 0)
                 return {
-                  item: i.quo_item || "",
-                  model: i.quo_model || "",
-                  description: i.quo_description || "",
+                  item: i.quo_item || i.item || "",
+                  model: i.quo_model || i.model || "",
+                  description: i.quo_description || i.description || "",
                   qty: qty,
                   price: qty > 0 ? total / qty : 0
                 }
@@ -305,7 +306,11 @@ function QuotationPage() {
       const payload = {
         details: q.details,
         customer: q.customer,
-        items: q.items,
+        items: q.items.map(i => ({
+          ...i,
+          qty: Number.isFinite(i.qty) ? i.qty : 0,
+          price: Number.isFinite(i.price) ? i.price : 0
+        })),
         totals: { total: q.total }
       }
       const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
