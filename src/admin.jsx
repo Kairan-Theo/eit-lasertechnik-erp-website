@@ -331,7 +331,10 @@ function QuotationList({ list, refreshData }) {
     <div className="bg-white rounded-xl border shadow-sm p-6 relative">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-gray-900">Quotations</h2>
+          <div className="flex items-center gap-2 text-[#2D4485]">
+            <FileText className="w-6 h-6" />
+            <h1 className="text-xl font-bold">Quotations</h1>
+          </div>
           {selectedRows.length > 0 && (
             <button 
               onClick={() => setOpenDeleteConfirm(true)}
@@ -484,7 +487,10 @@ function InvoiceList({ list, refreshData }) {
     <div className="bg-white rounded-xl border shadow-sm p-6 relative">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-gray-900">Invoices</h2>
+          <div className="flex items-center gap-2 text-[#2D4485]">
+            <Receipt className="w-6 h-6" />
+            <h1 className="text-xl font-bold">Invoices</h1>
+          </div>
           {selectedRows.length > 0 && (
             <button 
               onClick={() => setOpenDeleteConfirm(true)}
@@ -542,7 +548,7 @@ function InvoiceList({ list, refreshData }) {
                   </td>
                   <td className="p-3">{inv.customerName || "-"}</td>
                   <td className="p-3">{inv.details?.date}</td>
-                  <td className="p-3">{inv.details?.dueDate}</td>
+                  <td className="p-3 text-red-600">{inv.details?.dueDate}</td>
                   <td className="p-3 text-right font-medium">
                     {inv.details?.currency} {inv.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
@@ -652,7 +658,10 @@ function BillingNoteList({ list, refreshData }) {
     <div className="bg-white rounded-xl border shadow-sm p-6 relative">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-gray-900">Billing Notes</h2>
+          <div className="flex items-center gap-2 text-[#2D4485]">
+            <ClipboardList className="w-6 h-6" />
+            <h1 className="text-xl font-bold">Billing Notes</h1>
+          </div>
           {selectedRows.length > 0 && (
             <button 
               onClick={() => setOpenDeleteConfirm(true)}
@@ -712,7 +721,7 @@ function BillingNoteList({ list, refreshData }) {
                     </a>
                   </td>
                   <td className="p-3">{bn.customerName || "-"}</td>
-                  <td className="p-3">{bn.details?.dueDate}</td>
+                  <td className="p-3 text-red-600">{bn.details?.dueDate}</td>
                   <td className="p-3 text-right font-medium text-blue-600">
                     {bn.details?.currency} {amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
@@ -757,103 +766,6 @@ function BillingNoteList({ list, refreshData }) {
   )
 }
 
-function CustomerHistory({ data }) {
-  const [searchTerm, setSearchTerm] = React.useState("")
-  
-  // Filter customers based on search
-  // We need to map back to history keys to be useful
-  // But data.customers is just a list of customer objects. 
-  // Let's iterate localStorage keys again for this view to get the full "History" object.
-  
-  const [histories, setHistories] = React.useState([])
-
-  React.useEffect(() => {
-    const list = []
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith("history:")) {
-           const val = JSON.parse(localStorage.getItem(key))
-           list.push({ key, ...val })
-        }
-      }
-    } catch {}
-    setHistories(list)
-  }, [])
-
-  const filtered = histories.filter(h => {
-    const s = searchTerm.toLowerCase()
-    const name = h.customer?.name?.toLowerCase() || ""
-    const company = h.customer?.company?.toLowerCase() || ""
-    const email = h.customer?.email?.toLowerCase() || ""
-    return name.includes(s) || company.includes(s) || email.includes(s)
-  })
-
-  return (
-    <div className="space-y-6">
-       <div className="bg-white rounded-xl border shadow-sm p-6">
-         <div className="flex items-center gap-4 mb-6">
-           <div className="relative flex-1">
-             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-             <input 
-               value={searchTerm}
-               onChange={(e) => setSearchTerm(e.target.value)}
-               placeholder="Search customers..." 
-               className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-             />
-           </div>
-         </div>
-
-         <div className="space-y-8">
-           {filtered.map((h, i) => (
-             <div key={i} className="border rounded-lg p-4">
-               <div className="flex justify-between items-start mb-4">
-                 <div>
-                   <h3 className="font-semibold text-lg text-[#2D4485]">{h.customer?.company || h.customer?.name || "Unknown Customer"}</h3>
-                   <div className="text-sm text-gray-500">{h.customer?.name} • {h.customer?.email} • {h.customer?.phone}</div>
-                 </div>
-               </div>
-               
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Quotations ({h.quotations?.length || 0})</h4>
-                   <div className="space-y-2">
-                     {(h.quotations || []).slice(0, 3).map((q, j) => (
-                       <div key={j} className="text-sm flex justify-between bg-gray-50 p-2 rounded">
-                         <a href={`/quotation.html?key=${encodeURIComponent(h.key)}&index=${j}`} className="text-[#2D4485] hover:underline font-medium">
-                           {q.details?.number}
-                         </a>
-                         <span className="font-medium">{q.details?.currency} {q.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                       </div>
-                     ))}
-                     {(h.quotations?.length || 0) > 3 && <div className="text-xs text-gray-400 italic">...and {h.quotations.length - 3} more</div>}
-                   </div>
-                 </div>
-                 <div>
-                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Invoices ({h.invoices?.length || 0})</h4>
-                   <div className="space-y-2">
-                     {(h.invoices || []).slice(0, 3).map((inv, j) => (
-                       <div key={j} className="text-sm flex justify-between bg-gray-50 p-2 rounded">
-                         <a href={`/invoice.html?key=${encodeURIComponent(h.key)}&index=${j}`} className="text-green-600 hover:underline font-medium">
-                           {inv.details?.number}
-                         </a>
-                         <span className="font-medium text-green-600">{inv.details?.currency} {inv.totals?.total?.toFixed(2)}</span>
-                       </div>
-                     ))}
-                     {(h.invoices?.length || 0) > 3 && <div className="text-xs text-gray-400 italic">...and {h.invoices.length - 3} more</div>}
-                   </div>
-                 </div>
-               </div>
-             </div>
-           ))}
-           {filtered.length === 0 && (
-             <div className="text-center py-8 text-gray-500">No customer history found</div>
-           )}
-         </div>
-       </div>
-    </div>
-  )
-}
 
 function PermissionsManager() {
   const [users, setUsers] = React.useState([])
@@ -1256,22 +1168,22 @@ function AdminPage() {
             Dashboard
           </button>
           <button
+            onClick={() => setActiveTab("purchase-orders")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "purchase-orders" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <ShoppingCart className="w-5 h-5" />
+            Purchase Orders
+          </button>
+          <button
             onClick={() => setActiveTab("quotations")}
             className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === "quotations" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
             }`}
           >
-            <ClipboardList className="w-5 h-5" />
-            Quotations
-          </button>
-          <button
-            onClick={() => setActiveTab("billing-notes")}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "billing-notes" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
-            }`}
-          >
             <FileText className="w-5 h-5" />
-            Billing Notes
+            Quotations
           </button>
           <button
             onClick={() => setActiveTab("invoices")}
@@ -1283,22 +1195,13 @@ function AdminPage() {
             Invoices
           </button>
           <button
-            onClick={() => setActiveTab("purchase-orders")}
+            onClick={() => setActiveTab("billing-notes")}
             className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "purchase-orders" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+              activeTab === "billing-notes" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
             }`}
           >
-            <ShoppingCart className="w-5 h-5" />
-            Purchase Orders
-          </button>
-          <button
-            onClick={() => setActiveTab("customers")}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "customers" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            <Users className="w-5 h-5" />
-            Customer History
+            <ClipboardList className="w-5 h-5" />
+            Billing Notes
           </button>
           <button
             onClick={() => setActiveTab("permissions")}
@@ -1317,21 +1220,19 @@ function AdminPage() {
         <header className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">
             {activeTab === "dashboard" && "Dashboard"}
-            {activeTab === "quotations" && "Quotations"}
-            {activeTab === "billing-notes" && "Billing Notes"}
-            {activeTab === "invoices" && "Invoices"}
             {activeTab === "purchase-orders" && "Purchase Orders"}
-            {activeTab === "customers" && "Customer History"}
+            {activeTab === "quotations" && "Quotations"}
+            {activeTab === "invoices" && "Invoices"}
+            {activeTab === "billing-notes" && "Billing Notes"}
             {activeTab === "permissions" && "User Permissions"}
           </h1>
         </header>
 
         {activeTab === "dashboard" && <Dashboard data={data} />}
-        {activeTab === "quotations" && <QuotationList list={data.quotations} refreshData={loadData} />}
-        {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} refreshData={loadData} />}
-        {activeTab === "invoices" && <InvoiceList list={data.invoices} refreshData={loadData} />}
         {activeTab === "purchase-orders" && <PurchaseOrderPage />}
-        {activeTab === "customers" && <CustomerHistory data={data} />}
+        {activeTab === "quotations" && <QuotationList list={data.quotations} refreshData={loadData} />}
+        {activeTab === "invoices" && <InvoiceList list={data.invoices} refreshData={loadData} />}
+        {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} refreshData={loadData} />}
         {activeTab === "permissions" && <PermissionsManager />}
       </main>
     </div>

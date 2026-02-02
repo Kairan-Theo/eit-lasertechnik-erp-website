@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote
+from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder
 
 class EITSerializer(serializers.ModelSerializer):
     class Meta:
@@ -610,3 +610,50 @@ class ComponentEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = ComponentEntry
         fields = '__all__'
+
+class CustomerPurchaseOrderSerializer(serializers.ModelSerializer):
+    customer_name = serializers.SerializerMethodField()
+    write_customer_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    po_file = serializers.FileField(write_only=True, required=False)
+
+    class Meta:
+        model = CustomerPurchaseOrder
+        exclude = ['po_file_content']
+
+    def get_customer_name(self, obj):
+        return obj.customer.company_name if obj.customer else ""
+
+    def create(self, validated_data):
+        customer_name = validated_data.pop('write_customer_name', None)
+        po_file = validated_data.pop('po_file', None)
+        
+        if customer_name:
+            customer, _ = Customer.objects.get_or_create(company_name=customer_name)
+            validated_data['customer'] = customer
+            
+        if po_file:
+            validated_data['po_file_name'] = po_file.name
+            validated_data['po_file_type'] = po_file.content_type
+            validated_data['po_file_content'] = po_file.read()
+            
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        customer_name = validated_data.pop('write_customer_name', None)
+        po_file = validated_data.pop('po_file', None)
+        
+        if customer_name:
+            customer, _ = Customer.objects.get_or_create(company_name=customer_name)
+            validated_data['customer'] = customer
+            
+        if po_file:
+            validated_data['po_file_name'] = po_file.name
+            validated_data['po_file_type'] = po_file.content_type
+            validated_data['po_file_content'] = po_file.read()
+            
+        # If po_file_name is explicitly cleared (empty string) and no new file is uploaded, clear the file content
+        if 'po_file_name' in validated_data and not validated_data.get('po_file_name') and not po_file:
+            validated_data['po_file_content'] = None
+            validated_data['po_file_type'] = ''
+            
+        return super().update(instance, validated_data)
