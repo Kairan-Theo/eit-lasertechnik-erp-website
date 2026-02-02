@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -186,3 +186,9 @@ class SystemComponentAdmin(admin.ModelAdmin):
 class ComponentEntryAdmin(admin.ModelAdmin):
     list_display = ("component_name", "quantity")
     search_fields = ("component_name",)
+
+@admin.register(CustomerPurchaseOrder)
+class CustomerPurchaseOrderAdmin(admin.ModelAdmin):
+    list_display = ("po_number", "customer", "created_at", "updated_at")
+    search_fields = ("po_number", "customer__company_name")
+    list_filter = ("created_at", "updated_at")

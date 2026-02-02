@@ -1,5 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
@@ -579,6 +580,7 @@ class CustomerPurchaseOrderViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerPurchaseOrderSerializer
     authentication_classes = []
     permission_classes = [AllowAny]
+    parser_classes = (MultiPartParser, FormParser)
 
     @action(detail=True, methods=['get'], url_path='download')
     def download_po_file(self, request, pk=None):

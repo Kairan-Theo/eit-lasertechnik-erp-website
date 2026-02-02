@@ -451,7 +451,7 @@ class DealHistory(models.Model):
 class CustomerPurchaseOrder(models.Model):
     po_number = models.CharField(max_length=100, blank=True)
     customer = models.ForeignKey(Customer, related_name='customer_purchase_orders', on_delete=models.SET_NULL, null=True, blank=True)
-    description = models.TextField(blank=True)
+
     
     # PO File Storage (Binary)
     po_file_name = models.CharField(max_length=255, blank=True)
