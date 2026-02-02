@@ -21,7 +21,7 @@ from django.db import connection
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, google_login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom, delete_bom, send_email_api, EmailLogViewSet, DealHistoryViewSet, check_tracking_status, QuotationViewSet, BillingNoteViewSet, get_default_eit, EITViewSet, CustomerPurchaseOrderViewSet
+from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, google_login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom, delete_bom, send_email_api, EmailLogViewSet, DealHistoryViewSet, check_tracking_status, QuotationViewSet, BillingNoteViewSet, get_default_eit, EITViewSet, CustomerPurchaseOrderViewSet, PurchaseOrderViewSet
 from crm.pdf_views import generate_quotation_pdf, generate_billing_note_pdf
 
 router = DefaultRouter()
@@ -47,6 +47,7 @@ router.register(r'component_entries', ComponentEntryViewSet, basename='component
 router.register(r'email_logs', EmailLogViewSet)
 router.register(r'deal_history', DealHistoryViewSet)
 router.register(r'customer_purchase_orders', CustomerPurchaseOrderViewSet)
+router.register(r'purchase_orders', PurchaseOrderViewSet)
 
 def health(request):
     return JsonResponse({"status": "ok"})
