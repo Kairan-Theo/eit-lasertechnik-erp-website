@@ -121,6 +121,15 @@ function Dashboard({ data }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl border shadow-sm">
           <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-500 text-sm font-medium">Purchase Orders</h3>
+            <div className="p-2 bg-orange-50 rounded-lg">
+              <ShoppingCart className="w-5 h-5 text-orange-600" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{data.purchaseOrders.length}</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-500 text-sm font-medium">Total Quotations</h3>
             <div className="p-2 bg-blue-50 rounded-lg">
               <ClipboardList className="w-5 h-5 text-blue-600" />
@@ -139,25 +148,50 @@ function Dashboard({ data }) {
         </div>
         <div className="bg-white p-6 rounded-xl border shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-gray-500 text-sm font-medium">Purchase Orders</h3>
-            <div className="p-2 bg-orange-50 rounded-lg">
-              <ShoppingCart className="w-5 h-5 text-orange-600" />
+            <h3 className="text-gray-500 text-sm font-medium">Billing Notes</h3>
+            <div className="p-2 bg-blue-50 rounded-lg">
+              <ClipboardList className="w-5 h-5 text-blue-600" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{data.purchaseOrders.length}</div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-gray-500 text-sm font-medium">Customers</h3>
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <Users className="w-5 h-5 text-purple-600" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-gray-900">{data.customers.length}</div>
+          <div className="text-2xl font-bold text-gray-900">{data.billingNotes.length}</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border shadow-sm p-6">
+          <h3 className="font-semibold text-gray-900 mb-4">Recent Purchase Orders</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b">
+                  <th className="pb-2">PO Number</th>
+                  <th className="pb-2">Vendor</th>
+                  <th className="pb-2">Items</th>
+                  <th className="pb-2 text-right">Total Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {data.purchaseOrders.slice(0, 5).map((po, i) => {
+                  const total = (po.items || []).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 1.07
+                  return (
+                    <tr key={i}>
+                      <td className="py-3 font-medium">{po.poNumber}</td>
+                    <td className="py-3">{po.customer?.company || po.customer?.name || "-"}</td>
+                      <td className="py-3">{po.items?.length || 0}</td>
+                      <td className="py-3 text-right">
+                        THB {total.toFixed(2)}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {data.purchaseOrders.length === 0 && (
+                  <tr><td colSpan={4} className="py-4 text-center text-gray-500">No purchase orders found</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div className="bg-white rounded-xl border shadow-sm p-6">
           <h3 className="font-semibold text-gray-900 mb-4">Recent Quotations</h3>
           <div className="overflow-x-auto">
@@ -174,9 +208,7 @@ function Dashboard({ data }) {
                 {[...data.quotations].sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date)).slice(0, 5).map((q, i) => (
                   <tr key={i}>
                     <td className="py-3 font-medium">
-                      <a href={`/quotation.html?key=${encodeURIComponent(q.sourceKey)}&index=${q.sourceIndex}`} className="text-blue-600 hover:underline">
-                        {q.details?.number}
-                      </a>
+                      {q.details?.number}
                     </td>
                     <td className="py-3">{q.customerName || "-"}</td>
                     <td className="py-3">{q.details?.date}</td>
@@ -199,7 +231,7 @@ function Dashboard({ data }) {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b">
-                  <th className="pb-2">Number</th>
+                  <th className="pb-2">Invoice Number</th>
                   <th className="pb-2">Customer</th>
                   <th className="pb-2">Due Date</th>
                   <th className="pb-2 text-right">Amount</th>
@@ -209,9 +241,7 @@ function Dashboard({ data }) {
                 {data.invoices.slice(0, 5).map((inv, i) => (
                   <tr key={i}>
                     <td className="py-3 font-medium">
-                      <a href={`/invoice.html?key=${encodeURIComponent(inv.sourceKey)}&index=${inv.sourceIndex}`} className="text-green-600 hover:underline">
-                        {inv.details?.number}
-                      </a>
+                      {inv.details?.number}
                     </td>
                     <td className="py-3">{inv.customerName || "-"}</td>
                     <td className="py-3">{inv.details?.dueDate}</td>
@@ -228,34 +258,33 @@ function Dashboard({ data }) {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border shadow-sm p-6 lg:col-span-2">
-          <h3 className="font-semibold text-gray-900 mb-4">Recent Purchase Orders</h3>
+        <div className="bg-white rounded-xl border shadow-sm p-6">
+          <h3 className="font-semibold text-gray-900 mb-4">Recent Billing Notes</h3>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b">
-                  <th className="pb-2">PO Number</th>
-                  <th className="pb-2">Vendor</th>
-                  <th className="pb-2">Items</th>
-                  <th className="pb-2 text-right">Total Amount</th>
+                  <th className="pb-2">Billing Note Number</th>
+                  <th className="pb-2">Customer</th>
+                  <th className="pb-2">Due Date</th>
+                  <th className="pb-2 text-right">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {data.purchaseOrders.slice(0, 5).map((po, i) => {
-                  const total = (po.items || []).reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0) * 1.07
-                  return (
-                    <tr key={i}>
-                      <td className="py-3 font-medium text-orange-600">{po.poNumber}</td>
-                      <td className="py-3">{po.customer?.company || po.customer?.name || "-"}</td>
-                      <td className="py-3">{po.items?.length || 0}</td>
-                      <td className="py-3 text-right">
-                        THB {total.toFixed(2)}
-                      </td>
-                    </tr>
-                  )
-                })}
-                {data.purchaseOrders.length === 0 && (
-                  <tr><td colSpan={4} className="py-4 text-center text-gray-500">No purchase orders found</td></tr>
+                {data.billingNotes.slice(0, 5).map((bn, i) => (
+                  <tr key={i}>
+                    <td className="py-3 font-medium">
+                      {bn.details?.number}
+                    </td>
+                    <td className="py-3">{bn.customerName || "-"}</td>
+                    <td className="py-3">{bn.details?.dueDate}</td>
+                    <td className="py-3 text-right">
+                      {bn.details?.currency} {bn.totals?.total?.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+                {data.billingNotes.length === 0 && (
+                  <tr><td colSpan={4} className="py-4 text-center text-gray-500">No billing notes found</td></tr>
                 )}
               </tbody>
             </table>
@@ -363,7 +392,7 @@ function QuotationList({ list, refreshData }) {
                 />
               </th>
               <th className="p-3 text-left w-16">Index</th>
-              <th className="p-3 text-left">QT Code</th>
+              <th className="p-3 text-left">Quotation Number</th>
               <th className="p-3 text-left">Customer</th>
               <th className="p-3 text-left">Date</th>
               <th className="p-3 text-left">Item</th>
@@ -519,12 +548,11 @@ function InvoiceList({ list, refreshData }) {
                 />
               </th>
               <th className="p-3 text-left w-16">Index</th>
-              <th className="p-3 text-left">Number</th>
+              <th className="p-3 text-left">Invoice Number</th>
               <th className="p-3 text-left">Customer</th>
               <th className="p-3 text-left">Date</th>
               <th className="p-3 text-left">Due Date</th>
               <th className="p-3 text-right">Total</th>
-              <th className="p-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -542,7 +570,7 @@ function InvoiceList({ list, refreshData }) {
                   </td>
                   <td className="p-3 text-gray-500">{i + 1}</td>
                   <td className="p-3 font-medium">
-                    <a href={`/invoice.html?key=${encodeURIComponent(inv.sourceKey)}&index=${inv.sourceIndex}`} className="text-green-600 hover:underline">
+                    <a href={`/invoice.html?key=${encodeURIComponent(inv.sourceKey)}&index=${inv.sourceIndex}`} className="text-[#2D4485] hover:underline">
                       {inv.details?.number}
                     </a>
                   </td>
@@ -552,14 +580,11 @@ function InvoiceList({ list, refreshData }) {
                   <td className="p-3 text-right font-medium">
                     {inv.details?.currency} {inv.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
-                  <td className="p-3 text-right">
-                     <span className="text-xs text-gray-400">View in History</span>
-                  </td>
                 </tr>
               )
             })}
             {list.length === 0 && (
-              <tr><td colSpan={8} className="p-8 text-center text-gray-500">No invoices found</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-gray-500">No invoices found</td></tr>
             )}
           </tbody>
         </table>
@@ -690,7 +715,7 @@ function BillingNoteList({ list, refreshData }) {
                 />
               </th>
               <th className="p-3 text-left w-16">Index</th>
-              <th className="p-3 text-left">Number</th>
+              <th className="p-3 text-left">Billing Note Number</th>
               <th className="p-3 text-left">Customer</th>
               <th className="p-3 text-left">Due Date</th>
               <th className="p-3 text-right">Amount</th>
@@ -716,7 +741,7 @@ function BillingNoteList({ list, refreshData }) {
                   </td>
                   <td className="p-3 text-gray-500">{i + 1}</td>
                   <td className="p-3 font-medium">
-                    <a href={`/billing-note.html?key=${encodeURIComponent(bn.sourceKey)}&index=${bn.sourceIndex}`} className="text-purple-600 hover:underline">
+                    <a href={`/billing-note.html?key=${encodeURIComponent(bn.sourceKey)}&index=${bn.sourceIndex}`} className="text-[#2D4485] hover:underline">
                       {bn.details?.number}
                     </a>
                   </td>
