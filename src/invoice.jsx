@@ -3,7 +3,6 @@ import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
 import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, Receipt } from "lucide-react"
-import html2pdf from "html2pdf.js"
 import Navigation from "./components/navigation.jsx"
 import { CustomerCombobox } from "./components/customer-combobox"
 import { Combobox } from "./components/combobox"
@@ -429,7 +428,7 @@ function useInvoiceState() {
           customer,
           items,
           details,
-          totals: { subtotal, taxTotal, total },
+          totals: { subtotal, taxTotal, total, thaiText: THBText(total) },
           eit: details.eit,
           eit_name: details.salesPerson,
           eit_address: details.eitAddress,
@@ -456,80 +455,54 @@ function useInvoiceState() {
 
   const print = () => window.print()
 
+  const parseNumber = (val) => {
+    if (typeof val === 'number') return val
+    if (!val) return 0
+    return parseFloat(String(val).replace(/,/g, ''))
+  }
+
   const exportPdf = async () => {
-    const el = document.getElementById("invoice-document")
-    if (!el) return
-    const opt = { margin: 0, filename: `Invoice_${details.number}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }
-    const clone = el.cloneNode(true)
-    clone.style.position = "fixed"
-    clone.style.left = "-10000px"
-    clone.style.top = "0"
-    clone.style.display = "block"
-    clone.style.background = "#ffffff"
-    clone.classList.remove("hidden")
-    clone.removeAttribute("aria-hidden")
-    
-    // Force PDF layout to match Print layout
-    const printPage = clone.querySelector(".print-page")
-    if (printPage) {
-      printPage.style.width = "210mm"
-      printPage.style.height = "297mm"
-      printPage.style.padding = "0"
-      printPage.style.margin = "0"
-      printPage.style.overflow = "hidden"
-      printPage.style.backgroundColor = "white"
-    }
-
-    document.body.appendChild(clone)
-    
-    // Wait for images to load
-    const images = clone.querySelectorAll('img')
-    await Promise.all(Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve()
-        return new Promise(resolve => {
-            img.onload = resolve
-            img.onerror = resolve
-        })
-    }))
-
     try {
-      const all = clone.querySelectorAll("*")
-      all.forEach((node) => {
-        const cs = window.getComputedStyle(node)
-        const props = [
-          "color",
-          "backgroundColor",
-          "background",
-          "borderColor",
-          "borderTopColor",
-          "borderRightColor",
-          "borderBottomColor",
-          "borderLeftColor",
-          "boxShadow",
-        ]
-        props.forEach((prop) => {
-          const val = cs[prop]
-          if (typeof val === "string" && val.includes("oklch")) {
-            if (prop.toLowerCase().includes("background")) {
-              node.style[prop] = "#ffffff"
-            } else if (prop.toLowerCase().includes("border")) {
-              node.style[prop] = "#000000"
-            } else {
-              node.style[prop] = "#000000"
-            }
-          }
-        })
+      const payload = {
+        details,
+        customer,
+        items: items.map(i => ({
+          ...i,
+          qty: parseNumber(i.qty),
+          price: parseNumber(i.price)
+        })),
+        totals: { subtotal, taxTotal, total, thaiText: THBText(total) }
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/generate-invoice-pdf/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       })
-    } catch (e) {
-      console.error("Failed to sanitize colors for PDF", e)
-    }
-    try {
-      await html2pdf().set(opt).from(clone).save()
+
+      if (!response.ok) throw new Error('Failed to generate PDF')
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      }, 500)
+
+      setTimeout(() => {
+        document.body.removeChild(iframe)
+        window.URL.revokeObjectURL(url)
+      }, 60000)
+
     } catch (err) {
       console.error("PDF generation failed", err)
-      window.print()
-    } finally {
-      document.body.removeChild(clone)
+      alert("Failed to generate PDF")
     }
   }
 
@@ -618,16 +591,16 @@ function InvoiceDocument({ inv }) {
       <div className="flex justify-between items-start mb-1">
          {/* Left: Company Info Box */}
          <div className="border border-black p-2 w-[60%] min-h-[80px]">
-            <div className="font-bold text-xs">{orgThaiName}</div>
-            <div className="font-bold text-xs">{orgName}</div>
+            <div className="font-normal text-xs">{orgThaiName}</div>
+            <div className="font-normal text-xs">{orgName}</div>
             <div className="mt-1">{orgAddressLine1}</div>
             <div className="mt-1">TEL : {orgTel}    Fax : {orgFax}</div>
             <div className="mt-1 flex justify-between">
                <div className="flex gap-1">
-                  <span className="font-bold">เลขประจำตัวผู้เสียภาษีอากร :</span>
+                  <span className="font-normal">เลขประจำตัวผู้เสียภาษีอากร :</span>
                   <span>{orgTaxId}</span>
                </div>
-               <span className="font-bold">สำนักงานใหญ่</span>
+               <span className="font-normal">สำนักงานใหญ่</span>
             </div>
          </div>
 
@@ -646,11 +619,17 @@ function InvoiceDocument({ inv }) {
             </div>
             <div className="text-right text-xs">
                <div className="flex justify-end gap-2 mb-1">
-                  <span className="w-24 font-bold">เลขที่ (No.)</span>
+                  <span className="w-24">
+                  <span className="font-bold">เลขที่</span>
+                  <span className="font-normal"> (No.)</span>
+                  </span>
                   <span>EIT {inv.details.number}</span>
                </div>
                <div className="flex justify-end gap-2">
-                  <span className="w-24 font-bold">วันที่ (Issue Date)</span>
+                  <span className="w-24">
+                  <span className="font-bold">วันที่</span>
+                  <span className="font-normal"> (Issue Date)</span>
+                  </span>
                   <span>{issueDate}</span>
                </div>
             </div>
@@ -668,16 +647,13 @@ function InvoiceDocument({ inv }) {
                   <span>{customerTaxId}</span>
                </div>
             </div>
+            <div className="mb-1 font-normal">ลูกค้า (customer)</div>
             <div className="flex mb-1">
-               <div className="w-32 font-bold">ลูกค้า (customer)</div>
+               <div className="w-32 font-normal">ชื่อ</div>
                <div className="flex-1">{customerName}</div>
             </div>
-            <div className="flex mb-1">
-               <div className="w-32 font-bold">ชื่อ</div>
-               <div>{inv.customer.attn || ""}</div>
-            </div>
             <div className="flex">
-               <div className="w-32 font-bold">ที่อยู่</div>
+               <div className="w-32 font-normal">ที่อยู่</div>
                <div className="w-2/3 break-words">{customerAddress}</div>
             </div>
          </div>
@@ -685,22 +661,22 @@ function InvoiceDocument({ inv }) {
          {/* Right: Payment */}
          <div className="w-[30%] flex flex-col">
             <div className="flex-1 border-b border-black p-1 text-center flex flex-col justify-center">
-               <div className="font-bold">ประเภทการจ่ายเงิน (Payment Type)</div>
+               <div className="font-normal">ประเภทการจ่ายเงิน (Payment Type)</div>
                <div className="mt-1">{paymentType || "-"}</div>
             </div>
             <div className="flex-1 border-b border-black p-1 text-center flex flex-col justify-center">
-               <div className="font-bold">วันครบกำหนดชำระเงิน( Due date)</div>
+               <div className="font-normal">วันครบกำหนดชำระเงิน( Due date)</div>
                <div className="mt-1">{dueDate}</div>
             </div>
             <div className="flex-1 p-1 text-center flex flex-col justify-center">
-               <div className="font-bold">เลขที่ใบสั่งซื้อ (PO.NO)</div>
+               <div className="font-normal">เลขที่ใบสั่งซื้อ (PO.NO)</div>
                <div className="mt-1">{poNo || "-"}</div>
             </div>
          </div>
       </div>
 
       {/* Row 3: Table Header */}
-      <div className="border border-black border-b-0 flex text-center font-bold text-xs bg-gray-100 mt-[6mm]">
+      <div className="border border-black border-b-0 flex text-center text-xs bg-gray-100">
          <div className="w-[55%] border-r border-black p-1">
             <div>รายการ</div>
             <div>Description</div>
@@ -724,7 +700,7 @@ function InvoiceDocument({ inv }) {
       </div>
 
       {/* Row 4: Table Content */}
-      <div className="border border-black flex flex-col relative"> 
+      <div className="border border-black flex flex-col relative min-h-[300px]"> 
          {/* Loop Items */}
          {inv.items.map((item, i) => (
             <div key={i} className="flex text-xs z-10">
@@ -751,21 +727,21 @@ function InvoiceDocument({ inv }) {
          <div className="flex-1 border-r border-black"></div> 
          <div className="w-[30%]">
             <div className="flex border-b border-black">
-               <div className="w-[60%] border-r border-black p-1 text-right font-bold text-[10px]">
+               <div className="w-[60%] border-r border-black p-1 text-right font-normal text-[10px]">
                   <div>จำนวนเงินสุทธิ</div>
                   <div>Net Amount</div>
                </div>
                <div className="w-[40%] p-1 text-right">{inv.subtotal.toFixed(2)}</div>
             </div>
             <div className="flex border-b border-black">
-               <div className="w-[60%] border-r border-black p-1 text-right font-bold text-[10px]">
+               <div className="w-[60%] border-r border-black p-1 text-right font-normal text-[10px]">
                   <div>ภาษีมูลค่าเพิ่ม</div>
                   <div>VAT 7%</div>
                </div>
                <div className="w-[40%] p-1 text-right">{inv.taxTotal.toFixed(2)}</div>
             </div>
             <div className="flex">
-               <div className="w-[60%] border-r border-black p-1 text-right font-bold text-[10px]">
+               <div className="w-[60%] border-r border-black p-1 text-right font-normal text-[10px]">
                   <div>รวมเป็นมูลค่า</div>
                   <div>Total of sales</div>
                </div>
@@ -776,44 +752,48 @@ function InvoiceDocument({ inv }) {
 
       {/* Row 6: Text Amount */}
       <div className="border border-black border-t-0 flex">
-         <div className="w-[25%] border-r border-black p-1 text-center font-bold flex flex-col justify-center">
+         <div className="w-[25%] border-r border-black p-1 text-center font-normal flex flex-col justify-center">
             <div>จำนวนเงินรวมทั้งสิ้น</div>
-            <div>(The sum of bath)</div>
+            <div>(The sum of baht)</div>
          </div>
          <div className="flex-1 p-1 text-center flex items-center justify-center bg-gray-100">
             {THBText(inv.total)}
          </div>
       </div>
 
-      {/* Row 7: Signatures */}
-      <div className="border border-black border-t-0 p-2 pt-2 pb-2 flex justify-between text-center text-xs">
-         <div className="w-[30%] flex flex-col">
-            <div className="border border-black mb-1 font-bold p-1 w-full">ชำระเงินโดย</div>
-            <div className="mt-2 font-bold">ผู้รับสินค้า Receiver</div>
-            <div className="mt-4 border-b border-dotted border-black w-3/4 mx-auto"></div>
+      {/* Row 7: Payment By */}
+      <div className="border border-black border-t-0 flex">
+         <div className="w-[25%] border-r border-black p-1 text-center font-normal flex flex-col justify-center">
+            <div>ชำระเงินโดย</div>
+         </div>
+         <div className="flex-1 p-1"></div>
+      </div>
+
+      {/* Row 8: Signatures */}
+      <div className="border border-black border-t-0 p-2 pt-4 pb-2 flex justify-between text-center text-xs">
+         <div className="w-[30%] flex flex-col pt-2">
+            <div className="mt-2 font-normal">ผู้รับสินค้า Receiver</div>
+            <div className="mt-6 text-sm">(........................................................)</div>
             <div className="mt-1 flex justify-center gap-1">
                <span>วันที่</span>
-               <span className="border-b border-dotted border-black w-20"></span>
+               <span className="border-b border-dotted border-black w-24"></span>
             </div>
-            <div className="mt-1 text-[10px] text-gray-500">(........................................................)</div>
          </div>
          <div className="w-[30%] pt-2">
-            <div className="mt-2 font-bold">ผู้ส่งสินค้า Deliverer</div>
-            <div className="mt-4 border-b border-dotted border-black w-3/4 mx-auto"></div>
+            <div className="mt-2 font-normal">ผู้ส่งสินค้า Deliverer</div>
+            <div className="mt-6 text-sm">(........................................................)</div>
             <div className="mt-1 flex justify-center gap-1">
                <span>วันที่</span>
-               <span className="border-b border-dotted border-black w-20"></span>
+               <span className="border-b border-dotted border-black w-24"></span>
             </div>
-            <div className="mt-1 text-[10px] text-gray-500">(........................................................)</div>
          </div>
          <div className="w-[30%] pt-2">
-            <div className="mt-2 font-bold">ผู้มีอำนาจลงนาม Authorized Signature</div>
-            <div className="mt-4 border-b border-dotted border-black w-3/4 mx-auto"></div>
+            <div className="mt-2 font-normal">ผู้มีอำนาจลงนาม Authorized Signature</div>
+            <div className="mt-6 text-sm">(........................................................)</div>
             <div className="mt-1 flex justify-center gap-1">
                <span>วันที่</span>
-               <span className="border-b border-dotted border-black w-20"></span>
+               <span className="border-b border-dotted border-black w-24"></span>
             </div>
-            <div className="mt-1 text-[10px] text-gray-500">(........................................................)</div>
          </div>
       </div>
     </div>
@@ -825,6 +805,7 @@ function InvoicePage() {
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
   const [confirmSend, setConfirmSend] = React.useState({ open: false })
   const [notice, setNotice] = React.useState({ show: false, text: "" })
+  const [isGenerating, setIsGenerating] = React.useState(false)
 
   const openConfirm = () => setConfirmSend({ open: true })
   const cancelConfirm = () => setConfirmSend({ open: false })
@@ -843,6 +824,95 @@ function InvoicePage() {
     <>
     <main className="min-h-screen bg-gray-50">
       <Navigation />
+      
+      {/* Loading Overlay - Moved to top level */}
+      {isGenerating && (
+          <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center print:hidden">
+            <div className="bg-white rounded-lg p-5 flex flex-col items-center shadow-2xl">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#2D4485] mb-3"></div>
+              <div className="text-lg font-semibold text-gray-900">Generating PDF...</div>
+              <div className="text-sm text-gray-500 mb-4">Please wait</div>
+              <button 
+                onClick={() => setIsGenerating(false)}
+                className="text-xs text-red-500 hover:text-red-700 underline"
+              >
+                Cancel / Unfreeze
+              </button>
+            </div>
+          </div>
+      )}
+
+      {/* Confirmation Modal - Moved to top level */}
+      {openCreateConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-[55] flex items-center justify-center print:hidden" onClick={() => setOpenCreateConfirm(false)}>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-[560px] max-w-[95vw] relative" onClick={(e)=>e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Create Invoice Form</h3>
+                  <div className="text-sm text-gray-600 mt-1">Choose how you want to proceed</div>
+                </div>
+                <button className="text-gray-500 hover:text-gray-900 p-2" onClick={() => setOpenCreateConfirm(false)}>✕</button>
+              </div>
+              <div className="p-4 grid grid-cols-3 gap-4">
+                <button
+                  className="w-full px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
+                  onClick={() => { setOpenCreateConfirm(false); window.location.href = "/admin.html" }}
+                >
+                  Discard
+                </button>
+                <button
+                  className="w-full px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] min-w-[140px]"
+                  onClick={() => { inv.confirm(); window.location.href = "/admin.html" }}
+                >
+                  Save Changes
+                </button>
+                <button
+                  className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center disabled:opacity-50"
+                  disabled={isGenerating}
+                  onClick={async () => {
+                    inv.confirm()
+                    setIsGenerating(true)
+                    await new Promise(r => setTimeout(r, 100))
+                    try {
+                      await inv.exportPdf()
+                    } catch (e) {
+                      console.error(e)
+                    } finally {
+                      setIsGenerating(false)
+                      setOpenCreateConfirm(false)
+                    }
+                  }}
+                >
+                  {isGenerating ? "Generating..." : "Download Form"}
+                </button>
+              </div>
+            </div>
+        </div>
+      )}
+
+      {/* Confirm Send Modal - Moved to top level */}
+      {confirmSend.open && (
+        <div className="fixed inset-0 z-[55] bg-black/50 flex items-center justify-center print:hidden">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-sm p-5">
+            <div className="text-lg font-semibold text-gray-900 mb-2">Confirm Send</div>
+            <div className="text-gray-700 text-sm mb-4">Send invoice to customer email?</div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={cancelConfirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Cancel</button>
+              <button type="button" onClick={doConfirmSend} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Toast - Moved to top level */}
+      {notice.show && (
+        <div className="fixed bottom-4 right-4 z-[60] print:hidden">
+          <div className="bg-[#2D4485] text-white rounded-md shadow-md px-4 py-2 text-sm">
+            {notice.text}
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
@@ -860,28 +930,6 @@ function InvoicePage() {
           </div>
         </div>
 
-        {confirmSend.open && (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center print:hidden">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-sm p-5">
-              <div className="text-lg font-semibold text-gray-900 mb-2">Confirm Send</div>
-              <div className="text-gray-700 text-sm mb-4">Send invoice to customer email?</div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={cancelConfirm} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200">Cancel</button>
-                <button type="button" onClick={doConfirmSend} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-gray-100 text-gray-900 hover:bg-[#2D4485] hover:text-white">Confirm</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {notice.show && (
-          <div className="fixed bottom-4 right-4 z-50 print:hidden">
-            <div className="bg-[#2D4485] text-white rounded-md shadow-md px-4 py-2 text-sm">
-              {notice.text}
-            </div>
-          </div>
-        )}
-
-        {/* Code Box */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
            <h2 className="text-xl font-bold text-[#2D4485]">Code</h2>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1105,46 +1153,6 @@ function InvoicePage() {
           <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href = "/admin.html"}>Cancel</button>
           <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={() => setOpenCreateConfirm(true)}>Create Invoice Form</button>
         </div>
-
-        {openCreateConfirm && (
-        <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setOpenCreateConfirm(false)}>
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] max-w-[95vw]" onClick={(e)=>e.stopPropagation()}>
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
-              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-gray-900">Create Invoice Form</h3>
-                  <div className="text-sm text-gray-600 mt-1">Choose how you want to proceed</div>
-                </div>
-                <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenCreateConfirm(false)}>✕</button>
-              </div>
-              <div className="p-4 grid grid-cols-3 gap-4">
-                <button
-                  className="w-full px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                  onClick={() => { setOpenCreateConfirm(false); window.location.href = "/admin.html" }}
-                >
-                  Discard
-                </button>
-                <button
-                  className="w-full px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] min-w-[140px]"
-                  onClick={() => { inv.confirm(); window.location.href = "/admin.html" }}
-                >
-                  Save Changes
-                </button>
-                <button
-                  className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
-                  onClick={() => {
-                    inv.confirm()
-                    inv.exportPdf()
-                    setOpenCreateConfirm(false)
-                  }}
-                >
-                  Download Form
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        )}
 
         {/* Hidden Document for PDF */}
       </div>
