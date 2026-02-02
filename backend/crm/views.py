@@ -819,3 +819,9 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     serializer_class = PurchaseOrderSerializer
     authentication_classes = []
     permission_classes = [AllowAny]
+
+class InvoiceViewSet(viewsets.ModelViewSet):
+    queryset = Invoice.objects.all().order_by('-created_at')
+    serializer_class = InvoiceSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
