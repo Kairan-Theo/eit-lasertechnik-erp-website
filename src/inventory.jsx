@@ -50,7 +50,6 @@ function useInventory() {
           stockQty: Number(p.stockQty || 0),
           price: Number(p.price || 0),
           updatedAt: p.updatedAt || new Date().toISOString().slice(0, 10),
-          photo: p.photo || "/eit-icon.png",
           instock: Number(p.instock || 0),
           warehouse: p.warehouse || "Main",
           bin: p.bin || "A-01-01",
@@ -87,10 +86,10 @@ function useInventory() {
         try { localStorage.setItem("inventoryProducts", JSON.stringify(fixed)) } catch {}
       } else {
         setItems([
-          { sku: "WH/IV/1", name: "Simatic S7-1500", stockQty: 15000, price: 120000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: 1, warehouse: "Main", bin: "A-01-01", lot: "L210201", expiry: "2023-12-31", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
-          { sku: "WH/IV/2", name: "Simatic S7-1500", stockQty: 15000, price: 940000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: 1, warehouse: "Main", bin: "A-01-02", lot: "L210202", expiry: "2024-03-31", reserved: 500, incomingQty: 100, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
-          { sku: "WH/IV/3", name: "Simatic S7-1500", stockQty: 15000, price: 290000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: -1, warehouse: "Secondary", bin: "B-02-01", lot: "L210203", expiry: "", reserved: 0, incomingQty: 0, outgoingQty: 50, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
-          { sku: "WH/IV/4", name: "Simatic S7-1500", stockQty: 15000, price: 420000, updatedAt: "2021-02-20", photo: "/eit-icon.png", instock: 1, warehouse: "Main", bin: "A-02-01", lot: "L210204", expiry: "2025-01-15", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
+          { sku: "WH/IV/1", name: "Simatic S7-1500", stockQty: 15000, price: 120000, updatedAt: "2021-02-20", instock: 1, warehouse: "Main", bin: "A-01-01", lot: "L210201", expiry: "2023-12-31", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
+          { sku: "WH/IV/2", name: "Simatic S7-1500", stockQty: 15000, price: 940000, updatedAt: "2021-02-20", instock: 1, warehouse: "Main", bin: "A-01-02", lot: "L210202", expiry: "2024-03-31", reserved: 500, incomingQty: 100, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
+          { sku: "WH/IV/3", name: "Simatic S7-1500", stockQty: 15000, price: 290000, updatedAt: "2021-02-20", instock: -1, warehouse: "Secondary", bin: "B-02-01", lot: "L210203", expiry: "", reserved: 0, incomingQty: 0, outgoingQty: 50, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
+          { sku: "WH/IV/4", name: "Simatic S7-1500", stockQty: 15000, price: 420000, updatedAt: "2021-02-20", instock: 1, warehouse: "Main", bin: "A-02-01", lot: "L210204", expiry: "2025-01-15", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
         ])
       }
     } catch {
@@ -140,7 +139,6 @@ function useInventory() {
         reorderQty: Number(payload.reorderQty || 0),
         updatedAt: payload.updatedAt || new Date().toISOString().slice(0, 10),
         instock: payload.instock || 1,
-        photo: payload.photo || "/eit-icon.png",
       },
       ...items,
     ]
@@ -335,7 +333,6 @@ function useInventory() {
           reorderQty: Number(item.reorderQty || 0),
           updatedAt: item.updatedAt || new Date().toISOString().slice(0, 10),
           instock: 1,
-          photo: "/eit-icon.png",
         })
       }
       const next = [...newItems, ...items]
@@ -846,9 +843,8 @@ function HistoryView({ inv }) {
 
 function AddItemForm({ onCancel, onSave, initialData }) {
   const initial = {
-    sku: "WH/IV",
+    sku: "",
     name: "",
-    photo: "",
     stockQty: 0,
     reserved: 0,
     price: 0,

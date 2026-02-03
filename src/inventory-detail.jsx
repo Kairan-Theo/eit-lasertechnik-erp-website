@@ -182,41 +182,6 @@ function InventoryDetailPage() {
     setHistory(filtered)
   }
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-
-    if (file.size > 1024 * 1024) { // 1MB limit
-        alert("Image size too large. Please upload an image smaller than 1MB.")
-        return
-    }
-
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-        const base64 = ev.target.result
-        
-        // Update local state
-        const updatedItem = { ...item, photo: base64 }
-        setItem(updatedItem)
-        
-        // Update localStorage
-        try {
-            const rawProducts = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
-            if (Array.isArray(rawProducts)) {
-                const index = rawProducts.findIndex(i => i.sku === item.sku)
-                if (index !== -1) {
-                    rawProducts[index] = { ...rawProducts[index], photo: base64 }
-                    localStorage.setItem("inventoryProducts", JSON.stringify(rawProducts))
-                }
-            }
-        } catch (err) {
-            console.error("Failed to save image", err)
-            alert("Failed to save image. Local storage might be full.")
-        }
-    }
-    reader.readAsDataURL(file)
-  }
-
   const stockStatus = item.stockQty <= 0 ? "Out of Stock" : item.stockQty < (item.minStock || 0) ? "Low Stock" : "In Stock"
   const statusColor = stockStatus === "Out of Stock" ? "text-red-600" : stockStatus === "Low Stock" ? "text-amber-600" : "text-emerald-600"
 
@@ -244,32 +209,6 @@ function InventoryDetailPage() {
         {/* Header Section with Photo and Key Stats */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 mb-8 animate-fadeIn">
           <div className="flex flex-col md:flex-row gap-8 items-start">
-            {/* Photo Column */}
-            <div className="shrink-0 group relative">
-              <div 
-                className="w-32 h-32 rounded-xl border-2 border-gray-100 shadow-md overflow-hidden bg-gray-50 cursor-pointer relative transition-transform transform group-hover:scale-105"
-                onClick={() => document.getElementById('photo-upload').click()}
-                title="Click to upload product photo"
-              >
-                <img 
-                  src={item.photo || "/eit-icon.png"} 
-                  alt={item.name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => e.target.src = "/eit-icon.png"} 
-                />
-                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <svg className="w-8 h-8 text-white mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                  <span className="text-white text-xs font-medium">Change Photo</span>
-                </div>
-              </div>
-              <input 
-                type="file" 
-                id="photo-upload" 
-                accept="image/*" 
-                className="hidden" 
-                onChange={handleImageUpload}
-              />
-            </div>
             
             {/* Info Column */}
             <div className="flex-1 w-full">
