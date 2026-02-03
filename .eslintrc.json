@@ -1,0 +1,39 @@
+{
+  "root": true,
+  "env": {
+    "browser": true,
+    "es2023": true,
+    "node": false
+  },
+  "parserOptions": {
+    "ecmaVersion": 2023,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  "extends": [
+    "eslint:recommended"
+  ],
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
+  },
+  "globals": {
+    "localStorage": "readonly",
+    "confirm": "readonly",
+    "alert": "readonly",
+    "document": "readonly",
+    "window": "readonly"
+  },
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/"
+  ],
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-undef": "error",
+    "no-console": ["warn", { "allow": ["warn", "error"] }]
+  }
+}

@@ -1,7 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import { format, startOfWeek, addDays, isSameDay, isWeekend, differenceInDays, addWeeks } from "date-fns"
-import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal, ChevronDown, CornerDownRight, X, Trash2, Edit } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal, ChevronDown, CornerDownRight, X, Trash2, Edit, AlertTriangle } from "lucide-react"
 import Navigation from "./components/navigation.jsx"
 import "./index.css"
 
@@ -43,7 +43,20 @@ const initialProjects = [
 const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
     const [startDate, setStartDate] = React.useState(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))
     const [dragging, setDragging] = React.useState(null)
-    const [hoveredTask, setHoveredTask] = React.useState(null)
+  const [hoveredTask, setHoveredTask] = React.useState(null)
+  const [focusedId, setFocusedId] = React.useState(null)
+  const lighten = (hex, ratio = 0.5) => {
+    const h = hex.replace('#', '')
+    const n = parseInt(h, 16)
+    const r = (n >> 16) & 255
+    const g = (n >> 8) & 255
+    const b = n & 255
+    const lr = Math.round(r + (255 - r) * ratio)
+    const lg = Math.round(g + (255 - g) * ratio)
+    const lb = Math.round(b + (255 - b) * ratio)
+    const toHex = (x) => x.toString(16).padStart(2, '0')
+    return `#${toHex(lr)}${toHex(lg)}${toHex(lb)}`
+  }
 
     const toggleProject = (id) => {
         setProjects(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p))
@@ -107,7 +120,27 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
           // Check subtasks
           if (p.subtasks) {
               const updatedSubtasks = p.subtasks.map(sub => 
-                  sub.id === dragging.id ? updateItem(sub) : sub
+                  sub.id === dragging.id ? (() => {
+                    const u = updateItem(sub)
+                    const ps = new Date(p.start)
+                    const pe = new Date(p.end)
+                    const us = new Date(u.start)
+                    const ue = new Date(u.end)
+                    const cs = us < ps ? ps : us
+                    const ce = ue > pe ? pe : ue
+                    if (cs > ce) {
+                      return { 
+                        ...sub, 
+                        start: format(ps, "yyyy-MM-dd"), 
+                        end: format(pe, "yyyy-MM-dd") 
+                      }
+                    }
+                    return { 
+                      ...u, 
+                      start: format(cs, "yyyy-MM-dd"), 
+                      end: format(ce, "yyyy-MM-dd") 
+                    }
+                  })() : sub
               )
               
               if (updatedSubtasks.some((s, i) => s !== p.subtasks[i])) {
@@ -158,7 +191,10 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
           </div>
     
           <div className="flex-1 overflow-hidden relative flex flex-col">
-            <div className="flex-1 overflow-auto custom-scrollbar bg-white">
+            <div className="flex-1 overflow-auto custom-scrollbar bg-white relative">
+               {focusedId && (
+                 <div className="absolute top-0 bottom-0 right-0 z-20 pointer-events-none backdrop-blur-2xl bg-white/30" style={{ left: '20rem' }} />
+               )}
                {/* Header */}
                <div className="flex border-b border-slate-200 sticky top-0 bg-white/95 backdrop-blur-sm z-40 shadow-sm">
                   <div className="w-80 shrink-0 p-4 pl-8 text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center bg-white border-r border-slate-100 sticky left-0 z-50">
@@ -194,23 +230,26 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                   {projects.map(project => (
                      <React.Fragment key={project.id}>
                         {/* Project Row */}
-                        <div className="group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative z-10">
-                           <div className="w-80 shrink-0 py-4 px-6 flex items-center gap-3 bg-white border-r border-slate-100 relative sticky left-0 z-20 group-hover:bg-slate-50/30 transition-colors">
-                               <button onClick={() => toggleProject(project.id)} className="w-6 h-6 flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all">
+                        <div className={`group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative ${focusedId && project.id === focusedId ? 'z-30' : 'z-10'}`}>
+                           <div
+                             onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
+                             className={`w-80 shrink-0 py-4 px-6 flex items-center gap-3 bg-white border-r border-slate-100 relative sticky left-0 z-50 group-hover:bg-slate-50/30 transition-colors`}
+                           >
+                               <button onClick={() => toggleProject(project.id)} className={`w-6 h-6 flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all ${focusedId && project.id !== focusedId ? 'pointer-events-none' : ''}`}>
                                    {project.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                </button>
                                <div className="flex-1 min-w-0">
-                                   <div className="font-bold text-slate-800 text-sm truncate flex items-center gap-2">
-                                       {project.name}
+                                   <div className="font-extrabold text-slate-900 text-base truncate flex items-center gap-2">
+                                       <span onClick={() => setFocusedId(project.id)} className="relative z-50 pointer-events-auto cursor-pointer">{project.name}</span>
                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color }} />
                                    </div>
-                                   <div className="text-[10px] text-slate-400 font-medium mt-0.5 flex items-center gap-1.5">
+                                   <div className="text-[10px] text-slate-500 font-medium mt-0.5 flex items-center gap-1.5">
                                        <span>{project.subtasks?.length || 0} tasks</span>
                                        <span className="w-0.5 h-0.5 bg-slate-300 rounded-full"></span>
                                        <span>{getColorMeaning(project.color)}</span>
                                    </div>
                                </div>
-                               <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                               <div className={`opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all ${focusedId && project.id !== focusedId ? 'pointer-events-none opacity-0' : ''}`}>
                                    <button onClick={() => onEdit(project)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-md transition-all" title="Edit Project">
                                        <Edit size={14} />
                                    </button>
@@ -223,16 +262,20 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                            {/* Project Bar */}
                            <div className="relative h-14 flex-1">
                                <div 
-                                       className="absolute h-8 top-3 rounded-full shadow-md group-hover:shadow-lg transition-all flex items-center justify-between px-3 overflow-visible"
+                                       onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
+                                       className={`absolute h-8 top-3 rounded-full transition-all flex items-center justify-between px-3 overflow-visible ${focusedId && project.id !== focusedId ? 'pointer-events-none' : ''}`}
                                        style={{ 
                                            left: left(project.start), 
-                                           width: width(project.start, project.end),
-                                           background: `linear-gradient(90deg, ${project.color}, ${project.color}dd)`
+                                           width: width(project.start, project.end)
                                        }}
                                        onMouseEnter={() => setHoveredTask(project.id)}
                                        onMouseLeave={() => setHoveredTask(null)}
-                                   >
-                                   <span className="text-[11px] font-bold truncate text-white drop-shadow-sm">{project.name}</span>
+                                    >
+                                    <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(90deg, ${project.color}, ${project.color}dd)` }} />
+                                    {focusedId && project.id !== focusedId && (
+                                      <div className="absolute inset-0 rounded-full pointer-events-none border border-white/40 shadow-md group-hover:shadow-lg backdrop-blur-2xl bg-white/30" />
+                                    )}
+                                    <span className={`relative z-40 text-[11px] font-bold truncate text-white drop-shadow-sm ${focusedId && project.id !== focusedId ? 'opacity-0' : ''}`}>{project.name}</span>
                                    
 
 
@@ -248,23 +291,19 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                                    )}
 
                                    {/* Resize Handles */}
-                                   <div 
-                                       className="absolute left-0 top-0 bottom-0 w-4 rounded-l-full"
-                                   />
-                                   <div 
-                                       className="absolute right-0 top-0 bottom-0 w-4 rounded-r-full"
-                                   />
+                                    <div className="relative z-20 absolute left-0 top-0 bottom-0 w-4 rounded-l-full" />
+                                    <div className="relative z-20 absolute right-0 top-0 bottom-0 w-4 rounded-r-full" />
                                </div>
                            </div>
                         </div>
     
                         {/* Subtasks */}
                         {project.expanded && project.subtasks?.map((subtask, index) => (
-                            <div key={subtask.id} className="group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative z-10">
+                            <div key={subtask.id} className={`group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative ${focusedId && project.id === focusedId ? 'z-30' : 'z-10'}`}>
                                 <div className="w-80 shrink-0 py-3 pl-12 pr-6 flex items-center gap-3 bg-white border-r border-slate-100 relative sticky left-0 z-20">
                                     <div className="w-2 h-2 rounded-full border border-slate-300 bg-white relative z-10"></div>
                                     <div className="flex-1 min-w-0 flex items-center justify-between pr-2">
-                                        <div className="font-medium text-slate-600 text-xs truncate hover:text-indigo-600 transition-colors cursor-pointer">{subtask.name}</div>
+                                        <div className="font-medium text-slate-600 text-xs truncate hover:text-indigo-600 transition-colors cursor-pointer"><span className={`relative z-40 ${focusedId && project.id !== focusedId ? 'opacity-0 pointer-events-none' : ''}`}>{subtask.name}</span></div>
                                         <button onClick={() => onEdit(subtask)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded-md transition-all" title="Edit Subtask">
                                             <Edit size={12} />
                                         </button>
@@ -272,17 +311,20 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                                 </div>
                                 <div className="relative h-12 flex-1">
                                     <div 
-                                        className="absolute h-6 top-3 rounded-full shadow-sm flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5"
+                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5 ${focusedId && project.id !== focusedId ? 'pointer-events-none' : ''}`}
                                         style={{ 
                                             left: left(subtask.start), 
                                             width: width(subtask.start, subtask.end),
-                                            background: `linear-gradient(90deg, ${subtask.color}, ${subtask.color}dd)`,
                                             opacity: dragging?.id === subtask.id ? 0.8 : 1
                                         }}
                                         onMouseEnter={() => setHoveredTask(subtask.id)}
                                         onMouseLeave={() => setHoveredTask(null)}
                                     >
-                                        <span className="text-[9px] font-bold text-white truncate drop-shadow-sm">{subtask.name}</span>
+                                        <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(90deg, ${lighten(project.color, 0.6)}, ${lighten(project.color, 0.8)})` }} />
+                                        {focusedId && project.id !== focusedId && (
+                                          <div className="absolute inset-0 rounded-full pointer-events-none border border-white/40 backdrop-blur-2xl bg-white/30" />
+                                        )}
+                                        <span className={`relative z-40 text-[9px] font-bold text-slate-700 truncate ${focusedId && project.id !== focusedId ? 'opacity-0' : ''}`}>{subtask.name}</span>
                                         
 
 
@@ -326,8 +368,9 @@ function ProjectApp() {
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [draftParentId, setDraftParentId] = React.useState(null)
   const [editingId, setEditingId] = React.useState(null)
-  const [draft, setDraft] = React.useState({ name: "", description: "", priority: "medium", budget: "", assignee: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
+  const [draft, setDraft] = React.useState({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
   const [notification, setNotification] = React.useState({ show: false, message: "" })
+  const [validationError, setValidationError] = React.useState("")
 
   const activeProjectsCount = projects.filter((p) => (p.status || "todo") !== "done").length
   const doneProjectsCount = projects.filter((p) => (p.status || "todo") === "done").length
@@ -348,22 +391,53 @@ function ProjectApp() {
     showNotification(msg)
   }
 
+  React.useEffect(() => {
+    if (!isModalOpen) {
+      setValidationError("")
+      return
+    }
+    if (draftParentId) {
+      const parent = projects.find(p => p.id === draftParentId)
+      if (!parent) {
+        setValidationError("")
+        return
+      }
+      const ps = new Date(parent.start)
+      const pe = new Date(parent.end)
+      const ds = new Date(draft.start)
+      const de = new Date(draft.end)
+      if (isNaN(ds) || isNaN(de)) {
+        setValidationError("Please select valid dates")
+      } else if (ds > de) {
+        setValidationError("Start date must be before end date")
+      } else if (ds < ps) {
+        setValidationError("Task starts earlier than parent")
+      } else if (de > pe) {
+        setValidationError("Task ends later than parent")
+      } else {
+        setValidationError("")
+      }
+    } else {
+      setValidationError("")
+    }
+  }, [isModalOpen, draftParentId, draft.start, draft.end, projects])
 
 
 
   const handleAddSubtask = (parentId) => {
       setDraftParentId(parentId)
-      setDraft({ name: "", description: "", priority: "medium", budget: "", assignee: "", start: format(new Date(), "yyyy-MM-dd"), end: format(addDays(new Date(), 5), "yyyy-MM-dd"), status: "todo", color: DEFAULT_COLOR })
+      const parent = projects.find(p => p.id === parentId)
+      const ps = parent ? new Date(parent.start) : new Date()
+      const pe = parent ? new Date(parent.end) : addDays(new Date(), 5)
+      const initStart = format(ps, "yyyy-MM-dd")
+      const initEnd = format(pe, "yyyy-MM-dd")
+      setDraft({ name: "", start: initStart, end: initEnd, status: "todo", color: DEFAULT_COLOR })
       setIsModalOpen(true)
   }
 
   const handleEditProject = (project) => {
       setDraft({ 
           name: project.name, 
-          description: project.description || "", 
-          priority: project.priority || "medium", 
-          budget: project.budget || "", 
-          assignee: project.assignee || "", 
           start: project.start, 
           end: project.end, 
           status: project.status, 
@@ -382,7 +456,7 @@ function ProjectApp() {
   }
 
   const handleAddWithStatus = (status) => {
-      setDraft({ name: "", description: "", priority: "medium", budget: "", assignee: "", start: format(new Date(), "yyyy-MM-dd"), end: format(addDays(new Date(), 5), "yyyy-MM-dd"), status, color: DEFAULT_COLOR })
+      setDraft({ name: "", start: format(new Date(), "yyyy-MM-dd"), end: format(addDays(new Date(), 5), "yyyy-MM-dd"), status, color: DEFAULT_COLOR })
       setDraftParentId(null)
       setEditingId(null)
       setIsModalOpen(true)
@@ -398,21 +472,40 @@ function ProjectApp() {
             }
             // Check if it's a subtask update
             if (p.subtasks && p.subtasks.some(s => s.id === editingId)) {
+                const ps = new Date(p.start)
+                const pe = new Date(p.end)
+                const ds = new Date(draft.start)
+                const de = new Date(draft.end)
+                const cs = ds < ps ? ps : ds
+                const ce = de > pe ? pe : de
+                const fixed = cs > ce ? { start: format(ps, "yyyy-MM-dd"), end: format(pe, "yyyy-MM-dd") } : { start: format(cs, "yyyy-MM-dd"), end: format(ce, "yyyy-MM-dd") }
                 return {
                     ...p,
-                    subtasks: p.subtasks.map(s => s.id === editingId ? { ...s, ...draft } : s)
+                    subtasks: p.subtasks.map(s => s.id === editingId ? { ...s, ...draft, ...fixed } : s)
                 }
             }
             return p
         }))
     } else if (draftParentId) {
+        if (validationError) {
+          showNotification(validationError)
+          return
+        }
         setProjects(prev => prev.map(p => {
             if (p.id === draftParentId) {
+                const ps = new Date(p.start)
+                const pe = new Date(p.end)
+                const ds = new Date(draft.start)
+                const de = new Date(draft.end)
+                const cs = ds < ps ? ps : ds
+                const ce = de > pe ? pe : de
+                const fixedStart = cs > ce ? ps : cs
+                const fixedEnd = cs > ce ? pe : ce
                 return {
                     ...p,
                     subtasks: [
                         ...(p.subtasks || []),
-                        { id: Date.now(), ...draft }
+                        { id: Date.now(), ...draft, start: format(fixedStart, "yyyy-MM-dd"), end: format(fixedEnd, "yyyy-MM-dd") }
                     ],
                     expanded: true
                 }
@@ -428,7 +521,7 @@ function ProjectApp() {
     }
     showNotification(editingId ? 'Project updated successfully' : 'Project created successfully')
     setIsModalOpen(false)
-    setDraft({ name: "", description: "", priority: "medium", budget: "", assignee: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
+    setDraft({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
     setDraftParentId(null)
     setEditingId(null)
   }
@@ -482,7 +575,7 @@ function ProjectApp() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4 animate-in fade-in duration-200">
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xl p-4 animate-in fade-in duration-200">
             <div className="relative w-full max-w-md group">
                 {/* Creative Decorative Glows */}
                 <div className="absolute -top-12 -left-12 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-all duration-700"></div>
@@ -521,56 +614,7 @@ function ProjectApp() {
                                 />
                             </div>
                             
-                            <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Description</label>
-                                <textarea 
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium min-h-[60px] resize-none shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
-                                    placeholder="Add project details..."
-                                    value={draft.description}
-                                    onChange={e => setDraft({...draft, description: e.target.value})}
-                                />
-                            </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Priority</label>
-                                    <div className="relative">
-                                        <select 
-                                            className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium appearance-none shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] cursor-pointer"
-                                            value={draft.priority}
-                                            onChange={e => setDraft({...draft, priority: e.target.value})}
-                                        >
-                                            <option value="low">Low</option>
-                                            <option value="medium">Medium</option>
-                                            <option value="high">High</option>
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                            <ChevronDown size={14} />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Budget</label>
-                                    <input 
-                                        type="number" 
-                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
-                                        placeholder="0.00"
-                                        value={draft.budget}
-                                        onChange={e => setDraft({...draft, budget: e.target.value})}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Assignee</label>
-                                <input 
-                                    type="text" 
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
-                                    placeholder="e.g. John Doe"
-                                    value={draft.assignee}
-                                    onChange={e => setDraft({...draft, assignee: e.target.value})}
-                                />
-                            </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -592,6 +636,12 @@ function ProjectApp() {
                                     />
                                 </div>
                             </div>
+                            {!!validationError && (
+                              <div className="flex items-center gap-2 text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 text-xs font-bold">
+                                <AlertTriangle size={14} />
+                                <span>{validationError}</span>
+                              </div>
+                            )}
                             <div>
                                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Color Tag</label>
                                 <div className="flex gap-3 p-2 bg-white/50 rounded-xl border border-gray-200/60 w-fit">
@@ -618,7 +668,7 @@ function ProjectApp() {
                             </button>
                             <button 
                                 onClick={saveProject}
-                                disabled={!draft.name || !draft.start || !draft.end}
+                                disabled={!draft.name || !draft.start || !draft.end || !!validationError}
                                 className="relative overflow-hidden px-6 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none group/btn"
                             >
                                 <span className="relative z-10">{editingId ? 'Update Changes' : draftParentId ? 'Add Task' : 'Create Project'}</span>
