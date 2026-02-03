@@ -1,0 +1,1 @@
+import{t as s,a as c}from"./navigation-B0IDt7ps.js";function f(e,r,a){const t=s(e,a==null?void 0:a.in);return isNaN(r)?c(e,NaN):(r&&t.setDate(t.getDate()+r),t)}function u(e,r,a){return f(e,r*7,a)}export{u as a,f as b};
