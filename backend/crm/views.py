@@ -825,3 +825,6 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     serializer_class = InvoiceSerializer
     authentication_classes = []
     permission_classes = [AllowAny]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user if self.request.user.is_authenticated else None)

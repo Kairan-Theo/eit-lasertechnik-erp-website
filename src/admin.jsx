@@ -489,19 +489,37 @@ function InvoiceList({ list, refreshData }) {
     
     // API Deletion
     const apiItems = itemsToDelete.filter(inv => inv.sourceKey === 'api')
+    let successCount = 0
+    let failCount = 0
+
     for (const item of apiItems) {
       try {
-        const token = localStorage.getItem('token')
-        await fetch(`${API_BASE_URL}/api/invoices/${item.id}/`, { 
+        const token = localStorage.getItem('authToken')
+        const headers = {
+          'Content-Type': 'application/json'
+        }
+        if (token) {
+          headers['Authorization'] = `Token ${token}`
+        }
+        
+        const res = await fetch(`${API_BASE_URL}/api/invoices/${item.id}/`, { 
           method: 'DELETE',
-          headers: {
-            'Authorization': token ? `Token ${token}` : '',
-            'Content-Type': 'application/json'
-          }
+          headers
         })
+        if (res.ok) {
+          successCount++
+        } else {
+          console.error(`Failed to delete invoice ${item.id}:`, res.status)
+          failCount++
+        }
       } catch (e) {
         console.error("Error deleting API item", e)
+        failCount++
       }
+    }
+
+    if (failCount > 0) {
+      alert(`Deleted ${successCount} items. Failed to delete ${failCount} items. Please check permissions or network.`)
     }
 
     // LocalStorage Deletion
@@ -525,7 +543,9 @@ function InvoiceList({ list, refreshData }) {
       }
     })
 
-    if (refreshData) refreshData()
+    if (refreshData) {
+       await refreshData()
+    }
     setSelectedRows([])
     setOpenDeleteConfirm(false)
   }
@@ -1025,7 +1045,9 @@ function AdminPage() {
 
   const fetchQuotations = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/`)
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      const response = await fetch(`${API_BASE_URL}/api/quotations/`, { headers })
       if (response.ok) {
         const apiQuotations = await response.json()
         return apiQuotations.map(q => ({
@@ -1052,7 +1074,9 @@ function AdminPage() {
 
   const fetchBillingNotes = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/billing_notes/`)
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      const response = await fetch(`${API_BASE_URL}/api/billing_notes/`, { headers })
       if (response.ok) {
         const apiBillingNotes = await response.json()
         return apiBillingNotes.map(bn => ({
@@ -1086,7 +1110,9 @@ function AdminPage() {
 
   const fetchInvoices = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/`)
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      const response = await fetch(`${API_BASE_URL}/api/invoices/`, { headers })
       if (response.ok) {
         const apiInvoices = await response.json()
         return apiInvoices.map(inv => ({
@@ -1094,14 +1120,15 @@ function AdminPage() {
           sourceKey: 'api',
           sourceIndex: inv.id,
           details: {
-            number: inv.inv_code,
-            date: inv.created_date,
-            currency: inv.currency || 'THB',
+            ...inv.details,
+            number: inv.number,
+            date: inv.details?.date || inv.created_at,
+            currency: inv.details?.currency || 'THB',
           },
-          customerName: inv.customer_details?.company_name || 'Unknown',
-          items: inv.invoice_items || [],
+          customerName: inv.customer?.company || inv.customer?.company_name || inv.customer?.name || 'Unknown',
+          items: inv.items || [],
           totals: {
-            total: (inv.invoice_items || []).reduce((sum, item) => sum + parseFloat(item.total_price || 0), 0)
+            total: inv.totals?.total || 0
           }
         }))
       }
@@ -1111,12 +1138,45 @@ function AdminPage() {
     return []
   }
 
+  const fetchPurchaseOrders = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/purchase_orders/`)
+      if (response.ok) {
+        const data = await response.json()
+        return data.map(po => ({
+          poNumber: po.number,
+          customer: po.customer,
+          items: po.items,
+          details: {
+            poNumber: po.number,
+            eit: po.eit_details?.id || po.eit,
+            eitName: po.extra_fields?.eitName || po.eit_details?.organization_name || "",
+            eitAddress: po.extra_fields?.eitAddress || po.eit_details?.address || "",
+            ...po.extra_fields
+          },
+          extraFields: po.extra_fields,
+          updatedAt: po.updated_at,
+          sourceKey: 'api',
+          sourceIndex: po.id
+        }))
+      }
+    } catch (e) {
+      console.error("Failed to fetch POs from API", e)
+    }
+    return null
+  }
+
   const loadData = async () => {
     const localData = getAllData()
     const apiQuotations = await fetchQuotations()
     const apiBillingNotes = await fetchBillingNotes()
     const apiInvoices = await fetchInvoices()
+    const apiPurchaseOrders = await fetchPurchaseOrders()
     
+    if (apiPurchaseOrders !== null) {
+      localData.purchaseOrders = apiPurchaseOrders
+    }
+
     if (apiQuotations.length > 0) {
       // Create a Set of API quotation numbers for efficient lookup
       const apiNumbers = new Set(apiQuotations.map(q => q.details.number))

@@ -5,6 +5,8 @@ import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
 import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText } from "lucide-react"
+import { CustomerCombobox } from "./components/customer-combobox"
+import { Combobox } from "./components/combobox"
 import html2pdf from "html2pdf.js"
 import "./index.css"
 
@@ -222,6 +224,8 @@ function useBillingNoteState() {
   const [sourceKey, setSourceKey] = React.useState(null)
   const [sourceIndex, setSourceIndex] = React.useState(null)
   const [eitOptions, setEitOptions] = React.useState([])
+  const [dealCustomers, setDealCustomers] = React.useState([])
+  const [invoices, setInvoices] = React.useState([])
 
   const total = items.reduce((sum, it) => sum + ((Number(String(it.amount).replace(/,/g, '')) || 0) - (Number(String(it.paid).replace(/,/g, '')) || 0)), 0)
 
@@ -274,6 +278,87 @@ function useBillingNoteState() {
       })
   }, [])
 
+  // Load Deal Customers
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/deals/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          // Extract unique customers from deals
+          const uniqueCustomers = new Map()
+          data.forEach(deal => {
+            if (deal.customer_name) {
+              // We store the first occurrence. 
+              // If we want to be smarter, we could store the one with most info, 
+              // but for now just the name is key.
+              if (!uniqueCustomers.has(deal.customer_name)) {
+                uniqueCustomers.set(deal.customer_name, deal)
+              }
+            }
+          })
+          setDealCustomers(Array.from(uniqueCustomers.values()))
+        }
+      })
+      .catch(console.error)
+  }, [])
+
+  // Load Invoices (API + Local)
+  React.useEffect(() => {
+    // 1. Fetch from API
+    const apiPromise = fetch(`${API_BASE_URL}/api/invoices/`)
+      .then(res => res.json())
+      .then(data => Array.isArray(data) ? data : [])
+      .catch(err => {
+        console.error(err)
+        return []
+      })
+
+    // 2. Load from LocalStorage
+    const localInvoices = []
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith("history:")) {
+          try {
+            const item = JSON.parse(localStorage.getItem(key))
+            if (item && Array.isArray(item.invoices)) {
+              localInvoices.push(...item.invoices)
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      console.error("Error reading localStorage invoices", e)
+    }
+
+    // 3. Merge
+    apiPromise.then(apiInvoices => {
+      const map = new Map()
+      
+      // Add local first (converted to match API structure if needed)
+      localInvoices.forEach(inv => {
+         const number = inv.details?.number
+         if (number) {
+           map.set(number, {
+             id: `local-${number}`,
+             number: number,
+             details: inv.details,
+             totals: inv.totals
+           })
+         }
+      })
+      
+      // Overwrite with API (authoritative)
+      apiInvoices.forEach(inv => {
+        if (inv.number) {
+          map.set(inv.number, inv)
+        }
+      })
+      
+      setInvoices(Array.from(map.values()))
+    })
+  }, [])
+
   return {
     customer,
     setCustomer,
@@ -286,6 +371,8 @@ function useBillingNoteState() {
     sourceIndex,
     setSourceIndex,
     eitOptions,
+    dealCustomers,
+    invoices,
     addItem,
     removeItem,
     updateItem,
@@ -609,7 +696,29 @@ function BillingNotePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-               <input value={q.customer.company} onChange={(e) => q.setCustomer({ ...q.customer, company: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Company name" />
+               <CustomerCombobox
+                  value={q.customer.company}
+                  options={q.dealCustomers}
+                  onChange={(val) => {
+                    const match = q.dealCustomers.find(c => c.customer_name === val)
+                    if (match) {
+                      q.setCustomer({
+                        ...q.customer,
+                        company: val,
+                        address: match.address || q.customer.address,
+                        telephone: match.phone || q.customer.telephone,
+                        // Note: billing note state has fax/attn/div/mobile/email
+                        // deal object has email, phone, address, contact(attn), tax_id
+                        fax: q.customer.fax, // deal doesn't have fax usually
+                        attn: match.contact || q.customer.attn,
+                        mobile: q.customer.mobile, // deal doesn't have separate mobile usually
+                        email: match.email || q.customer.email
+                      })
+                    } else {
+                      q.setCustomer({ ...q.customer, company: val })
+                    }
+                  }}
+                />
              </div>
           </div>
 
@@ -680,8 +789,35 @@ function BillingNotePage() {
                        {i + 1}
                      </td>
                      <td className="p-3">
-                      <input value={item.invoiceNo} onChange={(e) => q.updateItem(i, "invoiceNo", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Invoice No" />
-                    </td>
+                       <Combobox 
+                        value={item.invoiceNo} 
+                        onChange={(val) => {
+                          q.updateItem(i, "invoiceNo", val)
+                          const inv = q.invoices.find(inv => inv.number === val)
+                          if (inv) {
+                            if (inv.details?.date) q.updateItem(i, "date", inv.details.date)
+                            
+                            // Calculate due date
+                            if (inv.details?.dueDate) {
+                              q.updateItem(i, "dueDate", inv.details.dueDate)
+                            } else if (inv.details?.date && inv.details?.paymentTermsDays) {
+                               try {
+                                 const d = new Date(inv.details.date)
+                                 d.setDate(d.getDate() + (parseInt(inv.details.paymentTermsDays) || 0))
+                                 q.updateItem(i, "dueDate", d.toISOString().split('T')[0])
+                               } catch (e) {}
+                            }
+
+                            if (inv.totals?.total) {
+                              q.updateItem(i, "amount", inv.totals.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}))
+                              q.updateItem(i, "paid", "0.00")
+                            }
+                          }
+                        }}
+                        options={q.invoices.map(inv => inv.number)}
+                        placeholder="Invoice No"
+                      />
+                     </td>
                     <td className="p-3">
                       <input type="date" value={item.date} onChange={(e) => q.updateItem(i, "date", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
                     </td>
