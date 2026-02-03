@@ -430,6 +430,8 @@ function InventoryTable({ inv }) {
   const [editingId, setEditingId] = React.useState(null)
   const [editingField, setEditingField] = React.useState(null)
   const [editingValue, setEditingValue] = React.useState("")
+  const [openStatusId, setOpenStatusId] = React.useState(null)
+  const [columnModes, setColumnModes] = React.useState({})
 
   const getRowId = (p) => `${p.sku}-${p.warehouse || "Main"}-${p.bin || "A-01-01"}-${p.lot || ""}`
 
@@ -450,9 +452,6 @@ function InventoryTable({ inv }) {
     setEditingField(null)
   }
 
-  const [openStatusId, setOpenStatusId] = React.useState(null)
-
-
   const deliveryStatusClass = (s) => {
     switch (s) {
       case "Pending": return "bg-amber-100 text-amber-800 border border-amber-200"
@@ -467,6 +466,181 @@ function InventoryTable({ inv }) {
     }
   }
 
+  const columns = [
+    { id: 'photo', label: 'Item Photo', width: 'w-20' },
+    { id: 'sku', label: 'Product Number', sortable: true },
+    { id: 'name', label: 'Name', sortable: true },
+    { id: 'stockQty', label: 'Stock', sortable: true },
+    { id: 'deliveryStatus', label: 'Delivery Status' },
+    { id: 'deliveryCompany', label: 'Customer' },
+    { id: 'tracking', label: 'Tracking #' },
+    { id: 'updatedAt', label: 'Last Updated', sortable: true },
+  ]
+
+  const toggleMode = (id, mode) => {
+    setColumnModes(prev => ({
+      ...prev,
+      [id]: prev[id] === mode ? undefined : mode
+    }))
+  }
+
+  const renderCellContent = (col, p) => {
+    if (columnModes[col.id] === 'folded') return <span className="text-gray-300">•</span>
+    
+    const rowId = getRowId(p)
+    const isEditing = (field) => editingId === rowId && editingField === field
+
+    switch (col.id) {
+      case 'photo':
+        return isEditing("photo") ? (
+          <input
+            autoFocus
+            className="w-full rounded-md border border-gray-300 px-2 py-1"
+            value={editingValue}
+            onChange={(e) => setEditingValue(e.target.value)}
+            onBlur={() => handleBlur(p)}
+            onKeyDown={(e) => handleKeyDown(e, p)}
+          />
+        ) : (
+          <img
+            src={p.photo || "/eit-icon.png"}
+            alt=""
+            className="w-10 h-10 rounded object-cover cursor-pointer hover:opacity-80"
+            title="Click to edit photo URL"
+            onClick={() => {
+              setEditingId(rowId)
+              setEditingField("photo")
+              setEditingValue(p.photo || "")
+            }}
+          />
+        )
+      case 'sku':
+        return (
+          <a href={`/inventory-detail.html?sku=${encodeURIComponent(p.sku)}`} className="text-[#3D56A6] hover:underline font-medium">
+            {p.sku}
+          </a>
+        )
+      case 'name':
+        return isEditing("name") ? (
+          <input
+            autoFocus
+            className="w-full rounded-md border border-gray-300 px-2 py-1"
+            value={editingValue}
+            onChange={(e) => setEditingValue(e.target.value)}
+            onBlur={() => handleBlur(p)}
+            onKeyDown={(e) => handleKeyDown(e, p)}
+          />
+        ) : (
+          <span
+            className="cursor-pointer hover:text-[#2D4485] hover:underline"
+            onClick={() => {
+              setEditingId(rowId)
+              setEditingField("name")
+              setEditingValue(p.name)
+            }}
+          >
+            {p.name}
+          </span>
+        )
+      case 'stockQty':
+        return (
+          <span
+            className="cursor-pointer hover:text-[#2D4485] hover:underline font-medium"
+            title="Click to update stock"
+            onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })}
+          >
+            {Number(p.stockQty).toLocaleString("en-US")}
+          </span>
+        )
+      case 'deliveryStatus':
+        return (
+          <div className="relative inline-block">
+            <button
+              className={`${deliveryStatusClass(p.deliveryStatus)} px-2 py-1 rounded-full text-xs font-medium min-w-[80px]`}
+              onClick={(e) => { e.stopPropagation(); setOpenStatusId(openStatusId === rowId ? null : rowId) }}
+            >
+              {p.deliveryStatus || "Set Status"}
+            </button>
+            {openStatusId === rowId && (
+              <div className="absolute z-20 mt-1 w-32 bg-white border border-gray-200 rounded-md shadow-lg left-0">
+                {["Pending", "Delivered", ""].map((status) => (
+                  <button
+                    key={status}
+                    className={`block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${status === "Pending" ? "text-amber-700" : status === "Delivered" ? "text-emerald-700" : "text-gray-500"}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setOpenStatusId(null)
+                      if (status === "Delivered") {
+                        inv.setShowDeliver(p)
+                      } else {
+                        inv.updateItem(p, { deliveryStatus: status })
+                      }
+                    }}
+                  >
+                    {status || "Clear"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      case 'deliveryCompany':
+        return isEditing("deliveryCompany") ? (
+          <input
+            autoFocus
+            className="w-full rounded-md border border-gray-300 px-2 py-1"
+            value={editingValue}
+            onChange={(e) => setEditingValue(e.target.value)}
+            onBlur={() => handleBlur(p)}
+            onKeyDown={(e) => handleKeyDown(e, p)}
+          />
+        ) : (
+          <span
+            className="cursor-pointer hover:text-[#2D4485] hover:underline truncate max-w-[120px] inline-block align-middle"
+            title={p.deliveryCompany || "Click to edit"}
+            onClick={() => {
+              setEditingId(rowId)
+              setEditingField("deliveryCompany")
+              setEditingValue(p.deliveryCompany || "")
+            }}
+          >
+            {p.deliveryCompany || "-"}
+          </span>
+        )
+      case 'tracking':
+        return (
+          <div className="text-gray-600 font-mono text-xs">
+            {p.trackingNumber ? (
+              (p.trackingUrl || getTrackingLink(p.courier, p.trackingNumber)) ? (
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    navigator.clipboard.writeText(p.trackingNumber);
+                    const url = p.trackingUrl || getTrackingLink(p.courier, p.trackingNumber);
+                    if(url) window.open(url, '_blank');
+                  }}
+                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer max-w-[140px]"
+                  title={`Track ${p.trackingNumber} on ${p.courier} website`}
+                >
+                  <span className="truncate">{p.trackingNumber}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </button>
+              ) : (
+                <span className="truncate max-w-[140px] inline-block" title={p.trackingNumber}>{p.trackingNumber}</span>
+              )
+            ) : "-"}
+          </div>
+        )
+      case 'updatedAt':
+        return <span className="text-gray-600 text-sm">{p.updatedAt}</span>
+      default:
+        return <span>-</span>
+    }
+  }
+
   return (
     <div className="">
       {inv.pageItems.length === 0 ? (
@@ -476,168 +650,92 @@ function InventoryTable({ inv }) {
           <button onClick={() => inv.setShowAdd(true)} className="mt-4 inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm">Add Item</button>
         </div>
       ) : (
-        <div className="overflow-x-auto bg-white rounded-xl shadow-sm border">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-[#2D4485] bg-gray-50">
-                <th className="p-3 text-left">Item Photo</th>
-                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("sku")}>Product Number</th>
-                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("name")}>Name</th>
-                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("stockQty")}>Stock</th>
-                <th className="p-3 text-left">Delivery Status</th>
-                <th className="p-3 text-left">Customer</th>
-                <th className="p-3 text-left">Tracking #</th>
-                <th className="p-3 text-left cursor-pointer" onClick={() => inv.toggleSort("updatedAt")}>Last Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inv.pageItems.map((p, i) => {
-                const rowId = getRowId(p)
-                const isEditing = (field) => editingId === rowId && editingField === field
-                return (
-                  <tr key={i} className="border-t odd:bg-gray-50 hover:bg-gray-100 transition">
-                    <td className="p-3">
-                      {isEditing("photo") ? (
-                        <input
-                          autoFocus
-                          className="w-full rounded-md border border-gray-300 px-2 py-1"
-                          value={editingValue}
-                          onChange={(e) => setEditingValue(e.target.value)}
-                          onBlur={() => handleBlur(p)}
-                          onKeyDown={(e) => handleKeyDown(e, p)}
-                        />
-                      ) : (
-                        <img
-                          src={p.photo || "/eit-icon.png"}
-                          alt=""
-                          className="w-10 h-10 rounded object-cover cursor-pointer hover:opacity-80"
-                          title="Click to edit photo URL"
-                          onClick={() => {
-                            setEditingId(rowId)
-                            setEditingField("photo")
-                            setEditingValue(p.photo || "")
-                          }}
-                        />
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <a href={`/inventory-detail.html?sku=${encodeURIComponent(p.sku)}`} className="text-[#3D56A6] hover:underline font-medium">
-                        {p.sku}
-                      </a>
-                    </td>
-                    <td className="p-3 text-gray-700">
-                      {isEditing("name") ? (
-                        <input
-                          autoFocus
-                          className="w-full rounded-md border border-gray-300 px-2 py-1"
-                          value={editingValue}
-                          onChange={(e) => setEditingValue(e.target.value)}
-                          onBlur={() => handleBlur(p)}
-                          onKeyDown={(e) => handleKeyDown(e, p)}
-                        />
-                      ) : (
-                        <span
-                          className="cursor-pointer hover:text-[#2D4485] hover:underline"
-                          onClick={() => {
-                            setEditingId(rowId)
-                            setEditingField("name")
-                            setEditingValue(p.name)
-                          }}
-                        >
-                          {p.name}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <span
-                        className="cursor-pointer hover:text-[#2D4485] hover:underline font-medium"
-                        title="Click to update stock"
-                        onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })}
-                      >
-                        {Number(p.stockQty).toLocaleString("en-US")}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <div className="relative inline-block">
-                        <button
-                          className={`${deliveryStatusClass(p.deliveryStatus)} px-2 py-1 rounded-full text-xs font-medium min-w-[80px]`}
-                          onClick={(e) => { e.stopPropagation(); setOpenStatusId(openStatusId === rowId ? null : rowId) }}
-                        >
-                          {p.deliveryStatus || "Set Status"}
-                        </button>
-                        {openStatusId === rowId && (
-                          <div className="absolute z-20 mt-1 w-32 bg-white border border-gray-200 rounded-md shadow-lg left-0">
-                            {["Pending", "Delivered", ""].map((status) => (
-                              <button
-                                key={status}
-                                className={`block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${status === "Pending" ? "text-amber-700" : status === "Delivered" ? "text-emerald-700" : "text-gray-500"}`}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setOpenStatusId(null)
-                                  if (status === "Delivered") {
-                                    inv.setShowDeliver(p)
-                                  } else {
-                                    inv.updateItem(p, { deliveryStatus: status })
-                                  }
-                                }}
-                              >
-                                {status || "Clear"}
-                              </button>
-                            ))}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
+              <tr>
+                <th className="p-4 border-b w-10">
+                  {/* Placeholder for checkbox to match manufacturing style */}
+                </th>
+                {columns.map(col => {
+                  const mode = columnModes[col.id]
+                  return (
+                    <th 
+                      key={col.id} 
+                      className={`p-4 border-b transition-all duration-300 group relative align-top ${
+                        mode === 'folded' ? 'w-12 max-w-[3rem]' : mode === 'expanded' ? 'min-w-[300px]' : 'whitespace-nowrap'
+                      }`}
+                    >
+                      <div className={`flex items-center justify-between gap-2 ${mode === 'folded' ? 'justify-center' : ''}`}>
+                        {mode !== 'folded' && (
+                          <div 
+                            className={`flex items-center gap-1 ${col.sortable ? 'cursor-pointer hover:text-gray-900' : ''}`}
+                            onClick={() => col.sortable && inv.toggleSort(col.id)}
+                          >
+                            {col.label}
                           </div>
                         )}
+                        <div className={`flex items-center gap-1 bg-white rounded-md shadow-md border border-gray-300 opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                          mode === 'folded' ? 'opacity-100 absolute left-1/2 -translate-x-1/2 top-2' : ''
+                        }`}>
+                          {mode !== 'folded' && (
+                            <button 
+                              onClick={() => toggleMode(col.id, 'folded')}
+                              className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
+                              title="Fold Column"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          )}
+                          {mode !== 'expanded' ? (
+                            <button 
+                              onClick={() => toggleMode(col.id, 'expanded')}
+                              className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
+                              title="Fully Expand"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12a1 1 0 01-1-1z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => toggleMode(col.id, undefined)}
+                              className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
+                              title="Reset Width"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
+                    </th>
+                  )
+                })}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {inv.pageItems.map((p, i) => {
+                const rowId = getRowId(p)
+                return (
+                  <tr key={i} className={`transition border-b border-gray-100 ${selectedRows.includes(rowId) ? 'bg-blue-200 hover:bg-blue-300' : 'hover:bg-gray-50'}`}>
+                    <td className="p-4">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                        onChange={() => handleSelectRow(rowId)}
+                        checked={selectedRows.includes(rowId)}
+                      />
                     </td>
-                    <td className="p-3 text-gray-600">
-                      {isEditing("deliveryCompany") ? (
-                        <input
-                          autoFocus
-                          className="w-full rounded-md border border-gray-300 px-2 py-1"
-                          value={editingValue}
-                          onChange={(e) => setEditingValue(e.target.value)}
-                          onBlur={() => handleBlur(p)}
-                          onKeyDown={(e) => handleKeyDown(e, p)}
-                        />
-                      ) : (
-                        <span
-                          className="cursor-pointer hover:text-[#2D4485] hover:underline truncate max-w-[120px] inline-block align-middle"
-                          title={p.deliveryCompany || "Click to edit"}
-                          onClick={() => {
-                            setEditingId(rowId)
-                            setEditingField("deliveryCompany")
-                            setEditingValue(p.deliveryCompany || "")
-                          }}
-                        >
-                          {p.deliveryCompany || "-"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-gray-600 font-mono text-xs">
-                      {p.trackingNumber ? (
-                         (p.trackingUrl || getTrackingLink(p.courier, p.trackingNumber)) ? (
-                           <button 
-                             onClick={(e) => { 
-                                e.stopPropagation(); 
-                                navigator.clipboard.writeText(p.trackingNumber);
-                                const url = p.trackingUrl || getTrackingLink(p.courier, p.trackingNumber);
-                                if(url) window.open(url, '_blank');
-                              }}
-                             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer max-w-[140px]"
-                             title={`Track ${p.trackingNumber} on ${p.courier} website`}
-                           >
-                             <span className="truncate">{p.trackingNumber}</span>
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                             </svg>
-                           </button>
-                         ) : (
-                           <span className="truncate max-w-[140px] inline-block" title={p.trackingNumber}>{p.trackingNumber}</span>
-                         )
-                      ) : "-"}
-                    </td>
-
-                    <td className="p-3">{p.updatedAt}</td>
+                    {columns.map(col => (
+                      <td key={col.id} className="p-4 align-top">
+                        {renderCellContent(col, p)}
+                      </td>
+                    ))}
                   </tr>
                 )
               })}

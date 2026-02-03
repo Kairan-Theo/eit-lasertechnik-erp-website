@@ -814,7 +814,7 @@ function PermissionsManager() {
   const [users, setUsers] = React.useState([])
   const [loading, setLoading] = React.useState(false)
   const [savingId, setSavingId] = React.useState(null)
-  const APPS = ["Manufacturing", "Inventory", "CRM", "Project Management", "Admin"]
+  const APPS = ["Manufacturing", "Inventory", "CRM", "Project Management", "Admin", "Support"]
   const parseAllowed = (allowed) => {
     if (!allowed) return []
     if (allowed === "all") return [...APPS]
