@@ -564,7 +564,7 @@ function CRMPage() {
     return Math.min(...pool)
   }
   const nextSchedule = (d) => {
-    const arr = (d.activitySchedules||[]).map((s)=>({ s, t: new Date(s.dueAt ?? s.startAt).getTime() })).filter((x)=>Number.isFinite(x.t))
+    const arr = (d.activitySchedules||[]).filter(s => !s.completed).map((s)=>({ s, t: new Date(s.dueAt ?? s.startAt).getTime() })).filter((x)=>Number.isFinite(x.t))
     if (!arr.length) return null
     const now = Date.now()
     const upcoming = arr.filter((x)=>x.t>=now)
@@ -1779,7 +1779,7 @@ function CRMPage() {
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setOpenActivity(null)}>
               <div className="absolute left-1/2 top-24 -translate-x-1/2 w-full max-w-3xl px-4" onClick={(e) => e.stopPropagation()}>
                 <div
-                  className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full overflow-hidden"
+                  className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full"
                   tabIndex={0}
                   ref={(el)=>{ if (el) { activityModalRef.current = el } }}
                   onKeyDown={(e)=>{
@@ -1803,7 +1803,7 @@ function CRMPage() {
                     }
                   }}
                 >
-                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
                     <div className="flex items-center gap-3">
                       <h3 className="font-bold text-slate-800 text-lg">Next Activity</h3>
                       {(() => { 
@@ -1880,29 +1880,29 @@ function CRMPage() {
                                           activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, dueAt: e.target.value } : s)
                                         }))
                                       }}
+                                      onBlur={(e)=>{
+                                        const { stageIndex, cardIndex } = openActivity
+                                        updateSchedule(stageIndex, cardIndex, i, { dueAt: e.target.value })
+                                      }}
                                       disabled={!isEditing}
-                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[170px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[220px] text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <input
                                       type="text"
                                       value={it.activityName || ""}
                                       onChange={(e)=>{
                                         const { stageIndex, cardIndex } = openActivity
+                                        updateDeal(stageIndex, cardIndex, (prev)=>({
+                                          ...prev,
+                                          activitySchedules: (prev.activitySchedules||[]).map((s, idx)=> idx===i ? { ...s, activityName: e.target.value } : s)
+                                        }))
+                                      }}
+                                      onBlur={(e)=>{
+                                        const { stageIndex, cardIndex } = openActivity
                                         updateSchedule(stageIndex, cardIndex, i, { activityName: e.target.value })
                                       }}
                                       placeholder="Details"
                                       className="flex-1 min-w-[120px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
-                                    />
-                                    <input
-                                      type="text"
-                                      value={it.salesperson || ""}
-                                      onChange={(e)=>{
-                                        const { stageIndex, cardIndex } = openActivity
-                                        updateSchedule(stageIndex, cardIndex, i, { salesperson: e.target.value })
-                                      }}
-                                      disabled={!isEditing}
-                                      placeholder="Salesperson"
-                                      className="w-[110px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:border-transparent focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                                     />
                                     <div className="relative">
                                       <button
@@ -1954,7 +1954,7 @@ function CRMPage() {
                                   type="datetime-local"
                                   value={scheduleDueInput}
                                   onChange={(e)=>setScheduleDueInput(e.target.value)}
-                                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[170px] text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 w-[220px] text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                                 />
                                 <input
                                   type="text"
@@ -1963,13 +1963,6 @@ function CRMPage() {
                                   placeholder="Scheduled activity details"
                                   autoFocus
                                   className="flex-1 min-w-[120px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
-                                />
-                                <input
-                                  type="text"
-                                  value={scheduleSalesperson}
-                                  onChange={(e)=>setScheduleSalesperson(e.target.value)}
-                                  placeholder="Salesperson"
-                                  className="w-[110px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                                 />
                                 <input
                                   type="text"
@@ -3510,7 +3503,7 @@ function CRMPage() {
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setDeleteConfirmation(null)}>Cancel</button>
                 <button
-                  className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
+                  className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
                   onClick={confirmDelete}
                 >
                   Delete
