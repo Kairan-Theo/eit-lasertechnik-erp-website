@@ -3,6 +3,33 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import "./index.css"
 
+/** Build tracking URL from courier + number (or use custom full URL) */
+const getTrackingLink = (courier, number) => {
+  if (!number) return null
+  if (String(number).startsWith("http")) return number
+  switch (courier) {
+    case "Kerry": return `https://th.kerryexpress.com/th/track/?track=${number}`
+    case "Flash": return `https://www.flashexpress.co.th/tracking/?se=${number}`
+    case "ThaiPost": return `https://track.thailandpost.co.th/?trackNumber=${number}`
+    case "J&T": return `https://www.jtexpress.co.th/tracking?billcode=${number}`
+    case "DHL": return `https://www.dhl.com/th-en/home/tracking.html?tracking-id=${number}`
+    case "SCG": return `https://www.scgexpress.co.th/tracking/detail/${number}`
+    case "NinjaVan": return `https://www.ninjavan.co/th-th/tracking?id=${number}`
+    case "Best": return `https://www.best-inc.co.th/track?billcode=${number}`
+    case "Lazada": return `https://tracker.lel.asia/tracker?trackingNumber=${number}`
+    case "Shopee": return `https://spx.co.th/` // Shopee often needs tracking in app/site search
+    case "Nim": return `https://www.nimexpress.com/web/p/tracking?i=${number}`
+    default: return `https://t.17track.net/en#nums=${number}`
+  }
+}
+
+const buildTrackingUrl = (courier, trackingNumber, trackingUrl) => {
+  // If user pasted full URL, keep it
+  if (trackingUrl && String(trackingUrl).trim()) return String(trackingUrl).trim()
+  // Otherwise compute from courier+number
+  return getTrackingLink(courier, trackingNumber) || ""
+}
+
 function useInventory() {
   const [query, setQuery] = React.useState("")
   const [sortKey, setSortKey] = React.useState("updatedAt")
@@ -12,7 +39,6 @@ function useInventory() {
   const [showEdit, setShowEdit] = React.useState(null)
   const [showAdjust, setShowAdjust] = React.useState(null)
   const [showTransfer, setShowTransfer] = React.useState(null)
-  const [showImport, setShowImport] = React.useState(false)
   const [showReceive, setShowReceive] = React.useState(null)
   const [showDeliver, setShowDeliver] = React.useState(null)
   const [role, setRole] = React.useState("Inventory Admin")
@@ -22,12 +48,12 @@ function useInventory() {
   const [view, setView] = React.useState("inventory")
   const [historyFilter, setHistoryFilter] = React.useState(null)
   const [selectedRows, setSelectedRows] = React.useState([])
+
   const saveItems = (next) => {
     setItems(next)
-    try {
-      localStorage.setItem("inventoryProducts", JSON.stringify(next))
-    } catch {}
+    try { localStorage.setItem("inventoryProducts", JSON.stringify(next)) } catch {}
   }
+
   const parseWhIvNum = (s) => {
     const m = /^WH\/IV\/(\d+)$/.exec(String(s || ""))
     return m ? parseInt(m[1], 10) : null
@@ -40,6 +66,7 @@ function useInventory() {
     }
     return max + 1
   }
+
   React.useEffect(() => {
     try {
       const data = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
@@ -74,47 +101,55 @@ function useInventory() {
           deliveryCompany: p.deliveryCompany || "",
           trackingNumber: p.trackingNumber || "",
           courier: p.courier || "",
+          trackingUrl: p.trackingUrl || "",
           trackingStatus: p.trackingStatus || "",
         }))
+
         let max = nextWhIvNumber(norm)
         const fixed = norm.map((it) => {
           const valid = /^WH\/IV\/\d+$/.test(String(it.sku || ""))
           const next = valid ? it : { ...it, sku: `WH/IV/${max++}` }
-          return next
+          // ensure trackingUrl exists if number exists
+          const url = buildTrackingUrl(next.courier, next.trackingNumber, next.trackingUrl)
+          return { ...next, trackingUrl: url }
         })
+
         setItems(fixed)
         try { localStorage.setItem("inventoryProducts", JSON.stringify(fixed)) } catch {}
       } else {
         setItems([
-          { sku: "WH/IV/1", name: "Simatic S7-1500", stockQty: 15000, price: 120000, updatedAt: "2021-02-20", instock: 1, warehouse: "Main", bin: "A-01-01", lot: "L210201", expiry: "2023-12-31", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
-          { sku: "WH/IV/2", name: "Simatic S7-1500", stockQty: 15000, price: 940000, updatedAt: "2021-02-20", instock: 1, warehouse: "Main", bin: "A-01-02", lot: "L210202", expiry: "2024-03-31", reserved: 500, incomingQty: 100, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
-          { sku: "WH/IV/3", name: "Simatic S7-1500", stockQty: 15000, price: 290000, updatedAt: "2021-02-20", instock: -1, warehouse: "Secondary", bin: "B-02-01", lot: "L210203", expiry: "", reserved: 0, incomingQty: 0, outgoingQty: 50, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
-          { sku: "WH/IV/4", name: "Simatic S7-1500", stockQty: 15000, price: 420000, updatedAt: "2021-02-20", instock: 1, warehouse: "Main", bin: "A-02-01", lot: "L210204", expiry: "2025-01-15", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "" },
+          { sku: "WH/IV/1", name: "Simatic S7-1500", stockQty: 15000, price: 120000, updatedAt: "2021-02-20", instock: 1, warehouse: "Main", bin: "A-01-01", lot: "L210201", expiry: "2023-12-31", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "", trackingNumber: "", courier: "", trackingUrl: "" },
         ])
       }
     } catch {
       setItems([])
     }
   }, [])
+
   const warehouses = React.useMemo(() => {
     const set = new Set(items.map((i) => i.warehouse || "Main"))
     return ["All", ...Array.from(set)]
   }, [items])
+
   const categories = React.useMemo(() => {
     const set = new Set(items.map((i) => i.category || "Finished Goods"))
     return ["All", ...Array.from(set)]
   }, [items])
+
   const filtered = items
     .filter((p) => (p.name || "").toLowerCase().includes(query.toLowerCase()))
     .filter((p) => (refQuery ? (p.sku || "").toLowerCase().includes(refQuery.toLowerCase()) : true))
     .filter((p) => (categoryFilter === "All" ? true : (p.category || "Finished Goods") === categoryFilter))
+
   const sorted = [...filtered].sort((a, b) => {
     const va = a[sortKey]
     const vb = b[sortKey]
     if (typeof va === "number" && typeof vb === "number") return sortDir === "asc" ? va - vb : vb - va
     return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
   })
+
   const pageItems = sorted
+
   const toggleSort = (key) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
     else {
@@ -122,10 +157,14 @@ function useInventory() {
       setSortDir("asc")
     }
   }
+
   const addItem = (payload, keepOpen = false) => {
     const s = String(payload.sku || "")
     const valid = /^WH\/IV\/\d+$/.test(s)
     const assignedSku = valid ? s : `WH/IV/${nextWhIvNumber()}`
+
+    const trackingUrl = buildTrackingUrl(payload.courier, payload.trackingNumber, payload.trackingUrl)
+
     const next = [
       {
         ...payload,
@@ -139,12 +178,14 @@ function useInventory() {
         reorderQty: Number(payload.reorderQty || 0),
         updatedAt: payload.updatedAt || new Date().toISOString().slice(0, 10),
         instock: payload.instock || 1,
+        trackingUrl,
       },
       ...items,
     ]
     saveItems(next)
     if (!keepOpen) setShowAdd(false)
   }
+
   const logMove = (entry) => {
     try {
       const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
@@ -153,19 +194,12 @@ function useInventory() {
       localStorage.setItem("inventoryMovements", JSON.stringify(logs))
     } catch {}
   }
+
   const setQty = (sku, warehouse, bin, lot, newQty, reason, ref) => {
     const next = items.map((it) => {
-      if (!(it.sku === sku && (it.warehouse || "Main") === (warehouse || "Main") && (it.bin || "A-01-01") === (bin || "A-01-01") && (it.lot || "") === (lot || ""))) {
-        return it
-      }
-      const prev = Number(it.stockQty || 0)
+      if (!(it.sku === sku && (it.warehouse || "Main") === (warehouse || "Main") && (it.bin || "A-01-01") === (bin || "A-01-01") && (it.lot || "") === (lot || ""))) return it
       const nextQty = Math.max(0, Number(newQty || 0))
-      return {
-        ...it,
-        stockQty: nextQty,
-        status: nextQty > 0 ? "Active" : "Inactive",
-        updatedAt: new Date().toISOString().slice(0, 10),
-      }
+      return { ...it, stockQty: nextQty, status: nextQty > 0 ? "Active" : "Inactive", updatedAt: new Date().toISOString().slice(0, 10) }
     })
     saveItems(next)
     const item = items.find((it) => it.sku === sku && (it.warehouse || "Main") === (warehouse || "Main") && (it.bin || "A-01-01") === (bin || "A-01-01") && (it.lot || "") === (lot || ""))
@@ -174,27 +208,26 @@ function useInventory() {
     logMove({ type: "adjustment", sku, warehouse: warehouse || "Main", bin: bin || "A-01-01", lot: lot || "", delta: finalQty - prevQty, newQty: finalQty, reason, ref })
     setShowAdjust(null)
   }
+
   const receiveQty = (sku, qty, ref, company) => {
-    if (!qty || qty <= 0) {
-      setShowReceive(null)
-      return
-    }
-    const next = items.map((it) => (it.sku === sku ? { ...it, stockQty: Number(it.stockQty || 0) + Number(qty || 0), incomingQty: Math.max(0, Number(it.incomingQty || 0) - Number(qty || 0)), deliveryStatus: "Delivered", updatedAt: new Date().toISOString().slice(0, 10) } : it))
+    if (!qty || qty <= 0) { setShowReceive(null); return }
+    const next = items.map((it) => (
+      it.sku === sku
+        ? { ...it, stockQty: Number(it.stockQty || 0) + Number(qty || 0), incomingQty: Math.max(0, Number(it.incomingQty || 0) - Number(qty || 0)), deliveryStatus: "Delivered", updatedAt: new Date().toISOString().slice(0, 10) }
+        : it
+    ))
     saveItems(next)
     logMove({ type: "purchase_receipt", sku, qty: Number(qty), ref, company })
     setShowReceive(null)
   }
-  const deliverQty = (sku, qty, ref, status, company, warehouse, bin, lot, tracking, courier, trackingUrl) => {
-    if (!qty || qty <= 0) {
-      setShowDeliver(null)
-      return
-    }
 
-    // Check stock availability before proceeding
-    const item = items.find((it) => 
-      it.sku === sku && 
-      (it.warehouse || "Main") === (warehouse || "Main") && 
-      (it.bin || "") === (bin || "") && 
+  const deliverQty = (sku, qty, ref, status, company, warehouse, bin, lot, tracking, courier, trackingUrl) => {
+    if (!qty || qty <= 0) { setShowDeliver(null); return }
+
+    const item = items.find((it) =>
+      it.sku === sku &&
+      (it.warehouse || "Main") === (warehouse || "Main") &&
+      (it.bin || "") === (bin || "") &&
       (it.lot || "") === (lot || "")
     )
 
@@ -205,71 +238,46 @@ function useInventory() {
         return
       }
     }
-    
-    // Status Logic:
-    // 1. "Shipped" or "Delivered" means the goods have physically left the warehouse.
-    //    We deduct stockQty immediately.
-    // 2. "Pending" or "Ready" means goods are reserved but still in the warehouse.
-    //    We increase reserved/outgoingQty but do NOT deduct stockQty yet.
-    
+
     const isShipped = ["Shipped", "Delivered"].includes(status || "Delivered")
     const isPending = ["Pending", "Ready"].includes(status)
-    
-    const next = items.map((it) => {
-      // Must match SKU
-      if (it.sku !== sku) return it
 
-      // If specific location provided, strict match required to avoid reducing stock from multiple locations
+    const finalTrackingUrl = buildTrackingUrl(courier, tracking, trackingUrl)
+
+    const next = items.map((it) => {
+      if (it.sku !== sku) return it
       if (warehouse !== undefined && (it.warehouse || "Main") !== (warehouse || "Main")) return it
       if (bin !== undefined && (it.bin || "") !== (bin || "")) return it
       if (lot !== undefined && (it.lot || "") !== (lot || "")) return it
-      
+
       let newStock = Number(it.stockQty || 0)
       let newReserved = Number(it.reserved || 0)
       let newOutgoing = Number(it.outgoingQty || 0)
-      
-      if (isShipped) {
-        // Reduce actual stock
-        newStock = Math.max(0, newStock - Number(qty))
-        
-        // If it was previously reserved, we might want to reduce reserved count too?
-        // But here we are creating a NEW delivery record. 
-        // Usually, if we deliver from "Reserved" stock, we should decrease reserved.
-        // However, this function `deliverQty` seems to handle new ad-hoc deliveries.
-        // Let's assume this delivery consumes available stock directly.
-        // If the user workflow is "Reserve -> Deliver", that's a status update, not a new delivery call.
-        
-        // For a NEW delivery that is immediately Shipped/Delivered:
-        // We just reduce stock. We don't touch reserved unless specified.
-      } else if (isPending) {
-        // Reserve stock for future delivery
-        newReserved = newReserved + Number(qty)
-        newOutgoing = newOutgoing + Number(qty)
-      }
-      
-      return { 
-        ...it, 
-        stockQty: newStock, 
-        reserved: newReserved, 
-        outgoingQty: newOutgoing, 
-        deliveryStatus: status || "Delivered", 
+
+      if (isShipped) newStock = Math.max(0, newStock - Number(qty))
+      else if (isPending) { newReserved += Number(qty); newOutgoing += Number(qty) }
+
+      return {
+        ...it,
+        stockQty: newStock,
+        reserved: newReserved,
+        outgoingQty: newOutgoing,
+        deliveryStatus: status || "Delivered",
         deliveryCompany: company || "",
         trackingNumber: tracking || "",
         courier: courier || "",
-        trackingUrl: trackingUrl || "",
-        updatedAt: new Date().toISOString().slice(0, 10) 
+        trackingUrl: finalTrackingUrl || "",
+        updatedAt: new Date().toISOString().slice(0, 10),
       }
     })
-    
+
     saveItems(next)
-    logMove({ type: "sales_delivery", sku, qty: Number(qty), ref, company, status: status || "Delivered", tracking: tracking || "", courier, trackingUrl })
+    logMove({ type: "sales_delivery", sku, qty: Number(qty), ref, company, status: status || "Delivered", tracking: tracking || "", courier, trackingUrl: finalTrackingUrl })
     setShowDeliver(null)
   }
+
   const transferQty = (sku, qty, fromWarehouse, toWarehouse, ref) => {
-    if (!qty || qty <= 0 || fromWarehouse === toWarehouse) {
-      setShowTransfer(null)
-      return
-    }
+    if (!qty || qty <= 0 || fromWarehouse === toWarehouse) { setShowTransfer(null); return }
     const next = items.map((it) => {
       if (it.sku === sku && (it.warehouse || "Main") === fromWarehouse) {
         return { ...it, stockQty: Math.max(0, Number(it.stockQty || 0) - Number(qty || 0)), updatedAt: new Date().toISOString().slice(0, 10) }
@@ -281,20 +289,16 @@ function useInventory() {
       next[targetIndex] = { ...next[targetIndex], stockQty: Number(next[targetIndex].stockQty || 0) + Number(qty || 0), updatedAt: new Date().toISOString().slice(0, 10) }
     } else {
       const src = items.find((it) => it.sku === sku)
-      if (src) {
-        next.push({ ...src, warehouse: toWarehouse, stockQty: Number(qty || 0), bin: "A-01-01", updatedAt: new Date().toISOString().slice(0, 10) })
-      }
+      if (src) next.push({ ...src, warehouse: toWarehouse, stockQty: Number(qty || 0), bin: "A-01-01", updatedAt: new Date().toISOString().slice(0, 10) })
     }
     saveItems(next)
     logMove({ type: "transfer", sku, qty: Number(qty), from: fromWarehouse, to: toWarehouse, ref })
     setShowTransfer(null)
   }
+
   const exportCsv = () => {
-    const headers = ["sku", "name", "stockQty", "reserved", "price", "updatedAt", "warehouse", "bin", "lot", "expiry"]
-    const csv = [
-      headers.join(","),
-      ...items.map((i) => headers.map((k) => i[k]).join(",")),
-    ].join("\n")
+    const headers = ["sku", "name", "stockQty", "reserved", "price", "updatedAt", "warehouse", "bin", "lot", "expiry", "trackingNumber", "courier", "trackingUrl"]
+    const csv = [headers.join(","), ...items.map((i) => headers.map((k) => i[k] ?? "").join(","))].join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -302,52 +306,28 @@ function useInventory() {
     a.download = "inventory.csv"
     a.click()
   }
-  const importCsv = (file) => {
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const text = e.target.result
-      const lines = text.split("\n")
-      const headers = lines[0].split(",").map((h) => h.trim())
-      const newItems = []
-      let max = nextWhIvNumber(items)
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].split(",")
-        if (line.length !== headers.length) continue
-        const item = {}
-        headers.forEach((h, j) => {
-          item[h] = line[j].trim()
-        })
-        const s = String(item.sku || "")
-        const valid = /^WH\/IV\/\d+$/.test(s)
-        const finalSku = valid ? s : `WH/IV/${max++}`
-        newItems.push({
-          ...item,
-          sku: finalSku,
-          stockQty: Number(item.stockQty || 0),
-          price: Number(item.price || 0),
-          reserved: Number(item.reserved || 0),
-          incomingQty: 0,
-          outgoingQty: 0,
-          minStock: Number(item.minStock || 0),
-          reorderQty: Number(item.reorderQty || 0),
-          updatedAt: item.updatedAt || new Date().toISOString().slice(0, 10),
-          instock: 1,
-        })
-      }
-      const next = [...newItems, ...items]
-      saveItems(next)
-      setShowImport(false)
-    }
-    reader.readAsText(file)
-  }
 
   const updateItem = (original, updates) => {
     const next = items.map((it) => {
-      if (it.sku === original.sku && (it.warehouse || "Main") === (original.warehouse || "Main") && (it.bin || "A-01-01") === (original.bin || "A-01-01") && (it.lot || "") === (original.lot || "")) {
-        return { ...it, ...updates, updatedAt: new Date().toISOString().slice(0, 10) }
+      const sameRow =
+        it.sku === original.sku &&
+        (it.warehouse || "Main") === (original.warehouse || "Main") &&
+        (it.bin || "A-01-01") === (original.bin || "A-01-01") &&
+        (it.lot || "") === (original.lot || "")
+
+      if (!sameRow) return it
+
+      // if tracking changed, recompute trackingUrl
+      const nextCourier = updates.courier ?? it.courier
+      const nextTrackingNumber = updates.trackingNumber ?? it.trackingNumber
+      const nextTrackingUrl = buildTrackingUrl(nextCourier, nextTrackingNumber, updates.trackingUrl ?? it.trackingUrl)
+
+      return {
+        ...it,
+        ...updates,
+        trackingUrl: nextTrackingUrl,
+        updatedAt: new Date().toISOString().slice(0, 10),
       }
-      return it
     })
     saveItems(next)
   }
@@ -356,110 +336,65 @@ function useInventory() {
 
   const deleteItems = (ids) => {
     if (!Array.isArray(ids) || ids.length === 0) return
-    const next = items.filter(p => !ids.includes(getRowId(p)))
-    saveItems(next)
+    saveItems(items.filter((p) => !ids.includes(getRowId(p))))
     setSelectedRows([])
   }
 
   return {
-    query,
-    setQuery,
+    query, setQuery,
     pageItems,
     toggleSort,
-    sortKey,
-    sortDir,
-    showAdd,
-    setShowAdd,
-    showEdit,
-    setShowEdit,
-    showAdjust,
-    setShowAdjust,
-    showTransfer,
-    setShowTransfer,
-    showImport,
-    setShowImport,
-    addItem,
-    updateItem,
-    deleteItems,
-    getRowId,
-    setQty,
-    transferQty,
+    sortKey, sortDir,
+    showAdd, setShowAdd,
+    showEdit, setShowEdit,
+    showAdjust, setShowAdjust,
+    showTransfer, setShowTransfer,
+    addItem, updateItem,
+    deleteItems, getRowId,
+    setQty, transferQty,
     exportCsv,
-    importCsv,
     warehouses,
-    role,
-    setRole,
-    refQuery,
-    setRefQuery,
+    role, setRole,
+    refQuery, setRefQuery,
     categories,
-    categoryFilter,
-    setCategoryFilter,
-    showReceive,
-    setShowReceive,
-    showDeliver,
-    setShowDeliver,
-    receiveQty,
-    deliverQty,
+    categoryFilter, setCategoryFilter,
+    showReceive, setShowReceive,
+    showDeliver, setShowDeliver,
+    receiveQty, deliverQty,
     items,
-    showHistory,
-    setShowHistory,
-    view,
-    setView,
-    historyFilter,
-    setHistoryFilter,
-    selectedRows,
-    setSelectedRows,
-  }
-}
-
-const getTrackingLink = (courier, number) => {
-  if (!number) return null
-  if (String(number).startsWith("http")) return number
-  switch (courier) {
-    case "Kerry": return `https://th.kerryexpress.com/th/track/?track=${number}`
-    case "Flash": return `https://www.flashexpress.co.th/tracking/?se=${number}`
-    case "ThaiPost": return `https://track.thailandpost.co.th/?trackNumber=${number}`
-    case "J&T": return `https://www.jtexpress.co.th/tracking?billcode=${number}`
-    case "DHL": return `https://www.dhl.com/th-en/home/tracking.html?tracking-id=${number}`
-    case "SCG": return `https://www.scgexpress.co.th/tracking/detail/${number}`
-    case "NinjaVan": return `https://www.ninjavan.co/th-th/tracking?id=${number}`
-    case "Best": return `https://www.best-inc.co.th/track?billcode=${number}`
-    case "Shopee": return `https://spx.co.th/`
-    case "Lazada": return `https://tracker.lel.asia/tracker?trackingNumber=${number}`
-    case "Nim": return `https://www.nimexpress.com/web/p/tracking?i=${number}`
-    default: return `https://t.17track.net/en#nums=${number}`
+    showHistory, setShowHistory,
+    view, setView,
+    historyFilter, setHistoryFilter,
+    selectedRows, setSelectedRows,
   }
 }
 
 function InventoryTable({ inv }) {
-  const fmtTHB = (n) => `฿ ${Number(n).toLocaleString("th-TH")}`
   const [editingId, setEditingId] = React.useState(null)
   const [editingField, setEditingField] = React.useState(null)
   const [editingValue, setEditingValue] = React.useState("")
+  const [editingCourier, setEditingCourier] = React.useState("")
   const [openStatusId, setOpenStatusId] = React.useState(null)
   const [columnModes, setColumnModes] = React.useState({})
   const { selectedRows, setSelectedRows, getRowId } = inv
 
   const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      const allIds = inv.pageItems.map(p => getRowId(p))
-      setSelectedRows(allIds)
-    } else {
-      setSelectedRows([])
-    }
+    if (e.target.checked) setSelectedRows(inv.pageItems.map((p) => getRowId(p)))
+    else setSelectedRows([])
   }
 
   const handleSelectRow = (id) => {
-    if (selectedRows.includes(id)) {
-      setSelectedRows(prev => prev.filter(r => r !== id))
-    } else {
-      setSelectedRows(prev => [...prev, id])
-    }
+    if (selectedRows.includes(id)) setSelectedRows((prev) => prev.filter((r) => r !== id))
+    else setSelectedRows((prev) => [...prev, id])
   }
 
   const handleKeyDown = (e, p) => {
     if (e.key === "Enter") {
-      inv.updateItem(p, { [editingField]: editingField === "price" ? Number(editingValue) : editingValue })
+      if (editingField === "trackingNumber") {
+        inv.updateItem(p, { trackingNumber: editingValue, courier: editingCourier })
+      } else {
+        inv.updateItem(p, { [editingField]: editingField === "price" ? Number(editingValue) : editingValue })
+      }
       setEditingId(null)
       setEditingField(null)
     } else if (e.key === "Escape") {
@@ -468,8 +403,13 @@ function InventoryTable({ inv }) {
     }
   }
 
-  const handleBlur = (p) => {
-    inv.updateItem(p, { [editingField]: editingField === "price" ? Number(editingValue) : editingValue })
+  const handleBlur = (e, p) => {
+    if (editingField === "trackingNumber") {
+      if (e.relatedTarget && e.relatedTarget.closest(".tracking-edit-container")) return
+      inv.updateItem(p, { trackingNumber: editingValue, courier: editingCourier })
+    } else {
+      inv.updateItem(p, { [editingField]: editingField === "price" ? Number(editingValue) : editingValue })
+    }
     setEditingId(null)
     setEditingField(null)
   }
@@ -477,11 +417,11 @@ function InventoryTable({ inv }) {
   const deliveryStatusClass = (s) => {
     switch (s) {
       case "Pending": return "bg-amber-100 text-amber-800 border border-amber-200"
-      case "Shipped": 
+      case "Shipped":
       case "In Transit": return "bg-blue-100 text-blue-800 border border-blue-200"
       case "Out for Delivery": return "bg-purple-100 text-purple-800 border border-purple-200"
       case "Delivered": return "bg-emerald-100 text-emerald-800 border border-emerald-200"
-      case "Returned": 
+      case "Returned":
       case "Exception": return "bg-rose-100 text-rose-800 border border-rose-200"
       case "Manual Check Needed": return "bg-orange-100 text-orange-800 border border-orange-200"
       default: return "bg-gray-100 text-gray-800 border border-gray-200"
@@ -489,58 +429,53 @@ function InventoryTable({ inv }) {
   }
 
   const columns = [
-    { id: 'sku', label: 'Product Number', sortable: true, defaultClass: 'font-medium text-[#3D56A6]' },
-    { id: 'name', label: 'Name', sortable: true, defaultClass: 'max-w-xs truncate' },
-    { id: 'stockQty', label: 'Stock', sortable: true, defaultClass: 'font-mono' },
-    { id: 'deliveryStatus', label: 'Delivery Status' },
-    { id: 'deliveryCompany', label: 'Customer', defaultClass: 'max-w-xs truncate' },
-    { id: 'tracking', label: 'Tracking #' },
-    { id: 'updatedAt', label: 'Last Updated', sortable: true },
+    { id: "sku", label: "Product Number", sortable: true, defaultClass: "font-medium text-[#3D56A6]" },
+    { id: "name", label: "Name", sortable: true, defaultClass: "max-w-xs truncate" },
+    { id: "stockQty", label: "Stock", sortable: true, defaultClass: "font-mono" },
+    { id: "deliveryStatus", label: "Delivery Status" },
+    { id: "deliveryCompany", label: "Customer", defaultClass: "max-w-xs truncate" },
+    { id: "tracking", label: "Tracking #" },
+    { id: "updatedAt", label: "Last Updated", sortable: true },
   ]
 
   const toggleMode = (id, mode) => {
-    setColumnModes(prev => ({
-      ...prev,
-      [id]: prev[id] === mode ? undefined : mode
-    }))
+    setColumnModes((prev) => ({ ...prev, [id]: prev[id] === mode ? undefined : mode }))
   }
 
   const renderCellContent = (col, p) => {
-    if (columnModes[col.id] === 'folded') return <span className="text-gray-300">•</span>
-    
+    if (columnModes[col.id] === "folded") return <span className="text-gray-300">•</span>
+
     const rowId = getRowId(p)
     const isEditing = (field) => editingId === rowId && editingField === field
 
     switch (col.id) {
-      case 'sku':
+      case "sku":
         return (
           <a href={`/inventory-detail.html?sku=${encodeURIComponent(p.sku)}`} className="text-[#3D56A6] hover:underline font-medium">
             {p.sku}
           </a>
         )
-      case 'name':
+
+      case "name":
         return isEditing("name") ? (
           <input
             autoFocus
             className="w-full rounded-md border border-gray-300 px-2 py-1"
             value={editingValue}
             onChange={(e) => setEditingValue(e.target.value)}
-            onBlur={() => handleBlur(p)}
+            onBlur={(e) => handleBlur(e, p)}
             onKeyDown={(e) => handleKeyDown(e, p)}
           />
         ) : (
           <span
             className="cursor-pointer hover:text-[#2D4485] hover:underline"
-            onClick={() => {
-              setEditingId(rowId)
-              setEditingField("name")
-              setEditingValue(p.name)
-            }}
+            onClick={() => { setEditingId(rowId); setEditingField("name"); setEditingValue(p.name) }}
           >
             {p.name}
           </span>
         )
-      case 'stockQty':
+
+      case "stockQty":
         return (
           <span
             className="cursor-pointer hover:text-[#2D4485] hover:underline font-medium"
@@ -550,7 +485,8 @@ function InventoryTable({ inv }) {
             {Number(p.stockQty).toLocaleString("en-US")}
           </span>
         )
-      case 'deliveryStatus':
+
+      case "deliveryStatus":
         return (
           <div className="relative inline-block">
             <button
@@ -568,11 +504,8 @@ function InventoryTable({ inv }) {
                     onClick={(e) => {
                       e.stopPropagation()
                       setOpenStatusId(null)
-                      if (status === "Delivered") {
-                        inv.setShowDeliver(p)
-                      } else {
-                        inv.updateItem(p, { deliveryStatus: status })
-                      }
+                      if (status === "Delivered") inv.setShowDeliver(p)
+                      else inv.updateItem(p, { deliveryStatus: status })
                     }}
                   >
                     {status || "Clear"}
@@ -582,184 +515,199 @@ function InventoryTable({ inv }) {
             )}
           </div>
         )
-      case 'deliveryCompany':
+
+      case "deliveryCompany":
         return isEditing("deliveryCompany") ? (
           <input
             autoFocus
             className="w-full rounded-md border border-gray-300 px-2 py-1"
             value={editingValue}
             onChange={(e) => setEditingValue(e.target.value)}
-            onBlur={() => handleBlur(p)}
+            onBlur={(e) => handleBlur(e, p)}
             onKeyDown={(e) => handleKeyDown(e, p)}
           />
         ) : (
           <span
             className="cursor-pointer hover:text-[#2D4485] hover:underline truncate max-w-[120px] inline-block align-middle"
             title={p.deliveryCompany || "Click to edit"}
-            onClick={() => {
-              setEditingId(rowId)
-              setEditingField("deliveryCompany")
-              setEditingValue(p.deliveryCompany || "")
-            }}
+            onClick={() => { setEditingId(rowId); setEditingField("deliveryCompany"); setEditingValue(p.deliveryCompany || "") }}
           >
             {p.deliveryCompany || "-"}
           </span>
         )
-      case 'tracking':
-        return (
-          <div className="text-gray-600 font-mono text-xs">
+
+      case "tracking": {
+        const url = p.trackingUrl || getTrackingLink(p.courier, p.trackingNumber)
+
+        return isEditing("trackingNumber") ? (
+          <div className="tracking-edit-container flex flex-col gap-1 min-w-[160px]">
+            <input
+              autoFocus
+              className="w-full rounded border border-gray-300 px-2 py-1 text-xs font-mono"
+              value={editingValue}
+              onChange={(e) => setEditingValue(e.target.value)}
+              onBlur={(e) => handleBlur(e, p)}
+              onKeyDown={(e) => handleKeyDown(e, p)}
+              placeholder="Tracking #"
+            />
+            <select
+              className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
+              value={editingCourier}
+              onChange={(e) => setEditingCourier(e.target.value)}
+              onBlur={(e) => handleBlur(e, p)}
+              onKeyDown={(e) => handleKeyDown(e, p)}
+            >
+              <option value="">Courier...</option>
+              {["Kerry", "Flash", "ThaiPost", "J&T", "DHL", "SCG", "NinjaVan", "Best", "Shopee", "Lazada", "Nim", "Other"].map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div
+            className="text-xs font-mono cursor-pointer"
+            onClick={() => { setEditingId(rowId); setEditingField("trackingNumber"); setEditingValue(p.trackingNumber || ""); setEditingCourier(p.courier || "") }}
+            title="Click to edit tracking"
+          >
             {p.trackingNumber ? (
-              (p.trackingUrl || getTrackingLink(p.courier, p.trackingNumber)) ? (
-                <button 
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    navigator.clipboard.writeText(p.trackingNumber);
-                    const url = p.trackingUrl || getTrackingLink(p.courier, p.trackingNumber);
-                    if(url) window.open(url, '_blank');
-                  }}
-                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer max-w-[140px]"
-                  title={`Track ${p.trackingNumber} on ${p.courier} website`}
-                >
-                  <span className="truncate">{p.trackingNumber}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </button>
+              url ? (
+                <div className="flex flex-col items-start gap-0.5">
+                  <span className="font-mono font-medium text-gray-900">{p.trackingNumber}</span>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[10px] inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                    title={`Open tracking website`}
+                  >
+                    <span>{p.courier ? `Track on ${p.courier}` : "Track Package"}</span>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  </a>
+                </div>
               ) : (
-                <span className="truncate max-w-[140px] inline-block" title={p.trackingNumber}>{p.trackingNumber}</span>
+                <span className="truncate max-w-[140px] inline-block">{p.trackingNumber}</span>
               )
-            ) : "-"}
+            ) : (
+              <span className="text-gray-400 opacity-50 hover:opacity-100 transition-opacity">+ Add</span>
+            )}
           </div>
         )
-      case 'updatedAt':
+      }
+
+      case "updatedAt":
         return <span className="text-gray-600 text-sm">{p.updatedAt}</span>
+
       default:
         return <span>-</span>
     }
   }
 
   return (
-    <div className="">
-      {inv.pageItems.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
-          <div className="text-lg font-semibold text-gray-900">No items found</div>
-          <div className="text-sm text-gray-600 mt-1">Try adjusting your search or add a new item</div>
-          <button onClick={() => inv.setShowAdd(true)} className="mt-4 inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm">Add Item</button>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
-              <tr>
-                <th className="p-4 border-b w-10">
-                  <input
-                    type="checkbox"
-                    className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
-                    checked={inv.pageItems.length > 0 && selectedRows.length === inv.pageItems.length}
-                    onChange={handleSelectAll}
-                  />
-                </th>
-                {columns.map(col => {
-                  const mode = columnModes[col.id]
-                  return (
-                    <th 
-                      key={col.id} 
-                      className={`p-4 border-b transition-all duration-300 group relative align-top ${
-                        mode === 'folded' ? 'w-12 max-w-[3rem]' : mode === 'expanded' ? 'min-w-[300px]' : 'whitespace-nowrap'
-                      }`}
-                    >
-                      <div className={`flex items-center justify-between gap-2 ${mode === 'folded' ? 'justify-center' : ''}`}>
-                        {mode !== 'folded' && (
-                          <div 
-                            className={`flex items-center gap-1 ${col.sortable ? 'cursor-pointer hover:text-gray-900' : ''}`}
-                            onClick={() => col.sortable && inv.toggleSort(col.id)}
-                          >
-                            {col.label}
-                          </div>
-                        )}
-                        <div className={`flex items-center gap-1 bg-white rounded-md shadow-md border border-gray-300 opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
-                          mode === 'folded' ? 'opacity-100 absolute left-1/2 -translate-x-1/2 top-2' : ''
-                        }`}>
-                          {mode !== 'folded' && (
-                            <button 
-                              onClick={() => toggleMode(col.id, 'folded')}
-                              className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
-                              title="Fold Column"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          )}
-                          {mode !== 'expanded' ? (
-                            <button 
-                              onClick={() => toggleMode(col.id, 'expanded')}
-                              className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
-                              title="Fully Expand"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12a1 1 0 01-1-1z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          ) : (
-                            <button 
-                              onClick={() => toggleMode(col.id, undefined)}
-                              className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
-                              title="Reset Width"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {inv.pageItems.map((p, i) => {
-                const rowId = getRowId(p)
+    <div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
+            <tr>
+              <th className="p-4 border-b w-10">
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                  checked={inv.pageItems.length > 0 && selectedRows.length === inv.pageItems.length}
+                  onChange={handleSelectAll}
+                />
+              </th>
+              {columns.map((col) => {
+                const mode = columnModes[col.id]
                 return (
-                  <tr key={i} className={`transition border-b border-gray-100 ${selectedRows.includes(rowId) ? 'bg-blue-200 hover:bg-blue-300' : 'hover:bg-gray-50'}`}>
-                    <td className="p-4">
-                      <input
-                        type="checkbox"
-                        className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
-                        onChange={() => handleSelectRow(rowId)}
-                        checked={selectedRows.includes(rowId)}
-                      />
-                    </td>
-                    {columns.map(col => {
-                      const mode = columnModes[col.id]
-                      return (
-                        <td 
-                          key={col.id} 
-                          className={`p-4 transition-all duration-300 align-top ${
-                            mode === 'folded' 
-                              ? 'w-12 max-w-[3rem] text-center overflow-hidden p-2' 
-                              : mode === 'expanded'
-                                ? 'min-w-[300px] whitespace-normal break-words text-gray-600'
-                                : `whitespace-nowrap text-gray-600 ${col.defaultClass || ''}`
-                          }`}
+                  <th
+                    key={col.id}
+                    className={`p-4 border-b transition-all duration-300 group relative align-top ${
+                      mode === "folded" ? "w-12 max-w-[3rem]" : mode === "expanded" ? "min-w-[300px]" : "whitespace-nowrap"
+                    }`}
+                  >
+                    <div className={`flex items-center justify-between gap-2 ${mode === "folded" ? "justify-center" : ""}`}>
+                      {mode !== "folded" && (
+                        <div
+                          className={`flex items-center gap-1 ${col.sortable ? "cursor-pointer hover:text-gray-900" : ""}`}
+                          onClick={() => col.sortable && inv.toggleSort(col.id)}
                         >
-                          {renderCellContent(col, p)}
-                        </td>
-                      )
-                    })}
-                  </tr>
+                          {col.label}
+                        </div>
+                      )}
+
+                      <div className={`flex items-center gap-1 bg-white rounded-md shadow-md border border-gray-300 opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                        mode === "folded" ? "opacity-100 absolute left-1/2 -translate-x-1/2 top-2" : ""
+                      }`}>
+                        {mode !== "folded" && (
+                          <button onClick={() => toggleMode(col.id, "folded")} className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors" title="Fold Column">
+                            ◀▶
+                          </button>
+                        )}
+                        {mode !== "expanded" ? (
+                          <button onClick={() => toggleMode(col.id, "expanded")} className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors" title="Fully Expand">
+                            ⤢
+                          </button>
+                        ) : (
+                          <button onClick={() => toggleMode(col.id, undefined)} className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors" title="Reset Width">
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </th>
                 )
               })}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </tr>
+          </thead>
 
-      
+          <tbody className="divide-y divide-gray-100">
+            {inv.pageItems.length === 0 && (
+              <tr>
+                <td colSpan={columns.length + 1} className="p-8 text-center text-gray-400">
+                  {inv.query ? "No matching items found." : "No inventory items."}
+                </td>
+              </tr>
+            )}
+
+            {inv.pageItems.map((p, i) => {
+              const rowId = getRowId(p)
+              return (
+                <tr key={i} className={`transition border-b border-gray-100 ${selectedRows.includes(rowId) ? "bg-blue-200 hover:bg-blue-300" : "hover:bg-gray-50"}`}>
+                  <td className="p-4">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                      onChange={() => handleSelectRow(rowId)}
+                      checked={selectedRows.includes(rowId)}
+                    />
+                  </td>
+
+                  {columns.map((col) => {
+                    const mode = columnModes[col.id]
+                    return (
+                      <td
+                        key={col.id}
+                        className={`p-4 transition-all duration-300 align-top ${
+                          mode === "folded"
+                            ? "w-12 max-w-[3rem] text-center overflow-hidden p-2"
+                            : mode === "expanded"
+                              ? "min-w-[300px] whitespace-normal break-words text-gray-600"
+                              : `whitespace-nowrap text-gray-600 ${col.defaultClass || ""}`
+                        }`}
+                      >
+                        {renderCellContent(col, p)}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modals (same as your original) */}
       {inv.showAdd && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowAdd(false)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
@@ -808,7 +756,14 @@ function InventoryTable({ inv }) {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => inv.setShowDeliver(null)}>
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-4 text-gray-900">Deliver Products</div>
-            <DeliverForm sku={inv.showDeliver.sku} items={inv.items} onCancel={() => inv.setShowDeliver(null)} onConfirm={(qty, ref, status, company, tracking, courier, trackingUrl) => inv.deliverQty(inv.showDeliver.sku, qty, ref, status, company, inv.showDeliver.warehouse, inv.showDeliver.bin, inv.showDeliver.lot, tracking, courier, trackingUrl)} />
+            <DeliverForm
+              sku={inv.showDeliver.sku}
+              items={inv.items}
+              onCancel={() => inv.setShowDeliver(null)}
+              onConfirm={(qty, ref, status, company, tracking, courier, trackingUrl) =>
+                inv.deliverQty(inv.showDeliver.sku, qty, ref, status, company, inv.showDeliver.warehouse, inv.showDeliver.bin, inv.showDeliver.lot, tracking, courier, trackingUrl)
+              }
+            />
           </div>
         </div>
       )}
@@ -866,42 +821,60 @@ function AddItemForm({ onCancel, onSave, initialData }) {
     valuationMethod: "FIFO",
     serials: "",
     manufactureDate: "",
+    trackingNumber: "",
+    courier: "",
+    trackingUrl: "",
   }
+
   const [f, setF] = React.useState(initialData || initial)
   const canSave = Boolean(f.name)
   const set = (k, v) => setF((prev) => ({ ...prev, [k]: v }))
 
-  const handleSave = () => {
-    const payload = {
-      ...f,
-      sku: f.sku || `SKU-${Date.now()}`,
-      serials: Array.isArray(f.serials) ? f.serials : []
-    }
-    onSave(payload)
-  }
-
   return (
     <div className="space-y-3">
       {initialData && (
-        <div className="text-sm text-gray-700">Product Number: <span className="font-semibold">{f.sku}</span></div>
+        <div className="text-sm text-gray-700">
+          Product Number: <span className="font-semibold">{f.sku}</span>
+        </div>
       )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className="block text-sm text-gray-700 mb-1">Product name</label>
-          <input value={f.name} onChange={(e) => set("name", e.target.value)} required placeholder="e.g. Laser Welding Machine" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+          <input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Laser Welding Machine" className="w-full rounded-md border border-gray-300 px-3 py-2" />
         </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Stock qty</label>
-          <input type="number" min={0} value={f.stockQty} onChange={(e) => set("stockQty", Math.max(0, Number(e.target.value))) } placeholder="e.g. 10" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+          <input type="number" min={0} value={f.stockQty} onChange={(e) => set("stockQty", Math.max(0, Number(e.target.value)))} className="w-full rounded-md border border-gray-300 px-3 py-2" />
         </div>
         <div>
           <label className="block text-sm text-gray-700 mb-1">Price</label>
-          <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} placeholder="e.g. 50000" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+          <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} className="w-full rounded-md border border-gray-300 px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Courier</label>
+          <select value={f.courier} onChange={(e) => set("courier", e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
+            <option value="">Select Courier</option>
+            {["Kerry", "Flash", "ThaiPost", "J&T", "DHL", "SCG", "NinjaVan", "Best", "Shopee", "Lazada", "Nim", "Other"].map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Tracking Number</label>
+          <input value={f.trackingNumber} onChange={(e) => set("trackingNumber", e.target.value)} placeholder="e.g. TH12345678" className="w-full rounded-md border border-gray-300 px-3 py-2" />
         </div>
       </div>
+
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="btn-pill">Cancel</button>
-        <button disabled={!canSave} onClick={() => onSave({ ...f, serials: [] })} className="btn-pill disabled:opacity-50">Save</button>
+        <button
+          disabled={!canSave}
+          onClick={() => onSave({ ...f, serials: [], trackingUrl: buildTrackingUrl(f.courier, f.trackingNumber, f.trackingUrl) })}
+          className="btn-pill disabled:opacity-50"
+        >
+          Save
+        </button>
       </div>
     </div>
   )
@@ -967,7 +940,6 @@ function ImportForm({ onCancel, onFile }) {
   return (
     <div className="space-y-3">
       <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-      <div className="text-xs text-gray-600">Headers: sku,name,stockQty,reserved,price,updatedAt,warehouse,bin,lot,expiry</div>
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="btn-pill">Cancel</button>
         <button onClick={() => onFile && onFile(file)} className="btn-pill">Import</button>
@@ -993,16 +965,15 @@ function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
       setRows([])
     }
   }, [sku, warehouse, bin, lot])
-  const fmtChange = (e) => {
-    if (e.delta != null) return e.delta
-    if (e.qty != null) return e.qty
-    return ""
-  }
+
+  const fmtChange = (e) => (e.delta != null ? e.delta : e.qty != null ? e.qty : "")
   const loc = `${warehouse || "Main"} / ${bin || "A-01-01"}${lot ? " / " + lot : ""}`
+
   return (
     <div className="space-y-3">
       <div className="text-sm text-gray-700">Product Number: <span className="font-semibold">{sku}</span></div>
       <div className="text-xs text-gray-600">Location: {loc}</div>
+
       <div className="overflow-x-auto border rounded-xl">
         <table className="min-w-full text-sm">
           <thead>
@@ -1033,31 +1004,18 @@ function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
                   <td className="p-2">{e.ref || e.from || e.to || ""}</td>
                   <td className="p-2">{e.company || "-"}</td>
                   <td className="p-2">
-                     {e.tracking ? (
-                       <a 
-                         href={e.trackingUrl || getTrackingLink(e.courier, e.tracking)} 
-                         target="_blank" 
-                         rel="noopener noreferrer" 
-                         className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
-                         title={`Track via ${e.courier || "17TRACK"}`}
-                         onClick={(evt) => evt.stopPropagation()}
-                       >
-                         <span className="truncate max-w-[100px] inline-block align-bottom">{e.tracking}</span>
-                         <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                       </a>
-                     ) : "-"}
-                  </td>
-                  <td className="p-2">
-                    {e.type === 'sales_delivery' ? (
-                       <span className={`px-2 py-0.5 rounded text-xs ${
-                         e.status === 'Delivered' ? 'bg-emerald-100 text-emerald-800' :
-                         e.status === 'Shipped' ? 'bg-blue-100 text-blue-800' :
-                         'bg-gray-100 text-gray-800'
-                       }`}>
-                         {e.status || "Shipped"}
-                       </span>
+                    {e.tracking ? (
+                      <a
+                        href={e.trackingUrl || getTrackingLink(e.courier, e.tracking)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        {e.tracking}
+                      </a>
                     ) : "-"}
                   </td>
+                  <td className="p-2">{e.status || "-"}</td>
                   <td className="p-2">{e.user || ""}</td>
                 </tr>
               ))
@@ -1065,6 +1023,7 @@ function MovementLog({ sku, warehouse, bin, lot, onCancel }) {
           </tbody>
         </table>
       </div>
+
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="btn-pill">Close</button>
       </div>
@@ -1088,88 +1047,56 @@ function ReceiveForm({ sku, onCancel, onConfirm }) {
   )
 }
 
-function DeliverForm({ sku, onCancel, onConfirm, items = [] }) {
-  // Simple delivery form to record outgoing items
-  // Fields: Quantity, Reference (SO/DO), Courier info, and Customer
+function DeliverForm({ sku, onCancel, onConfirm }) {
   const [qty, setQty] = React.useState(0)
   const [ref, setRef] = React.useState("")
   const [company, setCompany] = React.useState("")
   const [status, setStatus] = React.useState("Delivered")
   const [tracking, setTracking] = React.useState("")
   const [courier, setCourier] = React.useState("Other")
-  
-  // Custom courier fields
   const [customCourier, setCustomCourier] = React.useState("")
   const [customUrl, setCustomUrl] = React.useState("")
-  
   const isOther = courier === "Other"
 
   return (
     <div className="space-y-3">
       <div className="text-sm text-gray-700">Product: <span className="font-semibold">{sku}</span></div>
-      
-      {/* Quantity & Reference */}
+
       <input type="number" min={0} value={qty} onChange={(e) => setQty(Math.max(0, Number(e.target.value)))} placeholder="Quantity" className="w-full rounded-md border border-gray-300 px-3 py-2" />
       <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Reference No." className="w-full rounded-md border border-gray-300 px-3 py-2" />
-      
-      {/* Courier & Tracking */}
+
       <div className="grid grid-cols-2 gap-3">
         <select value={courier} onChange={(e) => setCourier(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2">
-          <option value="Other">Other Courier</option>
-          <option value="Kerry">Kerry Express</option>
-          <option value="Flash">Flash Express</option>
-          <option value="ThaiPost">Thai Post</option>
-          <option value="J&T">J&T Express</option>
-          <option value="DHL">DHL</option>
-          <option value="SCG">SCG Express</option>
-          <option value="NinjaVan">Ninja Van</option>
-          <option value="Best">Best Express</option>
-          <option value="Shopee">Shopee Xpress (SPX)</option>
-          <option value="Lazada">Lazada Express (LEX)</option>
-          <option value="Nim">Nim Express</option>
+          {["Other", "Kerry", "Flash", "ThaiPost", "J&T", "DHL", "SCG", "NinjaVan", "Best", "Shopee", "Lazada", "Nim"].map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
         </select>
         <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking No." className="w-full rounded-md border border-gray-300 px-3 py-2" />
       </div>
 
       {isOther && (
-        <div className="grid grid-cols-2 gap-3 animate-fadeIn">
-          <input 
-            value={customCourier} 
-            onChange={(e) => setCustomCourier(e.target.value)} 
-            placeholder="Specify Courier Name" 
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-          <input 
-            value={customUrl} 
-            onChange={(e) => setCustomUrl(e.target.value)} 
-            placeholder="Tracking Link (Optional)" 
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            title="Paste the full tracking URL if available"
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <input value={customCourier} onChange={(e) => setCustomCourier(e.target.value)} placeholder="Specify Courier Name" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+          <input value={customUrl} onChange={(e) => setCustomUrl(e.target.value)} placeholder="Tracking Link (Optional)" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
         </div>
       )}
-      
-      {/* Customer Info */}
-      <input 
-        value={company} 
-        onChange={(e) => setCompany(e.target.value)} 
-        placeholder="Customer Name" 
-        className="w-full rounded-md border border-gray-300 px-3 py-2" 
-      />
 
-      {/* Delivery Status */}
+      <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Customer Name" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+
       <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
         <option value="Pending">Pending</option>
         <option value="Delivered">Delivered</option>
+        <option value="Shipped">Shipped</option>
       </select>
-      
+
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="btn-pill">Cancel</button>
-        <button 
+        <button
           onClick={() => {
             const finalCourier = isOther ? (customCourier || "Other") : courier
-            onConfirm(qty, ref, status, company, tracking, finalCourier, customUrl)
-          }} 
+            const finalUrl = buildTrackingUrl(finalCourier, tracking, customUrl)
+            onConfirm(qty, ref, status, company, tracking, finalCourier, finalUrl)
+          }}
           className="btn-pill"
         >
           Deliver
@@ -1181,6 +1108,8 @@ function DeliverForm({ sku, onCancel, onConfirm, items = [] }) {
 
 function InventoryPage() {
   const inv = useInventory()
+  const [openBulkDelete, setOpenBulkDelete] = React.useState(false)
+
   return (
     <main className="min-h-screen bg-white">
       <Navigation />
@@ -1189,19 +1118,14 @@ function InventoryPage() {
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Inventory Control Tower</h1>
+
               <button
                 className="inline-flex items-center justify-center min-w-[150px] px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm"
-                title="Add Item"
                 onClick={() => inv.setShowAdd(true)}
               >
                 Add Item
               </button>
-              <button
-                onClick={() => inv.setShowImport(true)}
-                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
-              >
-                Import
-              </button>
+
               <button
                 onClick={inv.exportCsv}
                 className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
@@ -1209,62 +1133,79 @@ function InventoryPage() {
                 Export
               </button>
             </div>
+
             <div className="flex items-center gap-3">
-               {inv.selectedRows.length > 0 && (
+              {inv.selectedRows.length > 0 && (
                 <button
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to delete ${inv.selectedRows.length} items?`)) {
-                       inv.deleteItems(inv.selectedRows)
-                    }
-                  }}
+                  onClick={() => setOpenBulkDelete(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
                   <span className="font-medium">Delete ({inv.selectedRows.length})</span>
                 </button>
               )}
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={inv.query}
-                    onChange={(e) => inv.setQuery(e.target.value)}
-                    placeholder="Search by name or product number"
-                    className="pl-10 pr-10 py-2 border border-slate-300 rounded-lg text-sm w-80 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all"
-                  />
-                  <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  {inv.query && (
-                    <button
-                      onClick={() => inv.setQuery("")}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
-                      title="Clear Search"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-                 <button
-                    onClick={() => {
-                      inv.setHistoryFilter(null)
-                      inv.setView(inv.view === "history" ? "inventory" : "history")
-                    }}
-                    className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
-                  >
-                    {inv.view === "history" ? "Inventory" : "History"}
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={inv.query}
+                  onChange={(e) => inv.setQuery(e.target.value)}
+                  placeholder="Search by name or product number"
+                  className="pl-10 pr-10 py-2 border border-slate-300 rounded-lg text-sm w-80 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all"
+                />
+                <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {inv.query && (
+                  <button onClick={() => inv.setQuery("")} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600" title="Clear Search">
+                    ✕
                   </button>
+                )}
+              </div>
+
+              <button
+                onClick={() => { inv.setHistoryFilter(null); inv.setView(inv.view === "history" ? "inventory" : "history") }}
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
+              >
+                {inv.view === "history" ? "Inventory" : "History"}
+              </button>
+
+              <div className="text-slate-500 font-medium text-sm">
+                {inv.query ? (
+                  <span>Showing <span className="text-slate-900 font-bold">{inv.pageItems.length}</span> of <span className="text-slate-900 font-bold">{inv.items.length}</span> items</span>
+                ) : (
+                  <span>Total: <span className="text-slate-900 font-bold">{inv.items.length}</span> items</span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-             {inv.view === "history" ? <HistoryView inv={inv} /> : <InventoryTable inv={inv} />}
-          </div>
+          <div>{inv.view === "history" ? <HistoryView inv={inv} /> : <InventoryTable inv={inv} />}</div>
         </div>
       </section>
+
+      {openBulkDelete && (
+        <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpenBulkDelete(false)}>
+          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Delete items</h3>
+                <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenBulkDelete(false)}>✕</button>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-gray-700">
+                  Are you sure you want to delete <span className="font-semibold">{inv.selectedRows.length}</span> selected items?
+                </p>
+              </div>
+              <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenBulkDelete(false)}>Cancel</button>
+                <button className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700" onClick={() => { inv.deleteItems(inv.selectedRows); setOpenBulkDelete(false) }}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

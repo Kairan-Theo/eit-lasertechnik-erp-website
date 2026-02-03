@@ -191,6 +191,7 @@ function InventoryDetailPage() {
     { label: "Bin Location", value: item.bin || "-" },
     { label: "Unit Price", value: `฿${Number(item.price || 0).toLocaleString()}` },
     { label: "Status", value: item.status || "Active" },
+    { label: "Tracking", value: item.trackingNumber ? `${item.courier ? item.courier + ': ' : ''}${item.trackingNumber}` : "-" },
     { label: "Description", value: item.description || "-" },
   ]
   
@@ -236,6 +237,15 @@ function InventoryDetailPage() {
                       <div className="px-4 py-2 rounded-full text-sm font-semibold bg-gray-50 text-gray-600 border border-gray-200">
                         {item.status || "Active"}
                       </div>
+                   </div>
+
+                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-6 mt-8 pt-8 border-t border-gray-100">
+                     {detailRows.map((row, i) => (
+                       <div key={i} className="flex flex-col">
+                         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{row.label}</span>
+                         <span className="text-base font-medium text-gray-900 break-words">{row.value}</span>
+                       </div>
+                     ))}
                    </div>
                 </div>
               </div>
