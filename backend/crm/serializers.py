@@ -550,6 +550,7 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     write_customer_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     po_file = serializers.FileField(write_only=True, required=False)
+    linked_cpo_id = serializers.IntegerField(write_only=True, required=False)
 
     class Meta:
         model = ManufacturingOrder
@@ -577,6 +578,7 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         customer_name = validated_data.pop('write_customer_name', None)
         po_file = validated_data.pop('po_file', None)
+        linked_cpo_id = validated_data.pop('linked_cpo_id', None)
         
         if customer_name:
             customer, _ = Customer.objects.get_or_create(company_name=customer_name)
@@ -589,12 +591,23 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
             instance.po_file_type = po_file.content_type
             instance.po_file_content = po_file.read()
             instance.save()
+        elif linked_cpo_id:
+            try:
+                cpo = CustomerPurchaseOrder.objects.get(id=linked_cpo_id)
+                if cpo.po_file_content:
+                    instance.po_file_name = cpo.po_file_name
+                    instance.po_file_type = cpo.po_file_type
+                    instance.po_file_content = cpo.po_file_content
+                    instance.save()
+            except CustomerPurchaseOrder.DoesNotExist:
+                pass
             
         return instance
 
     def update(self, instance, validated_data):
         customer_name = validated_data.pop('write_customer_name', None)
         po_file = validated_data.pop('po_file', None)
+        linked_cpo_id = validated_data.pop('linked_cpo_id', None)
         
         if customer_name:
             customer, _ = Customer.objects.get_or_create(company_name=customer_name)
@@ -608,9 +621,18 @@ class ManufacturingOrderSerializer(serializers.ModelSerializer):
             instance.po_file_name = po_file.name
             instance.po_file_type = po_file.content_type
             instance.po_file_content = po_file.read()
+        elif linked_cpo_id:
+            try:
+                cpo = CustomerPurchaseOrder.objects.get(id=linked_cpo_id)
+                if cpo.po_file_content:
+                    instance.po_file_name = cpo.po_file_name
+                    instance.po_file_type = cpo.po_file_type
+                    instance.po_file_content = cpo.po_file_content
+            except CustomerPurchaseOrder.DoesNotExist:
+                pass
             
         # If po_file_name is explicitly cleared (empty string) and no new file is uploaded, clear the file content
-        if 'po_file_name' in validated_data and not validated_data.get('po_file_name') and not po_file:
+        if 'po_file_name' in validated_data and not validated_data.get('po_file_name') and not po_file and not linked_cpo_id:
             instance.po_file_content = None
             instance.po_file_type = ''
             

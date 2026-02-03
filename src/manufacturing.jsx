@@ -580,7 +580,7 @@ function ManufacturingOrderPage() {
         o.poFileName ? (
           <div className="flex flex-col">
             <a 
-              href={`${API_BASE_URL}/api/manufacturing_orders/${o.id}/download_po_file/`}
+              href={`${API_BASE_URL}/api/manufacturing_orders/${o.id}/download/`}
               className="text-blue-600 underline hover:text-blue-800"
               target="_blank"
               rel="noopener noreferrer"
