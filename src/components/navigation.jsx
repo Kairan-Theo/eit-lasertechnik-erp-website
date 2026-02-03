@@ -35,6 +35,16 @@ export default function Navigation() {
   const dropdownRef = React.useRef(null)
   const notificationRef = React.useRef(null)
   const [isAuthenticated, setIsAuthenticated] = React.useState(false)
+  const [allowedApps, setAllowedApps] = React.useState(null)
+
+  const isAllowed = (app) => {
+    // Admins always have access
+    if (user && user.role === "Admin") return true
+    
+    if (!allowedApps) return false
+    if (allowedApps === "all") return true
+    return allowedApps.split(",").map(s => s.trim()).includes(app)
+  }
 
   const [isEditProfileOpen, setIsEditProfileOpen] = React.useState(false)
   const [isChangePasswordOpen, setIsChangePasswordOpen] = React.useState(false)
@@ -133,6 +143,7 @@ export default function Navigation() {
       }
       const auth = localStorage.getItem("isAuthenticated")
       setIsAuthenticated(auth === "true")
+      setAllowedApps(localStorage.getItem("allowedApps"))
     } catch (e) {
       // ignore
     }
@@ -404,9 +415,11 @@ export default function Navigation() {
             <a href="/admin.html" className="nav-link text-white hover:text-gray-200 transition">
               Admin
             </a>
-            <a href="mailto:it-support@eit.local" className="nav-link text-white hover:text-gray-200 transition">
-              Support
-            </a>
+            {isAllowed("Support") && (
+              <a href="mailto:it-support@eit.local" className="nav-link text-white hover:text-gray-200 transition">
+                Support
+              </a>
+            )}
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
@@ -497,7 +510,7 @@ export default function Navigation() {
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="flex items-center gap-2 hover:bg-white/10 rounded-full pl-1 pr-3 py-1 transition"
+                  className={`flex items-center gap-2 rounded-full pl-1 pr-3 py-1 transition ${isDropdownOpen ? 'bg-white/20' : 'hover:bg-white/10'}`}
                 >
                   <img
                     src={user.profile_picture}
@@ -553,7 +566,7 @@ export default function Navigation() {
               </div>
             ) : (
               <>
-                <a href="/login.html" className="hidden sm:block rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition">
+                <a href="/login.html" className="rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition">
                   Log in
                 </a>
                 <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-4 py-1.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5">
