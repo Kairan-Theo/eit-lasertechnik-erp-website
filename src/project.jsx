@@ -234,20 +234,9 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                                    >
                                    <span className="text-[11px] font-bold truncate text-white drop-shadow-sm">{project.name}</span>
                                    
-                                   {/* Assignee Avatars */}
-                                   <div className="flex -space-x-1.5 mr-1">
-                                        <div className="w-5 h-5 rounded-full border border-white/20 bg-white/20 flex items-center justify-center text-[8px] text-white font-bold backdrop-blur-sm">
-                                            {project.name.charAt(0)}
-                                        </div>
-                                        <div className="w-5 h-5 rounded-full border border-white/20 bg-white flex items-center justify-center text-[8px] font-bold text-slate-600 shadow-sm">
-                                            B
-                                        </div>
-                                        <div className="w-5 h-5 rounded-full border border-white/20 bg-white flex items-center justify-center text-[7px] font-bold text-slate-400 shadow-sm">
-                                            +2
-                                        </div>
-                                   </div>
 
-                                   {/* Hover Info */}
+
+                                   
                                    {hoveredTask === project.id && !dragging && (
                                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap z-50 animate-in fade-in zoom-in-95 duration-150">
                                            <div className="font-bold">{project.name}</div>
@@ -295,16 +284,9 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                                     >
                                         <span className="text-[9px] font-bold text-white truncate drop-shadow-sm">{subtask.name}</span>
                                         
-                                        {/* Assignee Avatars Subtask */}
-                                        {width(subtask.start, subtask.end) > 100 && (
-                                            <div className="flex -space-x-1 mr-1">
-                                                <div className="w-4 h-4 rounded-full border border-white/20 bg-white/20 flex items-center justify-center text-[6px] text-white font-bold backdrop-blur-sm">
-                                                    {subtask.name.charAt(0)}
-                                                </div>
-                                            </div>
-                                        )}
 
-                                        {/* Hover Info Subtask */}
+
+                                        
                                         {hoveredTask === subtask.id && !dragging && (
                                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap z-50 animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
                                                <div className="font-bold">{subtask.name}</div>
