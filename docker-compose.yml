@@ -1,50 +1,33 @@
-services:
-  db:
-    image: postgres:15
-    container_name: eit_postgres
-    environment:
-      POSTGRES_DB: eit_crm
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+version: '3.8'
 
+services:
   backend:
-    build: ./backend
-    container_name: eit_backend
-    command: python manage.py runserver 0.0.0.0:8001
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8001"
     volumes:
       - ./backend:/app
-      - ./public:/app/public
-      - ./dist:/app/dist
-    ports:
-      - "8001:8001"
-    depends_on:
-      - db
     environment:
-      - DB_ENGINE=postgresql
-      - DB_NAME=eit_crm
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_HOST=db
-      - DB_PORT=5432
+      - DB_ENGINE=sqlite
+    command: python manage.py runserver 0.0.0.0:8001
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    container_name: eit_frontend
-    volumes:
-      - .:/app
-      - /app/node_modules
     ports:
-      - "5173:5173"
+      - "5174:5173"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./index.html:/app/index.html
+      - ./vite.config.js:/app/vite.config.js
+      - ./postcss.config.js:/app/postcss.config.js
+      - ./tailwind.config.js:/app/tailwind.config.js
+      - /app/node_modules
     environment:
-      - VITE_API_URL=http://localhost:8001
+      - VITE_API_BASE_URL=http://localhost:8002
     depends_on:
       - backend
-
-volumes:
-  postgres_data:
