@@ -1,5 +1,6 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
+import { createPortal } from "react-dom"
 import Navigation from "./components/navigation.jsx"
 import "./index.css"
 
@@ -1147,6 +1148,21 @@ function DeliveryView({ inv }) {
   const [editingTracking, setEditingTracking] = React.useState("")
   const [editingCourier, setEditingCourier] = React.useState("")
   const [openStatusId, setOpenStatusId] = React.useState(null)
+  const [statusPos, setStatusPos] = React.useState({ top: 0, left: 0 })
+
+  const applyStockForStatusChange = (sku, qty, prev, next) => {
+    try {
+      const item = inv.items.find((it) => it.sku === sku)
+      if (!item) return
+      let delta = 0
+      if (prev === "Delivered" && next !== "Delivered") delta = Number(qty || 0) // add back
+      if (prev !== "Delivered" && next === "Delivered") delta = -Number(qty || 0) // deduct
+      if (delta === 0) return
+      const newStock = Math.max(0, Number(item.stockQty || 0) + delta)
+      inv.updateItem(item, { stockQty: newStock })
+    } catch {}
+  }
+
   const changeStatus = (row, status) => {
     try {
       const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
@@ -1388,40 +1404,51 @@ function DeliveryView({ inv }) {
                 </td>
                 <td className="p-4 font-medium text-gray-900">{r.productName}</td>
                 <td className="p-4 font-mono text-gray-700">{r.orderAmount}</td>
-                <td className="p-4 overflow-visible">
+                <td className="p-4">
                   <div className="relative inline-block">
                     <button
                       className={`${r.status ? deliveryStatusClass(r.status) : "bg-white border border-gray-300 text-gray-700"} px-2 py-1 rounded-full text-xs font-medium min-w-[80px]`}
                       type="button"
-                      onClick={() => setOpenStatusId(openStatusId === r.id ? null : r.id)}
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        setStatusPos({ top: rect.bottom + 5, left: rect.left })
+                        setOpenStatusId(openStatusId === r.id ? null : r.id)
+                      }}
                       title="Set Delivery Status"
                     >
                       {r.status || "Set Status"}
                     </button>
-                    {openStatusId === r.id && (
-                      <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-md left-0 min-w-[120px]">
-                        <button
-                          className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-amber-700"
-                          onClick={() => changeStatus(r, "Pending")}
-                          title="Set Pending"
+                    {openStatusId === r.id && createPortal(
+                      <div className="fixed inset-0 z-[9999] isolate">
+                        <div className="absolute inset-0" onClick={() => setOpenStatusId(null)} />
+                        <div 
+                          className="absolute bg-white border border-gray-200 rounded-md shadow-md min-w-[120px]"
+                          style={{ top: statusPos.top, left: statusPos.left }}
                         >
-                          Pending
-                        </button>
-                        <button
-                          className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-emerald-700"
-                          onClick={() => changeStatus(r, "Delivered")}
-                          title="Set Delivered"
-                        >
-                          Delivered
-                        </button>
-                        <button
-                          className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-500"
-                          onClick={() => changeStatus(r, "")}
-                          title="Clear"
-                        >
-                          Clear
-                        </button>
-                      </div>
+                          <button
+                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-amber-700"
+                            onClick={() => changeStatus(r, "Pending")}
+                            title="Set Pending"
+                          >
+                            Pending
+                          </button>
+                          <button
+                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-emerald-700"
+                            onClick={() => changeStatus(r, "Delivered")}
+                            title="Set Delivered"
+                          >
+                            Delivered
+                          </button>
+                          <button
+                            className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-500"
+                            onClick={() => changeStatus(r, "")}
+                            title="Clear"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>,
+                      document.body
                     )}
                   </div>
                 </td>
