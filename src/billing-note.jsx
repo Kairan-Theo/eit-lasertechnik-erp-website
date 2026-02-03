@@ -459,13 +459,7 @@ function BillingNotePage() {
        })
 
        const detailsForPdf = {
-         ...q.details,
-         eit: null,
-         salesPerson: "",
-         eitAddress: "",
-         eitMobile: "",
-         eitTelephone: "",
-         eitFax: ""
+         ...q.details
        }
        const payload = {
          customer: q.customer,
@@ -790,7 +784,8 @@ function BillingNotePage() {
                      </td>
                      <td className="p-3">
                        <Combobox 
-                        value={item.invoiceNo} 
+                       placement="top"
+                       value={item.invoiceNo} 
                         onChange={(val) => {
                           q.updateItem(i, "invoiceNo", val)
                           const inv = q.invoices.find(inv => inv.number === val)
