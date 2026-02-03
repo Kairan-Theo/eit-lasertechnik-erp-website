@@ -60,6 +60,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
     { id: 'title', label: 'Opportunity Name', defaultClass: 'font-medium' },
     { id: 'salesperson', label: 'Sales Person' },
     { id: 'amount', label: 'Amount', defaultClass: 'font-mono' },
+    { id: 'stagesTotal', label: 'Stages Total' },
   ]
 
   const toggleMode = (id, mode) => {
@@ -94,6 +95,13 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       case 'taxId': return deal.taxId || "-";
       case 'poNumber': return deal.poNumber || "-";
       case 'title': return deal.title || "-";
+      case 'stagesTotal': 
+        return deal.stageName ? (
+          <div className="flex flex-col">
+            <span className="font-medium text-slate-700">{deal.stageName}</span>
+            <span className="text-xs text-slate-500">Total: {deal.stageCount}</span>
+          </div>
+        ) : "-";
       default: return "-";
     }
   }

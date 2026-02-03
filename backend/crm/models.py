@@ -195,6 +195,17 @@ class Deal(models.Model):
     def __str__(self):
         return f"{self.title} - {self.amount}"
 
+class Stage(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return self.name
+
 class ActivitySchedule(models.Model):
     deal = models.ForeignKey(Deal, related_name='activity_schedules', on_delete=models.CASCADE)
     start_at = models.DateTimeField(null=True, blank=True)

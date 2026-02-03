@@ -8,7 +8,6 @@ import "./index.css"
 import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
 import CRMActivities from "./crm-activities.jsx"
-import CRMAnalytics from "./crm-analytics.jsx"
 import CRMHistory from "./components/crm/CRMHistory.jsx"
 import { Toaster } from "../components/ui/toaster"
 
@@ -173,9 +172,57 @@ function CRMPage() {
     }
   }
 
+  const fetchStages = async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      const res = await fetch(`${API_BASE}/stages/`, { headers })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.length > 0) {
+           setStages(data.map(s => ({ ...s, deals: [] })))
+           return true
+        }
+      }
+      return false
+    } catch (err) {
+      console.error("Error fetching stages:", err)
+      return false
+    }
+  }
+
+  const seedStages = async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      
+      const stageNames = Object.keys(initialPipeline)
+      for (let i = 0; i < stageNames.length; i++) {
+        await fetch(`${API_BASE}/stages/`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ name: stageNames[i], order: i })
+        })
+      }
+    } catch (err) {
+      console.error("Error seeding stages:", err)
+    }
+  }
+
   React.useEffect(() => {
-    fetchDeals()
-    fetchUsers()
+    const init = async () => {
+       let loaded = await fetchStages()
+       if (!loaded) {
+          await seedStages()
+          await fetchStages()
+       }
+       fetchDeals()
+       fetchUsers()
+    }
+    init()
   }, [])
 
   const fetchDeals = async () => {
@@ -1076,38 +1123,153 @@ function CRMPage() {
     } catch {}
     e.dataTransfer.setData("stage", String(stageIndex))
   }
-  const onStageDrop = (toStageIndex, e) => {
+  const onStageDrop = async (toStageIndex, e) => {
     const payload = e.dataTransfer.getData("stage")
     if (payload === "") return
     const fromStageIndex = Number(payload)
     if (fromStageIndex === toStageIndex) return
+
+    let newStages = []
     setStages((prev) => {
       const next = prev.map((s) => ({ ...s, deals: [...s.deals] }))
       const [stage] = next.splice(fromStageIndex, 1)
       next.splice(toStageIndex, 0, stage)
+      newStages = next
       return next
     })
+
+    // Persist new order
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      
+      // Update order for all stages to ensure consistency
+      await Promise.all(newStages.map((stage, index) => 
+        fetch(`${API_BASE}/stages/${stage.id}/`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ order: index })
+        })
+      ))
+    } catch (err) {
+      console.error("Error reordering stages:", err)
+    }
   }
 
   // Stage actions
-  const editStage = (index) => {
+  const editStage = async (index) => {
     const current = stages[index]
-    const name = window.prompt("Edit stage name", current.name)
-    if (!name) return
+    const oldName = current.name
+    const name = window.prompt("Edit stage name", oldName)
+    if (!name || name === oldName) return
+
+    // Optimistic update
     setStages((prev) => prev.map((s, i) => (i === index ? { ...s, name } : s)))
     setMenuOpenIndex(null)
+
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+
+      // Update Stage
+      await fetch(`${API_BASE}/stages/${current.id}/`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ name })
+      })
+
+      // Update Deals in this stage (since they store stage as string)
+      if (current.deals && current.deals.length > 0) {
+        await Promise.all(current.deals.map(deal => 
+             fetch(`${API_BASE}/deals/${deal.id}/`, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ stage: name })
+             })
+        ))
+      }
+    } catch (err) {
+      console.error("Error editing stage:", err)
+      showNotification("Error updating stage name")
+    }
   }
-  const deleteStage = (index) => {
+
+  const deleteStage = async (index) => {
     if (stages.length <= 1) return
     const ok = window.confirm("Delete this stage? Deals inside will be removed.")
     if (!ok) return
+
+    const stageToDelete = stages[index]
+
+    // Optimistic update
     setStages((prev) => prev.filter((_, i) => i !== index))
     setMenuOpenIndex(null)
+
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+
+      // Delete Stage
+      await fetch(`${API_BASE}/stages/${stageToDelete.id}/`, {
+        method: "DELETE",
+        headers
+      })
+
+      // Delete Deals in this stage
+      if (stageToDelete.deals && stageToDelete.deals.length > 0) {
+        await Promise.all(stageToDelete.deals.map(deal => 
+             fetch(`${API_BASE}/deals/${deal.id}/`, {
+                method: "DELETE",
+                headers
+             })
+        ))
+      }
+    } catch (err) {
+      console.error("Error deleting stage:", err)
+      showNotification("Error deleting stage")
+    }
   }
-  const addStage = () => {
+
+  const addStage = async () => {
     const name = window.prompt("New stage name")
     if (!name) return
-    setStages((prev) => [...prev, { id: Date.now(), name, deals: [] }])
+
+    const tempId = Date.now()
+    // Optimistic update
+    setStages((prev) => [...prev, { id: tempId, name, deals: [] }])
+
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Token ${token}` } : {})
+      }
+      
+      const order = stages.length
+
+      const res = await fetch(`${API_BASE}/stages/`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name, order })
+      })
+      
+      if (res.ok) {
+        const newStage = await res.json()
+        setStages((prev) => prev.map(s => s.id === tempId ? { ...s, id: newStage.id, deals: [] } : s))
+      } else {
+         console.error("Failed to add stage")
+         setStages((prev) => prev.filter(s => s.id !== tempId))
+      }
+    } catch (err) {
+      console.error("Error adding stage:", err)
+      setStages((prev) => prev.filter(s => s.id !== tempId))
+    }
   }
 
   // Deal card actions
@@ -1317,7 +1479,7 @@ function CRMPage() {
             </h1>
             <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
             <div className="flex items-center gap-2">
-              {["Deals", "Customers", "Activities", "History", "Analytics"].map((tab) => (
+              {["Deals", "Customers", "Activities", "History"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -1334,7 +1496,6 @@ function CRMPage() {
           </div>
           {activeTab === "Deals" && (
             <div className="flex items-center gap-3">
-              <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">Import</button>
               <button 
                 onClick={() => { setNewDeal(defaultNewDeal); setShowNewForm(true); }}
                 className="px-5 py-2 text-sm font-medium text-white bg-[#2D4485] rounded-lg hover:bg-[#3D56A6] shadow-md transition-all hover:shadow-lg transform hover:-translate-y-0.5"
@@ -1355,7 +1516,6 @@ function CRMPage() {
               const total = totalFor(stage.deals);
               // Calculate probability based on stage position (index) to show process flow
               const prob = Math.round(((stageIndex + 1) / stages.length) * 100);
-              const weighted = total * (prob / 100);
               const sortedDeals = sortDeals(stage.deals, sortBy, sortAsc);
               return (
                 <div
@@ -1377,6 +1537,7 @@ function CRMPage() {
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-bold text-slate-700 uppercase text-xs tracking-wider">
                         <span className="mr-1 opacity-60">{stageIndex + 1}.</span> {stage.name}
+                        <span className="ml-2 text-slate-500 font-normal normal-case bg-slate-200 px-1.5 py-0.5 rounded-full text-[10px]">{stage.deals.length}</span>
                       </span>
                       <div className="flex items-center gap-1">
                         <button 
@@ -1599,7 +1760,6 @@ function CRMPage() {
                 <div className="p-3 border-t border-slate-200/60 bg-slate-50/50 rounded-b-2xl">
                   <div className="flex flex-col items-center justify-center text-center">
                     <div className="text-sm text-slate-700 font-semibold">Total: {total.toLocaleString()} ฿</div>
-                    <div className="text-xs text-slate-400 mt-0.5 font-medium">Weighted: {weighted.toLocaleString()} ฿</div>
                   </div>
                 </div>
               </div>
@@ -3311,7 +3471,7 @@ function CRMPage() {
       ) : activeTab === "Customers" ? (
         <div className="min-h-screen bg-white">
           <CRMCustomers 
-            deals={stages.flatMap(s => s.deals).sort((a, b) => (a.createdAt ? new Date(a.createdAt).getTime() : 0) - (b.createdAt ? new Date(b.createdAt).getTime() : 0))} 
+            deals={stages.flatMap(s => s.deals.map(d => ({ ...d, stageName: s.name, stageCount: s.deals.length }))).sort((a, b) => (a.createdAt ? new Date(a.createdAt).getTime() : 0) - (b.createdAt ? new Date(b.createdAt).getTime() : 0))} 
             onDeleteDeals={handleDeleteDeals}
           />
         </div>
@@ -3322,10 +3482,6 @@ function CRMPage() {
             onDeleteActivity={handleDeleteActivityFromTable}
             onActivityUpdate={fetchDeals}
           />
-        </div>
-      ) : activeTab === "Analytics" ? (
-        <div className="min-h-screen bg-white">
-          <CRMAnalytics />
         </div>
       ) : activeTab === "History" ? (
         <div className="p-6 bg-slate-50 min-h-screen">
