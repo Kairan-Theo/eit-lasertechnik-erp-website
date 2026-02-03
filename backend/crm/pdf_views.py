@@ -851,7 +851,22 @@ def generate_invoice_pdf(request):
     def label(text): return f"<font name='{font_name_eng}'>{text}</font>"
 
     # --- Header Image ---
-    organization = details.get('onBehalfOf', 'EIT LASERTECHNIK CO.,LTD')
+    # Prioritize checking 'eit' ID for reliable organization lookup
+    eit_id = details.get('eit')
+    organization = None
+    
+    if eit_id:
+        try:
+            from .models import EIT
+            eit_obj = EIT.objects.get(pk=eit_id)
+            organization = eit_obj.organization_name
+        except Exception:
+            pass
+
+    # Fallback to text fields if ID lookup failed or wasn't provided
+    if not organization:
+        organization = details.get('onBehalfOf') or details.get('salesPerson') or 'EIT LASERTECHNIK CO.,LTD'
+
     is_einstein = "EINSTEIN" in str(organization).upper()
     
     potential_roots = [os.path.dirname(BASE_DIR), BASE_DIR, r'd:\EIT_ERT_s\eit-lasertechnik-erp-website']

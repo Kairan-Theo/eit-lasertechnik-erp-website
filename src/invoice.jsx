@@ -300,12 +300,13 @@ function useInvoiceState() {
               ...prev,
               ...data.details,
               number: data.number,
-              eit: data.eit,
-              salesPerson: data.eit_details?.organization_name || "",
-              eitAddress: data.eit_details?.address || "",
-              eitTelephone: data.eit_details?.eit_telephone || "",
-              eitFax: data.eit_details?.eit_fax || "",
-              eitMobile: data.eit_details?.eit_mobile || ""
+              eit: data.eit || data.eit_details?.id || "",
+              salesPerson: data.details?.salesPerson || data.eit_details?.organization_name || "",
+              onBehalfOf: data.details?.onBehalfOf || data.eit_details?.organization_name || "",
+              eitAddress: data.details?.eitAddress || data.eit_details?.address || "",
+              eitTelephone: data.details?.eitTelephone || data.eit_details?.eit_telephone || "",
+              eitFax: data.details?.eitFax || data.eit_details?.eit_fax || "",
+              eitMobile: data.details?.eitMobile || data.eit_details?.eit_mobile || ""
             }))
             if (Array.isArray(data.items) && data.items.length > 0) {
               setItems(data.items)
@@ -410,7 +411,7 @@ function useInvoiceState() {
       ),
     )
 
-  const confirm = () => {
+  const confirm = async () => {
     const payload = { customer, details, items, totals: { subtotal, taxTotal, total } }
     localStorage.setItem("invoiceDraft", JSON.stringify(payload))
     try {
@@ -422,35 +423,51 @@ function useInvoiceState() {
     } catch {}
     try {
       const token = localStorage.getItem("authToken")
-      if (token) {
-        const body = {
-          number: details.number,
-          customer,
-          items,
-          details,
-          totals: { subtotal, taxTotal, total, thaiText: THBText(total) },
-          eit: details.eit,
-          eit_name: details.salesPerson,
-          eit_address: details.eitAddress,
-          eit_phone: details.eitTelephone,
-          eit_fax: details.eitFax,
-          eit_mobile: details.eitMobile
-        }
-        let url = `${API_BASE_URL}/api/invoices/`
-        let method = "POST"
-
-        if (sourceKey === 'api' && sourceIndex) {
-            url = `${API_BASE_URL}/api/invoices/${sourceIndex}/`
-            method = "PUT"
-        }
-
-        fetch(url, {
-          method: method,
-          headers: { "Authorization": `Token ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        }).catch(() => {})
+      
+      const body = {
+        number: details.number,
+        customer,
+        items,
+        details,
+        totals: { subtotal, taxTotal, total, thaiText: THBText(total) },
+        eit: details.eit,
+        eit_name: details.salesPerson,
+        eit_address: details.eitAddress,
+        eit_phone: details.eitTelephone,
+        eit_fax: details.eitFax,
+        eit_mobile: details.eitMobile
       }
-    } catch {}
+      let url = `${API_BASE_URL}/api/invoices/`
+      let method = "POST"
+
+      if (sourceKey === 'api' && sourceIndex) {
+          url = `${API_BASE_URL}/api/invoices/${sourceIndex}/`
+          method = "PUT"
+      }
+
+      const headers = { "Content-Type": "application/json" }
+      if (token) headers["Authorization"] = `Token ${token}`
+
+      const response = await fetch(url, {
+        method: method,
+        headers: headers,
+        body: JSON.stringify(body)
+      })
+
+      if (response.ok) {
+        alert("Invoice saved to database successfully!")
+        return true
+      } else {
+        const errText = await response.text()
+        console.error("Failed to save invoice to API:", response.status, errText)
+        alert(`Failed to save to database: ${response.status}`)
+        return false
+      }
+    } catch (e) {
+      console.error("Error in confirm function:", e)
+      alert("Network error saving to database")
+      return false
+    }
   }
 
   const print = () => window.print()
@@ -862,7 +879,12 @@ function InvoicePage() {
                 </button>
                 <button
                   className="w-full px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] min-w-[140px]"
-                  onClick={() => { inv.confirm(); window.location.href = "/admin.html" }}
+                  onClick={async () => { 
+                    const success = await inv.confirm()
+                    if (success) {
+                      window.location.href = "/admin.html"
+                    }
+                  }}
                 >
                   Save Changes
                 </button>
@@ -870,7 +892,6 @@ function InvoicePage() {
                   className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center disabled:opacity-50"
                   disabled={isGenerating}
                   onClick={async () => {
-                    inv.confirm()
                     setIsGenerating(true)
                     await new Promise(r => setTimeout(r, 100))
                     try {
