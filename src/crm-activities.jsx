@@ -213,33 +213,17 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
             <div className="p-2 bg-gray-50 rounded-lg">
                 <CalendarIcon className="w-6 h-6 text-gray-700" />
             </div>
-            <h2 className="text-3xl font-bold text-gray-900">
-                {format(currentDate, "MMMM")} <span className="text-gray-400 font-normal text-xl ml-2">{format(currentDate, "yyyy")}</span>
-            </h2>
-        </div>
-        <div className="flex items-center gap-3">
-            <button 
-                onClick={handleOpenNew}
-                className="p-2 hover:bg-gray-50 rounded-full border border-gray-200 text-gray-600 shadow-sm transition-all hover:shadow-md"
-            >
-                <Plus className="w-5 h-5" />
-            </button>
-            
-            <div className="hidden md:flex items-center border border-gray-200 rounded-lg p-1 bg-gray-50/50">
-                <button className="px-3 py-1.5 bg-white shadow-sm rounded-md text-sm font-semibold text-gray-900 border border-gray-100">Month</button>
-                <button className="px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">Week</button>
-                <button className="px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">Day</button>
+            <div className="flex items-center gap-3">
+                <button onClick={prevMonth} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-700 transition-colors">
+                    <ChevronLeft className="w-6 h-6" />
+                </button>
+                <h2 className="text-3xl font-bold text-gray-900 select-none">
+                    {format(currentDate, "MMMM")} <span className="text-gray-400 font-normal text-xl ml-2">{format(currentDate, "yyyy")}</span>
+                </h2>
+                <button onClick={nextMonth} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-700 transition-colors">
+                    <ChevronRight className="w-6 h-6" />
+                </button>
             </div>
-
-            <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-1 bg-white shadow-sm">
-                <button onClick={prevMonth} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
-                <button onClick={goToToday} className="px-3 py-1 text-sm font-medium hover:bg-gray-50 rounded-md text-gray-700 transition-colors">Today</button>
-                <button onClick={nextMonth} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 transition-colors"><ChevronRight className="w-4 h-4" /></button>
-            </div>
-            
-            <button className="p-2 hover:bg-gray-50 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
-                <MoreHorizontal className="w-5 h-5" />
-            </button>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, ArrowRight, RefreshCw, Calendar, Search, Paperclip } from 'lucide-react';
+import { Mail, ArrowRight, RefreshCw, Calendar, Search, Paperclip, Trash2 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
 const CRMHistory = () => {
@@ -36,15 +36,39 @@ const CRMHistory = () => {
     }
   };
 
+  const handleDelete = async (id, type) => {
+    try {
+      const endpoint = type === 'email' 
+        ? `${API_BASE_URL}/api/email_logs/${id}/` 
+        : `${API_BASE_URL}/api/deal_history/${id}/`;
+        
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        if (type === 'email') {
+          setEmailLogs(prev => prev.filter(item => item.id !== id));
+        } else {
+          setDealHistory(prev => prev.filter(item => item.id !== id));
+        }
+      } else {
+        console.error("Failed to delete item");
+      }
+    } catch (error) {
+      console.error("Error deleting item:", error);
+    }
+  };
+
   const filteredEmails = emailLogs.filter(log => 
-    log.recipient.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.subject.toLowerCase().includes(searchTerm.toLowerCase())
+    (log.recipient && log.recipient.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (log.subject && log.subject.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const filteredHistory = dealHistory.filter(h => 
-    h.deal_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    h.from_stage.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    h.to_stage.toLowerCase().includes(searchTerm.toLowerCase())
+    (h.deal_title && h.deal_title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (h.from_stage && h.from_stage.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (h.to_stage && h.to_stage.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -79,16 +103,18 @@ const CRMHistory = () => {
           </button>
         </div>
 
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
-          />
-        </div>
+        {activeSubTab === 'emails' && (
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+            />
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -113,9 +139,18 @@ const CRMHistory = () => {
                        <span className="font-medium text-slate-700">To:</span> {log.recipient}
                      </p>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium whitespace-nowrap ml-4 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
-                    <Calendar className="w-3.5 h-3.5" />
-                    {new Date(log.sent_at).toLocaleString()}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium whitespace-nowrap bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {new Date(log.sent_at).toLocaleString()}
+                    </div>
+                    <button 
+                      onClick={() => handleDelete(log.id, 'email')}
+                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete Email Log"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
@@ -168,7 +203,7 @@ const CRMHistory = () => {
             {filteredHistory.map((history) => (
               <div 
                 key={history.id} 
-                className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-start gap-4 transition-all hover:shadow-md"
+                className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-start gap-4 transition-all hover:shadow-md group"
               >
                 {/* Visual Indicator: Blue dot to match the user's notification style request */}
                 <div className="mt-1.5 w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0 shadow-sm"></div>
@@ -187,6 +222,14 @@ const CRMHistory = () => {
                     {new Date(history.changed_at).toLocaleString()}
                   </p>
                 </div>
+
+                <button 
+                  onClick={() => handleDelete(history.id, 'history')}
+                  className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  title="Delete History Log"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             ))}
             
