@@ -240,12 +240,28 @@ class ManufacturingOrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='download')
     def download_po_file(self, request, pk=None):
         mo = self.get_object()
-        if not mo.po_file_content:
-            return Response({"error": "No file attached"}, status=status.HTTP_404_NOT_FOUND)
+        
+        # 1. Try serving file from MO directly
+        if mo.po_file_content:
+            response = HttpResponse(mo.po_file_content, content_type=mo.po_file_type)
+            response['Content-Disposition'] = f'inline; filename="{mo.po_file_name}"'
+            return response
+
+        # 2. Fallback: Try looking up CustomerPurchaseOrder by po_number
+        # This handles existing orders where file content wasn't copied
+        if mo.po_number:
+            search_po = str(mo.po_number).strip()
+            # Try to find a matching CPO (case-insensitive)
+            cpo = CustomerPurchaseOrder.objects.filter(po_number__iexact=search_po).first()
             
-        response = HttpResponse(mo.po_file_content, content_type=mo.po_file_type)
-        response['Content-Disposition'] = f'inline; filename="{mo.po_file_name}"'
-        return response
+            if cpo and cpo.po_file_content:
+                # Serve the CPO file
+                response = HttpResponse(cpo.po_file_content, content_type=cpo.po_file_type)
+                filename = cpo.po_file_name or mo.po_file_name or f"PO_{search_po}.pdf"
+                response['Content-Disposition'] = f'inline; filename="{filename}"'
+                return response
+
+        return Response({"error": "No file attached"}, status=status.HTTP_404_NOT_FOUND)
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by('name')
@@ -580,17 +596,17 @@ class CustomerPurchaseOrderViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerPurchaseOrderSerializer
     authentication_classes = []
     permission_classes = [AllowAny]
-    parser_classes = (MultiPartParser, FormParser)
 
     @action(detail=True, methods=['get'], url_path='download')
     def download_po_file(self, request, pk=None):
-        instance = self.get_object()
-        if not instance.po_file_content:
-            return Response({"error": "No file attached"}, status=status.HTTP_404_NOT_FOUND)
-            
-        response = HttpResponse(instance.po_file_content, content_type=instance.po_file_type)
-        response['Content-Disposition'] = f'inline; filename="{instance.po_file_name}"'
+        cpo = self.get_object()
+        if not cpo.po_file_content:
+             return Response({"error": "No file attached"}, status=status.HTTP_404_NOT_FOUND)
+
+        response = HttpResponse(cpo.po_file_content, content_type=cpo.po_file_type)
+        response['Content-Disposition'] = f'inline; filename="{cpo.po_file_name}"'
         return response
+    parser_classes = (MultiPartParser, FormParser)
 
 class StageViewSet(viewsets.ModelViewSet):
     queryset = Stage.objects.all().order_by('order', 'created_at')

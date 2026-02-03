@@ -51,6 +51,7 @@ function NewMOPage() {
   })
   const [remoteJobCodes, setRemoteJobCodes] = React.useState([])
   const [crmPoNumbers, setCrmPoNumbers] = React.useState([])
+  const [customerPurchaseOrders, setCustomerPurchaseOrders] = React.useState([]) // Store full CPO objects
   const [showPoSuggestions, setShowPoSuggestions] = React.useState(false)
   const [showBomSuggestions, setShowBomSuggestions] = React.useState(false)
   const bomSuggestionRef = React.useRef(null)
@@ -388,21 +389,78 @@ function NewMOPage() {
       try {
         const token = localStorage.getItem("authToken")
         const headers = token ? { "Authorization": `Token ${token}` } : {}
-        const res = await fetch(`${API_BASE_URL}/api/deals/`, { headers })
-        if (!res.ok) return
-        const data = await res.json()
-        const nums = Array.from(new Set((data || []).map(d => String(d.po_number || "").trim()).filter(Boolean)))
-        setCrmPoNumbers(nums)
-      } catch {}
+        
+        // Fetch Deals POs
+        const resDeals = await fetch(`${API_BASE_URL}/api/deals/`, { headers })
+        let dealsPos = []
+        if (resDeals.ok) {
+          const data = await resDeals.json()
+          dealsPos = (data || []).map(d => String(d.po_number || "").trim()).filter(Boolean)
+        }
+
+        // Fetch Customer Purchase Orders
+        const resCPO = await fetch(`${API_BASE_URL}/api/customer_purchase_orders/`, { headers })
+        if (resCPO.ok) {
+          const cpoData = await resCPO.json()
+          setCustomerPurchaseOrders(cpoData || [])
+          
+          // Combine PO numbers from both sources
+          const cpoPos = (cpoData || []).map(c => String(c.po_number || "").trim()).filter(Boolean)
+          const combined = Array.from(new Set([...dealsPos, ...cpoPos]))
+          setCrmPoNumbers(combined)
+        } else {
+          // Fallback if CPO fetch fails, just use deals
+           const combined = Array.from(new Set(dealsPos))
+           setCrmPoNumbers(combined)
+        }
+      } catch (err) {
+        console.error("Error fetching PO numbers:", err)
+      }
     })()
   }, [])
 
   const applyPoSuggestion = React.useCallback((val) => {
     const s = String(val || "").trim()
     let next = { ...newOrder, purchaseOrder: s }
+    
+    // Check if this PO exists in customerPurchaseOrders to auto-fill file
+    const matchedCPO = customerPurchaseOrders.find(c => String(c.po_number || "").trim().toLowerCase() === s.toLowerCase())
+    if (matchedCPO && matchedCPO.po_file_name) {
+      // Construct download URL
+      const fileUrl = `${API_BASE_URL}/api/customer_purchase_orders/${matchedCPO.id}/download/`
+      
+      next = { 
+        ...next, 
+        poFileName: matchedCPO.po_file_name,
+        poFile: null, // Clear any manual upload
+        linkedCpoId: matchedCPO.id, // Store ID if needed
+        linkedCpoFileUrl: fileUrl // Store URL for preview
+      }
+    } else {
+         // Clear linked file if no match or no file
+         next = {
+             ...next,
+             linkedCpoId: null,
+             linkedCpoFileUrl: null,
+         }
+         // If we found a CPO but it has no file, we should clear the file fields
+         // to avoid showing the previous MO file or manual upload as if it belongs to this CPO.
+         // Also if we are just typing a custom PO, we probably shouldn't auto-clear unless we want to enforce re-upload.
+         // But for now, let's clear if we matched a CPO and it has no file.
+         if (matchedCPO) {
+             next.poFileName = ""
+             next.poFile = null
+         } else if (newOrder.linkedCpoFileUrl) {
+             // If we previously had a linked file, and now we typed something else (no match),
+             // we should clear the linked file.
+             next.poFileName = ""
+             next.poFile = null
+         }
+    }
+
     setNewOrder(next)
     setShowPoSuggestions(false)
-  }, [newOrder])
+  }, [newOrder, customerPurchaseOrders])
 
   const createOrderData = async () => {
     const token = localStorage.getItem("authToken")
@@ -461,6 +519,9 @@ function NewMOPage() {
 
     if (newOrder.poFile) {
       formData.append("po_file", newOrder.poFile)
+    }
+    if (newOrder.linkedCpoId) {
+        formData.append("linked_cpo_id", String(newOrder.linkedCpoId))
     }
     // Append po_file_name so backend knows if we cleared it
     formData.append("po_file_name", String(newOrder.poFileName || ""))
@@ -611,11 +672,14 @@ function NewMOPage() {
                       value={newOrder.purchaseOrder}
                       onChange={(e)=>{ setNewOrder({...newOrder, purchaseOrder:e.target.value}); setShowPoSuggestions(true) }}
                       onFocus={()=>setShowPoSuggestions(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setShowPoSuggestions(false)
+                      }}
                       placeholder="e.g. PO-1234"
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                     />
-                    {showPoSuggestions && newOrder.purchaseOrder && (() => {
-                      const q = newOrder.purchaseOrder.toLowerCase()
+                    {showPoSuggestions && (() => {
+                      const q = (newOrder.purchaseOrder || "").toLowerCase()
                       const candidates = Array.from(new Set([
                         ...moList.map(o => String(o.po_number || "").trim()).filter(Boolean),
                         ...crmPoNumbers,
@@ -693,10 +757,46 @@ function NewMOPage() {
                         {(() => {
                           const params = new URLSearchParams(window.location.search)
                           const mfgId = params.get('mfgId')
+                          
+                          // Check if it's a linked CPO file (Prioritize this, as user might have switched PO in edit mode)
+                          if (newOrder.linkedCpoFileUrl) {
+                            return (
+                               <a 
+                                 href={newOrder.linkedCpoFileUrl}
+                                 target="_blank"
+                                 rel="noopener noreferrer"
+                                 className="text-blue-600 text-sm underline hover:text-blue-800 truncate"
+                               >
+                                 {newOrder.poFileName}
+                               </a>
+                            )
+                          }
+
+                          // Fallback: Check if we can find this PO in the CPO list (for existing orders where file might not be copied or link lost)
+                          if (newOrder.purchaseOrder && newOrder.poFileName && customerPurchaseOrders.length > 0) {
+                              const matched = customerPurchaseOrders.find(c => 
+                                  String(c.po_number || "").trim().toLowerCase() === String(newOrder.purchaseOrder).trim().toLowerCase()
+                              )
+                              // If matched and file name matches (or we just trust the PO number match)
+                              // Let's trust the PO number match if the file name is also present in CPO
+                              if (matched && matched.po_file_name) {
+                                   return (
+                                       <a 
+                                         href={`${API_BASE_URL}/api/customer_purchase_orders/${matched.id}/download/`}
+                                         target="_blank"
+                                         rel="noopener noreferrer"
+                                         className="text-blue-600 text-sm underline hover:text-blue-800 truncate"
+                                       >
+                                         {newOrder.poFileName}
+                                       </a>
+                                   )
+                              }
+                          }
+                          
                           if (mfgId) {
                              return (
                                <a 
-                                 href={`${API_BASE_URL}/api/manufacturing_orders/${mfgId}/download_po_file/`}
+                                 href={`${API_BASE_URL}/api/manufacturing_orders/${mfgId}/download/`}
                                  target="_blank"
                                  rel="noopener noreferrer"
                                  className="text-blue-600 text-sm underline hover:text-blue-800 truncate"
@@ -705,11 +805,12 @@ function NewMOPage() {
                                </a>
                              )
                           }
+                          
                           return <span className="text-sm text-gray-700 truncate">{newOrder.poFileName}</span>
                         })()}
                         <button 
                             type="button"
-                            onClick={() => setNewOrder({...newOrder, poFileName: "", poFile: null})}
+                            onClick={() => setNewOrder({...newOrder, poFileName: "", poFile: null, linkedCpoId: null, linkedCpoFileUrl: null})}
                             className="text-red-500 hover:text-red-700 shrink-0"
                             title="Remove file"
                         >
