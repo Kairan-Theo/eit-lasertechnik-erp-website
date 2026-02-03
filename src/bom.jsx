@@ -85,23 +85,24 @@ function BOMPage() {
       if (res && res.ok) {
         const data = await res.json()
         const arr = Array.isArray(data) ? data : []
-        if (arr.length) {
-          const mapped = arr.map((item) => ({
-            id: item.id,
-            name: item.product || "",
-            product: item.product || "",
-            version: item.version || "",
-            type: item.type || "",
-            active: true,
-            productTree: item.productTree || []
-          }))
-          setAndPersist(mapped)
-          return
-        }
+        
+        // Always update state from API if successful, even if empty
+        const mapped = arr.map((item) => ({
+          id: item.id,
+          name: item.product || "",
+          product: item.product || "",
+          version: item.version || "",
+          type: item.type || "",
+          active: true,
+          productTree: item.productTree || []
+        }))
+        setAndPersist(mapped)
+        return
       }
     } catch (e) {
       console.error(e)
     }
+    // Only fall back to local storage if API fails
     try {
       const raw = JSON.parse(localStorage.getItem("mfgBOMs") || "[]")
       const stored = Array.isArray(raw) ? raw : []
