@@ -21,8 +21,7 @@ function useInventory() {
   const [showHistory, setShowHistory] = React.useState(null)
   const [view, setView] = React.useState("inventory")
   const [historyFilter, setHistoryFilter] = React.useState(null)
-  const [page, setPage] = React.useState(1)
-  const pageSize = 20
+  const [selectedRows, setSelectedRows] = React.useState([])
   const saveItems = (next) => {
     setItems(next)
     try {
@@ -116,8 +115,7 @@ function useInventory() {
     if (typeof va === "number" && typeof vb === "number") return sortDir === "asc" ? va - vb : vb - va
     return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
   })
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const pageItems = sorted.slice((page - 1) * pageSize, page * pageSize)
+  const pageItems = sorted
   const toggleSort = (key) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
     else {
@@ -125,8 +123,6 @@ function useInventory() {
       setSortDir("asc")
     }
   }
-  const prevPage = () => setPage((p) => Math.max(1, p - 1))
-  const nextPage = () => setPage((p) => Math.min(totalPages, p + 1))
   const addItem = (payload, keepOpen = false) => {
     const s = String(payload.sku || "")
     const valid = /^WH\/IV\/\d+$/.test(s)
@@ -359,6 +355,15 @@ function useInventory() {
     saveItems(next)
   }
 
+  const getRowId = (p) => `${p.sku}-${p.warehouse || "Main"}-${p.bin || "A-01-01"}-${p.lot || ""}`
+
+  const deleteItems = (ids) => {
+    if (!Array.isArray(ids) || ids.length === 0) return
+    const next = items.filter(p => !ids.includes(getRowId(p)))
+    saveItems(next)
+    setSelectedRows([])
+  }
+
   return {
     query,
     setQuery,
@@ -378,6 +383,8 @@ function useInventory() {
     setShowImport,
     addItem,
     updateItem,
+    deleteItems,
+    getRowId,
     setQty,
     transferQty,
     exportCsv,
@@ -403,6 +410,8 @@ function useInventory() {
     setView,
     historyFilter,
     setHistoryFilter,
+    selectedRows,
+    setSelectedRows,
   }
 }
 
@@ -432,8 +441,24 @@ function InventoryTable({ inv }) {
   const [editingValue, setEditingValue] = React.useState("")
   const [openStatusId, setOpenStatusId] = React.useState(null)
   const [columnModes, setColumnModes] = React.useState({})
+  const { selectedRows, setSelectedRows, getRowId } = inv
 
-  const getRowId = (p) => `${p.sku}-${p.warehouse || "Main"}-${p.bin || "A-01-01"}-${p.lot || ""}`
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const allIds = inv.pageItems.map(p => getRowId(p))
+      setSelectedRows(allIds)
+    } else {
+      setSelectedRows([])
+    }
+  }
+
+  const handleSelectRow = (id) => {
+    if (selectedRows.includes(id)) {
+      setSelectedRows(prev => prev.filter(r => r !== id))
+    } else {
+      setSelectedRows(prev => [...prev, id])
+    }
+  }
 
   const handleKeyDown = (e, p) => {
     if (e.key === "Enter") {
@@ -467,12 +492,11 @@ function InventoryTable({ inv }) {
   }
 
   const columns = [
-    { id: 'photo', label: 'Item Photo', width: 'w-20' },
-    { id: 'sku', label: 'Product Number', sortable: true },
-    { id: 'name', label: 'Name', sortable: true },
-    { id: 'stockQty', label: 'Stock', sortable: true },
+    { id: 'sku', label: 'Product Number', sortable: true, defaultClass: 'font-medium text-[#3D56A6]' },
+    { id: 'name', label: 'Name', sortable: true, defaultClass: 'max-w-xs truncate' },
+    { id: 'stockQty', label: 'Stock', sortable: true, defaultClass: 'font-mono' },
     { id: 'deliveryStatus', label: 'Delivery Status' },
-    { id: 'deliveryCompany', label: 'Customer' },
+    { id: 'deliveryCompany', label: 'Customer', defaultClass: 'max-w-xs truncate' },
     { id: 'tracking', label: 'Tracking #' },
     { id: 'updatedAt', label: 'Last Updated', sortable: true },
   ]
@@ -491,29 +515,6 @@ function InventoryTable({ inv }) {
     const isEditing = (field) => editingId === rowId && editingField === field
 
     switch (col.id) {
-      case 'photo':
-        return isEditing("photo") ? (
-          <input
-            autoFocus
-            className="w-full rounded-md border border-gray-300 px-2 py-1"
-            value={editingValue}
-            onChange={(e) => setEditingValue(e.target.value)}
-            onBlur={() => handleBlur(p)}
-            onKeyDown={(e) => handleKeyDown(e, p)}
-          />
-        ) : (
-          <img
-            src={p.photo || "/eit-icon.png"}
-            alt=""
-            className="w-10 h-10 rounded object-cover cursor-pointer hover:opacity-80"
-            title="Click to edit photo URL"
-            onClick={() => {
-              setEditingId(rowId)
-              setEditingField("photo")
-              setEditingValue(p.photo || "")
-            }}
-          />
-        )
       case 'sku':
         return (
           <a href={`/inventory-detail.html?sku=${encodeURIComponent(p.sku)}`} className="text-[#3D56A6] hover:underline font-medium">
@@ -655,7 +656,12 @@ function InventoryTable({ inv }) {
             <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
               <tr>
                 <th className="p-4 border-b w-10">
-                  {/* Placeholder for checkbox to match manufacturing style */}
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                    checked={inv.pageItems.length > 0 && selectedRows.length === inv.pageItems.length}
+                    onChange={handleSelectAll}
+                  />
                 </th>
                 {columns.map(col => {
                   const mode = columnModes[col.id]
@@ -731,11 +737,23 @@ function InventoryTable({ inv }) {
                         checked={selectedRows.includes(rowId)}
                       />
                     </td>
-                    {columns.map(col => (
-                      <td key={col.id} className="p-4 align-top">
-                        {renderCellContent(col, p)}
-                      </td>
-                    ))}
+                    {columns.map(col => {
+                      const mode = columnModes[col.id]
+                      return (
+                        <td 
+                          key={col.id} 
+                          className={`p-4 transition-all duration-300 align-top ${
+                            mode === 'folded' 
+                              ? 'w-12 max-w-[3rem] text-center overflow-hidden p-2' 
+                              : mode === 'expanded'
+                                ? 'min-w-[300px] whitespace-normal break-words text-gray-600'
+                                : `whitespace-nowrap text-gray-600 ${col.defaultClass || ''}`
+                          }`}
+                        >
+                          {renderCellContent(col, p)}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )
               })}
@@ -1170,8 +1188,8 @@ function InventoryPage() {
   return (
     <main className="min-h-screen bg-white">
       <Navigation />
-      <section className="w-full py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
-        <div className="max-w-7xl mx-auto">
+      <section className="w-full bg-gray-50">
+        <div className="w-full mx-auto p-6 min-h-full">
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Inventory Control Tower</h1>
@@ -1196,6 +1214,21 @@ function InventoryPage() {
               </button>
             </div>
             <div className="flex items-center gap-3">
+               {inv.selectedRows.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to delete ${inv.selectedRows.length} items?`)) {
+                       inv.deleteItems(inv.selectedRows)
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span className="font-medium">Delete ({inv.selectedRows.length})</span>
+                </button>
+              )}
                 <div className="relative">
                   <input
                     type="text"
