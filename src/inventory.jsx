@@ -428,13 +428,22 @@ function InventoryTable({ inv }) {
     }
   }
 
+  const applyStockForStatusChange = (sku, qty, prev, next) => {
+    try {
+      const item = inv.items.find((it) => it.sku === sku)
+      if (!item) return
+      let delta = 0
+      if (prev === "Delivered" && next !== "Delivered") delta = Number(qty || 0) // add back
+      if (prev !== "Delivered" && next === "Delivered") delta = -Number(qty || 0) // deduct
+      if (delta === 0) return
+      const newStock = Math.max(0, Number(item.stockQty || 0) + delta)
+      inv.updateItem(item, { stockQty: newStock })
+    } catch {}
+  }
+
   const columns = [
-    { id: "sku", label: "Product Number", sortable: true, defaultClass: "font-medium text-[#3D56A6]" },
     { id: "name", label: "Name", sortable: true, defaultClass: "max-w-xs truncate" },
     { id: "stockQty", label: "Stock", sortable: true, defaultClass: "font-mono" },
-    { id: "deliveryStatus", label: "Delivery Status" },
-    { id: "deliveryCompany", label: "Customer", defaultClass: "max-w-xs truncate" },
-    { id: "tracking", label: "Tracking #" },
     { id: "updatedAt", label: "Last Updated", sortable: true },
   ]
 
@@ -606,6 +615,25 @@ function InventoryTable({ inv }) {
   return (
     <div>
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
+        <div className="flex items-center justify-between px-4 pt-4">
+          <div className="text-lg font-semibold text-gray-900">Inventory</div>
+          <div className="flex items-center gap-3">
+            <button
+              className="inline-flex items-center justify-center min-w-[120px] px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm"
+              onClick={() => inv.setShowAdd(true)}
+              title="Add Item"
+            >
+              Add Item
+            </button>
+            <button
+              onClick={inv.exportCsv}
+              className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
+              title="Export"
+            >
+              Export
+            </button>
+          </div>
+        </div>
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
             <tr>
@@ -838,7 +866,7 @@ function AddItemForm({ onCancel, onSave, initialData }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="space-y-3">
         <div>
           <label className="block text-sm text-gray-700 mb-1">Product name</label>
           <input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Laser Welding Machine" className="w-full rounded-md border border-gray-300 px-3 py-2" />
@@ -846,23 +874,6 @@ function AddItemForm({ onCancel, onSave, initialData }) {
         <div>
           <label className="block text-sm text-gray-700 mb-1">Stock qty</label>
           <input type="number" min={0} value={f.stockQty} onChange={(e) => set("stockQty", Math.max(0, Number(e.target.value)))} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-700 mb-1">Price</label>
-          <input type="number" step="0.01" value={f.price} onChange={(e) => set("price", Number(e.target.value))} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-700 mb-1">Courier</label>
-          <select value={f.courier} onChange={(e) => set("courier", e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2">
-            <option value="">Select Courier</option>
-            {["Kerry", "Flash", "ThaiPost", "J&T", "DHL", "SCG", "NinjaVan", "Best", "Shopee", "Lazada", "Nim", "Other"].map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-gray-700 mb-1">Tracking Number</label>
-          <input value={f.trackingNumber} onChange={(e) => set("trackingNumber", e.target.value)} placeholder="e.g. TH12345678" className="w-full rounded-md border border-gray-300 px-3 py-2" />
         </div>
       </div>
 
@@ -1106,6 +1117,398 @@ function DeliverForm({ sku, onCancel, onConfirm }) {
   )
 }
 
+function DeliveryView({ inv }) {
+  const [rows, setRows] = React.useState([])
+  const [selectedIds, setSelectedIds] = React.useState([])
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) setSelectedIds(rows.map(r => r.id))
+    else setSelectedIds([])
+  }
+
+  const handleSelectRow = (id) => {
+    if (selectedIds.includes(id)) setSelectedIds(prev => prev.filter(i => i !== id))
+    else setSelectedIds(prev => [...prev, id])
+  }
+
+  const deleteSelected = () => {
+    if (!window.confirm(`Delete ${selectedIds.length} items?`)) return
+    try {
+      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
+      const logs = Array.isArray(raw) ? raw : []
+      const nextLogs = logs.filter(l => !selectedIds.includes(l.id))
+      localStorage.setItem("inventoryMovements", JSON.stringify(nextLogs))
+      setRows(prev => prev.filter(r => !selectedIds.includes(r.id)))
+      setSelectedIds([])
+    } catch {}
+  }
+
+  const [editingId, setEditingId] = React.useState(null)
+  const [editingTracking, setEditingTracking] = React.useState("")
+  const [editingCourier, setEditingCourier] = React.useState("")
+  const [openStatusId, setOpenStatusId] = React.useState(null)
+  const changeStatus = (row, status) => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
+      const logs = Array.isArray(raw) ? raw : []
+      let matched = false
+      const nextLogs = logs.map(l => {
+        if (l.id === row.id) {
+          applyStockForStatusChange(l.sku, l.qty, l.status || "", status || "")
+          matched = true
+          return { ...l, status: status || "" }
+        }
+        return l
+      })
+      if (!matched) {
+        const idx = logs.findIndex(l => l.sku === row.sku && String(l.ts) === String(row.ts))
+        if (idx >= 0) {
+          const prev = logs[idx].status || ""
+          applyStockForStatusChange(logs[idx].sku, logs[idx].qty, prev, status || "")
+          nextLogs[idx] = { ...logs[idx], status: status || "" }
+        }
+      }
+      localStorage.setItem("inventoryMovements", JSON.stringify(nextLogs))
+      setRows(prev => prev.map(x => x.id === row.id ? { ...x, status: status || "" } : x))
+    } catch {}
+    setOpenStatusId(null)
+  }
+  const [openNew, setOpenNew] = React.useState(false)
+  const [newSku, setNewSku] = React.useState("")
+  const [newQty, setNewQty] = React.useState(0)
+  const [newCompany, setNewCompany] = React.useState("")
+  const addManualDeliveryRow = () => {
+    setNewSku(inv.items[0]?.sku || "")
+    setNewQty(0)
+    setNewCompany("")
+    setOpenNew(true)
+  }
+  const saveNewRow = () => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
+      const logs = Array.isArray(raw) ? raw : []
+      const sku = newSku || "MANUAL"
+      const newLog = {
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+        ts: new Date().toISOString(),
+        type: "sales_delivery",
+        sku,
+        qty: Number(newQty || 0),
+        ref: "",
+        company: newCompany || "",
+        status: "",
+        tracking: "",
+        courier: "",
+        trackingUrl: "",
+        user: inv.role || "Inventory Admin",
+      }
+      const nextLogs = [...logs, newLog]
+      localStorage.setItem("inventoryMovements", JSON.stringify(nextLogs))
+      const p = inv.items.find(i => i.sku === sku)
+      setRows((prev) => [
+        { ...newLog, productName: p ? p.name : sku, orderAmount: newLog.qty },
+        ...prev,
+      ])
+    } catch {}
+    setOpenNew(false)
+  }
+  
+  React.useEffect(() => {
+    try {
+      const logs = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
+      const normalized = Array.isArray(logs) ? logs.map(l => {
+        if (!l.id) return { ...l, id: String(Date.now()) + Math.random().toString(36).slice(2) }
+        return l
+      }) : []
+      if (Array.isArray(logs) && logs.some(l => !l.id)) {
+        localStorage.setItem("inventoryMovements", JSON.stringify(normalized))
+      }
+      const filtered = normalized
+        .filter((e) => e.type === "sales_delivery")
+        .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
+        .map(log => {
+           const p = inv.items.find(i => i.sku === log.sku)
+           return {
+             ...log,
+             productName: p ? p.name : log.sku,
+             orderAmount: log.qty
+           }
+        })
+        .filter(r => {
+           if (!inv.query) return true
+           const q = inv.query.toLowerCase()
+           return (
+             (r.productName || "").toLowerCase().includes(q) ||
+             (r.sku || "").toLowerCase().includes(q) ||
+             (r.company || "").toLowerCase().includes(q) ||
+             (r.tracking || "").toLowerCase().includes(q)
+           )
+        })
+      setRows(filtered)
+    } catch {
+      setRows([])
+    }
+  }, [inv.items, inv.query])
+
+  const commitTrackingEdit = (row) => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
+      const logs = Array.isArray(raw) ? raw : []
+      const nextLogs = logs.map(l => {
+        if (l.id === row.id) {
+          const nextUrl = buildTrackingUrl(editingCourier, editingTracking, l.trackingUrl)
+          return { ...l, tracking: editingTracking, courier: editingCourier, trackingUrl: nextUrl }
+        }
+        return l
+      })
+      localStorage.setItem("inventoryMovements", JSON.stringify(nextLogs))
+      setRows(rows.map(r => r.id === row.id ? { ...r, tracking: editingTracking, courier: editingCourier, trackingUrl: buildTrackingUrl(editingCourier, editingTracking, r.trackingUrl) } : r))
+    } catch {}
+    setEditingId(null)
+  }
+
+  const cancelTrackingEdit = () => {
+    setEditingId(null)
+  }
+
+  const deliveryStatusClass = (s) => {
+    switch (s) {
+      case "Pending": return "bg-amber-100 text-amber-800 border border-amber-200"
+      case "Shipped": 
+      case "In Transit": return "bg-blue-100 text-blue-800 border border-blue-200"
+      case "Out for Delivery": return "bg-purple-100 text-purple-800 border border-purple-200"
+      case "Delivered": return "bg-emerald-100 text-emerald-800 border border-emerald-200"
+      case "Returned": 
+      case "Exception": return "bg-rose-100 text-rose-800 border border-rose-200"
+      case "Manual Check Needed": return "bg-orange-100 text-orange-800 border border-orange-200"
+      default: return "bg-gray-100 text-gray-800 border border-gray-200"
+    }
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-visible">
+      <div className="flex items-center justify-between px-4 pt-4">
+        <div className="flex items-center gap-3">
+          <div className="text-lg font-semibold text-gray-900">Delivery Records</div>
+          {selectedIds.length > 0 && (
+            <button
+              onClick={deleteSelected}
+              className="flex items-center gap-2 px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+            >
+              Delete ({selectedIds.length})
+            </button>
+          )}
+        </div>
+        <button
+          onClick={addManualDeliveryRow}
+          className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm"
+          title="Add a new delivery row"
+        >
+          New Row
+        </button>
+      </div>
+      {openNew && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setOpenNew(false)}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="text-lg font-semibold mb-4 text-gray-900">New Delivery</div>
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs font-semibold text-gray-500 mb-1">Product Name</div>
+                <select
+                  value={newSku}
+                  onChange={(e) => setNewSku(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                >
+                  <option value="">Select product</option>
+                  {inv.items.map((it) => (
+                    <option key={it.sku} value={it.sku}>{it.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-gray-500 mb-1">Order Amount</div>
+                <input
+                  type="number"
+                  min={0}
+                  value={newQty}
+                  onChange={(e) => setNewQty(Number(e.target.value))}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  placeholder="Enter quantity"
+                />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-gray-500 mb-1">Customer</div>
+                <input
+                  value={newCompany}
+                  onChange={(e) => setNewCompany(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  placeholder="Enter customer name"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenNew(false)}>Cancel</button>
+              <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={saveNewRow}>Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="overflow-x-auto overflow-y-visible">
+        <table className="w-full text-left border-collapse">
+        <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
+          <tr>
+            <th className="p-4 border-b w-10">
+              <input
+                type="checkbox"
+                className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                checked={rows.length > 0 && selectedIds.length === rows.length}
+                onChange={handleSelectAll}
+              />
+            </th>
+            <th className="p-4 border-b">Product Name</th>
+            <th className="p-4 border-b">Order Amount</th>
+            <th className="p-4 border-b">Delivery Status</th>
+            <th className="p-4 border-b">Customer</th>
+            <th className="p-4 border-b">Tracking #</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {rows.length === 0 ? (
+             <tr><td className="p-8 text-center text-gray-500" colSpan={6}>No deliveries recorded yet</td></tr>
+          ) : (
+            rows.map((r, i) => (
+              <tr key={i} className="hover:bg-gray-50 transition-colors">
+                <td className="p-4">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                    checked={selectedIds.includes(r.id)}
+                    onChange={() => handleSelectRow(r.id)}
+                  />
+                </td>
+                <td className="p-4 font-medium text-gray-900">{r.productName}</td>
+                <td className="p-4 font-mono text-gray-700">{r.orderAmount}</td>
+                <td className="p-4 overflow-visible">
+                  <div className="relative inline-block">
+                    <button
+                      className={`${r.status ? deliveryStatusClass(r.status) : "bg-white border border-gray-300 text-gray-700"} px-2 py-1 rounded-full text-xs font-medium min-w-[80px]`}
+                      type="button"
+                      onClick={() => setOpenStatusId(openStatusId === r.id ? null : r.id)}
+                      title="Set Delivery Status"
+                    >
+                      {r.status || "Set Status"}
+                    </button>
+                    {openStatusId === r.id && (
+                      <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-md left-0 min-w-[120px]">
+                        <button
+                          className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-amber-700"
+                          onClick={() => changeStatus(r, "Pending")}
+                          title="Set Pending"
+                        >
+                          Pending
+                        </button>
+                        <button
+                          className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-emerald-700"
+                          onClick={() => changeStatus(r, "Delivered")}
+                          title="Set Delivered"
+                        >
+                          Delivered
+                        </button>
+                        <button
+                          className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-500"
+                          onClick={() => changeStatus(r, "")}
+                          title="Clear"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
+                <td className="p-4 text-gray-700">{r.company || "-"}</td>
+                <td className="p-4">
+                  {editingId === r.id ? (
+                    <div className="tracking-edit-container flex flex-col gap-1 min-w-[160px]">
+                      <input
+                        autoFocus
+                        className="w-full rounded border border-gray-300 px-2 py-1 text-xs font-mono"
+                        value={editingTracking}
+                        onChange={(e) => setEditingTracking(e.target.value)}
+                        onBlur={(e) => {
+                          if (e.relatedTarget && e.relatedTarget.closest(".tracking-edit-container")) return
+                          commitTrackingEdit(r)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitTrackingEdit(r)
+                          if (e.key === "Escape") cancelTrackingEdit()
+                        }}
+                        placeholder="Tracking #"
+                      />
+                      <select
+                        className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
+                        value={editingCourier}
+                        onChange={(e) => setEditingCourier(e.target.value)}
+                        onBlur={(e) => {
+                          if (e.relatedTarget && e.relatedTarget.closest(".tracking-edit-container")) return
+                          commitTrackingEdit(r)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitTrackingEdit(r)
+                          if (e.key === "Escape") cancelTrackingEdit()
+                        }}
+                      >
+                        <option value="">Courier...</option>
+                        {["Kerry", "Flash", "ThaiPost", "J&T", "DHL", "SCG", "NinjaVan", "Best", "Shopee", "Lazada", "Nim", "Other"].map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    (() => {
+                      const url = r.trackingUrl || getTrackingLink(r.courier, r.tracking)
+                      return (
+                        <div
+                          className="text-xs font-mono cursor-pointer"
+                          onClick={() => { setEditingId(r.id); setEditingTracking(r.tracking || ""); setEditingCourier(r.courier || "") }}
+                          title="Click to edit tracking"
+                        >
+                          {r.tracking ? (
+                            url ? (
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className="font-mono font-medium text-gray-900">{r.tracking}</span>
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-[10px] inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                                  title={`Open tracking website`}
+                                >
+                                  <span>{r.courier ? `Track on ${r.courier}` : "Track Package"}</span>
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                </a>
+                              </div>
+                            ) : (
+                              <span className="truncate max-w-[140px] inline-block">{r.tracking}</span>
+                            )
+                          ) : (
+                            <span className="text-gray-400 opacity-50 hover:opacity-100 transition-opacity">+ Add</span>
+                          )}
+                        </div>
+                      )
+                    })()
+                  )}
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function InventoryPage() {
   const inv = useInventory()
   const [openBulkDelete, setOpenBulkDelete] = React.useState(false)
@@ -1118,20 +1521,6 @@ function InventoryPage() {
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Inventory Control Tower</h1>
-
-              <button
-                className="inline-flex items-center justify-center min-w-[150px] px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-sm"
-                onClick={() => inv.setShowAdd(true)}
-              >
-                Add Item
-              </button>
-
-              <button
-                onClick={inv.exportCsv}
-                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
-              >
-                Export
-              </button>
             </div>
 
             <div className="flex items-center gap-3">
@@ -1162,12 +1551,22 @@ function InventoryPage() {
                 )}
               </div>
 
-              <button
-                onClick={() => { inv.setHistoryFilter(null); inv.setView(inv.view === "history" ? "inventory" : "history") }}
-                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 shadow-sm"
-              >
-                {inv.view === "history" ? "Inventory" : "History"}
-              </button>
+              <div className="flex bg-gray-100 p-1 rounded-lg">
+                {["inventory", "delivery"].map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => {
+                      if (v === "history") inv.setHistoryFilter(null)
+                      inv.setView(v)
+                    }}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      inv.view === v ? "bg-white text-[#2D4485] shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {v.charAt(0).toUpperCase() + v.slice(1)}
+                  </button>
+                ))}
+              </div>
 
               <div className="text-slate-500 font-medium text-sm">
                 {inv.query ? (
@@ -1179,7 +1578,13 @@ function InventoryPage() {
             </div>
           </div>
 
-          <div>{inv.view === "history" ? <HistoryView inv={inv} /> : <InventoryTable inv={inv} />}</div>
+          <div>
+            {inv.view === "delivery" ? (
+              <DeliveryView inv={inv} />
+            ) : (
+              <InventoryTable inv={inv} />
+            )}
+          </div>
         </div>
       </section>
 
