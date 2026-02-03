@@ -494,7 +494,21 @@ def generate_billing_note_pdf(request):
     header_logo_content = []  # Initialize list
     
     # Top: Logo/Header Image
-    organization = details.get('salesPerson', '')
+    # Prioritize checking 'eit' ID for reliable organization lookup
+    eit_id = details.get('eit')
+    organization = None
+    
+    if eit_id:
+        try:
+            from .models import EIT
+            eit_obj = EIT.objects.get(pk=eit_id)
+            organization = eit_obj.organization_name
+        except Exception:
+            pass
+
+    # Fallback to text fields if ID lookup failed or wasn't provided
+    if not organization:
+        organization = details.get('salesPerson') or 'EIT LASERTECHNIK CO.,LTD'
     
     # Define potential roots to search for public/dist folders
     # 1. Windows Host Sibling: .../backend/../public
@@ -753,35 +767,193 @@ def generate_billing_note_pdf(request):
     # elements.append(Spacer(1, 20))
     
     # --- Signature Section ---
-    # Left: Receiver
-    # Right: Biller
-    
-    sig_data = [
-        [
-            Paragraph("ชื่อผู้รับวางบิล ......................................................", styles['Normal_Content']),
-            Paragraph("ในนาม EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD.", styles['Normal_Content'])
-        ],
-        [
-            Paragraph("วันที่รับ ................................./................./.................", styles['Normal_Content']),
-            ""
-        ],
-        [
-            Paragraph("วันที่นัดรับเช็ค ......................../................./.................", styles['Normal_Content']),
-            Paragraph("ชื่อผู้วางบิล ......................................................", styles['Normal_Content'])
+    # Layout based on user screenshot:
+    # Row 1: Note (spanning or separate)
+    # Row 2: Left: Recipient, Right: On Behalf Of
+    # Row 3: Left: Received Date, Right: Empty
+    # Row 4: Left: Cheque Date, Right: Biller
+
+    recipient = details.get('recipient')
+    received_date = details.get('receivedDate')
+    cheque_date = details.get('chequeDate')
+    depositor = details.get('depositor')
+    on_behalf_of = details.get('onBehalfOf')
+
+    def format_date_th(date_str):
+        if not date_str:
+            return None
+        try:
+            # Assuming YYYY-MM-DD from frontend
+            dt = datetime.strptime(date_str, '%Y-%m-%d')
+            return dt.strftime('%d/%m/%Y')
+        except:
+            return date_str
+
+    # Helper for dotted underlined fields: Label | Value (Dotted Underline)
+    def create_dotted_underlined_field(label, value, label_width=100, total_width=260):
+        val_str = str(value) if value else ""
+        
+        # If value is empty, provide space for writing
+        if not val_str:
+            val_str = " " * 10 
+            
+        # Create a small table: [Label, Value]
+        # Label cell
+        lbl = Paragraph(f"<b>{label}</b>", styles['Normal_Content'])
+        
+        # Value cell with Drawing for dotted line
+        # ReportLab's LINEBELOW is solid. For dotted, we need a custom approach or just use dots text if acceptable?
+        # User explicitly asked for "dotted line" and "under of the value".
+        # The best way to do "dotted underline" in a table cell is drawing on canvas or using a custom Flowable.
+        # Simpler approach: Use a Paragraph with underline? No, standard underline is solid.
+        # Alternative: Use a graphic line.
+        
+        # Let's try using a Drawing with a dotted line.
+        from reportlab.graphics.shapes import Drawing, Line
+        
+        # Calculate approximate width of value or use fixed width
+        # The column width is fixed (val_width). 
+        val_width = total_width - label_width
+        
+        # Create a drawing that is just a dotted line
+        d = Drawing(val_width, 1)
+        d.add(Line(0, 0, val_width, 0, strokeWidth=1, strokeDashArray=[1, 3]))
+        
+        # If we put the text in one cell and the line in the cell below?
+        # Or text and line in same cell?
+        # Let's try: Text Paragraph, then Drawing
+        
+        val_para = Paragraph(val_str, styles['Normal_Content'])
+        
+        # Table with 2 rows for the value column: Text, then Line
+        # But we need Label to align with Text.
+        # So: Outer Table 2 cols. Col 2 is a nested table of [Text, Line].
+        
+        inner_data = [
+            [val_para],
+            [d]
         ]
+        inner_table = Table(inner_data, colWidths=[val_width], rowHeights=[None, 2]) # Auto height for text, 2 for line
+        inner_table.setStyle(TableStyle([
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+        ]))
+        
+        t = Table([[lbl, inner_table]], colWidths=[label_width, val_width])
+        t.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'), # Align Label with bottom of inner table (which is the line)
+            # Actually we want Label to align with the Text part of inner table.
+            # VALIGN BOTTOM aligns with the bottom of the cell (the line). 
+            # This might make label sit too low.
+            # Let's try VALIGN TOP? No.
+            # Let's just use VALIGN TOP and add top padding to line?
+            
+            # Better approach:
+            # Row 1: Label, Value
+            # Row 2: Empty, DottedLine
+            
+            # Let's use this structure:
+            # [Label] [Value]
+            # [Empty] [DottedLine]
+            
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ]))
+        
+        # Re-implementation with simple 2x2 grid for alignment
+        # But label shouldn't have a line under it.
+        # [Label, Value]
+        # [  "",  Line ]
+        
+        # The line drawing
+        line_drawing = Drawing(val_width, 5) # Height 5 to give space
+        line_drawing.add(Line(0, 3, val_width, 3, strokeWidth=0.5, strokeDashArray=[2, 2]))
+        
+        final_data = [
+            [lbl, val_para],
+            ["", line_drawing]
+        ]
+        
+        final_table = Table(final_data, colWidths=[label_width, val_width])
+        final_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+            # Reduce vertical gap between text and line
+            ('BOTTOMPADDING', (1,0), (1,0), 1), 
+            ('TOPPADDING', (1,1), (1,1), 0),
+            ('SPAN', (0,0), (0,1)), # Span label across 2 rows? No, label is just in top row.
+            # If label is multiline, this might break. Assuming single line label.
+        ]))
+        
+        return final_table
+
+    # Helper for plain fields: Label | Value (No Line)
+    def create_plain_field(label, value, label_width=100, total_width=260):
+        val_str = str(value) if value else ""
+        
+        lbl = Paragraph(f"<b>{label}</b>", styles['Normal_Content'])
+        val = Paragraph(val_str, styles['Normal_Content'])
+        
+        val_width = total_width - label_width
+        
+        # Simple 1-row table
+        t = Table([[lbl, val]], colWidths=[label_width, val_width])
+        t.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ]))
+        return t
+
+    # Note Paragraph
+    note_text = "หมายเหตุ : แจ้งการชำระเงินได้ที่ sales@eitlaser.com"
+    note_p = Paragraph(f"<b>{note_text}</b>", styles['Normal_Content'])
+
+    # Signature Rows
+    # Row 1
+    # Reduced label widths to make lines shorter and fit better
+    row1_left = create_dotted_underlined_field("ชื่อผู้รับวางบิล", recipient, label_width=75, total_width=240)
+    row1_right = create_plain_field("ในนาม", on_behalf_of, label_width=35, total_width=240)
+    
+    # Row 2
+    row2_left = create_dotted_underlined_field("วันที่รับ", format_date_th(received_date), label_width=75, total_width=240)
+    row2_right = Paragraph("", styles['Normal_Content'])
+
+    # Row 3
+    row3_left = create_dotted_underlined_field("วันที่นัดรับเช็ค", format_date_th(cheque_date), label_width=75, total_width=240)
+    row3_right = create_dotted_underlined_field("ชื่อผู้วางบิล", depositor, label_width=60, total_width=240)
+
+    sig_data = [
+        [note_p, ""],
+        [row1_left, row1_right],
+        [row2_left, row2_right],
+        [row3_left, row3_right]
     ]
     
     sig_table = Table(sig_data, colWidths=[265, 265])
     sig_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
-        ('ALIGN', (0,0), (0,-1), 'LEFT'),
-        ('ALIGN', (1,0), (1,-1), 'LEFT'), # Right col content aligned left within cell? Reference shows "ในนาม..." aligned left of right section?
-        # Actually reference shows Right section text starts aligned left.
-        # "ในนาม..."
-        # "ชื่อผู้วางบิล..."
-        ('LEFTPADDING', (0,0), (-1,-1), 0),
-        ('RIGHTPADDING', (0,0), (-1,-1), 0),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 10), # Spacing between lines
+        ('SPAN', (0,0), (1,0)), # Note spans across
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        
+        # Padding
+        ('LEFTPADDING', (0,0), (-1,-1), 5),
+        ('RIGHTPADDING', (0,0), (-1,-1), 5),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        
+        # Spacing for Note
+        ('BOTTOMPADDING', (0,0), (1,0), 15), 
     ]))
     
     # elements.append(sig_table)
@@ -1145,16 +1317,44 @@ def generate_invoice_pdf(request):
     
     # Define cell content for each column
     def sig_cell(role_th, role_en):
+        title = Paragraph(f"{role_th} {role_en}", styles['Table_Data_Center'])
+        
+        # Nested table for signature lines with real underlines (LINEBELOW)
+        sub_data = [
+            ["(", "", ")"],
+            ["วันที่", "", ""]
+        ]
+        
+        # Widths: 25, 100, 25 = 150 total
+        # Row Heights: 30 for signature space, 20 for date space
+        sub_table = Table(sub_data, colWidths=[25, 100, 25], rowHeights=[35, 25])
+        sub_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+            
+            # Signature Line (Row 0, Col 1)
+            ('LINEBELOW', (1,0), (1,0), 0.5, colors.black),
+            
+            # Date Line (Row 1, Col 1)
+            ('LINEBELOW', (1,1), (1,1), 0.5, colors.black),
+            
+            # Align "วันที่" to right so it sits close to the line
+            ('ALIGN', (0,1), (0,1), 'RIGHT'),
+            
+            # Adjust padding
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ]))
+        
         return [
-            Paragraph(f"{role_th} {role_en}", styles['Table_Data_Center']),
-            Spacer(1, 35), # Space for signature
-            Paragraph("(.......................................)", styles['Table_Data_Center']),
-            Spacer(1, 2),
-            Paragraph("วันที่ .......................................", styles['Table_Data_Center'])
+            title,
+            Spacer(1, 5),
+            sub_table
         ]
 
     sig_data = [[
-        sig_cell("ผู้รับสินค้า", "Reciever"),
+        sig_cell("ผู้รับสินค้า", "Receiver"),
         sig_cell("ผู้ส่งสินค้า", "Deliverer"),
         sig_cell("ผู้มีอำนาจลงนาม", "Authorized Signature")
     ]]

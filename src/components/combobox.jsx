@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { ChevronDown, Check } from "lucide-react"
 import { cn } from "../lib/utils"
 
-export function Combobox({ value, onChange, options = [], placeholder = "Select or type..." }) {
+export function Combobox({ value, onChange, options = [], placeholder = "Select or type...", placement = "bottom" }) {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState("")
   const containerRef = useRef(null)
@@ -77,7 +77,10 @@ export function Combobox({ value, onChange, options = [], placeholder = "Select 
       </div>
 
       {isOpen && filteredOptions.length > 0 && (
-        <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none text-sm">
+        <ul className={cn(
+          "absolute z-50 max-h-60 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none text-sm",
+          placement === "top" ? "bottom-full mb-1" : "mt-1"
+        )}>
           {filteredOptions.map((option, index) => (
             <li
               key={index}
@@ -101,7 +104,10 @@ export function Combobox({ value, onChange, options = [], placeholder = "Select 
       )}
       
       {isOpen && filteredOptions.length === 0 && query !== "" && (
-         <ul className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white py-2 shadow-lg text-sm text-center text-slate-500">
+         <ul className={cn(
+           "absolute z-50 w-full rounded-md border border-slate-200 bg-white py-2 shadow-lg text-sm text-center text-slate-500",
+           placement === "top" ? "bottom-full mb-1" : "mt-1"
+         )}>
             <li>No matching options found</li>
          </ul>
       )}
