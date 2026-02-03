@@ -763,7 +763,7 @@ function InvoiceDocument({ inv }) {
 
       {/* Row 7: Payment By */}
       <div className="border border-black border-t-0 flex">
-         <div className="w-[25%] border-r border-black p-1 text-center font-normal">
+         <div className="w-[25%] border-r border-black p-1 text-center font-normal flex flex-col justify-center">
             <div>ชำระเงินโดย</div>
          </div>
          <div className="flex-1 p-1"></div>
@@ -772,7 +772,7 @@ function InvoiceDocument({ inv }) {
       {/* Row 8: Signatures */}
       <div className="border border-black border-t-0 p-2 pt-4 pb-2 flex justify-between text-center text-xs">
          <div className="w-[30%] flex flex-col pt-2">
-            <div className="mt-2 font-normal">ผู้รับสินค้า Reciever</div>
+            <div className="mt-2 font-normal">ผู้รับสินค้า Receiver</div>
             <div className="mt-6 text-sm">(........................................................)</div>
             <div className="mt-1 flex justify-center gap-1">
                <span>วันที่</span>

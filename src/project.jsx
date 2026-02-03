@@ -174,7 +174,7 @@ const KanbanBoard = ({ projects, setProjects, showNotification, notifyTeam, onEd
   )
 }
 
-const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
+const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
     const [startDate, setStartDate] = React.useState(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))
     const [dragging, setDragging] = React.useState(null)
     const [hoveredTask, setHoveredTask] = React.useState(null)
@@ -344,27 +344,28 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
                                        <span>{getColorMeaning(project.color)}</span>
                                    </div>
                                </div>
-                               <button onClick={() => onAddSubtask(project.id)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1.5 hover:bg-indigo-50 rounded-md">
-                                   <Plus size={16} />
-                               </button>
+                               <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                                   <button onClick={() => onEdit(project)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-md transition-all" title="Edit Project">
+                                       <Edit size={14} />
+                                   </button>
+                                   <button onClick={() => onAddSubtask(project.id)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-md transition-all" title="Add Subtask">
+                                       <Plus size={16} />
+                                   </button>
+                               </div>
                            </div>
     
                            {/* Project Bar */}
                            <div className="relative h-14 flex-1">
                                <div 
-                                   className="absolute h-8 top-3 rounded-full shadow-md group-hover:shadow-lg transition-all cursor-move flex items-center justify-between px-3 overflow-visible"
-                                   style={{ 
-                                       left: left(project.start), 
-                                       width: width(project.start, project.end),
-                                       background: `linear-gradient(90deg, ${project.color}, ${project.color}dd)`
-                                   }}
-                                   onMouseEnter={() => setHoveredTask(project.id)}
-                                   onMouseLeave={() => setHoveredTask(null)}
-                                   onMouseDown={(e) => {
-                                       e.preventDefault()
-                                       setDragging({ id: project.id, initialMouseX: e.clientX, initialStart: project.start, initialEnd: project.end, type: 'move' })
-                                   }}
-                               >
+                                       className="absolute h-8 top-3 rounded-full shadow-md group-hover:shadow-lg transition-all flex items-center justify-between px-3 overflow-visible"
+                                       style={{ 
+                                           left: left(project.start), 
+                                           width: width(project.start, project.end),
+                                           background: `linear-gradient(90deg, ${project.color}, ${project.color}dd)`
+                                       }}
+                                       onMouseEnter={() => setHoveredTask(project.id)}
+                                       onMouseLeave={() => setHoveredTask(null)}
+                                   >
                                    <span className="text-[11px] font-bold truncate text-white drop-shadow-sm">{project.name}</span>
                                    
                                    {/* Assignee Avatars */}
@@ -393,18 +394,10 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
 
                                    {/* Resize Handles */}
                                    <div 
-                                       className="absolute left-0 top-0 bottom-0 w-4 cursor-w-resize hover:bg-white/10 rounded-l-full"
-                                       onMouseDown={(e) => {
-                                           e.stopPropagation()
-                                           setDragging({ id: project.id, initialMouseX: e.clientX, initialStart: project.start, initialEnd: project.end, type: 'resize-start' })
-                                       }}
+                                       className="absolute left-0 top-0 bottom-0 w-4 rounded-l-full"
                                    />
                                    <div 
-                                       className="absolute right-0 top-0 bottom-0 w-4 cursor-e-resize hover:bg-white/10 rounded-r-full"
-                                       onMouseDown={(e) => {
-                                           e.stopPropagation()
-                                           setDragging({ id: project.id, initialMouseX: e.clientX, initialStart: project.start, initialEnd: project.end, type: 'resize-end' })
-                                       }}
+                                       className="absolute right-0 top-0 bottom-0 w-4 rounded-r-full"
                                    />
                                </div>
                            </div>
@@ -415,13 +408,16 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
                             <div key={subtask.id} className="group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative z-10">
                                 <div className="w-80 shrink-0 py-3 pl-12 pr-6 flex items-center gap-3 bg-white border-r border-slate-100 relative">
                                     <div className="w-2 h-2 rounded-full border border-slate-300 bg-white relative z-10"></div>
-                                    <div className="flex-1 min-w-0">
+                                    <div className="flex-1 min-w-0 flex items-center justify-between pr-2">
                                         <div className="font-medium text-slate-600 text-xs truncate hover:text-indigo-600 transition-colors cursor-pointer">{subtask.name}</div>
+                                        <button onClick={() => onEdit(subtask)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded-md transition-all" title="Edit Subtask">
+                                            <Edit size={12} />
+                                        </button>
                                     </div>
                                 </div>
                                 <div className="relative h-12 flex-1">
                                     <div 
-                                        className="absolute h-6 top-3 rounded-full shadow-sm cursor-move flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5"
+                                        className="absolute h-6 top-3 rounded-full shadow-sm flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5"
                                         style={{ 
                                             left: left(subtask.start), 
                                             width: width(subtask.start, subtask.end),
@@ -430,10 +426,6 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
                                         }}
                                         onMouseEnter={() => setHoveredTask(subtask.id)}
                                         onMouseLeave={() => setHoveredTask(null)}
-                                        onMouseDown={(e) => {
-                                            e.preventDefault()
-                                            setDragging({ id: subtask.id, initialMouseX: e.clientX, initialStart: subtask.start, initialEnd: subtask.end, type: 'move' })
-                                        }}
                                     >
                                         <span className="text-[9px] font-bold text-white truncate drop-shadow-sm">{subtask.name}</span>
                                         
@@ -453,22 +445,6 @@ const GanttChart = ({ projects, setProjects, onAddSubtask }) => {
                                                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 rotate-45"></div>
                                            </div>
                                         )}
- 
-                                         {/* Resize Handles */}
-                                         <div 
-                                             className="absolute left-0 top-0 bottom-0 w-3 cursor-w-resize hover:bg-white/20 rounded-l-full"
-                                             onMouseDown={(e) => {
-                                                 e.stopPropagation()
-                                                 setDragging({ id: subtask.id, initialMouseX: e.clientX, initialStart: subtask.start, initialEnd: subtask.end, type: 'resize-start' })
-                                             }}
-                                         />
-                                         <div 
-                                             className="absolute right-0 top-0 bottom-0 w-3 cursor-e-resize hover:bg-white/20 rounded-r-full"
-                                             onMouseDown={(e) => {
-                                                 e.stopPropagation()
-                                                 setDragging({ id: subtask.id, initialMouseX: e.clientX, initialStart: subtask.start, initialEnd: subtask.end, type: 'resize-end' })
-                                             }}
-                                         />
                                     </div>
                                 </div>
                             </div>
@@ -569,7 +545,19 @@ function ProjectApp() {
     if (!draft.name || !draft.start || !draft.end) return
     
     if (editingId) {
-        setProjects(prev => prev.map(p => p.id === editingId ? { ...p, ...draft } : p))
+        setProjects(prev => prev.map(p => {
+            if (p.id === editingId) {
+                return { ...p, ...draft }
+            }
+            // Check if it's a subtask update
+            if (p.subtasks && p.subtasks.some(s => s.id === editingId)) {
+                return {
+                    ...p,
+                    subtasks: p.subtasks.map(s => s.id === editingId ? { ...s, ...draft } : s)
+                }
+            }
+            return p
+        }))
     } else if (draftParentId) {
         setProjects(prev => prev.map(p => {
             if (p.id === draftParentId) {
@@ -659,7 +647,7 @@ function ProjectApp() {
         {view === 'kanban' ? (
             <KanbanBoard projects={projects} setProjects={setProjects} showNotification={showNotification} notifyTeam={notifyTeam} onEdit={handleEditProject} onDelete={handleDeleteProject} onAdd={handleAddWithStatus} />
         ) : (
-            <GanttChart projects={projects} setProjects={setProjects} onAddSubtask={handleAddSubtask} />
+            <GanttChart projects={projects} setProjects={setProjects} onAddSubtask={handleAddSubtask} onEdit={handleEditProject} />
         )}
       </div>
 
