@@ -1,7 +1,8 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import { format, startOfWeek, addDays, isSameDay, isWeekend, differenceInDays, addWeeks } from "date-fns"
-import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal, ChevronDown, CornerDownRight, X, Trash2, Edit, AlertTriangle } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal, ChevronDown, CornerDownRight, X, Trash2, Edit, AlertTriangle, Download } from "lucide-react"
+import html2pdf from "html2pdf.js"
 import Navigation from "./components/navigation.jsx"
 import "./index.css"
 
@@ -45,6 +46,248 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
     const [dragging, setDragging] = React.useState(null)
   const [hoveredTask, setHoveredTask] = React.useState(null)
   const [focusedId, setFocusedId] = React.useState(null)
+  const [selectedProjects, setSelectedProjects] = React.useState(new Set())
+  const [exportFormat, setExportFormat] = React.useState('pdf')
+  const [showExportMenu, setShowExportMenu] = React.useState(false)
+
+  const toggleSelection = (id) => {
+    const newSelected = new Set(selectedProjects)
+    if (newSelected.has(id)) {
+        newSelected.delete(id)
+    } else {
+        newSelected.add(id)
+    }
+    setSelectedProjects(newSelected)
+  }
+
+  const toggleAll = () => {
+    if (selectedProjects.size === projects.length) {
+        setSelectedProjects(new Set())
+    } else {
+        setSelectedProjects(new Set(projects.map(p => p.id)))
+    }
+  }
+
+  const exportProject = (project, formatType) => {
+    // 1. Calculate Timeline Bounds
+    let minDate = new Date(project.start)
+    let maxDate = new Date(project.end)
+    
+    // Only include subtasks in bounds calculation if project is expanded
+    if (project.expanded && project.subtasks && project.subtasks.length > 0) {
+        project.subtasks.forEach(sub => {
+            const s = new Date(sub.start)
+            const e = new Date(sub.end)
+            if (s < minDate) minDate = s
+            if (e > maxDate) maxDate = e
+        })
+    }
+    
+    // Add buffer (1 week before, 2 weeks after)
+    const bufferDaysBefore = 7
+    const bufferDaysAfter = 14
+    minDate = addDays(minDate, -bufferDaysBefore)
+    maxDate = addDays(maxDate, bufferDaysAfter)
+    
+    const totalDays = differenceInDays(maxDate, minDate) + 1
+    const dayWidth = 25 // px per day for Export
+    
+    // Helper for positioning
+    const getPos = (dateStr) => differenceInDays(new Date(dateStr), minDate) * dayWidth
+    const getLen = (start, end) => (differenceInDays(new Date(end), new Date(start)) + 1) * dayWidth
+
+    // 2. Prepare HTML Elements
+    const element = document.createElement('div')
+    const totalWidth = 200 + (totalDays * dayWidth) // 200px sidebar + timeline
+    element.style.width = `${Math.max(1100, totalWidth)}px` // Minimum 1100px for A4 landscape ratio
+    element.style.position = 'absolute'
+    element.style.left = '-9999px'
+    element.style.top = '0'
+    document.body.appendChild(element)
+    
+    // Generate Grid Lines (Weekly) with cleaner style
+    let gridLinesHtml = ''
+    for (let i = 0; i < totalDays; i += 7) { 
+        const left = i * dayWidth
+        const d = addDays(minDate, i)
+        // Check if it's the last week to avoid right border overflow if needed, but absolute positioning handles it.
+        gridLinesHtml += `
+            <div style="position: absolute; left: ${left}px; top: 0; bottom: 0; border-left: 1px solid #000; display: flex; flex-direction: column;">
+                <div style="font-size: 10px; color: #000; font-weight: bold; padding: 4px; border-bottom: 1px solid #000; width: ${dayWidth * 7}px; text-align: center; box-sizing: border-box;">
+                    Week ${format(d, 'w')} (${format(d, 'MMM d')})
+                </div>
+                <div style="flex: 1; display: flex;">
+                   ${Array.from({length: 7}).map((_, dayIndex) => `
+                        <div style="flex: 1; border-right: ${dayIndex < 6 ? '1px solid #ccc' : 'none'}; display: flex; justify-content: center; align-items: flex-start; padding-top: 4px; font-size: 10px; color: #333;">
+                             ${format(addDays(d, dayIndex), 'EE')[0]}
+                        </div>
+                   `).join('')}
+                </div>
+            </div>
+        `
+    }
+
+    // Generate Rows
+    const rowHeight = 40
+    const headerHeight = 50
+    const projectRowHeight = 45
+
+    const subtasksHtml = project.expanded ? (project.subtasks?.map(sub => `
+        <div style="height: ${rowHeight}px; position: relative; border-bottom: 1px solid #eee;">
+            <div style="
+                position: absolute; 
+                left: ${getPos(sub.start)}px; 
+                width: ${getLen(sub.start, sub.end)}px; 
+                top: 12px; 
+                height: 16px; 
+                background: ${project.color}; 
+                opacity: 0.6;
+                border: 1px solid #000;
+                display: flex;
+                align-items: center;
+                padding-left: 4px;
+            ">
+                <span style="font-size: 9px; color: #000; font-weight: bold; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">${sub.name}</span>
+            </div>
+        </div>
+    `).join('') || '') : ''
+
+    const subtasksNamesHtml = project.expanded ? (project.subtasks?.map(sub => `
+        <div style="height: ${rowHeight}px; padding: 0 10px; border-bottom: 1px solid #eee; display: flex; align-items: center; font-size: 12px; color: #000;">
+            - ${sub.name}
+        </div>
+    `).join('') || '') : ''
+
+    // 3. Construct Full HTML - Document Style
+    element.innerHTML = `
+        <div style="padding: 40px; font-family: 'Arial', sans-serif; background: white; color: black;">
+            <!-- Header Section -->
+            <div style="margin-bottom: 30px;">
+                <h1 style="font-size: 24px; font-weight: bold; margin: 0 0 10px 0; color: black;">Project: ${project.name}</h1>
+                <div style="font-size: 14px; margin-bottom: 5px;">
+                    <strong>Status:</strong> ${getColorMeaning(project.color)}
+                </div>
+                <div style="font-size: 14px;">
+                    <strong>Duration:</strong> ${project.start} to ${project.end} (${differenceInDays(new Date(project.end), new Date(project.start)) + 1} days)
+                </div>
+            </div>
+
+            <!-- Task List Section (if expanded) -->
+            ${project.expanded && project.subtasks ? `
+                <div style="margin-bottom: 30px;">
+                    <h3 style="font-size: 16px; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px;">Task Breakdown</h3>
+                    <ul style="list-style-type: disc; padding-left: 20px; font-size: 13px;">
+                        ${project.subtasks.map(s => `
+                            <li style="margin-bottom: 4px;">
+                                <strong>${s.name}</strong>: ${s.start} - ${s.end}
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+
+            <!-- Gantt Chart Section -->
+            <div>
+                <h3 style="font-size: 16px; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 20px;">Timeline View</h3>
+                
+                <div style="border: 2px solid #000; display: flex; background: white;">
+                    
+                    <!-- Task Names Column -->
+                    <div style="width: 200px; border-right: 2px solid #000; flex-shrink: 0;">
+                        <div style="height: ${headerHeight}px; background: #f0f0f0; border-bottom: 2px solid #000; padding: 0 10px; display: flex; align-items: center; font-weight: bold; font-size: 13px;">
+                            Task
+                        </div>
+                        <div style="height: ${projectRowHeight}px; border-bottom: 1px solid #eee; padding: 0 10px; display: flex; align-items: center; font-weight: bold; font-size: 13px;">
+                            ${project.name}
+                        </div>
+                        ${subtasksNamesHtml}
+                    </div>
+
+                    <!-- Timeline Column -->
+                    <div style="flex: 1; position: relative; overflow: hidden;">
+                        <!-- Grid Layer -->
+                        <div style="position: absolute; inset: 0; background: #fff; z-index: 0;">
+                            ${gridLinesHtml}
+                        </div>
+
+                        <!-- Bars Layer -->
+                        <div style="position: relative; z-index: 5;">
+                             <!-- Header Spacer -->
+                            <div style="height: ${headerHeight}px; border-bottom: 2px solid #000;"></div>
+
+                            <!-- Project Bar -->
+                            <div style="height: ${projectRowHeight}px; position: relative; border-bottom: 1px solid #eee;">
+                                <div style="
+                                    position: absolute; 
+                                    left: ${getPos(project.start)}px; 
+                                    width: ${getLen(project.start, project.end)}px; 
+                                    top: 10px; 
+                                    height: 24px; 
+                                    background: ${project.color}; 
+                                    border: 1px solid #000;
+                                    display: flex;
+                                    align-items: center;
+                                    padding-left: 8px;
+                                ">
+                                    <span style="font-size: 11px; color: white; font-weight: bold; text-shadow: 0 0 2px black;">${project.name}</span>
+                                </div>
+                            </div>
+
+                            <!-- Subtask Bars -->
+                            ${subtasksHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; font-size: 10px; color: #666; text-align: right;">
+                Exported on ${new Date().toLocaleDateString()}
+            </div>
+        </div>
+    `
+
+    const opt = {
+        margin: [0.5, 0.5],
+        filename: `${project.name.replace(/\s+/g, '_')}_gantt.${formatType === 'jpeg' ? 'jpg' : formatType}`,
+        image: { type: formatType === 'png' ? 'png' : 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+    };
+
+    if (formatType === 'pdf') {
+        html2pdf().set(opt).from(element).save().then(() => {
+            document.body.removeChild(element)
+        });
+    } else {
+        html2pdf()
+            .set(opt)
+            .from(element)
+            .toImg()
+            .output('dataurlstring')
+            .then((dataUrl) => {
+                const link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = `${project.name.replace(/\s+/g, '_')}_gantt.${formatType === 'jpeg' ? 'jpg' : formatType}`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                document.body.removeChild(element);
+            })
+            .catch(() => {
+                document.body.removeChild(element);
+            });
+    }
+  }
+
+  const handleExport = (format) => {
+    if (selectedProjects.size === 0) return
+    selectedProjects.forEach(projectId => {
+        const project = projects.find(p => p.id === projectId)
+        if (project) exportProject(project, format)
+    })
+    setShowExportMenu(false)
+  }
+
   const lighten = (hex, ratio = 0.5) => {
     const h = hex.replace('#', '')
     const n = parseInt(h, 16)
@@ -170,7 +413,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
     return (
         <div className="flex flex-col h-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6]">
           {/* Date Controls */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white shadow-sm z-30">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white shadow-sm z-50">
              <div className="flex items-center gap-4">
                  <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
                      <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600"><ChevronLeft size={16} /></button>
@@ -181,7 +424,44 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                      {format(startDate, "MMMM yyyy")}
                  </span>
              </div>
-             <div className="flex items-center gap-2">
+             <div className="flex items-center gap-4">
+                 <div className="relative">
+                    <button 
+                        onClick={() => setShowExportMenu(!showExportMenu)}
+                        disabled={selectedProjects.size === 0}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${selectedProjects.size > 0 ? 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                    >
+                        <Download size={14} />
+                        Export Selected ({selectedProjects.size})
+                        <ChevronDown size={14} className={`transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {showExportMenu && (
+                        <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-200">
+                            <button 
+                                onClick={() => handleExport('pdf')}
+                                className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            >
+                                <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px]">PDF</span>
+                                Document
+                            </button>
+                            <button 
+                                onClick={() => handleExport('png')}
+                                className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            >
+                                <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[10px]">PNG</span>
+                                Image
+                            </button>
+                            <button 
+                                onClick={() => handleExport('jpeg')}
+                                className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            >
+                                <span className="bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded text-[10px]">JPG</span>
+                                Image
+                            </button>
+                        </div>
+                    )}
+                 </div>
                  <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mr-4">
                      <div className="w-3 h-3 rounded bg-indigo-500"></div> Project
                      <div className="w-3 h-3 rounded bg-emerald-500 ml-2"></div> Done
@@ -192,12 +472,15 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
     
           <div className="flex-1 overflow-hidden relative flex flex-col">
             <div className="flex-1 overflow-auto custom-scrollbar bg-white relative">
-               {focusedId && (
-                 <div className="absolute top-0 bottom-0 right-0 z-20 pointer-events-none backdrop-blur-2xl bg-white/30" style={{ left: '20rem' }} />
-               )}
                {/* Header */}
                <div className="flex border-b border-slate-200 sticky top-0 bg-white/95 backdrop-blur-sm z-40 shadow-sm">
-                  <div className="w-80 shrink-0 p-4 pl-8 text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center bg-white border-r border-slate-100 sticky left-0 z-50">
+                  <div className="w-80 shrink-0 p-4 pl-4 text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-3 bg-white border-r border-slate-100">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedProjects.size === projects.length && projects.length > 0}
+                        onChange={toggleAll}
+                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
                       Project / Task
                   </div>
                   <div className="flex">
@@ -217,6 +500,11 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
     
                {/* Projects */}
                <div className="relative pb-20">
+                  {/* Focus Overlay - Restored with pointer-events-none for click-through */}
+                  {focusedId && (
+                    <div className="absolute inset-0 z-20 bg-white/60 backdrop-blur-[1px] pointer-events-none transition-all duration-300" />
+                  )}
+
                   {/* Background Grid & Today Line */}
                   <div className="absolute inset-0 flex ml-80 pointer-events-none z-0">
                      {days.map(day => {
@@ -233,9 +521,15 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                         <div className={`group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative ${focusedId && project.id === focusedId ? 'z-30' : 'z-10'}`}>
                            <div
                              onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                             className={`w-80 shrink-0 py-4 px-6 flex items-center gap-3 bg-white border-r border-slate-100 relative sticky left-0 z-50 group-hover:bg-slate-50/30 transition-colors`}
+                             className={`w-80 shrink-0 py-4 pl-4 pr-6 flex items-center gap-3 bg-white border-r border-slate-100 group-hover:bg-slate-50/30 transition-colors`}
                            >
-                               <button onClick={() => toggleProject(project.id)} className={`w-6 h-6 flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all ${focusedId && project.id !== focusedId ? 'pointer-events-none' : ''}`}>
+                               <input 
+                                    type="checkbox" 
+                                    checked={selectedProjects.has(project.id)}
+                                    onChange={(e) => { e.stopPropagation(); toggleSelection(project.id); }}
+                                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                               <button onClick={(e) => { e.stopPropagation(); toggleProject(project.id); }} className={`w-6 h-6 flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all`}>
                                    {project.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                </button>
                                <div className="flex-1 min-w-0">
@@ -249,21 +543,13 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                                        <span>{getColorMeaning(project.color)}</span>
                                    </div>
                                </div>
-                               <div className={`opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all ${focusedId && project.id !== focusedId ? 'pointer-events-none opacity-0' : ''}`}>
-                                   <button onClick={() => onEdit(project)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-md transition-all" title="Edit Project">
-                                       <Edit size={14} />
-                                   </button>
-                                   <button onClick={() => onAddSubtask(project.id)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-md transition-all" title="Add Subtask">
-                                       <Plus size={16} />
-                                   </button>
-                               </div>
                            </div>
     
                            {/* Project Bar */}
                            <div className="relative h-14 flex-1">
                                <div 
                                        onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                                       className={`absolute h-8 top-3 rounded-full transition-all flex items-center justify-between px-3 overflow-visible ${focusedId && project.id !== focusedId ? 'pointer-events-none' : ''}`}
+                                       className={`absolute h-8 top-3 rounded-full transition-all flex items-center justify-between px-3 overflow-visible`}
                                        style={{ 
                                            left: left(project.start), 
                                            width: width(project.start, project.end)
@@ -272,23 +558,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                                        onMouseLeave={() => setHoveredTask(null)}
                                     >
                                     <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(90deg, ${project.color}, ${project.color}dd)` }} />
-                                    {focusedId && project.id !== focusedId && (
-                                      <div className="absolute inset-0 rounded-full pointer-events-none border border-white/40 shadow-md group-hover:shadow-lg backdrop-blur-2xl bg-white/30" />
-                                    )}
-                                    <span className={`relative z-40 text-[11px] font-bold truncate text-white drop-shadow-sm ${focusedId && project.id !== focusedId ? 'opacity-0' : ''}`}>{project.name}</span>
-                                   
-
-
-                                   
-                                   {hoveredTask === project.id && !dragging && (
-                                       <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap z-50 animate-in fade-in zoom-in-95 duration-150">
-                                           <div className="font-bold">{project.name}</div>
-                                           <div className="text-[10px] text-slate-300 font-normal">
-                                               {format(new Date(project.start), 'MMM d')} - {format(new Date(project.end), 'MMM d')}
-                                           </div>
-                                           <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
-                                       </div>
-                                   )}
+                                    <span className={`relative z-40 text-[11px] font-bold truncate text-white drop-shadow-sm`}>{project.name}</span>
 
                                    {/* Resize Handles */}
                                     <div className="relative z-20 absolute left-0 top-0 bottom-0 w-4 rounded-l-full" />
@@ -300,18 +570,15 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                         {/* Subtasks */}
                         {project.expanded && project.subtasks?.map((subtask, index) => (
                             <div key={subtask.id} className={`group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative ${focusedId && project.id === focusedId ? 'z-30' : 'z-10'}`}>
-                                <div className="w-80 shrink-0 py-3 pl-12 pr-6 flex items-center gap-3 bg-white border-r border-slate-100 relative sticky left-0 z-20">
+                                <div className="w-80 shrink-0 py-3 pl-16 pr-6 flex items-center gap-3 bg-white border-r border-slate-100">
                                     <div className="w-2 h-2 rounded-full border border-slate-300 bg-white relative z-10"></div>
                                     <div className="flex-1 min-w-0 flex items-center justify-between pr-2">
-                                        <div className="font-medium text-slate-600 text-xs truncate hover:text-indigo-600 transition-colors cursor-pointer"><span className={`relative z-40 ${focusedId && project.id !== focusedId ? 'opacity-0 pointer-events-none' : ''}`}>{subtask.name}</span></div>
-                                        <button onClick={() => onEdit(subtask)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded-md transition-all" title="Edit Subtask">
-                                            <Edit size={12} />
-                                        </button>
-                                    </div>
+                                        <div className="font-medium text-slate-600 text-xs truncate hover:text-indigo-600 transition-colors cursor-pointer"><span className={`relative z-40`}>{subtask.name}</span></div>
+                                </div>
                                 </div>
                                 <div className="relative h-12 flex-1">
                                     <div 
-                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5 ${focusedId && project.id !== focusedId ? 'pointer-events-none' : ''}`}
+                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5`}
                                         style={{ 
                                             left: left(subtask.start), 
                                             width: width(subtask.start, subtask.end),
@@ -321,20 +588,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit }) => {
                                         onMouseLeave={() => setHoveredTask(null)}
                                     >
                                         <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(90deg, ${lighten(project.color, 0.6)}, ${lighten(project.color, 0.8)})` }} />
-                                        {focusedId && project.id !== focusedId && (
-                                          <div className="absolute inset-0 rounded-full pointer-events-none border border-white/40 backdrop-blur-2xl bg-white/30" />
-                                        )}
-                                        <span className={`relative z-40 text-[9px] font-bold text-slate-700 truncate ${focusedId && project.id !== focusedId ? 'opacity-0' : ''}`}>{subtask.name}</span>
-                                        
-
-
-                                        
-                                        {hoveredTask === subtask.id && !dragging && (
-                                           <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap z-50 animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
-                                               <div className="font-bold">{subtask.name}</div>
-                                               <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 rotate-45"></div>
-                                           </div>
-                                        )}
+                                        <span className={`relative z-40 text-[9px] font-bold text-slate-700 truncate`}>{subtask.name}</span>
                                     </div>
                                 </div>
                             </div>
@@ -542,7 +796,7 @@ function ProjectApp() {
 
   return (
     <main className="min-h-screen bg-white font-sans text-gray-900 flex flex-col">
-      <Navigation />
+      <Navigation require="Project Management" />
 
       {notification.show && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm animate-in fade-in slide-in-from-top-2 duration-200">
@@ -642,15 +896,31 @@ function ProjectApp() {
                                 <span>{validationError}</span>
                               </div>
                             )}
+
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Color Tag</label>
-                                <div className="flex gap-3 p-2 bg-white/50 rounded-xl border border-gray-200/60 w-fit">
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Status</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {['todo', 'in_progress', 'review', 'done'].map(s => (
+                                        <button
+                                            key={s}
+                                            onClick={() => setDraft({...draft, status: s})}
+                                            className={`px-3 py-2 rounded-lg text-xs font-bold capitalize border transition-all ${draft.status === s ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm' : 'bg-white border-gray-100 text-gray-500 hover:bg-gray-50'}`}
+                                        >
+                                            {s.replace('_', ' ')}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Color</label>
+                                <div className="flex flex-wrap gap-2">
                                     {COLORS.map(c => (
-                                        <button 
+                                        <button
                                             key={c.hex}
-                                            className={`w-6 h-6 rounded-full border-2 transition-all duration-300 hover:scale-110 shadow-sm ${draft.color === c.hex ? 'border-gray-900 scale-110 shadow-md ring-2 ring-gray-100' : 'border-transparent'}`}
-                                            style={{ backgroundColor: c.hex }}
                                             onClick={() => setDraft({...draft, color: c.hex})}
+                                            className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${draft.color === c.hex ? 'border-indigo-500 scale-110 shadow-md' : 'border-transparent'}`}
+                                            style={{ backgroundColor: c.hex }}
                                             title={c.name}
                                         />
                                     ))}
@@ -659,36 +929,32 @@ function ProjectApp() {
                         </div>
 
                         {/* Footer */}
-                        <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-100/50 flex justify-end gap-3 relative z-20 backdrop-blur-sm">
-                            <button 
-                                onClick={() => setIsModalOpen(false)}
-                                className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700 hover:bg-white rounded-xl transition-all border border-transparent hover:border-gray-200 hover:shadow-sm"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={saveProject}
-                                disabled={!draft.name || !draft.start || !draft.end || !!validationError}
-                                className="relative overflow-hidden px-6 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none group/btn"
-                            >
-                                <span className="relative z-10">{editingId ? 'Update Changes' : draftParentId ? 'Add Task' : 'Create Project'}</span>
-                                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
-                            </button>
+                        <div className="p-6 pt-2 relative z-20">
+                            <div className="flex gap-3">
+                                {editingId && (
+                                    <button 
+                                        onClick={() => handleDeleteProject(editingId)}
+                                        className="px-4 py-2.5 rounded-xl border border-rose-100 text-rose-500 hover:bg-rose-50 hover:text-rose-600 font-bold text-sm transition-all"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={saveProject}
+                                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 hover:-translate-y-0.5 transition-all active:scale-95"
+                                >
+                                    {editingId ? 'Save Changes' : 'Create Project'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
       )}
-      {/* Toolbar and stats can go here if needed */}
     </main>
   )
 }
 
-export default ProjectApp
-
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <ProjectApp />
-  </React.StrictMode>
-)
+const root = ReactDOM.createRoot(document.getElementById("root"))
+root.render(<ProjectApp />)

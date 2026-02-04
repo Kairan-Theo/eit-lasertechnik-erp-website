@@ -1469,7 +1469,7 @@ function CRMPage() {
 
   return (
     <main className="min-h-screen bg-white font-sans text-gray-900">
-      <Navigation />
+      <Navigation require="CRM" />
       
       <div className="border-b border-slate-200 bg-white px-6 py-4">
         <div className="flex items-center justify-between flex-wrap gap-4">

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
 import { 
   LayoutDashboard, 
   FileText, 
@@ -717,7 +717,7 @@ function PermissionsManager() {
   const [users, setUsers] = React.useState([])
   const [loading, setLoading] = React.useState(false)
   const [savingId, setSavingId] = React.useState(null)
-  const APPS = ["Manufacturing", "Inventory", "CRM", "Project Management", "Admin", "Support"]
+  const APPS = ["Manufacturing", "Inventory", "CRM", "Project Management", "Admin", "Permission"]
   const parseAllowed = (allowed) => {
     if (!allowed) return []
     if (allowed === "all") return [...APPS]
@@ -854,11 +854,13 @@ function PermissionsManager() {
     if (me && me.id === userId) setMe(prev => ({ ...prev, allowed_apps: nextAllowed }))
     save(userId, nextAllowed)
   }
+  const allUsers = [...(me ? [me] : []), ...users.filter(u => !me || u.email !== me.email)]
+
   return (
     <div className="bg-white rounded-xl border shadow-sm p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-900">User Permissions</h2>
-        <button onClick={fetchUsers} className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-gray-100 hover:bg-gray-200">Refresh</button>
+        <button onClick={fetchUsers} className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-gray-100 hover:bg-gray-200 transition-colors">Refresh</button>
       </div>
       {loading ? (
         <div className="py-6 text-center text-gray-500">Loading users...</div>
@@ -869,49 +871,49 @@ function PermissionsManager() {
               <tr className="bg-gray-50 text-gray-700 border-b">
                 <th className="p-3 text-left">User</th>
                 <th className="p-3 text-left">Role</th>
-                <th className="p-3 text-left">Allowed Apps</th>
+                <th className="p-3 text-left w-[40%]">Allowed Apps</th>
                 <th className="p-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {[...(me ? [me] : []), ...users.filter(u => !me || u.email !== me.email)].map(u => (
-                <tr key={u.id} className="hover:bg-gray-50">
+              {allUsers.map(u => (
+                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-3">
                     <div className="font-medium text-gray-900">{me && u.email === me.email ? "You" : u.name}</div>
                     <div className="text-xs text-gray-500">{u.email}</div>
                   </td>
                   <td className="p-3">{u.is_staff ? "Admin" : "User"}</td>
                   <td className="p-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       {APPS.map(app => (
-                        <label key={app} className="inline-flex items-center gap-2 text-xs">
+                        <label key={app} className="inline-flex items-center gap-1.5 text-xs cursor-pointer hover:text-blue-600">
                           <input
                             type="checkbox"
+                            className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
                             checked={isChecked(u.allowed_apps, app)}
                             onChange={() => toggleApp(u.id, app)}
                           />
-                          <span>{app}</span>
+                          <span className="whitespace-nowrap">{app}</span>
                         </label>
                       ))}
                     </div>
                   </td>
                   <td className="p-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => setAll(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300">All</button>
-                      <button onClick={() => setNone(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300">None</button>
+                      <button onClick={() => setAll(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50 transition-colors">All</button>
+                      <button onClick={() => setNone(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50 transition-colors">None</button>
                       <button
                         onClick={() => save(u.id, u.allowed_apps)}
-                        className={`px-3 py-1.5 text-xs rounded bg-[#2D4485] text-white ${savingId===u.id ? "opacity-50" : ""}`}
+                        className={`px-3 py-1.5 text-xs rounded bg-[#2D4485] text-white transition-colors hover:bg-[#1e2f5c] disabled:opacity-50 disabled:cursor-not-allowed min-w-[60px]`}
                         disabled={!u.id || savingId===u.id}
                       >
-                        Save
+                        {savingId===u.id ? "Saving..." : "Save"}
                       </button>
-                      {savingId===u.id && <span className="text-xs text-gray-500">Saving...</span>}
                     </div>
                   </td>
                 </tr>
               ))}
-              {users.length === 0 && (
+              {allUsers.length === 0 && (
                 <tr><td colSpan={4} className="p-8 text-center text-gray-500">No users available</td></tr>
               )}
             </tbody>
@@ -1123,3 +1125,4 @@ export default function AdminPage() {
     </div>
   )
 }
+export { PermissionsManager }

@@ -16,7 +16,7 @@ import { Label } from "../../components/ui/label"
 import { Button } from "../../components/ui/button"
 import { useToast } from "../../components/ui/use-toast"
 
-export default function Navigation() {
+export default function Navigation({ require }) {
   const { toast } = useToast()
   const lastNotifIdRef = React.useRef(null)
   const initialToastShownRef = React.useRef(false)
@@ -60,6 +60,26 @@ export default function Navigation() {
   const [currentPassword, setCurrentPassword] = React.useState("")
   const [newPassword, setNewPassword] = React.useState("")
   const [confirmPassword, setConfirmPassword] = React.useState("")
+
+  React.useEffect(() => {
+    if (!require) return
+    try {
+      const role = localStorage.getItem("userRole")
+      if (role === "Admin") return
+
+      const apps = localStorage.getItem("allowedApps")
+      if (!apps) {
+        window.location.href = "/apps.html"
+        return
+      }
+      if (apps === "all") return
+
+      const list = apps.split(",").map(s => s.trim())
+      if (!list.includes(require)) {
+        window.location.href = "/apps.html"
+      }
+    } catch {}
+  }, [require])
 
   React.useEffect(() => {
     if (user) {
@@ -415,9 +435,9 @@ export default function Navigation() {
             <a href="/admin.html" className="nav-link text-white hover:text-gray-200 transition">
               Admin
             </a>
-            {isAllowed("Support") && (
-              <a href="mailto:it-support@eit.local" className="nav-link text-white hover:text-gray-200 transition">
-                Support
+            {user && user.email === "htetyunn06@gmail.com" && (
+              <a href="/support.html" className="nav-link text-white hover:text-gray-200 transition">
+                Permission
               </a>
             )}
           </div>
