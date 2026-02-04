@@ -151,21 +151,16 @@ class DealSerializer(serializers.ModelSerializer):
         if cust_id:
             validated_data['customer'] = cust_id
         elif name:
-            try:
-                cust = Customer.objects.get(company_name=name)
-                validated_data['customer'] = cust
-            except Customer.DoesNotExist:
-                cust = Customer.objects.create(
-                    company_name=name,
-                    defaults={
-                        'contact_name': '',
-                        'email': '',
-                        'phone': '',
-                        'industry': '',
-                        'address': ''
-                    }
-                )
-                validated_data['customer'] = cust
+            cust, created = Customer.objects.get_or_create(
+                company_name=name,
+                defaults={
+                    'email': '',
+                    'phone': '',
+                    'industry': '',
+                    'address': ''
+                }
+            )
+            validated_data['customer'] = cust
         validated_data.pop('write_customer_name', None)
         if not validated_data.get('currency'):
             validated_data['currency'] = '฿'
