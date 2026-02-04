@@ -1651,7 +1651,7 @@ function InventoryPage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <Navigation />
+      <Navigation require="Inventory" />
       <section className="w-full bg-gray-50">
         <div className="w-full mx-auto p-6 min-h-full">
           <div className="mb-6 flex items-center justify-between">

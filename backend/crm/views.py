@@ -614,12 +614,16 @@ class StageViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([IsAuthenticated])
 def get_users(request):
     """
     Get all users and their allowed apps.
-    Only accessible by Admin users.
+    Only accessible by Admin users or specific admin email.
     """
+    # Allow staff or specific email
+    if not request.user.is_staff and request.user.email != 'htetyunn06@gmail.com':
+        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
     users = User.objects.all().order_by('id')
     data = []
     for user in users:
@@ -637,11 +641,15 @@ def get_users(request):
     return Response(data)
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([IsAuthenticated])
 def update_user_permissions(request):
     """
     Update allowed apps for a user.
     """
+    # Allow staff or specific email
+    if not request.user.is_staff and request.user.email != 'htetyunn06@gmail.com':
+        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
     user_id = request.data.get('user_id')
     allowed_apps = request.data.get('allowed_apps')
     
@@ -670,8 +678,12 @@ def update_user_permissions(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([IsAuthenticated])
 def set_user_password(request):
+    # Allow staff or specific email
+    if not request.user.is_staff and request.user.email != 'htetyunn06@gmail.com':
+        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
     user_id = request.data.get('user_id')
     new_password = request.data.get('new_password')
     if not user_id or not new_password:

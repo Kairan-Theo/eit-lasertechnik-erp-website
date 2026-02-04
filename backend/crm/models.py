@@ -398,6 +398,17 @@ class Component(models.Model):
     class Meta:
         db_table = 'bom_component'
 
+
+class PermissionControl(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='permission_control')
+    user_name = models.CharField(max_length=255)
+    email = models.EmailField(unique=True)
+    password = models.CharField(max_length=128)
+    allow_apps = models.TextField(blank=True, default="")
+
+    def __str__(self):
+        return self.user_name
+
     def __str__(self):
         return self.part_number
 
