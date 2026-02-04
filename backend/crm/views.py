@@ -6,8 +6,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer
 from datetime import date, timedelta
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -849,3 +849,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user if self.request.user.is_authenticated else None)
+
+class InventoryViewSet(viewsets.ModelViewSet):
+    queryset = Inventory.objects.all().order_by('-last_updated_day')
+    serializer_class = InventorySerializer
+    permission_classes = [AllowAny]

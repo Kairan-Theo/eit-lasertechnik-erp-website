@@ -1,7 +1,9 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import { createPortal } from "react-dom"
+import { Trash } from "lucide-react"
 import Navigation from "./components/navigation.jsx"
+import { API_BASE_URL } from "./config"
 import "./index.css"
 
 /** Build tracking URL from courier + number (or use custom full URL) */
@@ -49,6 +51,29 @@ function useInventory() {
   const [view, setView] = React.useState("inventory")
   const [historyFilter, setHistoryFilter] = React.useState(null)
   const [selectedRows, setSelectedRows] = React.useState([])
+  
+  // Delivery/Movements State
+  const [movements, setMovements] = React.useState([])
+  const [selectedDeliveryIds, setSelectedDeliveryIds] = React.useState([])
+  const [error, setError] = React.useState(null)
+
+  React.useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
+      const logs = Array.isArray(raw) ? raw : []
+      // Normalize IDs if missing
+      const normalized = logs.map(l => {
+        if (!l.id) return { ...l, id: String(Date.now()) + Math.random().toString(36).slice(2) }
+        return l
+      })
+      if (logs.some(l => !l.id)) {
+        localStorage.setItem("inventoryMovements", JSON.stringify(normalized))
+      }
+      setMovements(normalized)
+    } catch {
+      setMovements([])
+    }
+  }, [])
 
   const saveItems = (next) => {
     setItems(next)
@@ -68,63 +93,57 @@ function useInventory() {
     return max + 1
   }
 
-  React.useEffect(() => {
+  const refreshInventory = async () => {
     try {
-      const data = JSON.parse(localStorage.getItem("inventoryProducts") || "[]")
-      if (Array.isArray(data) && data.length) {
-        const norm = data.map((p) => ({
-          sku: String(p.sku || ""),
-          name: p.name,
-          stockQty: Number(p.stockQty || 0),
-          price: Number(p.price || 0),
-          updatedAt: p.updatedAt || new Date().toISOString().slice(0, 10),
-          instock: Number(p.instock || 0),
-          warehouse: p.warehouse || "Main",
-          bin: p.bin || "A-01-01",
-          lot: p.lot || "",
-          expiry: p.expiry || "",
-          reserved: Number(p.reserved || 0),
-          incomingQty: Number(p.incomingQty || 0),
-          outgoingQty: Number(p.outgoingQty || 0),
-          barcode: p.barcode || "",
-          category: p.category || "Finished Goods",
-          uom: p.uom || "pcs",
-          description: p.description || "",
-          brand: p.brand || "",
-          model: p.model || "",
-          status: p.status || "Active",
-          minStock: Number(p.minStock || 0),
-          reorderQty: Number(p.reorderQty || 0),
-          valuationMethod: p.valuationMethod || "FIFO",
-          serials: Array.isArray(p.serials) ? p.serials : [],
-          manufactureDate: p.manufactureDate || "",
-          deliveryStatus: p.deliveryStatus || "",
-          deliveryCompany: p.deliveryCompany || "",
-          trackingNumber: p.trackingNumber || "",
-          courier: p.courier || "",
-          trackingUrl: p.trackingUrl || "",
-          trackingStatus: p.trackingStatus || "",
+      const response = await fetch(`${API_BASE_URL}/api/inventory/`)
+      if (response.ok) {
+        setError(null)
+        const data = await response.json()
+        const mapped = data.map((item) => ({
+           sku: `INV-${item.id}`,
+           name: item.inventory_product_name,
+           stockQty: Number(item.inventory_stock || 0),
+           updatedAt: item.last_updated_day ? item.last_updated_day.slice(0, 10) : new Date().toISOString().slice(0, 10),
+           warehouse: "Main",
+           category: "Finished Goods",
+           status: "Active",
+           price: 0,
+           instock: item.inventory_stock > 0 ? 1 : 0,
+           bin: "A-01-01",
+           lot: "",
+           expiry: "",
+           reserved: 0,
+           incomingQty: 0,
+           outgoingQty: 0,
+           barcode: "",
+           uom: "pcs",
+           description: "",
+           brand: "",
+           model: "",
+           minStock: 0,
+           reorderQty: 0,
+           valuationMethod: "FIFO",
+           serials: [],
+           manufactureDate: "",
+           deliveryStatus: "",
+           deliveryCompany: "",
+           trackingNumber: "",
+           courier: "",
+           trackingUrl: "",
+           trackingStatus: ""
         }))
-
-        let max = nextWhIvNumber(norm)
-        const fixed = norm.map((it) => {
-          const valid = /^WH\/IV\/\d+$/.test(String(it.sku || ""))
-          const next = valid ? it : { ...it, sku: `WH/IV/${max++}` }
-          // ensure trackingUrl exists if number exists
-          const url = buildTrackingUrl(next.courier, next.trackingNumber, next.trackingUrl)
-          return { ...next, trackingUrl: url }
-        })
-
-        setItems(fixed)
-        try { localStorage.setItem("inventoryProducts", JSON.stringify(fixed)) } catch {}
+        setItems(mapped)
       } else {
-        setItems([
-          { sku: "WH/IV/1", name: "Simatic S7-1500", stockQty: 15000, price: 120000, updatedAt: "2021-02-20", instock: 1, warehouse: "Main", bin: "A-01-01", lot: "L210201", expiry: "2023-12-31", reserved: 0, incomingQty: 0, outgoingQty: 0, barcode: "1234567890123", category: "Finished Goods", uom: "pcs", description: "", brand: "Siemens", model: "S7-1500", status: "Active", minStock: 1000, reorderQty: 500, valuationMethod: "FIFO", serials: [], manufactureDate: "", trackingNumber: "", courier: "", trackingUrl: "" },
-        ])
+        setError("Failed to fetch inventory data from server.")
       }
-    } catch {
-      setItems([])
+    } catch (error) {
+      console.error("Error fetching inventory:", error)
+      setError("Unable to connect to inventory server. Please check your connection.")
     }
+  }
+
+  React.useEffect(() => {
+    refreshInventory()
   }, [])
 
   const warehouses = React.useMemo(() => {
@@ -159,40 +178,105 @@ function useInventory() {
     }
   }
 
-  const addItem = (payload, keepOpen = false) => {
-    const s = String(payload.sku || "")
-    const valid = /^WH\/IV\/\d+$/.test(s)
-    const assignedSku = valid ? s : `WH/IV/${nextWhIvNumber()}`
+  const addItem = async (payload, keepOpen = false) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventory/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inventory_product_name: payload.name,
+          inventory_stock: payload.stockQty,
+        }),
+      })
 
-    const trackingUrl = buildTrackingUrl(payload.courier, payload.trackingNumber, payload.trackingUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to save to backend: ${response.statusText}`)
+      }
 
-    const next = [
-      {
-        ...payload,
-        sku: assignedSku,
-        stockQty: Number(payload.stockQty || 0),
-        price: Number(payload.price || 0),
-        reserved: Number(payload.reserved || 0),
-        incomingQty: Number(payload.incomingQty || 0),
-        outgoingQty: Number(payload.outgoingQty || 0),
-        minStock: Number(payload.minStock || 0),
-        reorderQty: Number(payload.reorderQty || 0),
-        updatedAt: payload.updatedAt || new Date().toISOString().slice(0, 10),
-        instock: payload.instock || 1,
-        trackingUrl,
-      },
-      ...items,
-    ]
-    saveItems(next)
-    if (!keepOpen) setShowAdd(false)
+      // Only update local state if backend save succeeds
+      const s = String(payload.sku || "")
+      const valid = /^WH\/IV\/\d+$/.test(s)
+      const assignedSku = valid ? s : `WH/IV/${nextWhIvNumber()}`
+
+      const trackingUrl = buildTrackingUrl(payload.courier, payload.trackingNumber, payload.trackingUrl)
+
+      const next = [
+        {
+          ...payload,
+          sku: assignedSku,
+          stockQty: Number(payload.stockQty || 0),
+          price: Number(payload.price || 0),
+          reserved: Number(payload.reserved || 0),
+          incomingQty: Number(payload.incomingQty || 0),
+          outgoingQty: Number(payload.outgoingQty || 0),
+          minStock: Number(payload.minStock || 0),
+          reorderQty: Number(payload.reorderQty || 0),
+          updatedAt: payload.updatedAt || new Date().toISOString().slice(0, 10),
+          instock: payload.instock || 1,
+          trackingUrl,
+        },
+        ...items,
+      ]
+      saveItems(next)
+      if (!keepOpen) setShowAdd(false)
+      
+      // Refresh list from backend to be sure
+      const refresh = await fetch(`${API_BASE_URL}/api/inventory/`)
+      if (refresh.ok) {
+        const data = await refresh.json()
+        const mapped = data.map((item) => ({
+             sku: `INV-${item.id}`,
+             name: item.inventory_product_name,
+             stockQty: Number(item.inventory_stock || 0),
+             updatedAt: item.last_updated_day ? item.last_updated_day.slice(0, 10) : new Date().toISOString().slice(0, 10),
+             warehouse: "Main",
+             category: "Finished Goods",
+             status: "Active",
+             price: 0,
+             instock: item.inventory_stock > 0 ? 1 : 0,
+             bin: "A-01-01",
+             lot: "",
+             expiry: "",
+             reserved: 0,
+             incomingQty: 0,
+             outgoingQty: 0,
+             barcode: "",
+             uom: "pcs",
+             description: "",
+             brand: "",
+             model: "",
+             minStock: 0,
+             reorderQty: 0,
+             valuationMethod: "FIFO",
+             serials: [],
+             manufactureDate: "",
+             deliveryStatus: "",
+             deliveryCompany: "",
+             trackingNumber: "",
+             courier: "",
+             trackingUrl: "",
+             trackingStatus: ""
+        }))
+        setItems(mapped)
+      }
+
+    } catch (e) {
+      console.error("Backend sync failed", e)
+      alert("Failed to save inventory item to database. Please check your connection.")
+    }
   }
 
   const logMove = (entry) => {
     try {
-      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
-      const logs = Array.isArray(raw) ? raw : []
-      logs.push({ ...entry, id: entry.id || Date.now().toString(36) + Math.random().toString(36).substr(2), ts: new Date().toISOString(), user: role })
-      localStorage.setItem("inventoryMovements", JSON.stringify(logs))
+      const newLog = { 
+        ...entry, 
+        id: entry.id || Date.now().toString(36) + Math.random().toString(36).substr(2), 
+        ts: new Date().toISOString(), 
+        user: role 
+      }
+      const nextLogs = [...movements, newLog]
+      setMovements(nextLogs)
+      localStorage.setItem("inventoryMovements", JSON.stringify(nextLogs))
     } catch {}
   }
 
@@ -298,7 +382,7 @@ function useInventory() {
   }
 
   const exportCsv = () => {
-    const headers = ["sku", "name", "stockQty", "reserved", "price", "updatedAt", "warehouse", "bin", "lot", "expiry", "trackingNumber", "courier", "trackingUrl"]
+    const headers = ["Index", "Productname", "stockQty", "updatedAt"]
     const csv = [headers.join(","), ...items.map((i) => headers.map((k) => i[k] ?? "").join(","))].join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
@@ -335,10 +419,75 @@ function useInventory() {
 
   const getRowId = (p) => `${p.sku}-${p.warehouse || "Main"}-${p.bin || "A-01-01"}-${p.lot || ""}`
 
-  const deleteItems = (ids) => {
+  const deleteItems = async (ids) => {
     if (!Array.isArray(ids) || ids.length === 0) return
-    saveItems(items.filter((p) => !ids.includes(getRowId(p))))
+
+    const itemsToDelete = items.filter((p) => ids.includes(getRowId(p)))
+    const backendIds = []
+    
+    itemsToDelete.forEach(item => {
+        if (item.sku && item.sku.startsWith("INV-")) {
+            const id = item.sku.split("-")[1]
+            if (id) backendIds.push(id)
+        }
+    })
+
+    if (backendIds.length > 0) {
+        try {
+            await Promise.all(backendIds.map(id => 
+                fetch(`${API_BASE_URL}/api/inventory/${id}/`, { method: "DELETE" })
+            ))
+        } catch (e) {
+            console.error("Backend delete failed", e)
+            setError("Failed to delete items from backend.")
+        }
+    }
+    
+    // Refresh to sync with backend
+    await refreshInventory()
     setSelectedRows([])
+  }
+
+  const deliveryRows = React.useMemo(() => {
+    return movements
+      .filter((e) => e.type === "sales_delivery")
+      .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
+      .map(log => {
+          const p = items.find(i => i.sku === log.sku)
+          return {
+            ...log,
+            productName: p ? p.name : log.sku,
+            orderAmount: log.qty
+          }
+      })
+      .filter(r => {
+          if (!query) return true
+          const q = query.toLowerCase()
+          return (
+            (r.productName || "").toLowerCase().includes(q) ||
+            (r.sku || "").toLowerCase().includes(q) ||
+            (r.company || "").toLowerCase().includes(q) ||
+            (r.tracking || "").toLowerCase().includes(q)
+          )
+      })
+  }, [movements, items, query])
+
+  const addMovement = (entry) => {
+    logMove(entry)
+  }
+
+  const updateMovement = (id, updates) => {
+    const next = movements.map(m => m.id === id ? { ...m, ...updates } : m)
+    setMovements(next)
+    localStorage.setItem("inventoryMovements", JSON.stringify(next))
+  }
+
+  const deleteMovements = (ids) => {
+    if (!ids || !ids.length) return
+    const next = movements.filter(m => !ids.includes(m.id))
+    setMovements(next)
+    localStorage.setItem("inventoryMovements", JSON.stringify(next))
+    setSelectedDeliveryIds([])
   }
 
   return {
@@ -367,6 +516,11 @@ function useInventory() {
     view, setView,
     historyFilter, setHistoryFilter,
     selectedRows, setSelectedRows,
+    // Delivery exports
+    deliveryRows,
+    selectedDeliveryIds, setSelectedDeliveryIds,
+    addMovement, updateMovement, deleteMovements,
+    error,
   }
 }
 
@@ -393,6 +547,11 @@ function InventoryTable({ inv }) {
     if (e.key === "Enter") {
       if (editingField === "trackingNumber") {
         inv.updateItem(p, { trackingNumber: editingValue, courier: editingCourier })
+      } else if (editingField === "stockQty") {
+        const newQty = Number(editingValue)
+        if (!isNaN(newQty)) {
+          inv.setQty(p.sku, p.warehouse, p.bin, p.lot, newQty, "Manual Inline Update", "")
+        }
       } else {
         inv.updateItem(p, { [editingField]: editingField === "price" ? Number(editingValue) : editingValue })
       }
@@ -408,6 +567,11 @@ function InventoryTable({ inv }) {
     if (editingField === "trackingNumber") {
       if (e.relatedTarget && e.relatedTarget.closest(".tracking-edit-container")) return
       inv.updateItem(p, { trackingNumber: editingValue, courier: editingCourier })
+    } else if (editingField === "stockQty") {
+      const newQty = Number(editingValue)
+      if (!isNaN(newQty)) {
+        inv.setQty(p.sku, p.warehouse, p.bin, p.lot, newQty, "Manual Inline Update", "")
+      }
     } else {
       inv.updateItem(p, { [editingField]: editingField === "price" ? Number(editingValue) : editingValue })
     }
@@ -443,7 +607,7 @@ function InventoryTable({ inv }) {
   }
 
   const columns = [
-    { id: "name", label: "Name", sortable: true, defaultClass: "max-w-xs truncate" },
+    { id: "name", label: "Product Name", sortable: true, defaultClass: "max-w-xs truncate" },
     { id: "stockQty", label: "Stock", sortable: true, defaultClass: "font-mono" },
     { id: "updatedAt", label: "Last Updated", sortable: true },
   ]
@@ -486,11 +650,21 @@ function InventoryTable({ inv }) {
         )
 
       case "stockQty":
-        return (
+        return isEditing("stockQty") ? (
+          <input
+            autoFocus
+            type="number"
+            className="w-full rounded-md border border-gray-300 px-2 py-1 font-mono"
+            value={editingValue}
+            onChange={(e) => setEditingValue(e.target.value)}
+            onBlur={(e) => handleBlur(e, p)}
+            onKeyDown={(e) => handleKeyDown(e, p)}
+          />
+        ) : (
           <span
             className="cursor-pointer hover:text-[#2D4485] hover:underline font-medium"
             title="Click to update stock"
-            onClick={() => inv.setShowAdjust({ sku: p.sku, warehouse: p.warehouse || "Main", bin: p.bin || "A-01-01", lot: p.lot || "", current: Number(p.stockQty || 0) })}
+            onClick={() => { setEditingId(rowId); setEditingField("stockQty"); setEditingValue(p.stockQty) }}
           >
             {Number(p.stockQty).toLocaleString("en-US")}
           </span>
@@ -646,6 +820,7 @@ function InventoryTable({ inv }) {
                   onChange={handleSelectAll}
                 />
               </th>
+              <th className="p-4 border-b text-center">INDEX</th>
               {columns.map((col) => {
                 const mode = columnModes[col.id]
                 return (
@@ -693,7 +868,7 @@ function InventoryTable({ inv }) {
           <tbody className="divide-y divide-gray-100">
             {inv.pageItems.length === 0 && (
               <tr>
-                <td colSpan={columns.length + 1} className="p-8 text-center text-gray-400">
+                <td colSpan={columns.length + 2} className="p-8 text-center text-gray-400">
                   {inv.query ? "No matching items found." : "No inventory items."}
                 </td>
               </tr>
@@ -711,6 +886,7 @@ function InventoryTable({ inv }) {
                       checked={selectedRows.includes(rowId)}
                     />
                   </td>
+                  <td className="p-4 text-center text-gray-600">{i + 1}</td>
 
                   {columns.map((col) => {
                     const mode = columnModes[col.id]
@@ -1119,8 +1295,10 @@ function DeliverForm({ sku, onCancel, onConfirm }) {
 }
 
 function DeliveryView({ inv }) {
-  const [rows, setRows] = React.useState([])
-  const [selectedIds, setSelectedIds] = React.useState([])
+  // Use shared state from useInventory
+  const rows = inv.deliveryRows
+  const selectedIds = inv.selectedDeliveryIds
+  const setSelectedIds = inv.setSelectedDeliveryIds
 
   const handleSelectAll = (e) => {
     if (e.target.checked) setSelectedIds(rows.map(r => r.id))
@@ -1130,18 +1308,6 @@ function DeliveryView({ inv }) {
   const handleSelectRow = (id) => {
     if (selectedIds.includes(id)) setSelectedIds(prev => prev.filter(i => i !== id))
     else setSelectedIds(prev => [...prev, id])
-  }
-
-  const deleteSelected = () => {
-    if (!window.confirm(`Delete ${selectedIds.length} items?`)) return
-    try {
-      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
-      const logs = Array.isArray(raw) ? raw : []
-      const nextLogs = logs.filter(l => !selectedIds.includes(l.id))
-      localStorage.setItem("inventoryMovements", JSON.stringify(nextLogs))
-      setRows(prev => prev.filter(r => !selectedIds.includes(r.id)))
-      setSelectedIds([])
-    } catch {}
   }
 
   const [editingId, setEditingId] = React.useState(null)
@@ -1164,122 +1330,52 @@ function DeliveryView({ inv }) {
   }
 
   const changeStatus = (row, status) => {
-    try {
-      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
-      const logs = Array.isArray(raw) ? raw : []
-      let matched = false
-      const nextLogs = logs.map(l => {
-        if (l.id === row.id) {
-          applyStockForStatusChange(l.sku, l.qty, l.status || "", status || "")
-          matched = true
-          return { ...l, status: status || "" }
-        }
-        return l
-      })
-      if (!matched) {
-        const idx = logs.findIndex(l => l.sku === row.sku && String(l.ts) === String(row.ts))
-        if (idx >= 0) {
-          const prev = logs[idx].status || ""
-          applyStockForStatusChange(logs[idx].sku, logs[idx].qty, prev, status || "")
-          nextLogs[idx] = { ...logs[idx], status: status || "" }
-        }
-      }
-      localStorage.setItem("inventoryMovements", JSON.stringify(nextLogs))
-      setRows(prev => prev.map(x => x.id === row.id ? { ...x, status: status || "" } : x))
-    } catch {}
+    applyStockForStatusChange(row.sku, row.qty, row.status || "", status || "")
+    inv.updateMovement(row.id, { status: status || "" })
     setOpenStatusId(null)
   }
+
   const [openNew, setOpenNew] = React.useState(false)
   const [newSku, setNewSku] = React.useState("")
   const [newQty, setNewQty] = React.useState(0)
   const [newCompany, setNewCompany] = React.useState("")
+
   const addManualDeliveryRow = () => {
     setNewSku(inv.items[0]?.sku || "")
     setNewQty(0)
     setNewCompany("")
     setOpenNew(true)
   }
+
   const saveNewRow = () => {
-    try {
-      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
-      const logs = Array.isArray(raw) ? raw : []
-      const sku = newSku || "MANUAL"
-      const newLog = {
-        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-        ts: new Date().toISOString(),
-        type: "sales_delivery",
-        sku,
-        qty: Number(newQty || 0),
-        ref: "",
-        company: newCompany || "",
-        status: "",
-        tracking: "",
-        courier: "",
-        trackingUrl: "",
-        user: inv.role || "Inventory Admin",
-      }
-      const nextLogs = [...logs, newLog]
-      localStorage.setItem("inventoryMovements", JSON.stringify(nextLogs))
-      const p = inv.items.find(i => i.sku === sku)
-      setRows((prev) => [
-        { ...newLog, productName: p ? p.name : sku, orderAmount: newLog.qty },
-        ...prev,
-      ])
-    } catch {}
+    const sku = newSku || "MANUAL"
+    const newLog = {
+      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+      ts: new Date().toISOString(),
+      type: "sales_delivery",
+      sku,
+      qty: Number(newQty || 0),
+      ref: "",
+      company: newCompany || "",
+      status: "",
+      tracking: "",
+      courier: "",
+      trackingUrl: "",
+      user: inv.role || "Inventory Admin",
+    }
+    inv.addMovement(newLog)
     setOpenNew(false)
   }
-  
-  React.useEffect(() => {
-    try {
-      const logs = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
-      const normalized = Array.isArray(logs) ? logs.map(l => {
-        if (!l.id) return { ...l, id: String(Date.now()) + Math.random().toString(36).slice(2) }
-        return l
-      }) : []
-      if (Array.isArray(logs) && logs.some(l => !l.id)) {
-        localStorage.setItem("inventoryMovements", JSON.stringify(normalized))
-      }
-      const filtered = normalized
-        .filter((e) => e.type === "sales_delivery")
-        .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
-        .map(log => {
-           const p = inv.items.find(i => i.sku === log.sku)
-           return {
-             ...log,
-             productName: p ? p.name : log.sku,
-             orderAmount: log.qty
-           }
-        })
-        .filter(r => {
-           if (!inv.query) return true
-           const q = inv.query.toLowerCase()
-           return (
-             (r.productName || "").toLowerCase().includes(q) ||
-             (r.sku || "").toLowerCase().includes(q) ||
-             (r.company || "").toLowerCase().includes(q) ||
-             (r.tracking || "").toLowerCase().includes(q)
-           )
-        })
-      setRows(filtered)
-    } catch {
-      setRows([])
-    }
-  }, [inv.items, inv.query])
+
+  // Effect for filtering/sorting is now handled in useInventory via deliveryRows
 
   const commitTrackingEdit = (row) => {
-    try {
-      const raw = JSON.parse(localStorage.getItem("inventoryMovements") || "[]")
-      const logs = Array.isArray(raw) ? raw : []
-      const nextLogs = logs.map(l => {
-        if (l.id === row.id) {
-          const nextUrl = buildTrackingUrl(editingCourier, editingTracking, l.trackingUrl)
-          return { ...l, tracking: editingTracking, courier: editingCourier, trackingUrl: nextUrl }
-        }
-        return l
-      })
-      localStorage.setItem("inventoryMovements", JSON.stringify(nextLogs))
-      setRows(rows.map(r => r.id === row.id ? { ...r, tracking: editingTracking, courier: editingCourier, trackingUrl: buildTrackingUrl(editingCourier, editingTracking, r.trackingUrl) } : r))
-    } catch {}
+    const nextUrl = buildTrackingUrl(editingCourier, editingTracking, row.trackingUrl)
+    inv.updateMovement(row.id, { 
+      tracking: editingTracking, 
+      courier: editingCourier, 
+      trackingUrl: nextUrl 
+    })
     setEditingId(null)
   }
 
@@ -1306,14 +1402,7 @@ function DeliveryView({ inv }) {
       <div className="flex items-center justify-between px-4 pt-4">
         <div className="flex items-center gap-3">
           <div className="text-lg font-semibold text-gray-900">Delivery Records</div>
-          {selectedIds.length > 0 && (
-            <button
-              onClick={deleteSelected}
-              className="flex items-center gap-2 px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
-            >
-              Delete ({selectedIds.length})
-            </button>
-          )}
+          {/* Delete button moved to main page header */}
         </div>
         <button
           onClick={addManualDeliveryRow}
@@ -1381,6 +1470,7 @@ function DeliveryView({ inv }) {
                 onChange={handleSelectAll}
               />
             </th>
+            <th className="p-4 border-b text-center">INDEX</th>
             <th className="p-4 border-b">Product Name</th>
             <th className="p-4 border-b">Order Amount</th>
             <th className="p-4 border-b">Delivery Status</th>
@@ -1390,7 +1480,7 @@ function DeliveryView({ inv }) {
         </thead>
         <tbody className="divide-y divide-gray-100">
           {rows.length === 0 ? (
-             <tr><td className="p-8 text-center text-gray-500" colSpan={6}>No deliveries recorded yet</td></tr>
+             <tr><td className="p-8 text-center text-gray-500" colSpan={7}>No deliveries recorded yet</td></tr>
           ) : (
             rows.map((r, i) => (
               <tr key={i} className="hover:bg-gray-50 transition-colors">
@@ -1402,6 +1492,7 @@ function DeliveryView({ inv }) {
                     onChange={() => handleSelectRow(r.id)}
                   />
                 </td>
+                <td className="p-4 text-center text-gray-700">{i + 1}</td>
                 <td className="p-4 font-medium text-gray-900">{r.productName}</td>
                 <td className="p-4 font-mono text-gray-700">{r.orderAmount}</td>
                 <td className="p-4">
@@ -1540,6 +1631,24 @@ function InventoryPage() {
   const inv = useInventory()
   const [openBulkDelete, setOpenBulkDelete] = React.useState(false)
 
+  // Determine if we have selected items based on current view
+  const hasSelection = inv.view === 'delivery' 
+    ? inv.selectedDeliveryIds.length > 0 
+    : inv.selectedRows.length > 0
+  
+  const selectionCount = inv.view === 'delivery'
+    ? inv.selectedDeliveryIds.length
+    : inv.selectedRows.length
+
+  const handleBulkDelete = () => {
+    if (inv.view === 'delivery') {
+      inv.deleteMovements(inv.selectedDeliveryIds)
+    } else {
+      inv.deleteItems(inv.selectedRows)
+    }
+    setOpenBulkDelete(false)
+  }
+
   return (
     <main className="min-h-screen bg-white">
       <Navigation />
@@ -1551,12 +1660,13 @@ function InventoryPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              {inv.selectedRows.length > 0 && (
+              {hasSelection && (
                 <button
                   onClick={() => setOpenBulkDelete(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                 >
-                  <span className="font-medium">Delete ({inv.selectedRows.length})</span>
+                  <Trash className="w-4 h-4" />
+                  <span className="font-medium">Delete ({selectionCount})</span>
                 </button>
               )}
 
@@ -1624,13 +1734,20 @@ function InventoryPage() {
                 <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenBulkDelete(false)}>✕</button>
               </div>
               <div className="px-5 py-4">
-                <p className="text-sm text-gray-700">
-                  Are you sure you want to delete <span className="font-semibold">{inv.selectedRows.length}</span> selected items?
-                </p>
+                <div className="flex flex-col items-center justify-center py-4 gap-3">
+                   <div className="p-3 bg-red-100 rounded-full">
+                      <Trash className="w-6 h-6 text-red-600" />
+                   </div>
+                   <p className="text-center text-gray-700 max-w-sm">
+                      Are you sure you want to delete <span className="font-semibold">{selectionCount}</span> selected items? 
+                      <br/>
+                      <span className="text-sm text-gray-500">This action cannot be undone.</span>
+                   </p>
+                </div>
               </div>
               <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
                 <button className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenBulkDelete(false)}>Cancel</button>
-                <button className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700" onClick={() => { inv.deleteItems(inv.selectedRows); setOpenBulkDelete(false) }}>
+                <button className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700" onClick={handleBulkDelete}>
                   Delete
                 </button>
               </div>

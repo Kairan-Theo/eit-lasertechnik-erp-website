@@ -1,7 +1,7 @@
 
 // Configuration for API endpoints
-// You can override this with VITE_API_URL environment variable
-const envUrl = import.meta.env.VITE_API_URL;
+// You can override this with VITE_API_BASE_URL environment variable
+const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
 const host = window.location.hostname || "";
 const isLocalHost = host === "localhost" || host === "127.0.0.1";
 const proto = window.location.protocol === "https:" ? "https" : "http";
