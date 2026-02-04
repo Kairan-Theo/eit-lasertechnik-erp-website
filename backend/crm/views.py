@@ -723,7 +723,7 @@ def mark_notification_read(request):
     return Response({'error': 'Invalid ID'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def delete_notification(request, pk):
     try:
         n = Notification.objects.get(id=pk)

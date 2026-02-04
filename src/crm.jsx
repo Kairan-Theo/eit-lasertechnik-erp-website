@@ -147,7 +147,7 @@ const API_BASE = `${API_BASE_URL}/api`
 
 function CRMPage() {
   const [stages, setStages] = React.useState(
-    Object.keys(initialPipeline).map((name, idx) => ({ id: idx + 1, name, deals: initialPipeline[name] }))
+    Object.keys(initialPipeline).map((name, idx) => ({ id: idx + 1, name, deals: [] }))
   )
   const [activeTab, setActiveTab] = React.useState("Deals")
   const [menuOpenIndex, setMenuOpenIndex] = React.useState(null)

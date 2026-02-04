@@ -160,17 +160,16 @@ function NotificationsPage() {
 
     try {
       const token = localStorage.getItem("authToken")
-      if (token) {
-        const res = await fetch(`${API_BASE_URL}/api/notifications/${id}/`, {
-          method: "DELETE",
-          headers: {
-            "Authorization": `Token ${token}`
-          }
-        })
-        if (!res.ok) {
-          console.warn("Delete might not be implemented on backend or not found")
-        }
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      
+      const res = await fetch(`${API_BASE_URL}/api/notifications/${id}/`, {
+        method: "DELETE",
+        headers
+      })
+      if (!res.ok) {
+        console.warn("Delete might not be implemented on backend or not found")
       }
+      
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {
       console.error("Failed to delete notification", err)
@@ -188,14 +187,15 @@ function NotificationsPage() {
 
     try {
       const token = localStorage.getItem("authToken")
-      if (token) {
-        await Promise.all(notifications.map(n => 
-          fetch(`${API_BASE_URL}/api/notifications/${n.id}/`, {
-              method: "DELETE",
-              headers: { "Authorization": `Token ${token}` }
-          })
-        ))
-      }
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      
+      await Promise.all(notifications.map(n => 
+        fetch(`${API_BASE_URL}/api/notifications/${n.id}/`, {
+            method: "DELETE",
+            headers
+        })
+      ))
+      
       window.dispatchEvent(new Event("notificationUpdated"))
     } catch (err) {
       console.error("Failed to clear all", err)
