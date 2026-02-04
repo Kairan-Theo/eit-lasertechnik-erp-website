@@ -129,7 +129,7 @@ function computeComponentStatusFromItems(items, inventory) {
 function ManufacturingOrderPage() {
   const [orders, setOrders] = React.useState([])
   const setAndPersist = setOrders
-  const [openStatusId, setOpenStatusId] = React.useState(null)
+  const [activeDropdown, setActiveDropdown] = React.useState(null) // { type, id, x, y }
   const [openActivityId, setOpenActivityId] = React.useState(null)
   const [openScheduleForId, setOpenScheduleForId] = React.useState(null)
   const [scheduleDueInput, setScheduleDueInput] = React.useState("")
@@ -142,7 +142,7 @@ function ManufacturingOrderPage() {
   const [editingProductValue, setEditingProductValue] = React.useState("")
   const [editingJobOrderCodeId, setEditingJobOrderCodeId] = React.useState(null)
   const [editingJobOrderCodeValue, setEditingJobOrderCodeValue] = React.useState("")
-  const [openStateId, setOpenStateId] = React.useState(null)
+  // const [openStateId, setOpenStateId] = React.useState(null) // Replaced by activeDropdown
   const [editingQtyId, setEditingQtyId] = React.useState(null)
   const [editingQtyValue, setEditingQtyValue] = React.useState("")
   const [editingTotalQtyId, setEditingTotalQtyId] = React.useState(null)
@@ -603,33 +603,19 @@ function ManufacturingOrderPage() {
           <div className="relative inline-block">
             <button
               className={`${componentStatusClass(o.componentStatus)} px-2 py-1 rounded-full text-xs`}
-              onClick={()=>setOpenStatusId(openStatusId===o.id?null:o.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                const rect = e.currentTarget.getBoundingClientRect()
+                if (activeDropdown?.id === o.id && activeDropdown?.type === 'componentStatus') {
+                  setActiveDropdown(null)
+                } else {
+                  setActiveDropdown({ type: 'componentStatus', id: o.id, x: rect.left, y: rect.bottom, width: rect.width })
+                }
+              }}
               title="Change component status"
             >
               {o.componentStatus || 'Set Status'}
             </button>
-            {openStatusId===o.id && (
-              <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-md shadow-md">
-                <button
-                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
-                  onClick={()=>{ setOpenStatusId(null); patchOrder(o.id, { component_status: 'Available' }) }}
-                >
-                  Available
-                </button>
-                <button
-                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
-                  onClick={()=>{ setOpenStatusId(null); patchOrder(o.id, { component_status: 'Not Available' }) }}
-                >
-                  Not Available
-                </button>
-                <button
-                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={()=>{ setOpenStatusId(null); patchOrder(o.id, { component_status: '' }) }}
-                >
-                  Clear
-                </button>
-              </div>
-            )}
           </div>
         )
       case 'state':
@@ -637,39 +623,19 @@ function ManufacturingOrderPage() {
           <div className="relative inline-block">
             <button
               className={`${stateClass(o.state)} px-2 py-1 rounded-full text-xs`}
-              onClick={()=>setOpenStateId(openStateId===o.id?null:o.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                const rect = e.currentTarget.getBoundingClientRect()
+                if (activeDropdown?.id === o.id && activeDropdown?.type === 'state') {
+                  setActiveDropdown(null)
+                } else {
+                  setActiveDropdown({ type: 'state', id: o.id, x: rect.left, y: rect.bottom, width: rect.width })
+                }
+              }}
               title="Change state"
             >
               {o.state || 'Set State'}
             </button>
-            {openStateId===o.id && (
-              <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-md shadow-md">
-                <button
-                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={()=>{ setOpenStateId(null); patchOrder(o.id, { state: 'Processing' }) }}
-                >
-                  Processing
-                </button>
-                <button
-                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
-                  onClick={()=>{ setOpenStateId(null); patchOrder(o.id, { state: 'Finished' }) }}
-                >
-                  Finished
-                </button>
-                <button
-                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
-                  onClick={()=>{ setOpenStateId(null); patchOrder(o.id, { state: 'Cancelled' }) }}
-                >
-                  Cancelled
-                </button>
-                <button
-                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={()=>{ setOpenStateId(null); patchOrder(o.id, { state: '' }) }}
-                >
-                  Clear
-                </button>
-              </div>
-            )}
           </div>
         )
       default: return <span>-</span>
@@ -1358,7 +1324,71 @@ function ManufacturingOrderPage() {
               </div>
             </div>
           )}
-          {printingOrder && createPortal(
+          {activeDropdown && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setActiveDropdown(null)} />
+          <div 
+            className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-md py-1"
+            style={{ 
+              top: activeDropdown.y + 4, 
+              left: activeDropdown.x,
+              minWidth: Math.max(120, activeDropdown.width)
+            }}
+          >
+            {activeDropdown.type === 'componentStatus' && (
+              <>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
+                  onClick={()=>{ setActiveDropdown(null); patchOrder(activeDropdown.id, { component_status: 'Available' }) }}
+                >
+                  Available
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
+                  onClick={()=>{ setActiveDropdown(null); patchOrder(activeDropdown.id, { component_status: 'Not Available' }) }}
+                >
+                  Not Available
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+                  onClick={()=>{ setActiveDropdown(null); patchOrder(activeDropdown.id, { component_status: '' }) }}
+                >
+                  Clear
+                </button>
+              </>
+            )}
+            {activeDropdown.type === 'state' && (
+              <>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+                  onClick={()=>{ setActiveDropdown(null); patchOrder(activeDropdown.id, { state: 'Processing' }) }}
+                >
+                  Processing
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-green-700"
+                  onClick={()=>{ setActiveDropdown(null); patchOrder(activeDropdown.id, { state: 'Finished' }) }}
+                >
+                  Finished
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
+                  onClick={()=>{ setActiveDropdown(null); patchOrder(activeDropdown.id, { state: 'Cancelled' }) }}
+                >
+                  Cancelled
+                </button>
+                <button
+                  className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+                  onClick={()=>{ setActiveDropdown(null); patchOrder(activeDropdown.id, { state: '' }) }}
+                >
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+      {printingOrder && createPortal(
         <div className="print-portal">
           <style>
             {`

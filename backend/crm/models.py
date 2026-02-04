@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -475,3 +475,38 @@ class CustomerPurchaseOrder(models.Model):
     def __str__(self):
         return f"{self.po_number} - {self.customer}"
 
+class Inventory(models.Model):
+    inventory_product_name = models.CharField(max_length=255, unique=True)
+    inventory_stock = models.IntegerField(default=0)
+    last_updated_day = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.inventory_product_name
+
+@receiver(pre_save, sender=ManufacturingOrder)
+def mo_pre_save_inventory_check(sender, instance, **kwargs):
+    if instance.pk:
+        try:
+            old_instance = ManufacturingOrder.objects.get(pk=instance.pk)
+            instance._old_state = old_instance.state
+        except ManufacturingOrder.DoesNotExist:
+            instance._old_state = None
+    else:
+        instance._old_state = None
+
+@receiver(post_save, sender=ManufacturingOrder)
+def update_inventory_on_mo_finish(sender, instance, created, **kwargs):
+    old_state = getattr(instance, '_old_state', None)
+    # Check if transitioning to 'Finished'
+    # Note: Using case-insensitive check if needed, but 'Finished' is the standard per context
+    if instance.state == 'Finished' and old_state != 'Finished':
+        if instance.product_no:
+            # Import/Add to Inventory
+            # Use get_or_create to handle existence
+            inv, _ = Inventory.objects.get_or_create(
+                inventory_product_name=instance.product_no,
+                defaults={'inventory_stock': 0}
+            )
+            # Add the quantity from Manufacturing Order
+            inv.inventory_stock += int(instance.quantity or 0)
+            inv.save()

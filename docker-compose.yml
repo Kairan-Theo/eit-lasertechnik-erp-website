@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   backend:
+    container_name: eit_backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -11,9 +12,14 @@ services:
       - ./backend:/app
     environment:
       - DB_ENGINE=sqlite
-    command: python manage.py runserver 0.0.0.0:8001
+    # Run migrations, create superuser if missing, then start server
+    command: >
+      sh -c "python manage.py migrate &&
+             python create_superuser.py &&
+             python manage.py runserver 0.0.0.0:8001"
 
   frontend:
+    container_name: eit_frontend
     build:
       context: .
       dockerfile: Dockerfile.frontend
