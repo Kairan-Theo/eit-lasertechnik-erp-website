@@ -1386,22 +1386,12 @@ function AdminRoot() {
   const [ready, setReady] = React.useState(false)
 
   React.useEffect(() => {
-    // Automatically grant admin access
-    try {
-      const role = localStorage.getItem("userRole")
-      const auth = localStorage.getItem("isAuthenticated")
-      if (auth !== "true" || role !== "Admin") {
-        localStorage.setItem("isAuthenticated", "true")
-        localStorage.setItem("userRole", "Admin")
-        localStorage.setItem("currentUser", JSON.stringify({ 
-          email: "admin@eit.com", 
-          name: "Admin User", 
-          role: "Admin",
-          company: "EIT Lasertechnik" 
-        }))
-        localStorage.setItem("allowedApps", "all")
-      }
-    } catch {}
+    // Check if user is authenticated
+    const auth = localStorage.getItem("isAuthenticated")
+    if (auth !== "true") {
+      window.location.href = "/"
+      return
+    }
     setReady(true)
   }, [])
 

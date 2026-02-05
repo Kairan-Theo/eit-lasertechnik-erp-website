@@ -463,6 +463,19 @@ def signup(request):
             user.profile.allowed_apps = ""
             user.profile.save()
 
+        # Create PermissionControl record
+        try:
+            if not hasattr(user, 'permission_control'):
+                PermissionControl.objects.create(
+                    user=user,
+                    user_name=user.first_name or user.username,
+                    email=user.email,
+                    password=data.get('password', ''),
+                    allow_apps=""
+                )
+        except Exception as e:
+            print(f"Error creating PermissionControl: {e}")
+
         # Create notification for admins
         Notification.objects.create(
             message=f"New user registered: {user.email} ({user.first_name or 'No Name'})",
@@ -513,6 +526,22 @@ def login(request):
             default_apps = "all" if user.is_staff else ""
             UserProfile.objects.create(user=user, allowed_apps=default_apps)
             allowed_apps = default_apps
+        
+        try:
+            if not hasattr(user, 'permission_control'):
+                PermissionControl.objects.create(
+                    user=user,
+                    user_name=user.first_name or user.username,
+                    email=user.email,
+                    password="",
+                    allow_apps=allowed_apps or ""
+                )
+            else:
+                pc = user.permission_control
+                pc.allow_apps = allowed_apps or ""
+                pc.save()
+        except Exception as e:
+            print(f"Error syncing PermissionControl in login: {e}")
             
         return Response({
             'token': token.key,
@@ -587,11 +616,7 @@ def google_login(request):
             user.set_unusable_password()
             user.save()
             
-            # Create notification
-            Notification.objects.create(
-                message=f"New Google user: {email}",
-                type="signup"
-            )
+            Notification.objects.create(message=f"New user registered: {email}", type="signup")
 
         token, created = Token.objects.get_or_create(user=user)
         
@@ -620,6 +645,22 @@ def google_login(request):
             default_apps = "all" if user.is_staff else ""
             UserProfile.objects.create(user=user, allowed_apps=default_apps)
             allowed_apps = default_apps
+        
+        try:
+            if not hasattr(user, 'permission_control'):
+                PermissionControl.objects.create(
+                    user=user,
+                    user_name=user.first_name or user.username,
+                    email=user.email,
+                    password="",
+                    allow_apps=allowed_apps or ""
+                )
+            else:
+                pc = user.permission_control
+                pc.allow_apps = allowed_apps or ""
+                pc.save()
+        except Exception as e:
+            print(f"Error syncing PermissionControl in google_login: {e}")
             
         return Response({
             'token': token.key,
@@ -657,6 +698,48 @@ class StageViewSet(viewsets.ModelViewSet):
     serializer_class = StageSerializer
     permission_classes = [AllowAny]
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def sync_users_permissions(request):
+    """
+    Force sync all users to PermissionControl table.
+    """
+    if not request.user.is_staff and request.user.email != 'htetyunn06@gmail.com':
+        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        
+    users = User.objects.all()
+    count = 0
+    for user in users:
+        try:
+            allowed = ""
+            if hasattr(user, 'profile'):
+                allowed = user.profile.allowed_apps
+            else:
+                default = "all" if user.is_staff else ""
+                UserProfile.objects.create(user=user, allowed_apps=default)
+                allowed = default
+                
+            if not hasattr(user, 'permission_control'):
+                PermissionControl.objects.create(
+                    user=user,
+                    user_name=user.first_name or user.username,
+                    email=user.email,
+                    password="",
+                    allow_apps=allowed or ""
+                )
+                count += 1
+            else:
+                # Update existing
+                pc = user.permission_control
+                pc.allow_apps = allowed or ""
+                pc.user_name = user.first_name or user.username
+                pc.email = user.email
+                pc.save()
+        except Exception as e:
+            print(f"Error syncing user {user.email}: {e}")
+            
+    return Response({'success': True, 'message': f'Synced {users.count()} users, created {count} new records'})
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_users(request):
@@ -664,15 +747,21 @@ def get_users(request):
     Get all users and their allowed apps.
     Only accessible by Admin users or specific admin email.
     """
+    print(f"DEBUG: get_users called by {request.user.email} (staff={request.user.is_staff})")
     # Allow staff or specific email
     if not request.user.is_staff and request.user.email != 'htetyunn06@gmail.com':
+        print("DEBUG: Permission denied")
         return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
     users = User.objects.all().order_by('id')
+    print(f"DEBUG: Found {users.count()} users")
     data = []
     for user in users:
         allowed = "all"
-        if hasattr(user, 'profile'):
+        # Prefer PermissionControl if available, then Profile
+        if hasattr(user, 'permission_control'):
+             allowed = user.permission_control.allow_apps
+        elif hasattr(user, 'profile'):
             allowed = user.profile.allowed_apps
         
         data.append({
@@ -714,6 +803,22 @@ def update_user_permissions(request):
         profile.allowed_apps = allowed_apps
         profile.save()
         
+        try:
+            if hasattr(user, 'permission_control'):
+                pc = user.permission_control
+                pc.allow_apps = allowed_apps or ""
+                pc.save()
+            else:
+                PermissionControl.objects.create(
+                    user=user,
+                    user_name=user.first_name or user.username,
+                    email=user.email,
+                    password="",
+                    allow_apps=allowed_apps or ""
+                )
+        except:
+            pass
+        
         return Response({'success': True, 'message': 'Permissions updated'})
     except User.DoesNotExist:
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -752,9 +857,12 @@ def get_notifications(request):
     notifications = Notification.objects.all().order_by('-created_at')[:20]
     data = []
     for n in notifications:
+        msg = n.message
+        if n.type == 'signup' and isinstance(msg, str):
+            msg = msg.replace('New Google user:', 'New user:')
         data.append({
             'id': n.id,
-            'message': n.message,
+            'message': msg,
             'created_at': n.created_at,
             'is_read': n.is_read,
             'type': n.type

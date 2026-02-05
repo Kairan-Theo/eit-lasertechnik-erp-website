@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django import forms
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, PermissionControl
 from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
 
 APPS_CHOICES = [
@@ -211,3 +212,8 @@ class InventoryAdmin(admin.ModelAdmin):
     list_display = ("inventory_product_name", "inventory_stock", "last_updated_day")
     search_fields = ("inventory_product_name",)
     list_filter = ("last_updated_day",)
+
+@admin.register(PermissionControl)
+class PermissionControlAdmin(admin.ModelAdmin):
+    list_display = ("user_name", "email", "allow_apps")
+    search_fields = ("user_name", "email")
