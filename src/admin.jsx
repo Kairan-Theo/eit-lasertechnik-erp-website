@@ -12,11 +12,13 @@ import {
   Trash2,
   ExternalLink,
   Lock,
-  ClipboardList
+  ClipboardList,
+  Building2
 } from "lucide-react"
 
 import Navigation from "./components/navigation.jsx"
 import PurchaseOrderPage from "./components/purchase-order-page.jsx"
+import EitManagement from "./components/eit-management.jsx"
 import { LanguageProvider } from "./components/language-context"
 import { API_BASE_URL } from "./config"
 import "./index.css"
@@ -1347,6 +1349,15 @@ function AdminPage() {
             Billing Notes
           </button>
           <button
+            onClick={() => setActiveTab("eit-management")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "eit-management" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <Building2 className="w-5 h-5" />
+            EIT Organizations
+          </button>
+          <button
             onClick={() => setActiveTab("permissions")}
             className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === "permissions" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
@@ -1367,6 +1378,7 @@ function AdminPage() {
             {activeTab === "quotations" && "Quotations"}
             {activeTab === "invoices" && "Invoices"}
             {activeTab === "billing-notes" && "Billing Notes"}
+            {activeTab === "eit-management" && "EIT Organizations"}
             {activeTab === "permissions" && "User Permissions"}
           </h1>
         </header>
@@ -1376,6 +1388,7 @@ function AdminPage() {
         {activeTab === "quotations" && <QuotationList list={data.quotations} refreshData={loadData} />}
         {activeTab === "invoices" && <InvoiceList list={data.invoices} refreshData={loadData} />}
         {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} refreshData={loadData} />}
+        {activeTab === "eit-management" && <EitManagement />}
         {activeTab === "permissions" && <PermissionsManager />}
       </main>
     </div>

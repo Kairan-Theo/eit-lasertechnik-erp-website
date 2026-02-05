@@ -971,6 +971,9 @@ function InvoicePage() {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+              {/* Select EIT organization to populate details. 
+                   The options are fetched from /api/eits/ and include "EIT Lasertechnik Co.,Ltd." 
+                   and "Einstein Industrietechnik Corporation Co.,LTD" as populated by the backend. */}
               <select 
                 value={inv.details.eit || ""} 
                 onChange={(e) => {

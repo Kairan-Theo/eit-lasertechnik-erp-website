@@ -127,6 +127,18 @@ def generate_quotation_pdf(request):
     # --- Header ---
     # Try to load logo - Updated to use robust path discovery like Billing Note
     organization = details.get('salesPerson', '')
+    
+    # Check for EIT object and image from DB
+    eit_id = details.get('eit')
+    header_image_path = None
+    if eit_id:
+        try:
+            from .models import EIT
+            eit_obj = EIT.objects.get(pk=eit_id)
+            if eit_obj.header_image:
+                header_image_path = eit_obj.header_image.path
+        except Exception:
+            pass
 
     # Define potential roots to search for public/dist folders
     # 1. Windows Host Sibling: .../backend/../public
@@ -157,22 +169,29 @@ def generate_quotation_pdf(request):
          DIST_DIR = os.path.join(BASE_DIR, 'dist')
 
     # Logic:
-    # 1. If "EINSTEIN" is in organization -> Prefer Einstein header
-    # 2. Else -> Prefer EIT header
+    # 1. DB Image (Highest Priority)
+    # 2. If "EINSTEIN" is in organization -> Prefer Einstein header
+    # 3. Else -> Prefer EIT header
     is_einstein = "EINSTEIN" in str(organization).upper()
     
-    # Define candidates based on organization
+    candidates = []
+    
+    # Add DB image as first candidate if available
+    if header_image_path:
+         candidates.append((header_image_path, 530, 80))
+
+    # Define candidates based on organization (Fallback)
     if is_einstein:
-        candidates = [
+        candidates.extend([
             (os.path.join(DIST_DIR, 'Einstein header.png'), 530, 80),
             (os.path.join(PUBLIC_DIR, 'Einstein header.png'), 530, 80)
-        ]
+        ])
     else:
         # Default/EIT
-        candidates = [
+        candidates.extend([
             (os.path.join(PUBLIC_DIR, 'EIT header.png'), 530, 80),
             (os.path.join(DIST_DIR, 'EIT header.png'), 530, 80)
-        ]
+        ])
 
     # Try to find first existing candidate
     found_image = None
@@ -497,12 +516,15 @@ def generate_billing_note_pdf(request):
     # Prioritize checking 'eit' ID for reliable organization lookup
     eit_id = details.get('eit')
     organization = None
+    header_image_path = None
     
     if eit_id:
         try:
             from .models import EIT
             eit_obj = EIT.objects.get(pk=eit_id)
             organization = eit_obj.organization_name
+            if eit_obj.header_image:
+                header_image_path = eit_obj.header_image.path
         except Exception:
             pass
 
@@ -544,20 +566,24 @@ def generate_billing_note_pdf(request):
     
     is_einstein = "EINSTEIN" in str(organization).upper()
     
+    candidates = []
+    if header_image_path:
+         candidates.append((header_image_path, 530, 80))
+
     # Define candidates based on organization
     # User requested: Einstein header.png and EIT header.png, NOT eit-icon.png
     if is_einstein:
-        candidates = [
+        candidates.extend([
             (os.path.join(DIST_DIR, 'Einstein header.png'), 530, 80),
             (os.path.join(PUBLIC_DIR, 'Einstein header.png'), 530, 80)
-        ]
+        ])
     else:
         # Default/EIT
         # Prioritize EIT header.png as requested
-        candidates = [
+        candidates.extend([
             (os.path.join(PUBLIC_DIR, 'EIT header.png'), 530, 80),
             (os.path.join(DIST_DIR, 'EIT header.png'), 530, 80)
-        ]
+        ])
 
     # Try to find first existing candidate
     found_image = None
@@ -1026,12 +1052,15 @@ def generate_invoice_pdf(request):
     # Prioritize checking 'eit' ID for reliable organization lookup
     eit_id = details.get('eit')
     organization = None
+    header_image_path = None
     
     if eit_id:
         try:
             from .models import EIT
             eit_obj = EIT.objects.get(pk=eit_id)
             organization = eit_obj.organization_name
+            if eit_obj.header_image:
+                header_image_path = eit_obj.header_image.path
         except Exception:
             pass
 
@@ -1050,7 +1079,14 @@ def generate_invoice_pdf(request):
             break
     if not PUBLIC_DIR: PUBLIC_DIR, DIST_DIR = os.path.join(BASE_DIR, 'public'), os.path.join(BASE_DIR, 'dist')
 
-    candidates = [(os.path.join(PUBLIC_DIR, 'Einstein header.png'), 530, 80), (os.path.join(DIST_DIR, 'Einstein header.png'), 530, 80)] if is_einstein else [(os.path.join(PUBLIC_DIR, 'EIT header.png'), 530, 80), (os.path.join(DIST_DIR, 'EIT header.png'), 530, 80)]
+    candidates = []
+    if header_image_path:
+        candidates.append((header_image_path, 530, 80))
+        
+    if is_einstein:
+        candidates.extend([(os.path.join(PUBLIC_DIR, 'Einstein header.png'), 530, 80), (os.path.join(DIST_DIR, 'Einstein header.png'), 530, 80)])
+    else:
+        candidates.extend([(os.path.join(PUBLIC_DIR, 'EIT header.png'), 530, 80), (os.path.join(DIST_DIR, 'EIT header.png'), 530, 80)])
     
     found_image = None
     for path, w, h in candidates:
@@ -1329,6 +1365,7 @@ def generate_invoice_pdf(request):
         # Row Heights: 30 for signature space, 20 for date space
         sub_table = Table(sub_data, colWidths=[25, 100, 25], rowHeights=[35, 25])
         sub_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), font_name), # Ensure Thai font is used
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
             
