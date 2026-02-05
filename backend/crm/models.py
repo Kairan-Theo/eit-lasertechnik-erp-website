@@ -358,6 +358,7 @@ class Product(models.Model):
     code = models.CharField(max_length=100, blank=True, default='')
     name = models.CharField(max_length=255, blank=True, default='')
     description = models.TextField(blank=True, default='')
+    image = models.ImageField(upload_to='products/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -387,6 +388,7 @@ class ProductType(models.Model):
 class System(models.Model):
     type = models.ForeignKey(ProductType, related_name='systems', on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
+    image = models.ImageField(upload_to='systems/', null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -396,6 +398,7 @@ class Component(models.Model):
     part_number = models.CharField(max_length=100)
     name = models.CharField(max_length=255)
     unit = models.CharField(max_length=50)
+    image = models.ImageField(upload_to='components/', null=True, blank=True)
 
     class Meta:
         db_table = 'bom_component'
