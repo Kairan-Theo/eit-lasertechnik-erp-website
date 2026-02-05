@@ -54,8 +54,21 @@ function useInventory() {
   
   // Delivery/Movements State
   const [movements, setMovements] = React.useState([])
+  const [deliveries, setDeliveries] = React.useState([]) // Backend delivery records
   const [selectedDeliveryIds, setSelectedDeliveryIds] = React.useState([])
   const [error, setError] = React.useState(null)
+
+  const refreshDeliveries = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/delivery/`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeliveries(data)
+      }
+    } catch (error) {
+      console.error("Error fetching deliveries:", error)
+    }
+  }
 
   React.useEffect(() => {
     try {
@@ -227,6 +240,7 @@ function useInventory() {
 
   React.useEffect(() => {
     refreshInventory()
+    refreshDeliveries()
   }, [])
 
   const warehouses = React.useMemo(() => {
@@ -671,17 +685,36 @@ function useInventory() {
   }
 
   const deliveryRows = React.useMemo(() => {
-    return movements
+    // Map backend deliveries
+    const backendRows = deliveries.map(d => ({
+         id: d.id,
+         ts: d.created_at,
+         type: "sales_delivery",
+         productName: d.inventory_product_name_display || "Unknown",
+         sku: "INV-" + d.inventory_product_name,
+         orderAmount: d.order_amount,
+         status: d.delivery_status ? d.delivery_status.charAt(0).toUpperCase() + d.delivery_status.slice(1) : "Pending",
+         company: d.company_name_display || "",
+         tracking: d.tracking_number || "",
+         courier: d.courier || "",
+         trackingUrl: buildTrackingUrl(d.courier, d.tracking_number, ""),
+         isBackend: true
+     }))
+
+    const localRows = movements
       .filter((e) => e.type === "sales_delivery")
-      .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
       .map(log => {
           const p = items.find(i => i.sku === log.sku)
           return {
             ...log,
             productName: p ? p.name : log.sku,
-            orderAmount: log.qty
+            orderAmount: log.qty,
+            isBackend: false
           }
       })
+
+    return [...backendRows, ...localRows]
+      .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
       .filter(r => {
           if (!query) return true
           const q = query.toLowerCase()
@@ -692,23 +725,126 @@ function useInventory() {
             (r.tracking || "").toLowerCase().includes(q)
           )
       })
-  }, [movements, items, query])
+  }, [movements, items, query, deliveries])
+
+  const addDelivery = async (payload) => {
+    try {
+      // Find product ID from SKU if possible
+      // payload.sku is likely "INV-123" or product name? 
+      // In DeliveryView, it sends `sku` which is `it.sku` (e.g. "INV-123")
+      
+      let productId = null
+      if (payload.sku && payload.sku.startsWith("INV-")) {
+          productId = payload.sku.split("-")[1]
+      } else {
+          // Try to find by name? Or if SKU is just the name?
+          // DeliveryView uses `it.sku` as value.
+          // If manually entered, might be tricky.
+          const item = items.find(i => i.sku === payload.sku)
+          if (item && item.sku.startsWith("INV-")) {
+              productId = item.sku.split("-")[1]
+          }
+      }
+
+      const body = {
+          inventory_product_name: productId,
+          order_amount: payload.qty,
+          delivery_status: "pending",
+          company_name_input: payload.company, // Use input field for name
+          tracking_number: payload.tracking,
+          courier: payload.courier
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/delivery/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+      })
+
+      if (response.ok) {
+          await refreshDeliveries()
+          // Optionally also log local movement for stock consistency if needed
+          // But usually backend should handle stock deduction? 
+          // Current logic in DeliveryView calls addMovement which is local.
+          // We might need to keep local movement for stock update if backend doesn't trigger it automatically
+          // OR if we rely on `deliverQty` function.
+          // But `saveNewRow` is "Manual Delivery Row", it might not affect stock immediately or maybe it should?
+          // The original `saveNewRow` calls `inv.addMovement` which DOES NOT update stock automatically (it just logs it).
+          // `deliverQty` updates stock.
+          // So `saveNewRow` is just a record?
+          
+          // If we want stock deduction, we should use `deliverQty`.
+          // But `saveNewRow` seems to be just creating a record.
+      } else {
+          const err = await response.json()
+          console.error("Failed to add delivery", err)
+          alert("Failed to save delivery: " + JSON.stringify(err))
+      }
+    } catch (e) {
+        console.error("Error adding delivery:", e)
+        alert("Error connecting to server")
+    }
+  }
 
   const addMovement = (entry) => {
     logMove(entry)
   }
 
-  const updateMovement = (id, updates) => {
+  const updateMovement = async (id, updates) => {
+    // Check if it's a backend delivery
+    const isBackend = deliveries.some(d => d.id === id)
+    if (isBackend) {
+        const payload = {}
+        if (updates.status) payload.delivery_status = updates.status.toLowerCase()
+        if (updates.tracking) payload.tracking_number = updates.tracking
+        if (updates.courier) payload.courier = updates.courier
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/delivery/${id}/`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            })
+            if (res.ok) {
+                await refreshDeliveries()
+            }
+        } catch (e) {
+            console.error("Failed to update backend delivery", e)
+        }
+        return
+    }
+
     const next = movements.map(m => m.id === id ? { ...m, ...updates } : m)
     setMovements(next)
     localStorage.setItem("inventoryMovements", JSON.stringify(next))
   }
 
-  const deleteMovements = (ids) => {
+  const deleteMovements = async (ids) => {
     if (!ids || !ids.length) return
-    const next = movements.filter(m => !ids.includes(m.id))
-    setMovements(next)
-    localStorage.setItem("inventoryMovements", JSON.stringify(next))
+    
+    // Separate backend and local IDs
+    const backendIds = ids.filter(id => deliveries.some(d => d.id === id))
+    const localIds = ids.filter(id => !backendIds.includes(id))
+
+    // Delete backend items
+    if (backendIds.length > 0) {
+        try {
+            await Promise.all(backendIds.map(id => 
+                fetch(`${API_BASE_URL}/api/delivery/${id}/`, { method: "DELETE" })
+            ))
+            await refreshDeliveries()
+        } catch (e) {
+            console.error("Failed to delete backend deliveries", e)
+        }
+    }
+
+    // Delete local items
+    if (localIds.length > 0) {
+        const next = movements.filter(m => !localIds.includes(m.id))
+        setMovements(next)
+        localStorage.setItem("inventoryMovements", JSON.stringify(next))
+    }
+    
     setSelectedDeliveryIds([])
   }
 
@@ -742,6 +878,7 @@ function useInventory() {
     deliveryRows,
     selectedDeliveryIds, setSelectedDeliveryIds,
     addMovement, updateMovement, deleteMovements,
+    addDelivery,
     error,
   }
 }
@@ -1571,21 +1708,16 @@ function DeliveryView({ inv }) {
 
   const saveNewRow = () => {
     const sku = newSku || "MANUAL"
-    const newLog = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-      ts: new Date().toISOString(),
-      type: "sales_delivery",
+    
+    // Save to backend
+    inv.addDelivery({
       sku,
       qty: Number(newQty || 0),
-      ref: "",
       company: newCompany || "",
-      status: "",
       tracking: "",
-      courier: "",
-      trackingUrl: "",
-      user: inv.role || "Inventory Admin",
-    }
-    inv.addMovement(newLog)
+      courier: ""
+    })
+    
     setOpenNew(false)
   }
 

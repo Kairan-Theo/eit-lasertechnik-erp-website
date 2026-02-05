@@ -254,6 +254,7 @@ class Project(models.Model):
         ('low', 'Low'),
         ('medium', 'Medium'),
         ('high', 'High'),
+     
     ]
     STATUS_CHOICES = [
         ('planned', 'Planned'),
@@ -279,6 +280,7 @@ class Task(models.Model):
         ('low', 'Low'),
         ('medium', 'Medium'),
         ('high', 'High'),
+     
     ]
     STATUS_CHOICES = [
         ('todo', 'To Do'),
@@ -398,6 +400,9 @@ class Component(models.Model):
     class Meta:
         db_table = 'bom_component'
 
+    def __str__(self):
+        return self.part_number
+
 
 class PermissionControl(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='permission_control')
@@ -408,9 +413,6 @@ class PermissionControl(models.Model):
 
     def __str__(self):
         return self.user_name
-
-    def __str__(self):
-        return self.part_number
 
 
 class SystemComponent(models.Model):
@@ -521,3 +523,52 @@ def update_inventory_on_mo_finish(sender, instance, created, **kwargs):
             # Add the quantity from Manufacturing Order
             inv.inventory_stock += int(instance.quantity or 0)
             inv.save()
+
+class Delivery(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('delivered', 'Delivered'),
+    ]
+
+    inventory_product_name = models.ForeignKey(Inventory, on_delete=models.CASCADE, related_name='deliveries', null=True, blank=True)
+    order_amount = models.IntegerField(default=0)
+    delivery_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    company_name = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='deliveries', null=True, blank=True)
+    tracking_number = models.CharField(max_length=100, blank=True)
+    courier = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Delivery {self.tracking_number} - {self.company_name}"
+
+@receiver(pre_save, sender=Delivery)
+def delivery_pre_save_status_check(sender, instance, **kwargs):
+    if instance.pk:
+        try:
+            old_instance = Delivery.objects.get(pk=instance.pk)
+            instance._old_status = old_instance.delivery_status
+        except Delivery.DoesNotExist:
+            instance._old_status = None
+    else:
+        instance._old_status = None
+
+@receiver(post_save, sender=Delivery)
+def update_inventory_on_delivery_status_change(sender, instance, created, **kwargs):
+    old_status = getattr(instance, '_old_status', None)
+    new_status = instance.delivery_status
+    
+    # If no product linked, we cannot update stock
+    if not instance.inventory_product_name:
+        return
+
+    # Case 1: Transition TO 'delivered' -> Subtract stock
+    if new_status == 'delivered' and old_status != 'delivered':
+        instance.inventory_product_name.inventory_stock -= int(instance.order_amount or 0)
+        instance.inventory_product_name.save()
+        
+    # Case 2: Transition FROM 'delivered' TO something else (e.g. 'pending') -> Add stock back (revert)
+    elif old_status == 'delivered' and new_status != 'delivered':
+        instance.inventory_product_name.inventory_stock += int(instance.order_amount or 0)
+        instance.inventory_product_name.save()
+
