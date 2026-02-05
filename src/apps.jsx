@@ -3,24 +3,65 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import AppGrid from "./components/app-grid.jsx"
 import { LanguageProvider } from "./components/language-context"
+import { API_BASE_URL } from "./config"
 import "./index.css"
 
 function AppsPage() {
   const [auth, setAuth] = React.useState({ isAuthenticated: false, allowedApps: null, user: null })
   
   React.useEffect(() => {
-    try {
-      const isAuthenticated = localStorage.getItem("isAuthenticated") === "true"
-      if (!isAuthenticated) {
-        window.location.href = "/"
-        return
+    let mounted = true
+
+    const checkAuth = async () => {
+      try {
+        const isAuthenticated = localStorage.getItem("isAuthenticated") === "true"
+        if (!isAuthenticated) {
+          window.location.href = "/"
+          return
+        }
+
+        // Initial load from local storage
+        let allowedApps = localStorage.getItem("allowedApps")
+        const user = JSON.parse(localStorage.getItem("currentUser") || "{}")
+        const token = localStorage.getItem("authToken")
+
+        if (mounted) {
+          setAuth({ isAuthenticated, allowedApps, user })
+        }
+
+        // Fetch fresh permissions from backend
+        if (token) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/auth/me/allowed-apps/`, {
+              headers: {
+                "Authorization": `Token ${token}`
+              }
+            })
+            if (res.ok) {
+              const data = await res.json()
+              if (data.allowed_apps !== undefined) {
+                const newAllowed = data.allowed_apps || ""
+                localStorage.setItem("allowedApps", newAllowed)
+                if (mounted) {
+                  setAuth(prev => ({ ...prev, allowedApps: newAllowed }))
+                }
+              }
+            }
+          } catch (err) {
+            console.error("Failed to refresh permissions:", err)
+          }
+        }
+      } catch (e) {
+        console.error("Auth check error:", e)
+        if (mounted) {
+          setAuth({ isAuthenticated: false, allowedApps: null, user: null })
+        }
       }
-      const allowedApps = localStorage.getItem("allowedApps")
-      const user = JSON.parse(localStorage.getItem("currentUser") || "{}")
-      setAuth({ isAuthenticated, allowedApps, user })
-    } catch {
-      setAuth({ isAuthenticated: false, allowedApps: null, user: null })
     }
+
+    checkAuth()
+    
+    return () => { mounted = false }
   }, [])
 
   const canViewApps = (() => {
@@ -47,6 +88,12 @@ function AppsPage() {
               Please contact the administrator to request access.
             </p>
             <div className="flex items-center justify-center gap-3">
+              <button 
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition"
+              >
+                Refresh Permissions
+              </button>
               <a href="/" className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition">
                 Return to Dashboard
               </a>

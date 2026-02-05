@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
 import { 
   LayoutDashboard, 
   FileText, 
@@ -791,27 +791,6 @@ function PermissionsManager() {
       setLoading(false)
     }
   }, [])
-  const syncUsers = async () => {
-    try {
-      const token = localStorage.getItem("authToken")
-      if (!token) return
-      if (!confirm("This will synchronize all users to the Permission Control table. Continue?")) return
-      
-      const r = await fetch(`${API_BASE_URL}/api/users/sync/`, {
-        method: "POST",
-        headers: { "Authorization": `Token ${token}` }
-      })
-      if (r.ok) {
-        alert("Sync successful!")
-        fetchUsers()
-      } else {
-        alert("Sync failed: " + r.status)
-      }
-    } catch (e) {
-      alert("Error syncing: " + e.message)
-    }
-  }
-
   React.useEffect(() => {
     loadMe()
     fetchUsers()
@@ -908,8 +887,6 @@ function PermissionsManager() {
              {lastUpdated && ` • Last updated: ${lastUpdated.toLocaleTimeString()}`}
            </p>
         </div>
-        <button onClick={fetchUsers} className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-gray-100 hover:bg-gray-200 transition-colors">Refresh</button>
-        <button onClick={syncUsers} className="ml-2 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">Sync DB</button>
       </div>
       {loading ? (
         <div className="py-6 text-center text-gray-500">Loading users...</div>
