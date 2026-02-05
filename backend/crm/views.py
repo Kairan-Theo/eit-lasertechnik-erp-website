@@ -523,9 +523,11 @@ def login(request):
         allowed_apps = ""
         profile_pic_url = None
         company = ""
+        account_type = "normal"
         if hasattr(user, 'profile'):
             allowed_apps = user.profile.allowed_apps
             company = user.profile.company or ""
+            account_type = user.profile.account_type
             if user.profile.profile_picture:
                 try:
                     profile_pic_url = request.build_absolute_uri(user.profile.profile_picture.url)
@@ -561,7 +563,8 @@ def login(request):
             'role': 'Admin' if user.is_staff else 'User',
             'allowed_apps': allowed_apps,
             'profile_picture': profile_pic_url,
-            'company': company
+            'company': company,
+            'account_type': account_type
         })
     else:
         return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
@@ -634,10 +637,12 @@ def google_login(request):
         allowed_apps = ""
         profile_pic_url = None
         company = ""
+        account_type = "normal"
         
         if hasattr(user, 'profile'):
             allowed_apps = user.profile.allowed_apps
             company = user.profile.company or ""
+            account_type = user.profile.account_type
             # Update profile pic from google if not set
             if not user.profile.profile_picture and google_data.get('picture'):
                 # We could download and save, or just store URL if we had a field. 
@@ -680,7 +685,8 @@ def google_login(request):
             'role': 'Admin' if user.is_staff else 'User',
             'allowed_apps': allowed_apps,
             'profile_picture': profile_pic_url or google_data.get('picture'),
-            'company': company
+            'company': company,
+            'account_type': account_type
         })
             
     except Exception as e:
@@ -758,8 +764,9 @@ def get_users(request):
     Only accessible by Admin users or specific admin email.
     """
     print(f"DEBUG: get_users called by {request.user.email} (staff={request.user.is_staff})")
-    # Allow staff or specific email
-    if not request.user.is_staff and request.user.email != 'htetyunn06@gmail.com':
+    # Allow staff or permission_control accounts (or specific email)
+    is_pc = hasattr(request.user, 'profile') and request.user.profile.account_type == 'permission_control'
+    if not (request.user.is_staff or is_pc or request.user.email in ['htetyunn06@gmail.com', 'eit@eitlaser.com', 'shwinpyonethu0106@gmail.com']):
         print("DEBUG: Permission denied")
         return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -789,8 +796,9 @@ def update_user_permissions(request):
     """
     Update allowed apps for a user.
     """
-    # Allow staff or specific email
-    if not request.user.is_staff and request.user.email != 'htetyunn06@gmail.com':
+    # Allow staff or permission_control accounts (or specific email)
+    is_pc = hasattr(request.user, 'profile') and request.user.profile.account_type == 'permission_control'
+    if not (request.user.is_staff or is_pc or request.user.email in ['htetyunn06@gmail.com', 'eit@eitlaser.com', 'shwinpyonethu0106@gmail.com']):
         return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
     user_id = request.data.get('user_id')
@@ -836,11 +844,41 @@ def update_user_permissions(request):
         print(f"Error updating permissions: {e}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_user(request, pk):
+    """
+    Delete a user.
+    """
+    # Allow staff or permission_control accounts (or specific email)
+    is_pc = hasattr(request.user, 'profile') and request.user.profile.account_type == 'permission_control'
+    if not (request.user.is_staff or is_pc or request.user.email in ['htetyunn06@gmail.com', 'eit@eitlaser.com', 'shwinpyonethu0106@gmail.com']):
+        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        user = User.objects.get(id=pk)
+        if user.is_staff and not request.user.is_staff:
+             # Prevent permission_control from deleting actual Admins if we want to be strict
+             # But for now, let's assume if they have access, they can manage.
+             pass
+             
+        # Prevent self-deletion
+        if user.id == request.user.id:
+            return Response({'error': 'Cannot delete yourself'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user.delete()
+        return Response({'success': True, 'message': 'User deleted'})
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def set_user_password(request):
-    # Allow staff or specific email
-    if not request.user.is_staff and request.user.email != 'htetyunn06@gmail.com':
+    # Allow staff or permission_control accounts (or specific email)
+    is_pc = hasattr(request.user, 'profile') and request.user.profile.account_type == 'permission_control'
+    if not (request.user.is_staff or is_pc or request.user.email in ['htetyunn06@gmail.com', 'eit@eitlaser.com', 'shwinpyonethu0106@gmail.com']):
         return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
     user_id = request.data.get('user_id')

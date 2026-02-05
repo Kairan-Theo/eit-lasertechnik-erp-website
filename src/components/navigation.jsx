@@ -447,9 +447,9 @@ export default function Navigation({ require }) {
             <a href="/admin.html" className="nav-link text-white hover:text-gray-200 transition">
               Admin
             </a>
-            {user && user.email === "htetyunn06@gmail.com" && (
-              <a href="/support.html" className="nav-link text-white hover:text-gray-200 transition">
-                Permission
+            {user && (user.role === "Admin" || user.account_type === "permission_control") && (
+              <a href="/admin.html?view=permissions" className="nav-link text-white hover:text-gray-200 transition">
+                User Permissions
               </a>
             )}
           </div>

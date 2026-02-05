@@ -231,6 +231,11 @@ class UserProfile(models.Model):
     allowed_apps = models.TextField(default="all", blank=True)
     profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
     company = models.CharField(max_length=255, blank=True, null=True)
+    ACCOUNT_TYPE_CHOICES = [
+        ('normal', 'Normal Account'),
+        ('permission_control', 'Permission Control Account'),
+    ]
+    account_type = models.CharField(max_length=32, choices=ACCOUNT_TYPE_CHOICES, default="normal")
 
     def __str__(self):
         return f"{self.user.username}'s Profile"
