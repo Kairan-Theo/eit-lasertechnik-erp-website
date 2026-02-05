@@ -65,9 +65,9 @@ class ActivityScheduleAdmin(admin.ModelAdmin):
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     form = UserProfileForm
-    list_display = ("user", "allowed_apps")
-    search_fields = ("user__username", "allowed_apps")
-    fields = ("user", "profile_picture", "allowed_apps_list", "allowed_apps")
+    list_display = ("user", "allowed_apps", "account_type")
+    search_fields = ("user__username", "allowed_apps", "account_type")
+    fields = ("user", "profile_picture", "allowed_apps_list", "allowed_apps", "account_type")
     readonly_fields = ("allowed_apps",)
 
 @admin.register(Notification)

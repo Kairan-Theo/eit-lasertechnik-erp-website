@@ -149,7 +149,14 @@ function LoginPage() {
         localStorage.setItem("userRole", data.role)
         localStorage.setItem("authToken", data.token)
         localStorage.setItem("allowedApps", data.allowed_apps)
-        localStorage.setItem("currentUser", JSON.stringify({ email: data.email, role: data.role, name: data.name, profile_picture: data.profile_picture, company: data.company }))
+        localStorage.setItem("currentUser", JSON.stringify({ 
+          email: data.email, 
+          role: data.role, 
+          name: data.name, 
+          profile_picture: data.profile_picture, 
+          company: data.company,
+          account_type: data.account_type
+        }))
         window.location.href = "/apps.html"
       } else {
         setError(data.error || "Google login failed")
@@ -188,7 +195,14 @@ function LoginPage() {
         localStorage.setItem("userRole", data.role)
         localStorage.setItem("authToken", data.token)
         localStorage.setItem("allowedApps", data.allowed_apps)
-        localStorage.setItem("currentUser", JSON.stringify({ email: data.email, role: data.role, name: data.name, profile_picture: data.profile_picture }))
+        localStorage.setItem("currentUser", JSON.stringify({ 
+          email: data.email, 
+          role: data.role, 
+          name: data.name, 
+          profile_picture: data.profile_picture,
+          company: data.company,
+          account_type: data.account_type
+        }))
         window.location.href = "/apps.html"
       } else {
         setError(data.error || "Login failed")

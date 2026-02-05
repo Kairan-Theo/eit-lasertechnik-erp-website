@@ -973,6 +973,36 @@ function PermissionsManager() {
     if (me && me.id === userId) setMe(prev => ({ ...prev, allowed_apps: nextAllowed }))
     save(userId, nextAllowed)
   }
+
+  const deleteUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return
+    
+    try {
+      const token = localStorage.getItem("authToken")
+      if (!token) return
+      
+      const r = await fetch(`${API_BASE_URL}/api/users/${userId}/delete/`, {
+        method: "DELETE",
+        headers: { "Authorization": `Token ${token}` }
+      })
+      
+      if (r.ok) {
+        setUsers(prev => prev.filter(u => u.id !== userId))
+      } else {
+        const txt = await r.text()
+        try {
+            const json = JSON.parse(txt)
+            alert(json.error || "Failed to delete user")
+        } catch {
+            alert("Failed to delete user: " + txt)
+        }
+      }
+    } catch (e) {
+      console.error("Error deleting user", e)
+      alert("Error deleting user: " + e.message)
+    }
+  }
+
   return (
     <div className="bg-white rounded-xl border shadow-sm p-6">
       <div className="flex items-center justify-between mb-4">
@@ -1025,6 +1055,14 @@ function PermissionsManager() {
                       >
                         Save
                       </button>
+                      <button 
+                        onClick={() => deleteUser(u.id)}
+                        className={`p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors ${savingId===u.id || (me && me.id === u.id) ? "opacity-50 cursor-not-allowed" : ""}`}
+                        title="Delete User"
+                        disabled={savingId===u.id || (me && me.id === u.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                       {savingId===u.id && <span className="text-xs text-gray-500">Saving...</span>}
                     </div>
                   </td>
@@ -1044,6 +1082,17 @@ function PermissionsManager() {
 function AdminPage() {
   const [activeTab, setActiveTab] = React.useState("dashboard")
   const [data, setData] = React.useState({ quotations: [], invoices: [], billingNotes: [], customers: [], purchaseOrders: [] })
+
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const view = params.get("view")
+      const allowed = ["dashboard","purchase-orders","quotations","invoices","billing-notes","eit-management","permissions"]
+      if (view && allowed.includes(view)) {
+        setActiveTab(view)
+      }
+    } catch {}
+  }, [])
 
   const fetchQuotations = async () => {
     try {
@@ -1356,15 +1405,6 @@ function AdminPage() {
           >
             <Building2 className="w-5 h-5" />
             EIT Organizations
-          </button>
-          <button
-            onClick={() => setActiveTab("permissions")}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "permissions" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            <Lock className="w-5 h-5" />
-            User Permissions
           </button>
         </nav>
       </aside>
