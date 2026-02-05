@@ -1,13 +1,14 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.decorators import api_view, permission_classes, action, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, StageSerializer, InventorySerializer, DeliverySerializer, CustomerPurchaseOrderSerializer, EITSerializer, BillingNoteSerializer
+import json
 from datetime import date, timedelta
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -321,10 +322,12 @@ def list_boms(request):
                             'qty': sc.quantity,
                             'part_number': comp.part_number,
                             'unit': comp.unit,
+                            'photo': request.build_absolute_uri(comp.image.url) if comp.image else None,
                         })
                     systems_list.append({
                         'name': system.name,
                         'components': components_list,
+                        'photo': request.build_absolute_uri(system.image.url) if system.image else None,
                     })
                 result.append({
                     'id': ptype.id,
@@ -334,6 +337,7 @@ def list_boms(request):
                     'productTree': {
                         'product': product.name,
                         'systems': systems_list,
+                        'photo': request.build_absolute_uri(product.image.url) if product.image else None,
                     },
                 })
                 products_with_boms.add(product.id)
@@ -348,36 +352,76 @@ def list_boms(request):
             'productTree': {
                 'product': product.name,
                 'systems': [],
+                'photo': request.build_absolute_uri(product.image.url) if product.image else None,
             },
         })
     return Response(result)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def import_bom(request):
-    data = request.data if isinstance(request.data, dict) else {}
+    data = request.data
+    # Check if data is passed as a JSON string in 'json_data' field (common with FormData)
+    if 'json_data' in request.data:
+        try:
+            data = json.loads(request.data['json_data'])
+        except Exception:
+            pass # Fallback to using request.data as is if parsing fails, though it might be a QueryDict
+    
+    # If request.data is a dict (JSONParser) or QueryDict (but not using json_data), use it directly.
+    # Note: request.data from MultiPartParser is a QueryDict.
+    # Ideally, we expect 'json_data' when using FormData for complex structures.
+    if not isinstance(data, dict):
+        data = {}
+
     product_name = str(data.get('product') or '').strip()
     version_code = str(data.get('version') or '').strip() or 'v1'
     type_code = str(data.get('type') or '').strip() or 'standard'
     systems = data.get('systems') or []
+    
     if not product_name:
         return Response({'error': 'product is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
     product, _ = Product.objects.get_or_create(name=product_name, defaults={'code': '', 'description': ''})
+    
+    # Handle Product Image
+    if 'product_image' in request.FILES:
+        product.image = request.FILES['product_image']
+        product.save()
+        
     version, _ = ProductVersion.objects.get_or_create(product=product, version_code=version_code, defaults={'description': ''})
     ptype, _ = ProductType.objects.get_or_create(version=version, type_code=type_code, defaults={'description': ''})
+    
     created_rows = 0
-    for s in systems or []:
+    for i, s in enumerate(systems or []):
         sys_name = str(s.get('name') or s.get('system') or '').strip()
         comps = s.get('components') or []
         if not sys_name or not ptype:
             continue
+        
         sys_obj, _ = System.objects.get_or_create(type=ptype, name=sys_name)
-        for c in comps:
+        
+        # Handle System Image
+        sys_img_key = f"sys_{i}_image"
+        if sys_img_key in request.FILES:
+            sys_obj.image = request.FILES[sys_img_key]
+            sys_obj.save()
+            
+        for j, c in enumerate(comps):
             cname = str(c.get('name') or '').strip()
             qty = int(c.get('qty') or c.get('quantity') or 0)
             part_number = str(c.get('part_number') or '').strip() or cname
             unit = str(c.get('unit') or 'Unit').strip()
+            
             comp_obj, _ = Component.objects.get_or_create(part_number=part_number, defaults={'name': cname or part_number, 'unit': unit})
+            
+            # Handle Component Image
+            comp_img_key = f"sys_{i}_comp_{j}_image"
+            if comp_img_key in request.FILES:
+                comp_obj.image = request.FILES[comp_img_key]
+                comp_obj.save()
+                
             sc, created = SystemComponent.objects.get_or_create(system=sys_obj, component=comp_obj, defaults={'quantity': max(qty, 0)})
             if not created:
                 sc.quantity = max(qty, 0)
