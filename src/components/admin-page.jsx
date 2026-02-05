@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
 import { 
   LayoutDashboard, 
   FileText, 
@@ -753,6 +753,7 @@ function PermissionsManager() {
       setMe(null)
     }
   }, [])
+  const [lastUpdated, setLastUpdated] = React.useState(null)
   const fetchUsers = React.useCallback(async () => {
     try {
       setLoading(true)
@@ -768,10 +769,23 @@ function PermissionsManager() {
       if (r.ok) {
         const d = await r.json()
         setUsers(Array.isArray(d) ? d : [])
+        setLastUpdated(new Date())
       } else {
+        if (r.status === 401) {
+          alert("Session expired. Please log in again.")
+          localStorage.removeItem("isAuthenticated")
+          localStorage.removeItem("authToken")
+          window.location.href = "/login.html"
+          return
+        }
+        const txt = await r.text()
+        console.error("Fetch users failed:", r.status, txt)
+        alert(`Failed to load users: ${r.status} ${txt}`)
         setUsers([])
       }
-    } catch {
+    } catch (err) {
+      console.error("Fetch users error:", err)
+      alert(`Error loading users: ${err.message}`)
       setUsers([])
     } finally {
       setLoading(false)
@@ -855,12 +869,24 @@ function PermissionsManager() {
     save(userId, nextAllowed)
   }
   const allUsers = [...(me ? [me] : []), ...users.filter(u => !me || u.email !== me.email)]
+  const sortedUsers = allUsers.slice().sort((a, b) => {
+    const aEmpty = !a.allowed_apps || a.allowed_apps.trim() === ""
+    const bEmpty = !b.allowed_apps || b.allowed_apps.trim() === ""
+    if (aEmpty && !bEmpty) return -1
+    if (!aEmpty && bEmpty) return 1
+    return (a.name || a.email).localeCompare(b.name || b.email)
+  })
 
   return (
     <div className="bg-white rounded-xl border shadow-sm p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">User Permissions</h2>
-        <button onClick={fetchUsers} className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-gray-100 hover:bg-gray-200 transition-colors">Refresh</button>
+        <div>
+           <h2 className="text-lg font-semibold text-gray-900">User Permissions</h2>
+           <p className="text-xs text-gray-500 mt-1">
+             {loading ? "Refreshing..." : `${allUsers.length} users loaded`} 
+             {lastUpdated && ` • Last updated: ${lastUpdated.toLocaleTimeString()}`}
+           </p>
+        </div>
       </div>
       {loading ? (
         <div className="py-6 text-center text-gray-500">Loading users...</div>
@@ -876,10 +902,15 @@ function PermissionsManager() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {allUsers.map(u => (
+              {sortedUsers.map(u => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-3">
-                    <div className="font-medium text-gray-900">{me && u.email === me.email ? "You" : u.name}</div>
+                    <div className="font-medium text-gray-900 flex items-center gap-2">
+                      <span>{me && u.email === me.email ? "You" : u.name}</span>
+                      {(!u.allowed_apps || u.allowed_apps.trim() === "") && (
+                        <span className="inline-flex items-center rounded-full bg-yellow-100 text-yellow-800 px-2 py-0.5 text-[10px] font-semibold">Pending</span>
+                      )}
+                    </div>
                     <div className="text-xs text-gray-500">{u.email}</div>
                   </td>
                   <td className="p-3">{u.is_staff ? "Admin" : "User"}</td>

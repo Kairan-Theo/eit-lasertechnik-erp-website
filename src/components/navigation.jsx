@@ -188,6 +188,9 @@ export default function Navigation({ require }) {
       localStorage.removeItem("isAuthenticated")
       localStorage.removeItem("userRole")
       localStorage.removeItem("currentUser")
+      localStorage.removeItem("authToken")
+      localStorage.removeItem("allowedApps")
+      localStorage.removeItem("notifications")
     } catch {}
     window.location.href = "/"
   }
@@ -302,13 +305,16 @@ export default function Navigation({ require }) {
             const local = Array.isArray(raw) ? raw : []
             const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
             setNotificationsCount(unread)
-            setNotifications(local.map(n => ({
-              id: n.id,
-              message: n.message,
-              created_at: n.timestamp || n.created_at,
-              is_read: !n.unread,
-              type: n.type || "info"
-            })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+            setNotifications(local.map(n => {
+              const msg = typeof n.message === "string" && (n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message
+              return {
+                id: n.id,
+                message: msg,
+                created_at: n.timestamp || n.created_at,
+                is_read: !n.unread,
+                type: n.type || "info"
+              }
+            }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
           } catch {
             setNotificationsCount(0)
             setNotifications([])
@@ -350,7 +356,7 @@ export default function Navigation({ require }) {
                 freshAlerts.forEach(n => {
                   toast({
                     title: "Reminder",
-                    description: n.message,
+                    description: (typeof n.message === "string" && n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message,
                   })
                 })
                 initialToastShownRef.current = true
@@ -367,13 +373,16 @@ export default function Navigation({ require }) {
               const local = Array.isArray(raw) ? raw : []
               const unread = local.reduce((acc, n) => acc + (n && n.unread === true ? 1 : 0), 0)
               setNotificationsCount(unread)
-              setNotifications(local.map(n => ({
-                id: n.id,
-                message: n.message,
-                created_at: n.timestamp || n.created_at,
-                is_read: !n.unread,
-                type: n.type || "info"
-              })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+              setNotifications(local.map(n => {
+                const msg = typeof n.message === "string" && (n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message
+                return {
+                  id: n.id,
+                  message: msg,
+                  created_at: n.timestamp || n.created_at,
+                  is_read: !n.unread,
+                  type: n.type || "info"
+                }
+              }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
             } catch {
               setNotificationsCount(0)
               setNotifications([])
@@ -388,13 +397,16 @@ export default function Navigation({ require }) {
               const local = Array.isArray(raw) ? raw : []
               const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
               setNotificationsCount(unread)
-              setNotifications(local.map(n => ({
-                id: n.id,
-                message: n.message,
-                created_at: n.timestamp || n.created_at,
-                is_read: !n.unread,
-                type: n.type || "info"
-              })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+              setNotifications(local.map(n => {
+                const msg = typeof n.message === "string" && (n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message
+                return {
+                  id: n.id,
+                  message: msg,
+                  created_at: n.timestamp || n.created_at,
+                  is_read: !n.unread,
+                  type: n.type || "info"
+                }
+              }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
             } catch {
               setNotificationsCount(0)
               setNotifications([])
