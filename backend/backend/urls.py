@@ -21,8 +21,7 @@ from django.db import connection
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, google_login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom, delete_bom, send_email_api, EmailLogViewSet, DealHistoryViewSet, check_tracking_status, QuotationViewSet, BillingNoteViewSet, get_default_eit, EITViewSet, CustomerPurchaseOrderViewSet, PurchaseOrderViewSet, InvoiceViewSet, StageViewSet, InventoryViewSet, sync_users_permissions
-from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, google_login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom, delete_bom, send_email_api, EmailLogViewSet, DealHistoryViewSet, check_tracking_status, QuotationViewSet, BillingNoteViewSet, get_default_eit, EITViewSet, CustomerPurchaseOrderViewSet, PurchaseOrderViewSet, InvoiceViewSet, StageViewSet, InventoryViewSet, DeliveryViewSet
+from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, TaskViewSet, CustomerViewSet, SupportTicketViewSet, LeadViewSet, signup, login, google_login, get_users, update_user_permissions, get_notifications, mark_notification_read, delete_notification, my_allowed_apps, update_profile, set_user_password, get_crm_analytics, ManufacturingOrderViewSet, ProductViewSet, ProductVersionViewSet, ProductTypeViewSet, SystemViewSet, ComponentViewSet, SystemComponentViewSet, ComponentEntryViewSet, list_boms, import_bom, delete_bom, send_email_api, EmailLogViewSet, DealHistoryViewSet, check_tracking_status, QuotationViewSet, BillingNoteViewSet, get_default_eit, EITViewSet, CustomerPurchaseOrderViewSet, PurchaseOrderViewSet, InvoiceViewSet, StageViewSet, InventoryViewSet, DeliveryViewSet, sync_users_permissions, delete_user
 from crm.pdf_views import generate_quotation_pdf, generate_billing_note_pdf, generate_invoice_pdf
 
 router = DefaultRouter()
@@ -90,6 +89,7 @@ urlpatterns = [
     path('api/auth/google/', google_login),
     path('api/users/', get_users),
     path('api/users/permissions/', update_user_permissions),
+    path('api/users/<int:pk>/delete/', delete_user),
     path('api/users/sync/', sync_users_permissions),
     path('api/users/password/', set_user_password),
     path('api/notifications/', get_notifications),
