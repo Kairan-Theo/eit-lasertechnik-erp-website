@@ -1,6 +1,42 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory
+from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
+
+class DeliverySerializer(serializers.ModelSerializer):
+    company_name = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all(), required=False, allow_null=True)
+    inventory_product_name = serializers.PrimaryKeyRelatedField(queryset=Inventory.objects.all(), required=False, allow_null=True)
+    company_name_input = serializers.CharField(write_only=True, required=False)
+    
+    # For display
+    company_name_display = serializers.SerializerMethodField()
+    inventory_product_name_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Delivery
+        fields = [
+            'id', 'inventory_product_name', 'order_amount', 'delivery_status', 
+            'company_name', 'tracking_number', 'courier', 'created_at', 'updated_at',
+            'company_name_input', 'company_name_display', 'inventory_product_name_display'
+        ]
+
+    def get_company_name_display(self, obj):
+        return obj.company_name.company_name if obj.company_name else ""
+
+    def get_inventory_product_name_display(self, obj):
+        return obj.inventory_product_name.inventory_product_name if obj.inventory_product_name else ""
+
+    def create(self, validated_data):
+        company_name_input = validated_data.pop('company_name_input', None)
+        
+        if not validated_data.get('company_name') and company_name_input:
+            customer, _ = Customer.objects.get_or_create(company_name=company_name_input)
+            validated_data['company_name'] = customer
+        
+        # If no customer provided at all (and strict mode off), maybe handle error or let it fail if model requires it
+        # Model has on_delete=CASCADE, so it is required.
+            
+        return super().create(validated_data)
+
 
 class EITSerializer(serializers.ModelSerializer):
     class Meta:
@@ -151,21 +187,16 @@ class DealSerializer(serializers.ModelSerializer):
         if cust_id:
             validated_data['customer'] = cust_id
         elif name:
-            try:
-                cust = Customer.objects.get(company_name=name)
-                validated_data['customer'] = cust
-            except Customer.DoesNotExist:
-                cust = Customer.objects.create(
-                    company_name=name,
-                    defaults={
-                        'contact_name': '',
-                        'email': '',
-                        'phone': '',
-                        'industry': '',
-                        'address': ''
-                    }
-                )
-                validated_data['customer'] = cust
+            cust, created = Customer.objects.get_or_create(
+                company_name=name,
+                defaults={
+                    'email': '',
+                    'phone': '',
+                    'industry': '',
+                    'address': ''
+                }
+            )
+            validated_data['customer'] = cust
         validated_data.pop('write_customer_name', None)
         if not validated_data.get('currency'):
             validated_data['currency'] = '฿'

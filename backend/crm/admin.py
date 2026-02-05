@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django import forms
 from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, PermissionControl
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -198,6 +199,13 @@ class StageAdmin(admin.ModelAdmin):
     list_display = ("name", "order", "created_at")
     search_fields = ("name",)
     ordering = ("order", "created_at")
+
+@admin.register(Delivery)
+class DeliveryAdmin(admin.ModelAdmin):
+    list_display = ("tracking_number", "company_name", "delivery_status", "order_amount", "courier", "created_at")
+    search_fields = ("tracking_number", "company_name__company_name", "courier")
+    list_filter = ("delivery_status", "created_at")
+    ordering = ("-created_at",)
 
 @admin.register(Inventory)
 class InventoryAdmin(admin.ModelAdmin):

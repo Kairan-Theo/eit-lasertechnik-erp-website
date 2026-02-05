@@ -54,8 +54,21 @@ function useInventory() {
   
   // Delivery/Movements State
   const [movements, setMovements] = React.useState([])
+  const [deliveries, setDeliveries] = React.useState([]) // Backend delivery records
   const [selectedDeliveryIds, setSelectedDeliveryIds] = React.useState([])
   const [error, setError] = React.useState(null)
+
+  const refreshDeliveries = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/delivery/`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeliveries(data)
+      }
+    } catch (error) {
+      console.error("Error fetching deliveries:", error)
+    }
+  }
 
   React.useEffect(() => {
     try {
@@ -93,46 +106,129 @@ function useInventory() {
     return max + 1
   }
 
+  // Fetch inventory from backend and merge with local data
+  // This ensures we get the latest stock/names from server while preserving local fields (warehouse, bin, etc.)
   const refreshInventory = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/inventory/`)
       if (response.ok) {
         setError(null)
         const data = await response.json()
-        const mapped = data.map((item) => ({
-           sku: `INV-${item.id}`,
-           name: item.inventory_product_name,
-           stockQty: Number(item.inventory_stock || 0),
-           updatedAt: item.last_updated_day ? item.last_updated_day.slice(0, 10) : new Date().toISOString().slice(0, 10),
-           warehouse: "Main",
-           category: "Finished Goods",
-           status: "Active",
-           price: 0,
-           instock: item.inventory_stock > 0 ? 1 : 0,
-           bin: "A-01-01",
-           lot: "",
-           expiry: "",
-           reserved: 0,
-           incomingQty: 0,
-           outgoingQty: 0,
-           barcode: "",
-           uom: "pcs",
-           description: "",
-           brand: "",
-           model: "",
-           minStock: 0,
-           reorderQty: 0,
-           valuationMethod: "FIFO",
-           serials: [],
-           manufactureDate: "",
-           deliveryStatus: "",
-           deliveryCompany: "",
-           trackingNumber: "",
-           courier: "",
-           trackingUrl: "",
-           trackingStatus: ""
-        }))
-        setItems(mapped)
+        
+        let localItems = []
+        try { localItems = JSON.parse(localStorage.getItem("inventoryProducts") || "[]") } catch {}
+
+        // Group local items by SKU to handle multi-warehouse distribution
+        const localGroups = {}
+        localItems.forEach(item => {
+            if (!item.sku) return
+            if (!localGroups[item.sku]) localGroups[item.sku] = []
+            localGroups[item.sku].push(item)
+        })
+
+        const finalItems = []
+
+        // Iterate over Backend Items (Source of Truth for Total Stock & Name)
+        data.forEach(backendItem => {
+           const sku = `INV-${backendItem.id}`
+           const totalStock = Number(backendItem.inventory_stock || 0)
+           const group = localGroups[sku] || []
+
+           if (group.length === 0) {
+             // New item from backend (not in local) - Create default entry
+             finalItems.push({
+               // Defaults
+               warehouse: "Main",
+               category: "Finished Goods",
+               price: 0,
+               bin: "A-01-01",
+               lot: "",
+               expiry: "",
+               reserved: 0,
+               incomingQty: 0,
+               outgoingQty: 0,
+               barcode: "",
+               uom: "pcs",
+               description: "",
+               brand: "",
+               model: "",
+               minStock: 0,
+               reorderQty: 0,
+               valuationMethod: "FIFO",
+               serials: [],
+               manufactureDate: "",
+               deliveryStatus: "",
+               deliveryCompany: "",
+               trackingNumber: "",
+               courier: "",
+               trackingUrl: "",
+               trackingStatus: "",
+               
+               // Backend Data
+               sku: sku,
+               name: backendItem.inventory_product_name,
+               stockQty: totalStock,
+               updatedAt: backendItem.last_updated_day ? backendItem.last_updated_day.slice(0, 10) : new Date().toISOString().slice(0, 10),
+               instock: totalStock > 0 ? 1 : 0,
+               status: totalStock > 0 ? "Active" : "Inactive",
+             })
+           } else {
+             // Existing local items - Reconcile stock
+             const localTotal = group.reduce((sum, i) => sum + Number(i.stockQty || 0), 0)
+             const diff = totalStock - localTotal
+
+             // Update common fields from backend (name, date) for all rows
+             const updatedGroup = group.map(item => ({
+               ...item,
+               name: backendItem.inventory_product_name,
+               updatedAt: backendItem.last_updated_day ? backendItem.last_updated_day.slice(0, 10) : new Date().toISOString().slice(0, 10),
+               instock: totalStock > 0 ? 1 : 0, // Global status based on total stock
+               status: totalStock > 0 ? "Active" : "Inactive"
+             }))
+
+             if (diff !== 0) {
+                 // Adjust stock to match backend total
+                 // We add/subtract the difference from the "Main" warehouse or the first available row
+                 let targetIdx = updatedGroup.findIndex(i => (i.warehouse === "Main"))
+                 if (targetIdx === -1) targetIdx = 0 
+
+                 let remainingDiff = diff
+                 
+                 if (remainingDiff > 0) {
+                     // Backend has MORE stock -> Add to target
+                     updatedGroup[targetIdx].stockQty = Number(updatedGroup[targetIdx].stockQty || 0) + remainingDiff
+                 } else {
+                     // Backend has LESS stock -> Subtract from rows until satisfied
+                     // We try to subtract from target first, then others
+                     // Since remainingDiff is negative, we want to add it (reduce stock)
+                     
+                     // First apply to target
+                     let targetStock = Number(updatedGroup[targetIdx].stockQty || 0)
+                     let canTake = Math.min(targetStock, Math.abs(remainingDiff))
+                     updatedGroup[targetIdx].stockQty = targetStock - canTake
+                     remainingDiff += canTake // Move towards 0
+                     
+                     // If still negative, distribute to others
+                     if (remainingDiff < 0) {
+                         for (let i = 0; i < updatedGroup.length; i++) {
+                             if (i === targetIdx) continue // Already handled
+                             if (remainingDiff === 0) break
+                             
+                             let q = Number(updatedGroup[i].stockQty || 0)
+                             let take = Math.min(q, Math.abs(remainingDiff))
+                             updatedGroup[i].stockQty = q - take
+                             remainingDiff += take
+                         }
+                     }
+                 }
+             }
+             
+             finalItems.push(...updatedGroup)
+           }
+        })
+
+        setItems(finalItems)
+        try { localStorage.setItem("inventoryProducts", JSON.stringify(finalItems)) } catch {}
       } else {
         setError("Failed to fetch inventory data from server.")
       }
@@ -144,6 +240,7 @@ function useInventory() {
 
   React.useEffect(() => {
     refreshInventory()
+    refreshDeliveries()
   }, [])
 
   const warehouses = React.useMemo(() => {
@@ -221,44 +318,8 @@ function useInventory() {
       if (!keepOpen) setShowAdd(false)
       
       // Refresh list from backend to be sure
-      const refresh = await fetch(`${API_BASE_URL}/api/inventory/`)
-      if (refresh.ok) {
-        const data = await refresh.json()
-        const mapped = data.map((item) => ({
-             sku: `INV-${item.id}`,
-             name: item.inventory_product_name,
-             stockQty: Number(item.inventory_stock || 0),
-             updatedAt: item.last_updated_day ? item.last_updated_day.slice(0, 10) : new Date().toISOString().slice(0, 10),
-             warehouse: "Main",
-             category: "Finished Goods",
-             status: "Active",
-             price: 0,
-             instock: item.inventory_stock > 0 ? 1 : 0,
-             bin: "A-01-01",
-             lot: "",
-             expiry: "",
-             reserved: 0,
-             incomingQty: 0,
-             outgoingQty: 0,
-             barcode: "",
-             uom: "pcs",
-             description: "",
-             brand: "",
-             model: "",
-             minStock: 0,
-             reorderQty: 0,
-             valuationMethod: "FIFO",
-             serials: [],
-             manufactureDate: "",
-             deliveryStatus: "",
-             deliveryCompany: "",
-             trackingNumber: "",
-             courier: "",
-             trackingUrl: "",
-             trackingStatus: ""
-        }))
-        setItems(mapped)
-      }
+      // We use the shared refreshInventory function to ensure consistency across the app
+      await refreshInventory()
 
     } catch (e) {
       console.error("Backend sync failed", e)
@@ -280,33 +341,89 @@ function useInventory() {
     } catch {}
   }
 
-  const setQty = (sku, warehouse, bin, lot, newQty, reason, ref) => {
+  // Update stock quantity on backend and refresh
+  // This function handles both backend sync and local movement logging
+  const setQty = async (sku, warehouse, bin, lot, newQty, reason, ref) => {
+    const finalQty = Math.max(0, Number(newQty || 0))
+
+    // 1. Update Backend
+    if (sku && sku.startsWith("INV-")) {
+      const id = sku.split("-")[1]
+      if (id) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/inventory/${id}/`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ inventory_stock: finalQty })
+          })
+          if (!res.ok) throw new Error("Backend update failed")
+        } catch (e) {
+          console.error("Stock update failed", e)
+          alert("Failed to update stock on server. Please check connection.")
+          return // Stop if backend fails to prevent desync
+        }
+      }
+    }
+
+    // 2. Update Local State (Optimistic/Legacy) & Log Movement
     const next = items.map((it) => {
       if (!(it.sku === sku && (it.warehouse || "Main") === (warehouse || "Main") && (it.bin || "A-01-01") === (bin || "A-01-01") && (it.lot || "") === (lot || ""))) return it
-      const nextQty = Math.max(0, Number(newQty || 0))
-      return { ...it, stockQty: nextQty, status: nextQty > 0 ? "Active" : "Inactive", updatedAt: new Date().toISOString().slice(0, 10) }
+      return { ...it, stockQty: finalQty, status: finalQty > 0 ? "Active" : "Inactive", updatedAt: new Date().toISOString().slice(0, 10) }
     })
     saveItems(next)
+
     const item = items.find((it) => it.sku === sku && (it.warehouse || "Main") === (warehouse || "Main") && (it.bin || "A-01-01") === (bin || "A-01-01") && (it.lot || "") === (lot || ""))
     const prevQty = item ? Number(item.stockQty || 0) : 0
-    const finalQty = Math.max(0, Number(newQty || 0))
     logMove({ type: "adjustment", sku, warehouse: warehouse || "Main", bin: bin || "A-01-01", lot: lot || "", delta: finalQty - prevQty, newQty: finalQty, reason, ref })
+    
     setShowAdjust(null)
+
+    // 3. Refresh data from backend
+    await refreshInventory()
   }
 
-  const receiveQty = (sku, qty, ref, company) => {
+  // Receive goods: Update backend stock and log movement
+  const receiveQty = async (sku, qty, ref, company) => {
     if (!qty || qty <= 0) { setShowReceive(null); return }
+    const qtyNum = Number(qty)
+
+    // 1. Update Backend
+    if (sku && sku.startsWith("INV-")) {
+      const id = sku.split("-")[1]
+      const currentItem = items.find(i => i.sku === sku)
+      if (id && currentItem) {
+        const newStock = Number(currentItem.stockQty || 0) + qtyNum
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/inventory/${id}/`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ inventory_stock: newStock })
+          })
+          if (!res.ok) throw new Error("Backend update failed")
+        } catch (e) {
+          console.error("Receive sync failed", e)
+          alert("Failed to sync receipt to server.")
+          return
+        }
+      }
+    }
+
+    // 2. Update Local
     const next = items.map((it) => (
       it.sku === sku
-        ? { ...it, stockQty: Number(it.stockQty || 0) + Number(qty || 0), incomingQty: Math.max(0, Number(it.incomingQty || 0) - Number(qty || 0)), deliveryStatus: "Delivered", updatedAt: new Date().toISOString().slice(0, 10) }
+        ? { ...it, stockQty: Number(it.stockQty || 0) + qtyNum, incomingQty: Math.max(0, Number(it.incomingQty || 0) - qtyNum), deliveryStatus: "Delivered", updatedAt: new Date().toISOString().slice(0, 10) }
         : it
     ))
     saveItems(next)
-    logMove({ type: "purchase_receipt", sku, qty: Number(qty), ref, company })
+    logMove({ type: "purchase_receipt", sku, qty: qtyNum, ref, company })
     setShowReceive(null)
+
+    // 3. Refresh
+    await refreshInventory()
   }
 
-  const deliverQty = (sku, qty, ref, status, company, warehouse, bin, lot, tracking, courier, trackingUrl) => {
+  // Deliver goods: Update backend stock and log movement
+  const deliverQty = async (sku, qty, ref, status, company, warehouse, bin, lot, tracking, courier, trackingUrl) => {
     if (!qty || qty <= 0) { setShowDeliver(null); return }
 
     const item = items.find((it) =>
@@ -325,8 +442,28 @@ function useInventory() {
     }
 
     const isShipped = ["Shipped", "Delivered"].includes(status || "Delivered")
-    const isPending = ["Pending", "Ready"].includes(status)
+    
+    // 1. Update Backend if shipped
+    if (isShipped && sku && sku.startsWith("INV-")) {
+      const id = sku.split("-")[1]
+      if (id && item) {
+         const newStock = Math.max(0, Number(item.stockQty || 0) - Number(qty))
+         try {
+           const res = await fetch(`${API_BASE_URL}/api/inventory/${id}/`, {
+             method: "PATCH",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({ inventory_stock: newStock })
+           })
+           if (!res.ok) throw new Error("Backend update failed")
+         } catch (e) {
+           console.error("Delivery sync failed", e)
+           alert("Failed to sync delivery to server.")
+           return
+         }
+      }
+    }
 
+    const isPending = ["Pending", "Ready"].includes(status)
     const finalTrackingUrl = buildTrackingUrl(courier, tracking, trackingUrl)
 
     const next = items.map((it) => {
@@ -359,8 +496,16 @@ function useInventory() {
     saveItems(next)
     logMove({ type: "sales_delivery", sku, qty: Number(qty), ref, company, status: status || "Delivered", tracking: tracking || "", courier, trackingUrl: finalTrackingUrl })
     setShowDeliver(null)
+
+    // 3. Refresh
+    await refreshInventory()
   }
 
+  // Transfer stock between warehouses/bins
+  // NOTE: This operation is currently local-only because the Backend only stores "Total Stock" per product.
+  // The distribution of stock across warehouses is maintained in Local Storage.
+  // Since "Transfer" does not change the Total Stock, we do not need to call the Backend API here.
+  // The new refreshInventory logic will preserve this distribution while syncing the Total Stock.
   const transferQty = (sku, qty, fromWarehouse, toWarehouse, ref) => {
     if (!qty || qty <= 0 || fromWarehouse === toWarehouse) { setShowTransfer(null); return }
     const next = items.map((it) => {
@@ -383,7 +528,22 @@ function useInventory() {
 
   const exportCsv = () => {
     const headers = ["Index", "Productname", "stockQty", "updatedAt"]
-    const csv = [headers.join(","), ...items.map((i) => headers.map((k) => i[k] ?? "").join(","))].join("\n")
+    const rows = items.map((item, idx) => {
+      const values = [
+        String(idx + 1),
+        item.name ?? "",
+        item.stockQty ?? "",
+        item.updatedAt ?? ""
+      ]
+      return values
+        .map((v) => {
+          const s = String(v)
+          const needsQuote = s.includes(",") || s.includes("\n") || s.includes('"')
+          return needsQuote ? `"${s.replace(/"/g, '""')}"` : s
+        })
+        .join(",")
+    })
+    const csv = [headers.join(","), ...rows].join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -392,7 +552,35 @@ function useInventory() {
     a.click()
   }
 
-  const updateItem = (original, updates) => {
+  // Update item details on backend and refresh
+  const updateItem = async (original, updates) => {
+    // 1. Update Backend
+    if (original.sku && original.sku.startsWith("INV-")) {
+      const id = original.sku.split("-")[1]
+      if (id) {
+        try {
+          // Map frontend fields to backend fields
+          const backendPayload = {}
+          if (updates.name !== undefined) backendPayload.inventory_product_name = updates.name
+          if (updates.stockQty !== undefined) backendPayload.inventory_stock = updates.stockQty
+          
+          if (Object.keys(backendPayload).length > 0) {
+            const res = await fetch(`${API_BASE_URL}/api/inventory/${id}/`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(backendPayload)
+            })
+            if (!res.ok) throw new Error("Backend update failed")
+          }
+        } catch (e) {
+          console.error("Update failed", e)
+          alert("Failed to update item on server.")
+          return
+        }
+      }
+    }
+
+    // 2. Update Local State (Legacy)
     const next = items.map((it) => {
       const sameRow =
         it.sku === original.sku &&
@@ -415,6 +603,9 @@ function useInventory() {
       }
     })
     saveItems(next)
+
+    // 3. Refresh from backend
+    await refreshInventory()
   }
 
   const getRowId = (p) => `${p.sku}-${p.warehouse || "Main"}-${p.bin || "A-01-01"}-${p.lot || ""}`
@@ -423,43 +614,107 @@ function useInventory() {
     if (!Array.isArray(ids) || ids.length === 0) return
 
     const itemsToDelete = items.filter((p) => ids.includes(getRowId(p)))
-    const backendIds = []
     
+    // Group deletions by SKU to decide between Full Delete vs Partial Stock Reduction
+    const deletionGroups = {}
     itemsToDelete.forEach(item => {
-        if (item.sku && item.sku.startsWith("INV-")) {
-            const id = item.sku.split("-")[1]
-            if (id) backendIds.push(id)
-        }
+        if (!item.sku) return
+        if (!deletionGroups[item.sku]) deletionGroups[item.sku] = []
+        deletionGroups[item.sku].push(item)
     })
 
-    if (backendIds.length > 0) {
-        try {
-            await Promise.all(backendIds.map(id => 
-                fetch(`${API_BASE_URL}/api/inventory/${id}/`, { method: "DELETE" })
-            ))
-        } catch (e) {
-            console.error("Backend delete failed", e)
-            setError("Failed to delete items from backend.")
+    const backendDeletes = []
+    const backendUpdates = []
+
+    for (const sku in deletionGroups) {
+        // Only process backend-synced items
+        if (!sku.startsWith("INV-")) continue 
+        
+        const toDelete = deletionGroups[sku]
+        const allRowsForSku = items.filter(i => i.sku === sku)
+        
+        // Check if we are deleting ALL rows for this SKU
+        if (toDelete.length === allRowsForSku.length) {
+            // Full Delete: Remove the product entirely from backend
+            const id = sku.split("-")[1]
+            if (id) backendDeletes.push(id)
+        } else {
+            // Partial Delete: Removing specific warehouse/bin entries
+            // We must reduce backend total stock by the quantity of deleted items
+            const id = sku.split("-")[1]
+            if (id) {
+                const qtyToRemove = toDelete.reduce((sum, i) => sum + Number(i.stockQty || 0), 0)
+                const currentTotal = allRowsForSku.reduce((sum, i) => sum + Number(i.stockQty || 0), 0)
+                const newStock = Math.max(0, currentTotal - qtyToRemove)
+                backendUpdates.push({ id, inventory_stock: newStock })
+            }
         }
     }
-    
-    // Refresh to sync with backend
-    await refreshInventory()
-    setSelectedRows([])
+
+    try {
+        // Execute Backend Operations
+        if (backendDeletes.length > 0) {
+            await Promise.all(backendDeletes.map(id => 
+                fetch(`${API_BASE_URL}/api/inventory/${id}/`, { method: "DELETE" })
+            ))
+        }
+        
+        if (backendUpdates.length > 0) {
+            await Promise.all(backendUpdates.map(update => 
+                fetch(`${API_BASE_URL}/api/inventory/${update.id}/`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ inventory_stock: update.inventory_stock })
+                })
+            ))
+        }
+        
+        // Update Local State immediately
+        // We remove deleted items from local storage so refreshInventory knows they are gone
+        const remaining = items.filter(p => !ids.includes(getRowId(p)))
+        saveItems(remaining) 
+
+        // Refresh to ensure final sync with backend
+        await refreshInventory()
+        setSelectedRows([])
+        
+    } catch (e) {
+        console.error("Delete operation failed", e)
+        setError("Failed to delete items. Please check connection.")
+    }
   }
 
   const deliveryRows = React.useMemo(() => {
-    return movements
+    // Map backend deliveries
+    const backendRows = deliveries.map(d => ({
+         id: d.id,
+         ts: d.created_at,
+         type: "sales_delivery",
+         productName: d.inventory_product_name_display || "Unknown",
+         sku: "INV-" + d.inventory_product_name,
+         orderAmount: d.order_amount,
+         status: d.delivery_status ? d.delivery_status.charAt(0).toUpperCase() + d.delivery_status.slice(1) : "Pending",
+         company: d.company_name_display || "",
+         tracking: d.tracking_number || "",
+         courier: d.courier || "",
+         trackingUrl: buildTrackingUrl(d.courier, d.tracking_number, ""),
+         isBackend: true
+     }))
+
+    const localRows = movements
       .filter((e) => e.type === "sales_delivery")
-      .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
       .map(log => {
           const p = items.find(i => i.sku === log.sku)
           return {
             ...log,
             productName: p ? p.name : log.sku,
-            orderAmount: log.qty
+            orderAmount: log.qty,
+            isBackend: false
           }
       })
+
+    return [...backendRows, ...localRows]
+      .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
       .filter(r => {
           if (!query) return true
           const q = query.toLowerCase()
@@ -470,23 +725,126 @@ function useInventory() {
             (r.tracking || "").toLowerCase().includes(q)
           )
       })
-  }, [movements, items, query])
+  }, [movements, items, query, deliveries])
+
+  const addDelivery = async (payload) => {
+    try {
+      // Find product ID from SKU if possible
+      // payload.sku is likely "INV-123" or product name? 
+      // In DeliveryView, it sends `sku` which is `it.sku` (e.g. "INV-123")
+      
+      let productId = null
+      if (payload.sku && payload.sku.startsWith("INV-")) {
+          productId = payload.sku.split("-")[1]
+      } else {
+          // Try to find by name? Or if SKU is just the name?
+          // DeliveryView uses `it.sku` as value.
+          // If manually entered, might be tricky.
+          const item = items.find(i => i.sku === payload.sku)
+          if (item && item.sku.startsWith("INV-")) {
+              productId = item.sku.split("-")[1]
+          }
+      }
+
+      const body = {
+          inventory_product_name: productId,
+          order_amount: payload.qty,
+          delivery_status: "pending",
+          company_name_input: payload.company, // Use input field for name
+          tracking_number: payload.tracking,
+          courier: payload.courier
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/delivery/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+      })
+
+      if (response.ok) {
+          await refreshDeliveries()
+          // Optionally also log local movement for stock consistency if needed
+          // But usually backend should handle stock deduction? 
+          // Current logic in DeliveryView calls addMovement which is local.
+          // We might need to keep local movement for stock update if backend doesn't trigger it automatically
+          // OR if we rely on `deliverQty` function.
+          // But `saveNewRow` is "Manual Delivery Row", it might not affect stock immediately or maybe it should?
+          // The original `saveNewRow` calls `inv.addMovement` which DOES NOT update stock automatically (it just logs it).
+          // `deliverQty` updates stock.
+          // So `saveNewRow` is just a record?
+          
+          // If we want stock deduction, we should use `deliverQty`.
+          // But `saveNewRow` seems to be just creating a record.
+      } else {
+          const err = await response.json()
+          console.error("Failed to add delivery", err)
+          alert("Failed to save delivery: " + JSON.stringify(err))
+      }
+    } catch (e) {
+        console.error("Error adding delivery:", e)
+        alert("Error connecting to server")
+    }
+  }
 
   const addMovement = (entry) => {
     logMove(entry)
   }
 
-  const updateMovement = (id, updates) => {
+  const updateMovement = async (id, updates) => {
+    // Check if it's a backend delivery
+    const isBackend = deliveries.some(d => d.id === id)
+    if (isBackend) {
+        const payload = {}
+        if (updates.status) payload.delivery_status = updates.status.toLowerCase()
+        if (updates.tracking) payload.tracking_number = updates.tracking
+        if (updates.courier) payload.courier = updates.courier
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/delivery/${id}/`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            })
+            if (res.ok) {
+                await refreshDeliveries()
+            }
+        } catch (e) {
+            console.error("Failed to update backend delivery", e)
+        }
+        return
+    }
+
     const next = movements.map(m => m.id === id ? { ...m, ...updates } : m)
     setMovements(next)
     localStorage.setItem("inventoryMovements", JSON.stringify(next))
   }
 
-  const deleteMovements = (ids) => {
+  const deleteMovements = async (ids) => {
     if (!ids || !ids.length) return
-    const next = movements.filter(m => !ids.includes(m.id))
-    setMovements(next)
-    localStorage.setItem("inventoryMovements", JSON.stringify(next))
+    
+    // Separate backend and local IDs
+    const backendIds = ids.filter(id => deliveries.some(d => d.id === id))
+    const localIds = ids.filter(id => !backendIds.includes(id))
+
+    // Delete backend items
+    if (backendIds.length > 0) {
+        try {
+            await Promise.all(backendIds.map(id => 
+                fetch(`${API_BASE_URL}/api/delivery/${id}/`, { method: "DELETE" })
+            ))
+            await refreshDeliveries()
+        } catch (e) {
+            console.error("Failed to delete backend deliveries", e)
+        }
+    }
+
+    // Delete local items
+    if (localIds.length > 0) {
+        const next = movements.filter(m => !localIds.includes(m.id))
+        setMovements(next)
+        localStorage.setItem("inventoryMovements", JSON.stringify(next))
+    }
+    
     setSelectedDeliveryIds([])
   }
 
@@ -520,6 +878,7 @@ function useInventory() {
     deliveryRows,
     selectedDeliveryIds, setSelectedDeliveryIds,
     addMovement, updateMovement, deleteMovements,
+    addDelivery,
     error,
   }
 }
@@ -1349,21 +1708,16 @@ function DeliveryView({ inv }) {
 
   const saveNewRow = () => {
     const sku = newSku || "MANUAL"
-    const newLog = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-      ts: new Date().toISOString(),
-      type: "sales_delivery",
+    
+    // Save to backend
+    inv.addDelivery({
       sku,
       qty: Number(newQty || 0),
-      ref: "",
       company: newCompany || "",
-      status: "",
       tracking: "",
-      courier: "",
-      trackingUrl: "",
-      user: inv.role || "Inventory Admin",
-    }
-    inv.addMovement(newLog)
+      courier: ""
+    })
+    
     setOpenNew(false)
   }
 
