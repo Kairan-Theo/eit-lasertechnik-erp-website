@@ -27,6 +27,7 @@ class EIT(models.Model):
     eit_telephone = models.CharField(max_length=50, blank=True, default="02-052-9544")
     eit_fax = models.CharField(max_length=50, blank=True, default="02-052-9544")
     address = models.TextField(blank=True, default="1/120 ซอยรามคําแหง 184 \n แขวงมีนบุรี เขตมีนบุรี \n กรุงเทพมหานคร 10510")
+    header_image = models.ImageField(upload_to='eit_headers/', null=True, blank=True)
 
     def __str__(self):
         return self.organization_name
@@ -87,7 +88,7 @@ class Quotation(models.Model):
     qo_code = models.CharField(max_length=100, unique=True, null=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
     eit = models.ForeignKey(EIT, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
-    created_date = models.DateField(default=timezone.now)
+    created_date = models.DateField(default=timezone.localdate)
     
     trade_terms = models.CharField(max_length=255, blank=True)
     validity = models.CharField(max_length=255, blank=True)
@@ -96,6 +97,7 @@ class Quotation(models.Model):
     shipment_location = models.CharField(max_length=255, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
     remark = models.TextField(blank=True)
+    is_archived = models.BooleanField(default=False)
     
     # Legacy/System fields
     doc_type = models.CharField(max_length=50, default="Quotation")
@@ -358,6 +360,7 @@ class Product(models.Model):
     code = models.CharField(max_length=100, blank=True, default='')
     name = models.CharField(max_length=255, blank=True, default='')
     description = models.TextField(blank=True, default='')
+    image = models.ImageField(upload_to='products/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -387,6 +390,7 @@ class ProductType(models.Model):
 class System(models.Model):
     type = models.ForeignKey(ProductType, related_name='systems', on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
+    image = models.ImageField(upload_to='systems/', null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -396,6 +400,7 @@ class Component(models.Model):
     part_number = models.CharField(max_length=100)
     name = models.CharField(max_length=255)
     unit = models.CharField(max_length=50)
+    image = models.ImageField(upload_to='components/', null=True, blank=True)
 
     class Meta:
         db_table = 'bom_component'

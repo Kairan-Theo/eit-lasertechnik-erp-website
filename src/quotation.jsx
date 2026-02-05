@@ -1,0 +1,848 @@
+import React from "react"
+import ReactDOM from "react-dom/client"
+import { createPortal } from "react-dom"
+import { QuotationTemplate } from "./components/quotation-template.jsx"
+import Navigation from "./components/navigation.jsx"
+import { API_BASE_URL } from "./config"
+import { format, parseISO } from "date-fns"
+import { DayPicker, getDefaultClassNames } from "react-day-picker"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText, ClipboardList } from "lucide-react"
+import { CustomerCombobox } from "./components/customer-combobox.jsx"
+import "./index.css"
+
+function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
+  const [open, setOpen] = React.useState(false)
+  const containerRef = React.useRef(null)
+  const defaultClassNames = getDefaultClassNames()
+  const selected = (() => {
+    try {
+      return value ? parseISO(value) : undefined
+    } catch {
+      return undefined
+    }
+  })()
+  const display = (() => {
+    try {
+      return selected ? format(selected, "dd/MM/yyyy") : ""
+    } catch {
+      return ""
+    }
+  })()
+  React.useEffect(() => {
+    if (!open) return
+    const handle = (e) => {
+      const el = containerRef.current
+      if (el && !el.contains(e.target)) setOpen(false)
+    }
+    const handleKey = (e) => {
+      if (e.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("mousedown", handle)
+    document.addEventListener("touchstart", handle, { passive: true })
+    document.addEventListener("keydown", handleKey)
+    return () => {
+      document.removeEventListener("mousedown", handle)
+      document.removeEventListener("touchstart", handle)
+      document.removeEventListener("keydown", handleKey)
+    }
+  }, [open])
+  return (
+    <div ref={containerRef} className="relative inline-block w-full">
+      <input
+        type="text"
+        value={display}
+        placeholder={placeholder}
+        onClick={() => setOpen((o) => !o)}
+        readOnly
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+      />
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+        aria-label="Open calendar"
+      >
+        <CalendarIcon className="size-4" aria-hidden="true" />
+      </button>
+      {open && (
+        <div onMouseDown={(e) => e.stopPropagation()} className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+2px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
+          <DayPicker
+            mode="single"
+            selected={selected}
+            onSelect={(d) => {
+              if (!d) return
+              const v = format(d, "yyyy-MM-dd")
+              onChange(v)
+            }}
+            captionLayout="buttons"
+            classNames={{
+              root: `w-fit ${defaultClassNames.root}`,
+              months: `flex flex-col ${defaultClassNames.months}`,
+              month: `rounded-2xl pt-8 ${defaultClassNames.month}`,
+              caption: `relative h-8 ${defaultClassNames.caption}`,
+              nav: `absolute left-3 right-3 top-0 flex items-center justify-between ${defaultClassNames.nav}`,
+              nav_button: `p-2 rounded-full hover:bg-slate-100 ${defaultClassNames.nav_button}`,
+              nav_button_previous: `${defaultClassNames.nav_button_previous}`,
+              nav_button_next: `${defaultClassNames.nav_button_next}`,
+              caption_label: `absolute left-1/2 -translate-x-1/2 top-0 h-8 leading-8 text-center font-semibold uppercase tracking-wide text-[#2D4485] ${defaultClassNames.caption_label}`,
+              table: `w-full border-collapse`,
+              weekdays: `flex justify-between border-b border-slate-200 pb-2 ${defaultClassNames.weekdays}`,
+              weekday: `text-slate-500 flex-1 text-sm text-center ${defaultClassNames.weekday}`,
+              week: `grid grid-cols-7 mt-2 ${defaultClassNames.week}`,
+              day: `mx-auto size-10 flex items-center justify-center rounded-full hover:bg-blue-50 ${defaultClassNames.day}`,
+              today: `bg-[#D6E4FF] text-[#2D4485] font-semibold ${defaultClassNames.today}`,
+              outside: `text-slate-400 ${defaultClassNames.outside}`,
+              disabled: `${defaultClassNames.disabled}`,
+            }}
+            modifiersClassNames={{
+              selected: "border-2 border-[#2D4485]/30 !bg-transparent text-[#2D4485] font-semibold",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+const parseNumber = (val) => {
+  if (typeof val === 'number') return val
+  if (!val) return 0
+  return parseFloat(String(val).replace(/,/g, ''))
+}
+
+function useQuotationState() {
+  const [customer, setCustomer] = React.useState({
+    company: "",
+    taxId: "",
+    address: "",
+    telephone: "",
+    fax: "",
+    attn: "",
+    div: "",
+    mobile: "",
+    email: ""
+  })
+
+  // Helper to get next quotation number
+  const getNextQuotationNumber = () => {
+    const quotations = []
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith("history:")) {
+          try {
+            const item = JSON.parse(localStorage.getItem(key))
+            if (item && Array.isArray(item.quotations)) {
+              quotations.push(...item.quotations)
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      console.error("Error reading localStorage", e)
+    }
+
+    const currentYear = new Date().getFullYear()
+    const nums = quotations
+      .map(q => String(q.number || ""))
+      .map(s => {
+        // Match EIT QUO YYYY-XXXX format for the current year
+        const m = s.match(new RegExp(`^QUO ${currentYear}-(\\d{4})$`))
+        return m ? parseInt(m[1], 10) : null
+      })
+      .filter(n => Number.isFinite(n))
+    const next = (nums.length ? Math.max(...nums) + 1 : 1)
+    return `QUO ${currentYear}-${String(next).padStart(4, "0")}`
+  }
+
+  const [details, setDetails] = React.useState({
+    number: getNextQuotationNumber(),
+    date: new Date().toISOString().slice(0, 10),
+    validUntil: "",
+    currency: "THB",
+    deliveryTerms: "Ex-Works",
+    eit: null,
+    salesPerson: "",
+    eitMobile: " 000-000-0000",
+    eitTelephone: " 02-052-9544",
+    eitFax: " 02-052 9544",
+    eitAddress: "1/120 ซอยรามคําแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510",
+    tradeTerms: "",
+    validity: "",
+    delivery: "",
+    shipmentLocation: "",
+    invoiceDate: "SAME AS DELIVERY DATE",
+    remark: "IN CASE OF PURCHASING THERE IS NO EXCHANGE GOODS AFTER PURCHASED PLEASE SEE WARRANTY CONDITION\nTHE INFORMATION ARE SUBJECT TO CHANGE WITH OUT NOTICE",
+    paymentTerms: ""
+  })
+
+  const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0 }])
+  const [sourceKey, setSourceKey] = React.useState(null)
+  const [sourceIndex, setSourceIndex] = React.useState(null)
+  const [eitOptions, setEitOptions] = React.useState([])
+  const [customerOptions, setCustomerOptions] = React.useState([])
+
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/deals/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const unique = {}
+          data.forEach(d => {
+            if (d.customer_name && !unique[d.customer_name]) {
+              unique[d.customer_name] = d
+            }
+          })
+          setCustomerOptions(Object.values(unique))
+        }
+      })
+      .catch(err => console.error("Error loading deals for customers", err))
+  }, [])
+
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/eits/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setEitOptions(data)
+        } else {
+          console.error("EIT data is not an array:", data)
+          setEitOptions([])
+        }
+      })
+      .catch(err => {
+        console.error("Error loading EITs", err)
+        setEitOptions([])
+      })
+  }, [])
+
+  const total = items.reduce((sum, it) => sum + (parseNumber(it.qty) || 0) * (parseNumber(it.price) || 0), 0)
+
+  const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0 }])
+  const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
+  const updateItem = (i, field, value) =>
+    setItems((prev) =>
+      prev.map((row, idx) =>
+        idx === i ? { ...row, [field]: value } : row,
+      ),
+    )
+
+  // Load from URL params if present
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const key = params.get("key")
+    const index = params.get("index")
+
+    if (key && index !== null) {
+      setSourceKey(key)
+      setSourceIndex(parseInt(index, 10))
+
+      if (key === 'api') {
+        // Load from API
+        fetch(`${API_BASE_URL}/api/quotations/${index}/`)
+          .then(res => {
+            if (!res.ok) throw new Error("Failed to fetch")
+            return res.json()
+          })
+          .then(data => {
+            // Map API data to state
+            setCustomer({
+              company: data.customer_details?.company_name || "",
+              taxId: data.customer_details?.tax_id || "",
+              address: data.customer_details?.address || "",
+              telephone: data.customer_details?.phone || "",
+              fax: data.customer_details?.cus_fax || "",
+              attn: data.customer_details?.attn || "",
+              div: data.customer_details?.division || "",
+              mobile: data.customer_details?.mobile || "",
+              email: data.customer_details?.email || ""
+            })
+            setDetails({
+              number: data.qo_code,
+              date: data.created_date,
+              validUntil: "",
+              currency: "THB",
+              deliveryTerms: "Ex-Works",
+              salesPerson: data.eit_details?.organization_name || "",
+              eit: data.eit_details?.id || null,
+              eitMobile: data.eit_details?.eit_mobile || "",
+              eitTelephone: data.eit_details?.eit_telephone || "",
+              eitFax: data.eit_details?.eit_fax || "",
+              eitAddress: data.eit_details?.address || "",
+              tradeTerms: data.trade_terms || "",
+              validity: data.validity || "",
+              delivery: data.delivery || "",
+              shipmentLocation: data.shipment_location || "",
+              invoiceDate: data.invoice_date || "SAME AS DELIVERY DATE",
+              remark: data.remark || "",
+              paymentTerms: data.payment_terms || ""
+            })
+            const apiItems = data.quotation_items || data.items || data.products || []
+            if (apiItems.length > 0) {
+              setItems(apiItems.map(i => {
+                const qty = i.quantity || i.qty || 1
+                const total = parseFloat(i.quo_total || i.total || 0)
+                return {
+                  item: i.quo_item || i.item || "",
+                  model: i.quo_model || i.model || "",
+                  description: i.quo_description || i.description || "",
+                  qty: qty,
+                  price: qty > 0 ? total / qty : 0
+                }
+              }))
+            }
+          })
+          .catch(err => console.error("Error loading from API", err))
+      } else {
+        try {
+          const storedItem = JSON.parse(localStorage.getItem(key))
+          if (storedItem) {
+            if (storedItem.quotations && storedItem.quotations[index]) {
+              const qData = storedItem.quotations[index]
+              setDetails(prev => ({ ...prev, ...qData.details }))
+              setItems(qData.items || [])
+              if (storedItem.customer) {
+                 setCustomer(storedItem.customer)
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error loading quotation", e)
+        }
+      }
+    }
+  }, [])
+
+  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total, sourceKey, sourceIndex, eitOptions, customerOptions }
+}
+
+function QuotationPage() {
+  const q = useQuotationState()
+  const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
+
+  const handlePrintPdf = async () => {
+    try {
+      const payload = {
+        details: q.details,
+        customer: q.customer,
+        items: q.items.map(i => ({
+          ...i,
+          qty: parseNumber(i.qty),
+          price: parseNumber(i.price)
+        })),
+        totals: { total: q.total }
+      }
+      const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) throw new Error('Failed to generate PDF')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      }, 500)
+
+      setTimeout(() => {
+        document.body.removeChild(iframe)
+        window.URL.revokeObjectURL(url)
+      }, 60000)
+    } catch (error) {
+      console.error("Error generating PDF:", error)
+      alert("Failed to generate PDF")
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-50">
+      <Navigation />
+      <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => window.location.href = "/admin.html"}
+              className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
+              title="Back to List"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <ClipboardList className="w-8 h-8" />
+              New Quotation
+            </h1>
+          </div>
+        </div>
+
+        {/* Codes Box */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
+           <h2 className="text-xl font-bold text-[#2D4485]">Codes</h2>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Quotation Number</label>
+               <input value={q.details.number} onChange={(e) => q.setDetails({ ...q.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Quotation number" />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+               <DateField value={q.details.date} onChange={(val) => q.setDetails({ ...q.details, date: val })} />
+             </div>
+          </div>
+        </div>
+
+        {/* EIT Box */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
+           <h2 className="text-xl font-bold text-[#2D4485]">EIT/Einstein organization</h2>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+               {/* Select EIT organization to populate details. 
+                   The options are fetched from /api/eits/ and include "EIT Lasertechnik Co.,Ltd." 
+                   and "Einstein Industrietechnik Corporation Co.,LTD" as populated by the backend. */}
+               <select 
+                 value={q.details.eit || ""} 
+                 onChange={(e) => {
+                   const val = e.target.value
+                   if (!val) {
+                      q.setDetails({ 
+                        ...q.details, 
+                        eit: null,
+                        salesPerson: "",
+                        eitMobile: "",
+                        eitTelephone: "",
+                        eitFax: "",
+                        eitAddress: "" 
+                      })
+                      return
+                   }
+                   const selected = q.eitOptions.find(o => String(o.id) === val)
+                   if (selected) {
+                     q.setDetails({ 
+                       ...q.details, 
+                       eit: selected.id,
+                       salesPerson: selected.organization_name,
+                       eitMobile: selected.eit_mobile || "",
+                       eitTelephone: selected.eit_telephone || "",
+                       eitFax: selected.eit_fax || "",
+                       eitAddress: selected.address || "" 
+                     })
+                   }
+                 }} 
+                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+               >
+                 <option value="">Select Organization</option>
+                 {q.eitOptions.map(opt => (
+                   <option key={opt.id} value={opt.id}>{opt.organization_name}</option>
+                 ))}
+               </select>
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+               <input value={q.details.eitMobile} onChange={(e) => q.setDetails({ ...q.details, eitMobile: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+             </div>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
+               <input value={q.details.eitTelephone} onChange={(e) => q.setDetails({ ...q.details, eitTelephone: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Telephone" />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
+               <input value={q.details.eitFax} onChange={(e) => q.setDetails({ ...q.details, eitFax: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Fax" />
+             </div>
+           </div>
+        </div>
+
+        {/* Customer Information Box */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
+          <h2 className="text-xl font-bold text-[#2D4485]">Customer Information</h2>
+          
+
+
+          <h3 className="text-base font-bold text-gray-900 pt-2">Customer Company</h3>
+
+          {/* Company Name (50% width) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                <CustomerCombobox
+                  value={q.customer.company}
+                  options={q.customerOptions}
+                  onChange={(val) => {
+                    const match = q.customerOptions.find(c => c.customer_name === val)
+                    if (match) {
+                      q.setCustomer({ 
+                        ...q.customer, 
+                        company: val,
+                        taxId: match.tax_id || q.customer.taxId,
+                        address: match.address || q.customer.address,
+                        telephone: match.phone || q.customer.telephone,
+                        attn: match.contact || q.customer.attn,
+                        email: match.email || q.customer.email
+                      })
+                    } else {
+                      q.setCustomer({ ...q.customer, company: val })
+                    }
+                  }}
+                />
+              </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
+               <input value={q.customer.taxId} onChange={(e) => q.setCustomer({ ...q.customer, taxId: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Tax ID" />
+             </div>
+          </div>
+
+          {/* Telephone / Fax / Address */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
+                <input value={q.customer.telephone} onChange={(e) => q.setCustomer({ ...q.customer, telephone: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Telephone" />
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
+                <input value={q.customer.fax} onChange={(e) => q.setCustomer({ ...q.customer, fax: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Fax" />
+            </div>
+             <div className="md:col-span-2">
+               <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+               <textarea value={q.customer.address} onChange={(e) => q.setCustomer({ ...q.customer, address: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
+             </div>
+          </div>
+
+          <h3 className="text-base font-bold text-gray-900 pt-2">Customer Responsible</h3>
+
+          {/* Attn / Div / Mobile */}
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Attention(Attn.)</label>
+                <input value={q.customer.attn} onChange={(e) => q.setCustomer({ ...q.customer, attn: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Attention" />
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
+                <input value={q.customer.div} onChange={(e) => q.setCustomer({ ...q.customer, div: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                <input value={q.customer.mobile} onChange={(e) => q.setCustomer({ ...q.customer, mobile: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+            </div>
+          </div>
+        </div>
+
+
+
+        {/* Quotation Description Box */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 mb-8">
+           <div className="flex justify-between items-center mb-4">
+             <h2 className="text-xl font-bold text-[#2D4485]">Quotation Description</h2>
+             <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
+               <Plus className="w-4 h-4" />
+               <span className="text-sm font-medium">Add Item</span>
+             </button>
+           </div>
+           <div className="overflow-x-auto">
+             <table className="w-full text-left border-collapse">
+               <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
+                 <tr>
+                   <th className="p-3 border-b w-16">Item</th>
+                   <th className="p-3 border-b">Model</th>
+                   <th className="p-3 border-b">Description</th>
+                   <th className="p-3 border-b w-32">Price</th>
+                   <th className="p-3 border-b w-20">Quantity</th>
+                   <th className="p-3 border-b w-32">Total (Baht)</th>
+                   <th className="p-3 border-b w-12"></th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-gray-100">
+                 {q.items.map((item, i) => (
+                   <tr key={i} className="hover:bg-gray-50 transition border-b border-gray-100">
+                     <td className="p-3 text-center text-sm text-gray-700">
+                       {i + 1}
+                     </td>
+                     <td className="p-3">
+                       <input value={item.model} onChange={(e) => q.updateItem(i, "model", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Model" />
+                     </td>
+                    <td className="p-3">
+                      <input value={item.description} onChange={(e) => q.updateItem(i, "description", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Description" />
+                    </td>
+                    <td className="p-3">
+                      <input 
+                        type="text" 
+                        value={item.price} 
+                        onChange={(e) => q.updateItem(i, "price", e.target.value)} 
+                        onBlur={(e) => {
+                          const val = parseNumber(e.target.value)
+                          if (!isNaN(val)) {
+                            q.updateItem(i, "price", val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                          }
+                        }}
+                        className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" 
+                      />
+                    </td>
+                    <td className="p-3">
+                      <input type="number" value={item.qty} onChange={(e) => q.updateItem(i, "qty", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
+                    </td>
+                     <td className="p-3 text-right text-sm text-gray-700">
+                       {(parseNumber(item.qty || 0) * parseNumber(item.price || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                     </td>
+                     <td className="p-3 text-right">
+                       <button onClick={() => q.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete"><Trash className="w-4 h-4" /></button>
+                     </td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           </div>
+           <div className="flex justify-end mt-4">
+             <div className="w-64 space-y-2">
+               <div className="flex justify-between text-base font-bold text-gray-900"><span>Total:</span> <span>{q.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+               <div className="flex justify-between text-base font-bold text-gray-900"><span>VAT 7%:</span> <span>{(q.total * 0.07).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+               <div className="flex justify-between text-base font-bold text-[#2D4485] pt-2 border-t"><span>Grand Total:</span> <span>{(q.total * 1.07).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+             </div>
+           </div>
+        </div>
+        
+        {/* Terms & Conditions Box */}
+        <div className="mb-8">
+           <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6">
+             <h2 className="text-xl font-bold text-[#2D4485] mb-4">Terms & Conditions</h2>
+             <div className="space-y-4">
+                {/* Row 1: Trade Terms, Validity, Delivery */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Trade Terms</label>
+                     <input value={q.details.tradeTerms} onChange={(e) => q.setDetails({ ...q.details, tradeTerms: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Trade Terms" />
+                  </div>
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Validity</label>
+                     <input value={q.details.validity} onChange={(e) => q.setDetails({ ...q.details, validity: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Validity" />
+                  </div>
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Delivery</label>
+                     <input value={q.details.delivery} onChange={(e) => q.setDetails({ ...q.details, delivery: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Delivery" />
+                  </div>
+                </div>
+
+                {/* Row 2: Payment Terms */}
+                <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Payment Terms</label>
+                   <textarea 
+                     name="paymentTerms"
+                     value={q.details.paymentTerms} 
+                     onChange={(e) => q.setDetails({ ...q.details, paymentTerms: e.target.value })} 
+                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
+                     rows="4" 
+                     placeholder="Payment terms" 
+                   />
+                </div>
+
+                {/* Row 3: Shipment Location, Invoice Date */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Shipment Location</label>
+                     <input value={q.details.shipmentLocation} onChange={(e) => q.setDetails({ ...q.details, shipmentLocation: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Shipment Location" />
+                  </div>
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
+                     <input value={q.details.invoiceDate} onChange={(e) => q.setDetails({ ...q.details, invoiceDate: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Invoice Date" />
+                  </div>
+                </div>
+
+                {/* Row 4: Remark */}
+                <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Remark</label>
+                   <textarea value={q.details.remark} onChange={(e) => q.setDetails({ ...q.details, remark: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="4" placeholder="Remark" />
+                </div>
+             </div>
+           </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href="/admin.html"}>Cancel</button>
+          <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={() => setOpenCreateConfirm(true)}>Create QO Form</button>
+        </div>
+
+        {openCreateConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setOpenCreateConfirm(false)}>
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] max-w-[95vw]" onClick={(e)=>e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Create QO Form</h3>
+                  <div className="text-sm text-gray-600 mt-1">Choose how you want to proceed</div>
+                </div>
+                <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenCreateConfirm(false)}>✕</button>
+              </div>
+              <div className="p-4 grid grid-cols-3 gap-4">
+                <button
+                  className="w-full px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
+                  onClick={() => { setOpenCreateConfirm(false); window.location.href = "/admin.html" }}
+                >
+                  Discard
+                </button>
+                <button
+                  className="w-full px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] min-w-[140px]"
+                  onClick={() => {
+                    const handleSave = async () => {
+                      try {
+                        // --- 1. LocalStorage Save (Legacy/Backup) ---
+                        const company = q.customer.company || "Unknown"
+                        const targetKey = `history:${company}`
+                        
+                        if (q.sourceKey && q.sourceKey !== targetKey && q.sourceIndex !== null) {
+                            try {
+                                const oldDataStr = localStorage.getItem(q.sourceKey)
+                                if (oldDataStr) {
+                                    const oldData = JSON.parse(oldDataStr)
+                                    if (oldData && Array.isArray(oldData.quotations)) {
+                                        oldData.quotations.splice(q.sourceIndex, 1)
+                                        localStorage.setItem(q.sourceKey, JSON.stringify(oldData))
+                                    }
+                                }
+                            } catch(e) { console.error("Error removing old record", e) }
+                        }
+
+                        let data = { customer: q.customer, quotations: [], invoices: [], billingNotes: [] }
+                        try {
+                          const existing = localStorage.getItem(targetKey)
+                          if (existing) {
+                            const parsed = JSON.parse(existing)
+                            if (parsed) data = { ...data, ...parsed }
+                          }
+                        } catch (e) { console.error("Error parsing localStorage", e) }
+
+                        if (!Array.isArray(data.quotations)) data.quotations = []
+                        if (!data.customer || !data.customer.company) data.customer = q.customer
+
+                        const newQuotation = {
+                          id: Date.now(),
+                          savedAt: new Date().toISOString(),
+                          number: q.details.number,
+                          details: q.details,
+                          items: q.items,
+                          total: q.total,
+                          totals: { total: q.total },
+                          customerName: company
+                        }
+
+                        let updateIndex = -1
+                        if (q.sourceKey === targetKey && q.sourceIndex !== null) {
+                             updateIndex = q.sourceIndex
+                        } else {
+                             updateIndex = data.quotations.findIndex(x => x.number === q.details.number)
+                        }
+
+                        if (updateIndex >= 0 && updateIndex < data.quotations.length) {
+                          data.quotations[updateIndex] = newQuotation
+                        } else {
+                          data.quotations.push(newQuotation)
+                        }
+
+                        localStorage.setItem(targetKey, JSON.stringify(data))
+                        
+                        // --- 2. Backend Database Save ---
+                        const backendPayload = {
+                            qo_code: q.details.number,
+                            created_date: q.details.date,
+                            customer_name: q.customer.company || "Unknown",
+                            customer_tax_id: q.customer.taxId || "",
+                            customer_address: q.customer.address || "",
+                            customer_email: q.customer.email || "",
+                            customer_phone: q.customer.telephone || "",
+                            customer_fax: q.customer.fax || "",
+                            cus_respon_attn: q.customer.attn || "",
+                            cus_respon_div: q.customer.div || "",
+                            cus_respon_mobile: q.customer.mobile || "",
+                            eit: q.details.eit,
+                            eit_name: q.details.salesPerson || "",
+                            eit_address: q.details.eitAddress || "",
+                            eit_mobile: q.details.eitMobile || "",
+                            eit_phone: q.details.eitTelephone || "",
+                            eit_fax: q.details.eitFax || "",
+                            trade_terms: q.details.tradeTerms || "",
+                            validity: q.details.validity || "",
+                            delivery: q.details.delivery || "",
+                            payment_terms: q.details.paymentTerms || "",
+                            shipment_location: q.details.shipmentLocation || "",
+                            invoice_date: (q.details.invoiceDate && q.details.invoiceDate !== "SAME AS DELIVERY DATE") ? q.details.invoiceDate : null,
+                            remark: q.details.remark || "",
+                            items: q.items.map(item => ({
+                                item: item.item || "",
+                                model: item.model || "",
+                                description: item.description || "",
+                                qty: item.qty || 1,
+                                price: item.price || 0
+                            }))
+                        }
+                        
+                        // Validate date format for backend
+                        if (backendPayload.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(backendPayload.invoice_date)) {
+                             backendPayload.invoice_date = null
+                        }
+
+                        console.log("Saving to backend...", backendPayload)
+                        
+                        let url = `${API_BASE_URL}/api/quotations/`
+                        let method = 'POST'
+                        
+                        if (q.sourceKey === 'api' && q.sourceIndex) {
+                            url = `${API_BASE_URL}/api/quotations/${q.sourceIndex}/`
+                            method = 'PUT'
+                        }
+
+                        const response = await fetch(url, {
+                            method: method,
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(backendPayload)
+                        })
+
+                        if (!response.ok) {
+                            const errText = await response.text()
+                            console.error("Backend save error:", errText)
+                            throw new Error("Failed to save to database: " + errText)
+                        }
+                        
+                        alert("Quotation saved successfully!")
+                        setOpenCreateConfirm(false)
+                        window.location.href = "/admin.html"
+                      } catch (error) {
+                        console.error(error)
+                        alert("Error saving quotation: " + error.message)
+                      }
+                    }
+                    handleSave()
+                  }}
+                >
+                  Save Changes
+                </button>
+                <button
+                  className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
+                  onClick={() => {
+                    setOpenCreateConfirm(false)
+                    handlePrintPdf()
+                  }}
+                >
+                  Download Form
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal removed */}
+
+
+      </div>
+    </main>
+  )
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <QuotationPage />
+  </React.StrictMode>,
+)
