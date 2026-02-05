@@ -496,6 +496,26 @@ class Inventory(models.Model):
     def __str__(self):
         return self.inventory_product_name
 
+class ProjectManagement(models.Model):
+    project_name = models.CharField(max_length=255)
+    duration = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Project Management"
+        verbose_name_plural = "Project Management"
+
+    def __str__(self):
+        return self.project_name
+
+class SubProject(models.Model):
+    project = models.ForeignKey(ProjectManagement, related_name='subprojects', on_delete=models.CASCADE)
+    subproject_name = models.CharField(max_length=255, verbose_name="Subproject")
+    subproject_duration = models.CharField(max_length=100, verbose_name="Subproject duration")
+
+    def __str__(self):
+        return self.subproject_name
+
 @receiver(pre_save, sender=ManufacturingOrder)
 def mo_pre_save_inventory_check(sender, instance, **kwargs):
     if instance.pk:

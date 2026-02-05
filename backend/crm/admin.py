@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, PermissionControl
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, PermissionControl, ProjectManagement, SubProject
 from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
 
 APPS_CHOICES = [
@@ -217,3 +217,13 @@ class InventoryAdmin(admin.ModelAdmin):
 class PermissionControlAdmin(admin.ModelAdmin):
     list_display = ("user_name", "email", "allow_apps")
     search_fields = ("user_name", "email")
+
+class SubProjectInline(admin.TabularInline):
+    model = SubProject
+    extra = 1
+
+@admin.register(ProjectManagement)
+class ProjectManagementAdmin(admin.ModelAdmin):
+    list_display = ("project_name", "duration", "created_at")
+    inlines = [SubProjectInline]
+    search_fields = ("project_name",)
