@@ -720,6 +720,7 @@ export function PermissionsManager() {
   const [loading, setLoading] = React.useState(false)
   const [savingId, setSavingId] = React.useState(null)
   const APPS = ["Manufacturing", "Inventory", "CRM", "Project Management", "Admin", "Permission"]
+  const LOCKED_EMAILS = ['eit@eitlaser.com', 'shwinpyonethu0106@gmail.com', 'htetyunn06@gmail.com']
   const parseAllowed = (allowed) => {
     if (!allowed) return []
     if (allowed === "all") return [...APPS]
@@ -929,22 +930,30 @@ export function PermissionsManager() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {sortedUsers.map(u => (
+              {sortedUsers.map(u => {
+                const isLocked = LOCKED_EMAILS.includes(u.email)
+                return (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-3">
                     <div className="font-medium text-gray-900 flex items-center gap-2">
                       <span>{me && u.email === me.email ? "You" : u.name}</span>
-                      {(!u.allowed_apps || u.allowed_apps.trim() === "") && (
+                      {(!u.allowed_apps || u.allowed_apps.trim() === "") && !isLocked && (
                         <span className="inline-flex items-center rounded-full bg-yellow-100 text-yellow-800 px-2 py-0.5 text-[10px] font-semibold">Pending</span>
+                      )}
+                      {isLocked && (
+                        <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-[10px] font-semibold">Permission Control</span>
                       )}
                     </div>
                     <div className="text-xs text-gray-500">{u.email}</div>
                   </td>
                   <td className="p-3">{u.is_staff ? "Admin" : "User"}</td>
                   <td className="p-3">
+                    {isLocked ? (
+                      <div className="text-sm font-medium text-gray-500 italic">Full Access (Permission Control)</div>
+                    ) : (
                     <div className="grid grid-cols-2 gap-2">
                       {APPS.map(app => (
-                        <label key={app} className="inline-flex items-center gap-1.5 text-xs cursor-pointer hover:text-blue-600">
+                        <label key={app} className={`inline-flex items-center gap-1.5 text-xs cursor-pointer hover:text-blue-600`}>
                           <input
                             type="checkbox"
                             className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
@@ -955,8 +964,12 @@ export function PermissionsManager() {
                         </label>
                       ))}
                     </div>
+                    )}
                   </td>
                   <td className="p-3 text-right">
+                    {isLocked ? (
+                      <span className="text-xs text-gray-400 font-medium">Protected Account</span>
+                    ) : (
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => setAll(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50 transition-colors">All</button>
                       <button onClick={() => setNone(u.id)} className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50 transition-colors">None</button>
@@ -976,9 +989,10 @@ export function PermissionsManager() {
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
+                    )}
                   </td>
                 </tr>
-              ))}
+              )})}
               {allUsers.length === 0 && (
                 <tr><td colSpan={4} className="p-8 text-center text-gray-500">No users available</td></tr>
               )}
