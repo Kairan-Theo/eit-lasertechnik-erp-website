@@ -115,7 +115,7 @@ function NewMOPage() {
       console.log("bomList length:", bomList.length)
       if (!Array.isArray(bomList) || !bomList.length) return
       
-      const match = bomList.find(b => String(b.product || "").trim().toLowerCase() === key)
+      const match = bomList.find(b => String(b.product || "").trim().toLowerCase() === key)  
       console.log("BOM match found:", match)
       
       if (!match) return false
@@ -138,7 +138,7 @@ function NewMOPage() {
         : Array.isArray(pt)
           ? pt
           : []
-          
+
       console.log("Extracted systems:", systems)
       
       const comps = systems.flatMap(s => (s.components || []).map(c => ({
@@ -151,7 +151,7 @@ function NewMOPage() {
       console.log("Extracted components:", comps)
       
       if (comps.length) {
-        setItems(comps.map((x, idx) => ({ ...x, itemCode: x.itemCode || String(idx + 1) })))
+        setItems(comps.map((x, idx) => ({ ...x, itemCode: x.itemCode || String(idx + 1) }))) 
         return true
       }
       return false
@@ -169,7 +169,7 @@ function NewMOPage() {
         setItems([])
       }
     } else if (!itemsTouched) {
-      // If items haven't been manually modified, try to sync from BOM if a match is found.
+      // If items haven't been manually modified, try to sync from BOM if a match is found.  
       // This will check if the entered product name matches any BOM product and populate items.
       syncItemsFromBOM()
     }
@@ -407,6 +407,9 @@ function NewMOPage() {
          setInventory(map)
       })
       .catch(console.error)
+
+    // BOMs - backend only
+    setBomList([])
 
     // Fetch BOMs to allow auto-filling items based on product name.
     // When a user enters a product name that matches a BOM product, we fetch its components.

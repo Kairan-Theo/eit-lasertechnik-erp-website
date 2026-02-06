@@ -32,57 +32,9 @@ class EIT(models.Model):
     def __str__(self):
         return self.organization_name
 
-class SupportTicket(models.Model):
-    STATUS_CHOICES = [
-        ('open', 'Open'),
-        ('in_progress', 'In Progress'),
-        ('resolved', 'Resolved'),
-        ('closed', 'Closed'),
-    ]
-    PRIORITY_CHOICES = [
-        ('low', 'Low'),
-        ('medium', 'Medium'),
-        ('high', 'High'),
-        ('critical', 'Critical'),
-    ]
-    
-    ticket_id = models.CharField(max_length=50, unique=True)
-    title = models.CharField(max_length=200)
-    description = models.TextField()
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='tickets')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
-    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
-    assigned_to = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='assigned_tickets')
-    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_tickets')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+# Removed SupportTicket Model
 
-    def __str__(self):
-        return f"#{self.ticket_id} - {self.title}"
-
-class Lead(models.Model):
-    STATUS_CHOICES = [
-        ('new', 'New'),
-        ('contacted', 'Contacted'),
-        ('qualified', 'Qualified'),
-        ('lost', 'Lost'),
-        ('converted', 'Converted'),
-    ]
-    
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
-    company = models.CharField(max_length=200, blank=True)
-    email = models.EmailField()
-    phone = models.CharField(max_length=50, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
-    source = models.CharField(max_length=100, blank=True)
-    notes = models.TextField(blank=True)
-    assigned_to = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='leads')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.first_name} {self.last_name}"
+# Removed Lead Model
 
 class Quotation(models.Model):
     qo_code = models.CharField(max_length=100, unique=True, null=True, blank=True)
@@ -241,10 +193,24 @@ class UserProfile(models.Model):
         return f"{self.user.username}'s Profile"
 
 class Notification(models.Model):
+    # Define notification types as controlled values
+    NOTIFICATION_TYPES = [
+        ('info', 'Info'),  # Default type
+        ('crm_created', 'CRM Created'),
+        ('user_registration', 'User Registration'),
+        ('activity_schedule_reminder', 'Activity Schedule Reminder'),
+        ('billing_note_reminder', 'Billing Note Reminder'),
+        ('manufacturing_finish', 'Manufacturing Finish'),
+        ('delivery_updates', 'Delivery Updates'),
+        ('inventory_updates', 'Inventory Updates'),
+        ('signup', 'Signup'), # For legacy compatibility if needed
+        ('alert', 'Alert'),   # For legacy compatibility if needed
+    ]
     message = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
-    type = models.CharField(max_length=50, default='info') # info, signup, alert
+    # Type field controls visibility based on user permissions
+    type = models.CharField(max_length=50, choices=NOTIFICATION_TYPES, default='info') 
 
     def __str__(self):
         return self.message
@@ -508,6 +474,26 @@ class Inventory(models.Model):
 
     def __str__(self):
         return self.inventory_product_name
+
+class ProjectManagement(models.Model):
+    project_name = models.CharField(max_length=255)
+    duration = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Project Management"
+        verbose_name_plural = "Project Management"
+
+    def __str__(self):
+        return self.project_name
+
+class SubProject(models.Model):
+    project = models.ForeignKey(ProjectManagement, related_name='subprojects', on_delete=models.CASCADE)
+    subproject_name = models.CharField(max_length=255, verbose_name="Subproject")
+    subproject_duration = models.CharField(max_length=100, verbose_name="Subproject duration")
+
+    def __str__(self):
+        return self.subproject_name
 
 @receiver(pre_save, sender=ManufacturingOrder)
 def mo_pre_save_inventory_check(sender, instance, **kwargs):

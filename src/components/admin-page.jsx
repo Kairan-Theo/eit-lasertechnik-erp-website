@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React from "react"
+import React from "react"
 import { 
   LayoutDashboard, 
   FileText, 
@@ -713,7 +713,9 @@ function CustomerHistory({ data }) {
   )
 }
 
-function PermissionsManager() {
+// Component to manage user permissions
+// Lists all users and allows toggling access to specific apps
+export function PermissionsManager() {
   const [users, setUsers] = React.useState([])
   const [loading, setLoading] = React.useState(false)
   const [savingId, setSavingId] = React.useState(null)
@@ -870,12 +872,37 @@ function PermissionsManager() {
   }
   const allUsers = [...(me ? [me] : []), ...users.filter(u => !me || u.email !== me.email)]
   const sortedUsers = allUsers.slice().sort((a, b) => {
-    const aEmpty = !a.allowed_apps || a.allowed_apps.trim() === ""
-    const bEmpty = !b.allowed_apps || b.allowed_apps.trim() === ""
-    if (aEmpty && !bEmpty) return -1
-    if (!aEmpty && bEmpty) return 1
+    // Stable sort by ID or Name to prevent reordering on edit
+    if (a.id && b.id) return a.id - b.id
     return (a.name || a.email).localeCompare(b.name || b.email)
   })
+
+  const deleteUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return
+    try {
+      const token = localStorage.getItem("authToken")
+      const r = await fetch(`${API_BASE_URL}/api/users/${userId}/delete/`, {
+        method: 'DELETE',
+        headers: { "Authorization": `Token ${token}` }
+      })
+      if (r.ok) {
+        setUsers(prev => prev.filter(u => u.id !== userId))
+        // Update me if I deleted myself (though backend prevents this)
+        if (me && me.id === userId) setMe(null)
+      } else {
+        const txt = await r.text()
+        try {
+            const json = JSON.parse(txt)
+            alert(json.error || "Failed to delete user")
+        } catch {
+            alert(`Failed to delete user: ${txt}`)
+        }
+      }
+    } catch (e) {
+      console.error("Error deleting user", e)
+      alert("Error deleting user")
+    }
+  }
 
   return (
     <div className="bg-white rounded-xl border shadow-sm p-6">
@@ -939,6 +966,14 @@ function PermissionsManager() {
                         disabled={!u.id || savingId===u.id}
                       >
                         {savingId===u.id ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={() => deleteUser(u.id)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete User"
+                        disabled={!u.id || (me && me.id === u.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -1156,4 +1191,3 @@ export default function AdminPage() {
     </div>
   )
 }
-export { PermissionsManager }
