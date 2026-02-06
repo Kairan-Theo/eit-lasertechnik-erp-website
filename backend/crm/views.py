@@ -123,18 +123,18 @@ class DealViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def list(self, request, *args, **kwargs):
-        try:
-            from django.db import connection
-            cols = []
-            with connection.cursor() as cur:
-                cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='crm_deal' ORDER BY ordinal_position")
-                cols = [r[0] for r in cur.fetchall()]
-            # print(f"DEBUG CRM_DEAL COLUMNS: {cols}")
-            # print(f"DEBUG DB SETTINGS: {connection.settings_dict}")
-            if request.query_params.get('diag') == '1':
-                return Response({'columns': cols, 'db': connection.settings_dict})
-        except Exception as e:
-            print(f"DEBUG LIST SETUP ERROR: {e}")
+        # try:
+        #     from django.db import connection
+        #     cols = []
+        #     with connection.cursor() as cur:
+        #         cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='crm_deal' ORDER BY ordinal_position")
+        #         cols = [r[0] for r in cur.fetchall()]
+        #     # print(f"DEBUG CRM_DEAL COLUMNS: {cols}")
+        #     # print(f"DEBUG DB SETTINGS: {connection.settings_dict}")
+        #     if request.query_params.get('diag') == '1':
+        #         return Response({'columns': cols, 'db': connection.settings_dict})
+        # except Exception as e:
+        #     print(f"DEBUG LIST SETUP ERROR: {e}")
         return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
