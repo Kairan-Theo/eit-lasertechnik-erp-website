@@ -57,459 +57,422 @@ const initialProjects = [
   }
 ]
 
-const GanttChart = ({ projects, setProjects }) => {
-  // Initialize start date to the first project's start date or today
-  const [startDate, setStartDate] = React.useState(() => {
-    if (projects.length > 0) {
-      return addWeeks(startOfWeek(new Date(projects[0].start), { weekStartsOn: 1 }), -1)
+const lighten = (hex, ratio = 0.5) => {
+  const h = hex.replace('#', '')
+  const n = parseInt(h, 16)
+  const r = (n >> 16) & 255
+  const g = (n >> 8) & 255
+  const b = n & 255
+  const lr = Math.round(r + (255 - r) * ratio)
+  const lg = Math.round(g + (255 - g) * ratio)
+  const lb = Math.round(b + (255 - b) * ratio)
+  const toHex = (x) => x.toString(16).padStart(2, '0')
+  return `#${toHex(lr)}${toHex(lg)}${toHex(lb)}`
+}
+
+// ======= EXPORT: Spreadsheet Style Gantt Chart =======
+const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
+  const buildProjectHTML = (project) => {
+    // 1. Determine Date Range
+    let minDate = new Date(project.start)
+    let maxDate = new Date(project.end)
+    const subtasks = project.subtasks || []
+    
+    subtasks.forEach(sub => {
+      const s = new Date(sub.start)
+      const e = new Date(sub.end)
+      if (s < minDate) minDate = s
+      if (e > maxDate) maxDate = e
+    })
+
+    // Snap to Week Start (Monday) and End (Sunday)
+    minDate = startOfWeek(addDays(minDate, -7), { weekStartsOn: 1 }) // Add buffer week before
+    maxDate = startOfWeek(addDays(maxDate, 7), { weekStartsOn: 1 }) // Add buffer week after
+
+    const totalDays = differenceInDays(maxDate, minDate) + 1
+    const days = Array.from({ length: totalDays }).map((_, i) => addDays(minDate, i))
+    
+    // Constants for A4 Landscape Optimization
+    const PAGE_WIDTH_PX = 1123 // ~297mm at 96 DPI
+    const NAME_COL_WIDTH = 380 // px
+    const HEADER_HEIGHT = 50 // px
+    const ROW_HEIGHT = 45 // px
+
+    // Dynamic Column Width to fit A4
+    const availableDateSpace = PAGE_WIDTH_PX - NAME_COL_WIDTH - 60 // 60px padding/margin safety
+    let calcColWidth = Math.floor(availableDateSpace / totalDays)
+    const COL_WIDTH = Math.max(24, Math.min(40, calcColWidth)) // Daily width
+    
+    const TOTAL_WIDTH = NAME_COL_WIDTH + (totalDays * COL_WIDTH)
+    
+    // If content fits in A4, center it. If larger, expand page.
+    const PAGE_CONTAINER_WIDTH = Math.max(PAGE_WIDTH_PX, TOTAL_WIDTH + 80)
+    
+    // Header width should match table width (but min 700px for text)
+    const HEADER_WIDTH = Math.max(TOTAL_WIDTH, 700)
+
+    // Colors (Spreadsheet Style)
+    const COLORS = {
+        headerBlue: '#4472C4', 
+        headerOrange: '#FFC000', 
+        headerDateBg: '#FFFFFF', 
+        groupBg: '#A5A5A5', 
+        taskBar: '#ED7D31', 
+        border: '#000000', // Black border
+        grid: '#000000' // Black grid lines
     }
-    return addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1)
-  })
-  const [dragging, setDragging] = React.useState(null)
-  const [hoveredTask, setHoveredTask] = React.useState(null)
-  const [focusedId, setFocusedId] = React.useState(null)
-  const [selectedProjects, setSelectedProjects] = React.useState(new Set())
-  const [showExportMenu, setShowExportMenu] = React.useState(false)
 
-  const toggleSelection = (id) => {
-    const newSelected = new Set(selectedProjects)
-    if (newSelected.has(id)) newSelected.delete(id)
-    else newSelected.add(id)
-    setSelectedProjects(newSelected)
-  }
+    // Invoice Header Data
+    const headerImgSrc = window.location.origin + (company === 'Einstein' ? "/Einstein%20header.png" : "/EIT%20header.png")
+    
+    const companyDetails = {
+        EIT: {
+            thaiName: "บริษัท อีไอที เลเซอร์เทคนิค จำกัด",
+            engName: "EIT LASERTECHNIK CO.,LTD",
+            address: "118/20 Soi Ramkhamhaeng 184, Minburi, Minburi, Bangkok 10510 Thailand",
+            tel: "02-xxx-xxxx",
+            fax: "02-xxx-xxxx",
+            taxId: "010555xxxxxxx"
+        },
+        Einstein: {
+            thaiName: "บริษัท ไอน์สไตน์ อินดัสเตรียล เทคนิค คอร์ปอเรชั่น จำกัด",
+            engName: "Einstein Industrial Technic Corporation Co., Ltd.",
+            address: "1/120 Soi Ramkhamhaeng 184, Minburi, Minburi, Bangkok 10510 Thailand",
+            tel: "02-052-9544",
+            fax: "02-052-9544",
+            taxId: "0105547001928"
+        }
+    }
 
-  const toggleAll = () => {
-    if (selectedProjects.size === projects.length) setSelectedProjects(new Set())
-    else setSelectedProjects(new Set(projects.map((p) => p.id)))
-  }
+    const details = companyDetails[company] || companyDetails.EIT
 
-  const toggleProject = (id) => {
-    setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, expanded: !p.expanded } : p)))
-  }
-
-  const lighten = (hex, ratio = 0.5) => {
-    const h = hex.replace("#", "")
-    const n = parseInt(h, 16)
-    const r = (n >> 16) & 255
-    const g = (n >> 8) & 255
-    const b = n & 255
-    const lr = Math.round(r + (255 - r) * ratio)
-    const lg = Math.round(g + (255 - g) * ratio)
-    const lb = Math.round(b + (255 - b) * ratio)
-    const toHex = (x) => x.toString(16).padStart(2, "0")
-    return `#${toHex(lr)}${toHex(lg)}${toHex(lb)}`
-  }
-
-  // ======= ✅ EXPORT: Visual Gantt Chart (Reference Style) =======
-  const exportProjectsAsSinglePDF = (list) => {
-    const buildProjectHTML = (project) => {
-      // 1. Determine Date Range
-      let minDate = new Date(project.start)
-      let maxDate = new Date(project.end)
-      const subtasks = project.subtasks || []
-      
-      subtasks.forEach(sub => {
-        const s = new Date(sub.start)
-        const e = new Date(sub.end)
-        if (s < minDate) minDate = s
-        if (e > maxDate) maxDate = e
-      })
-
-      const totalDays = differenceInDays(maxDate, minDate) + 5 // +buffer
-      const durationActual = differenceInDays(maxDate, minDate) + 1
-      const taskCount = subtasks.length
-      const completedCount = subtasks.filter(t => t.status === "done").length
-      const progress = calculateProgress(project)
-      const ROW_HEIGHT = 50 // px
-      const BAR_HEIGHT = 36 // px
-      const BAR_OFFSET = (ROW_HEIGHT - BAR_HEIGHT) / 2
-      const uniqueColors = Array.from(new Set(subtasks.map(s => s.color || project.color || DEFAULT_COLOR)))
-      const legendHtml = uniqueColors.map(hex => `
-        <div class="chip legend">
-          <span class="dot" style="background:${hex}"></span>
-          ${getColorMeaning(hex)}
+    const invoiceHeader = `
+        <div style="margin-bottom: 15px; font-family: sans-serif;">
+            <div style="display: flex; justify-content: flex-start; margin-bottom: 15px; height: 80px;">
+                <img src="${headerImgSrc}" style="height: 100%; width: auto; object-fit: contain;" />
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 9px; align-items: flex-start;">
+                 <div style="border: 1px solid #000; padding: 8px; width: 60%; border-radius: 4px;">
+                    <div style="font-weight: bold; font-size: 10px;">${details.thaiName}</div>
+                    <div style="font-weight: bold; font-size: 10px;">${details.engName}</div>
+                    <div style="margin-top: 4px;">${details.address}</div>
+                    <div style="margin-top: 2px;">TEL : ${details.tel}    Fax : ${details.fax}</div>
+                    <div style="display: flex; gap: 10px; margin-top: 2px;">
+                        <span>Tax ID : ${details.taxId}</span>
+                        <span>(Head Office)</span>
+                    </div>
+                 </div>
+                 <div style="text-align: right; width: 35%;">
+                    <div style="font-size: 14px; font-weight: bold; color: ${COLORS.headerBlue}; margin-bottom: 5px;">PROJECT PLAN</div>
+                    <div>Date: ${format(new Date(), 'dd/MM/yyyy')}</div>
+                 </div>
+            </div>
         </div>
-      `).join('')
+    `
 
-      // 2. Pre-calculate Coordinates for Connectors
-      const taskCoords = subtasks.map((sub, i) => {
+    // 2. Generate Date Headers (Double Row: Month | Week)
+    // Group days by month
+    const months = []
+    let currentMonth = null
+    let count = 0
+    days.forEach(d => {
+        const mStr = format(d, 'MMMM yyyy')
+        if (mStr !== currentMonth) {
+            if (currentMonth) months.push({ name: currentMonth, count })
+            currentMonth = mStr
+            count = 1
+        } else {
+            count++
+        }
+    })
+    if (currentMonth) months.push({ name: currentMonth, count })
+
+    const monthHeaderCells = months.map(m => `
+        <div style="
+            width: ${m.count * COL_WIDTH}px; 
+            min-width: ${m.count * COL_WIDTH}px;
+            text-align: center; 
+            border-right: 1px solid ${COLORS.grid}; 
+            font-size: 13px;
+            font-weight: bold;
+            padding: 6px 0;
+            background: ${COLORS.headerDateBg};
+            color: #222;
+        ">
+            ${m.name}
+        </div>
+    `).join('')
+
+    const dayHeaderCells = days.map(d => `
+        <div style="
+            width: ${COL_WIDTH}px; 
+            min-width: ${COL_WIDTH}px;
+            height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid ${COLORS.grid}; 
+            font-size: 11px;
+            background: white;
+            color: #444;
+            font-weight: 600;
+        ">
+            ${format(d, 'd')}
+        </div>
+    `).join('')
+
+    // 3. Generate Subtask Rows
+    const subtaskRows = subtasks.map(sub => {
         const start = new Date(sub.start)
         const end = new Date(sub.end)
+        
         const offsetDays = differenceInDays(start, minDate)
         const durationDays = differenceInDays(end, start) + 1
         
-        const leftPct = (offsetDays / totalDays) * 100
-        const widthPct = (durationDays / totalDays) * 100
-        const rightPct = leftPct + widthPct
+        const left = offsetDays * COL_WIDTH
+        const width = durationDays * COL_WIDTH
         
-        const y = i * ROW_HEIGHT + BAR_HEIGHT / 2 + BAR_OFFSET
-        
-        return { leftPct, rightPct, y, color: sub.color || project.color || "#3D56A6" }
-      })
-
-      // 3. Generate Connectors (HTML divs)
-      const svgLines = taskCoords.map((curr, i) => {
-        if (i === taskCoords.length - 1) return ''
-        const next = taskCoords[i + 1]
-        
-        const isNextAfter = next.leftPct > curr.rightPct
-        const midX = isNextAfter 
-          ? curr.rightPct + (next.leftPct - curr.rightPct)/2 
-          : curr.rightPct + 2 
-          
-        const lineColor = '#ffffff'; // White connector
-        const lineWidth = '2px';
-          
         return `
-          <!-- Connector ${i} to ${i+1} -->
-          <div class="connector-path">
-              <!-- Horizontal from current -->
-              <div style="position: absolute; left: ${curr.rightPct}%; top: ${curr.y}px; width: ${Math.abs(midX - curr.rightPct)}%; height: ${lineWidth}; background: ${lineColor};"></div>
-              
-              <!-- Vertical down -->
-              <div style="position: absolute; left: ${midX}%; top: ${curr.y}px; height: ${next.y - curr.y}px; width: ${lineWidth}; background: ${lineColor};"></div>
-              
-              <!-- Horizontal to next -->
-              <div style="position: absolute; left: ${Math.min(midX, next.leftPct)}%; top: ${next.y}px; width: ${Math.abs(next.leftPct - midX)}%; height: ${lineWidth}; background: ${lineColor};"></div>
-              
-              <!-- Arrowhead at destination -->
-              <div style="
-                position: absolute; 
-                left: ${next.leftPct}%; 
-                top: ${next.y - 4}px; 
-                width: 0; 
-                height: 0; 
-                border-top: 5px solid transparent; 
-                border-bottom: 5px solid transparent; 
-                border-left: 8px solid ${lineColor};
-              "></div>
+            <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; page-break-inside: avoid;">
+                <div style="
+                    width: ${NAME_COL_WIDTH}px; 
+                    min-width: ${NAME_COL_WIDTH}px;
+                    padding: 0 15px; 
+                    display: flex; 
+                    align-items: center; 
+                    font-size: 11px;
+                    border-right: 1px solid ${COLORS.grid};
+                    background: #ffffff;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                ">
+                    ${sub.name}
+                </div>
+                <div style="flex: 1; position: relative; display: flex;">
+                    <!-- Task Bar -->
+                    <div style="
+                        position: absolute;
+                        left: ${left}px;
+                        top: 0;
+                        width: ${width}px;
+                        height: 100%;
+                        background: ${COLORS.taskBar};
+                    "></div>
+
+                    <!-- Grid Lines -->
+                    ${days.map(() => `
+                        <div style="
+                            width: ${COL_WIDTH}px; 
+                            min-width: ${COL_WIDTH}px;
+                            height: 100%; 
+                            border-right: 1px solid ${COLORS.grid};
+                            position: relative;
+                            z-index: 1;
+                        "></div>
+                    `).join('')}
+                </div>
+            </div>
+        `
+    }).join('')
+
+    // 4. Generate Group Header (Project Name)
+    const projectRow = `
+        <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; background: white; color: black; page-break-inside: avoid;">
+            <div style="
+                width: ${NAME_COL_WIDTH}px; 
+                min-width: ${NAME_COL_WIDTH}px;
+                padding: 0 15px; 
+                display: flex; 
+                align-items: center; 
+                font-weight: bold; 
+                font-size: 12px;
+                border-right: 1px solid ${COLORS.grid};
+            ">
+                ${project.name}
+            </div>
+             <div style="flex: 1; position: relative; display: flex;">
+                <div style="
+                    position: absolute;
+                    left: ${differenceInDays(new Date(project.start), minDate) * COL_WIDTH}px;
+                    top: 0;
+                    width: ${(differenceInDays(new Date(project.end), new Date(project.start)) + 1) * COL_WIDTH}px;
+                    height: 100%;
+                    background: #c0504d; 
+                "></div>
+
+                ${days.map(() => `
+                    <div style="
+                        width: ${COL_WIDTH}px; 
+                        min-width: ${COL_WIDTH}px;
+                        height: 100%; 
+                        border-right: 1px solid ${COLORS.grid};
+                        position: relative;
+                        z-index: 1;
+                    "></div>
+                `).join('')}
+            </div>
+        </div>
+    `
+
+    return `
+      <section class="page spreadsheet-page" style="width: ${PAGE_CONTAINER_WIDTH}px; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+        
+        <!-- Invoice Header -->
+        <div style="width: ${HEADER_WIDTH}px; max-width: 100%; margin-bottom: 20px;">
+           ${invoiceHeader}
+        </div>
+        
+        <!-- Table Container -->
+        <div style="display: flex; flex-direction: column; width: 100%; align-items: center;">
+            <div style="
+                width: ${TOTAL_WIDTH}px; 
+                margin: 0 auto;
+                border: 1px solid ${COLORS.border}; 
+                border-radius: 4px; 
+                background: white;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            ">
+            <!-- Main Title Header -->
+            <div style="
+                background: white; 
+                color: black; 
+                text-align: center; 
+                font-weight: bold; 
+                padding: 10px; 
+                font-size: 14px;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                border-bottom: 1px solid ${COLORS.grid};
+            ">
+                Project Schedule
+            </div>
           </div>
         `
       }).join('')
 
-      // 4. Generate Axis Ticks (Fixed 5-day interval for cleaner look)
-      const tickInterval = 5
-      const ticks = []
-      for (let i = 0; i <= totalDays; i += tickInterval) {
-        const date = addDays(minDate, i)
-        if (date > maxDate) break
-        const leftPct = (i / totalDays) * 100
-        ticks.push(`
-          <div class="timeline-tick" style="left: ${leftPct}%">
-            <div class="tick-label">${format(date, 'MMMM d')}</div>
-            <div class="tick-mark"></div>
-            <div class="tick-grid-line"></div>
-          </div>
-        `)
+            <!-- Date Headers Container -->
+            <div style="display: flex; border-bottom: 1px solid ${COLORS.grid};">
+                <!-- Empty Corner for Task Names -->
+                <div style="
+                    width: ${NAME_COL_WIDTH}px; 
+                    min-width: ${NAME_COL_WIDTH}px;
+                    background: white; 
+                    border-right: 1px solid ${COLORS.grid};
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    color: black;
+                    font-size: 12px;
+                ">
+                    TASK NAME
+                </div>
+                
+                <!-- Date Columns -->
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                    <!-- Month Row -->
+                    <div style="display: flex; border-bottom: 1px solid ${COLORS.grid}; background: ${COLORS.headerDateBg};">
+                        ${monthHeaderCells}
+                    </div>
+                    <!-- Day Row -->
+                    <div style="display: flex; background: white;">
+                        ${dayHeaderCells}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rows Container -->
+            <div style="background: white;">
+                ${projectRow}
+                ${subtaskRows}
+            </div>
+        </div>
+      </section>
+    `
+  }
+
+  const element = document.createElement("div")
+  element.className = "print-container"
+  element.innerHTML = `
+    <style id="gantt-print-styles">
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+      
+      .print-container {
+        font-family: 'Inter', sans-serif;
+        background: white;
+        color: black;
+        box-sizing: border-box;
       }
 
-      // 5. Generate Bars
-      const barsHtml = subtasks.map((sub, index) => {
-        const coords = taskCoords[index]
-        const color = sub.color || '#3D56A6'
-        const isFinal = index === subtasks.length - 1
-        
-        return `
-          <div class="gantt-row" style="height: ${ROW_HEIGHT}px;">
-            <div class="gantt-bar-container" style="
-              left: ${coords.leftPct}%; 
-              width: ${coords.rightPct - coords.leftPct}%;
-              top: ${BAR_OFFSET}px;
-              height: ${BAR_HEIGHT}px;
-            ">
-              <div class="gantt-bar-visual" style="
-                background: ${color}; 
-                box-shadow: 0 4px 8px rgba(0,0,0,0.4);
-                border-radius: 20px;
-                border: 1px solid rgba(255,255,255,0.1);
-                overflow: visible;
-              ">
-                <div class="bar-gloss" style="
-                  position: absolute;
-                  top: 0;
-                  left: 0;
-                  right: 0;
-                  height: 50%;
-                  background: linear-gradient(to bottom, rgba(255,255,255,0.2), transparent);
-                  pointer-events: none;
-                  border-top-left-radius: 20px;
-                  border-top-right-radius: 20px;
-                "></div>
-                <span class="gantt-bar-text" style="font-weight: 800; text-transform: none;">${sub.name}</span>
-                ${isFinal ? `
-                  <div class="sparkle" style="
-                    position: absolute;
-                    right: -10px;
-                    bottom: -10px;
-                    width: 24px;
-                    height: 24px;
-                    background: radial-gradient(circle, #ffffff 10%, transparent 60%);
-                    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
-                    opacity: 0.8;
-                    z-index: 100;
-                  "></div>
-                ` : ''}
-              </div>
-            </div>
-          </div>
-        `
-      }).join('')
+      .print-container * {
+        box-sizing: border-box;
+      }
+      
+      .page {
+        padding: 10mm;
+        box-sizing: border-box;
+        page-break-after: always;
+        background: white;
+      }
+      .page:last-child { page-break-after: auto; }
+      
+      /* Print-specific adjustments */
+      @media print {
+        .page { margin: 0; border: initial; width: initial; min-height: initial; box-shadow: initial; background: initial; page-break-after: always; }
+      }
+    </style>
+    ${list.map(buildProjectHTML).join("")}
+  `
+  document.body.appendChild(element)
 
-      const stripesHtml = subtasks.map((_, i) => `
-        <div class="row-stripe" style="
-          position: absolute;
-          left: 0;
-          right: 0;
-          top: ${i * ROW_HEIGHT}px;
-          height: ${ROW_HEIGHT}px;
-          background: ${i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)'};
-        "></div>
-      `).join('')
+  // Generate PDF (A4 Landscape)
+  const opt = {
+    margin: 0, // Manual padding in CSS
+    filename: `Project_Plan_${format(new Date(), "yyyyMMdd")}.pdf`,
+    image: { type: "jpeg", quality: 0.98 },
+    html2canvas: { 
+      scale: 2.5, // Higher scale for crisp text
+      useCORS: true,
+      onclone: (clonedDoc) => {
+        const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+        styles.forEach(style => {
+          if (style.id !== 'gantt-print-styles') style.remove();
+        });
+        clonedDoc.body.className = '';
+        clonedDoc.documentElement.className = '';
+        clonedDoc.documentElement.style.cssText = 'background: white; color: black; margin: 0; padding: 0;';
+        clonedDoc.body.style.cssText = 'background: white; color: black; margin: 0; padding: 0;';
+      }
+    },
+    jsPDF: { unit: "mm", format: "a4", orientation: "landscape" }, 
+  }
 
-      return `
-        <section class="page gantt-page">
-          <div class="gantt-header-modern">
-            <div class="header-icon">
-              <span>PDF</span>
-            </div>
-            <div class="header-text">
-              <h1>PDF FILE DESIGN PROJECT - Q${Math.ceil((minDate.getMonth() + 1) / 3)} ${minDate.getFullYear()}</h1>
-            </div>
-          </div>
-
-          <div class="chart-wrapper">
-            <div class="timeline-axis">
-              ${ticks.join('')}
-            </div>
-            
-            <div class="chart-body">
-              <div class="connectors-layer">
-                ${svgLines}
-              </div>
-              
-              <div class="bars-layer">
-                ${barsHtml}
-              </div>
-            </div>
-          </div>
-        </section>
-      `
-    }
-
-    const element = document.createElement("div")
-    element.className = "print-container"
-    element.innerHTML = `
-      <style id="gantt-print-styles">
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-        
-        .print-container {
-          font-family: 'Inter', sans-serif;
-          width: 297mm;
-          background: linear-gradient(135deg, #2b2b2b 0%, #4a4a4a 100%); /* Dark Gray Gradient */
-          color: #ffffff;
-        }
-        
-        .page {
-          padding: 10mm 15mm;
-          min-height: 210mm;
-          box-sizing: border-box;
-          position: relative;
-          page-break-after: always;
-        }
-        .page:last-child { page-break-after: auto; }
-
-        /* Modern Header */
-        .gantt-header-modern {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          margin-bottom: 40px;
-          border-bottom: 2px solid #555555;
-          padding-bottom: 20px;
-        }
-        
-        .header-icon {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #ef4444;
-          color: white;
-          padding: 8px 12px;
-          border-radius: 8px;
-          font-weight: 800;
-          font-size: 14px;
-          min-width: 40px;
-        }
-        
-        .header-text h1 {
-          margin: 0;
-          font-size: 32px;
-          font-weight: 800;
-          color: #ffffff;
-          letter-spacing: -1px;
-        }
-
-        /* Chart Structure */
-        .chart-wrapper {
-          position: relative;
-          width: 100%;
-        }
-        /* header accent removed to match reference */
-
-        .timeline-axis {
-          position: relative;
-          height: 40px;
-          border-bottom: 1px solid #555555;
-          margin-bottom: 10px;
-        }
-
-        .timeline-tick {
-          position: absolute;
-          transform: translateX(-50%);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-        
-        .tick-label {
-          font-size: 11px;
-          font-weight: 600;
-          color: #ffffff;
-          margin-bottom: 8px;
-        }
-        
-        .tick-mark {
-          width: 1px;
-          height: 8px;
-          background: #ffffff;
-        }
-        
-        .tick-grid-line { display: none; }
-
-        .chart-body {
-          position: relative;
-          min-height: 500px;
-        }
-        /* stripes overlay removed to match reference */
-
-        .gantt-row {
-          position: relative;
-          width: 100%;
-          z-index: 20;
-        }
-
-        .gantt-bar-container {
-          position: absolute;
-          z-index: 30;
-        }
-
-        .gantt-bar-visual {
-          width: 100%;
-          height: 100%;
-          border-radius: 8px;
-          position: relative;
-          overflow: hidden;
-          display: flex;
-          align-items: center;
-          padding: 0 12px;
-          color: white;
-          font-size: 13px;
-          font-weight: 600;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-        }
-        
-        .gantt-bar-text {
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        /* Connectors */
-        .connectors-layer {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          z-index: 15;
-          pointer-events: none;
-        }
-        /* footer removed to match reference */
-      </style>
-      ${list.map(buildProjectHTML).join("")}
-    `
-    document.body.appendChild(element)
-
-    // Generate PDF (Landscape)
-    const opt = {
-      margin: 0,
-      filename: `Project_Plan_Gantt_${format(new Date(), "yyyyMMdd")}.pdf`,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true,
-        onclone: (clonedDoc) => {
-          // 1. Remove all stylesheets to prevent Tailwind oklch errors,
-          // BUT keep our specific print styles
-          const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
-          styles.forEach(style => {
-            if (style.id !== 'gantt-print-styles') {
-              style.remove();
-            }
-          });
-          
-          // 2. Scrub global classes that might trigger Tailwind
-          clonedDoc.body.className = '';
-          clonedDoc.documentElement.className = '';
-          
-          // 3. Force reset styles on body and html to ensure no oklch inheritance (Dark Background)
-          clonedDoc.documentElement.style.cssText = 'background: linear-gradient(135deg, #2b2b2b 0%, #4a4a4a 100%); color: #ffffff; margin: 0; padding: 0;';
-          clonedDoc.body.style.cssText = 'background: linear-gradient(135deg, #2b2b2b 0%, #4a4a4a 100%); color: #ffffff; margin: 0; padding: 0;';
-        }
-      },
-      jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
-    }
-
-    html2pdf()
-      .set(opt)
-      .from(element)
-      .save()
-      .then(() => {
+  html2pdf()
+    .set(opt)
+    .from(element)
+    .save()
+    .then(() => {
+      document.body.removeChild(element)
+      console.log("PDF generated successfully")
+    })
+    .catch((err) => {
+      console.error("PDF Generation Error:", err)
+      alert("Failed to generate PDF.")
+      if (document.body.contains(element)) {
         document.body.removeChild(element)
-        console.log("PDF generated successfully")
-      })
-      .catch((err) => {
-        console.error("PDF Generation Error:", err)
-        alert("Failed to generate PDF.")
-        if (document.body.contains(element)) {
-          document.body.removeChild(element)
-        }
-      })
-  }
+      }
+    })
+}
+
+const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, setStartDate, focusedId, setFocusedId, selectedProjects, toggleSelection, toggleAll }) => {
+  const [dragging, setDragging] = React.useState(null)
+  const [hoveredTask, setHoveredTask] = React.useState(null)
 
 
+  // ======= EXPORT: Visual Gantt Chart (Reference Style) =======
+  // (Moved to module scope and ProjectApp)
 
-  const handleExportPDF = () => {
-    // Focused: export only that project
-    if (focusedId) {
-      const one = projects.find((p) => p.id === focusedId)
-      if (!one) return
-      exportProjectsAsSinglePDF([one])
-      setShowExportMenu(false)
-      return
-    }
-
-    // Export all projects when none selected
-    let list = []
-    if (selectedProjects.size > 0) {
-      list = projects.filter((p) => selectedProjects.has(p.id))
-    } else {
-      list = projects
-    }
-    if (list.length === 0) return
-    exportProjectsAsSinglePDF(list)
-    setShowExportMenu(false)
-  }
 
   const handleExportExcel = () => {
     // Determine which projects to export
@@ -632,30 +595,115 @@ const GanttChart = ({ projects, setProjects }) => {
     }
   }, [dragging, handleMouseMove, handleMouseUp])
 
-  return (
-    <div className="flex flex-col h-full bg-gradient-to-br from-[#2b2b2b] to-[#4a4a4a] text-white">
-      {/* Date Controls */}
-      <div className="relative flex items-center justify-between px-6 py-4 border-b border-gray-600 bg-[#333333] shadow-sm z-[60]">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center bg-gray-700 rounded-lg p-1 border border-gray-600">
-            <button
-              onClick={() => setStartDate((d) => addWeeks(d, -1))}
-              className="p-1.5 hover:bg-gray-600 hover:shadow-sm rounded-md transition-all text-gray-300"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => setStartDate(addWeeks(startOfWeek(new Date(projects[0]?.start || new Date()), { weekStartsOn: 1 }), -1))}
-              className="px-4 py-1 text-xs font-bold text-gray-200 uppercase tracking-wide"
-            >
-              Reset
-            </button>
-            <button
-              onClick={() => setStartDate((d) => addWeeks(d, 1))}
-              className="p-1.5 hover:bg-gray-600 hover:shadow-sm rounded-md transition-all text-gray-300"
-            >
-              <ChevronRight size={16} />
-            </button>
+    // Drag & Drop Logic
+    const handleMouseMove = React.useCallback((e) => {
+        if (!dragging) return
+    
+        const diffX = e.clientX - dragging.initialMouseX
+        const daysDiff = Math.round(diffX / dayWidth)
+    
+        if (daysDiff === 0) return
+    
+        const updateItem = (item) => {
+            const newStart = new Date(dragging.initialStart)
+            const newEnd = new Date(dragging.initialEnd)
+    
+            if (dragging.type === 'move') {
+                newStart.setDate(newStart.getDate() + daysDiff)
+                newEnd.setDate(newEnd.getDate() + daysDiff)
+            } else if (dragging.type === 'resize-start') {
+                newStart.setDate(newStart.getDate() + daysDiff)
+                if (newStart >= newEnd) return item // Prevent inversion
+            } else if (dragging.type === 'resize-end') {
+                newEnd.setDate(newEnd.getDate() + daysDiff)
+                if (newEnd <= newStart) return item // Prevent inversion
+            }
+    
+            return {
+                ...item,
+                start: format(newStart, "yyyy-MM-dd"),
+                end: format(newEnd, "yyyy-MM-dd")
+            }
+        }
+    
+        setProjects(prev => prev.map(p => {
+          // Check main project
+          if (p.id === dragging.id) {
+              return updateItem(p)
+          }
+    
+          // Check subtasks
+          if (p.subtasks) {
+              const updatedSubtasks = p.subtasks.map(sub => 
+                  sub.id === dragging.id ? (() => {
+                    const u = updateItem(sub)
+                    const ps = new Date(p.start)
+                    const pe = new Date(p.end)
+                    const us = new Date(u.start)
+                    const ue = new Date(u.end)
+                    const cs = us < ps ? ps : us
+                    const ce = ue > pe ? pe : ue
+                    if (cs > ce) {
+                      return { 
+                        ...sub, 
+                        start: format(ps, "yyyy-MM-dd"), 
+                        end: format(pe, "yyyy-MM-dd") 
+                      }
+                    }
+                    return { 
+                      ...u, 
+                      start: format(cs, "yyyy-MM-dd"), 
+                      end: format(ce, "yyyy-MM-dd") 
+                    }
+                  })() : sub
+              )
+              
+              if (updatedSubtasks.some((s, i) => s !== p.subtasks[i])) {
+                  return { ...p, subtasks: updatedSubtasks }
+              }
+          }
+    
+          return p
+        }))
+      }, [dragging, setProjects])
+    
+      const handleMouseUp = React.useCallback(() => {
+        setDragging(null)
+      }, [])
+    
+      React.useEffect(() => {
+        if (dragging) {
+          window.addEventListener('mousemove', handleMouseMove)
+          window.addEventListener('mouseup', handleMouseUp)
+        }
+        return () => {
+          window.removeEventListener('mousemove', handleMouseMove)
+          window.removeEventListener('mouseup', handleMouseUp)
+        }
+      }, [dragging, handleMouseMove, handleMouseUp])
+
+    return (
+        <div className="flex flex-col h-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6]">
+          {/* Date Controls */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white shadow-sm z-50">
+             <div className="flex items-center gap-4">
+                 <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
+                     <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600"><ChevronLeft size={16} /></button>
+                     <button onClick={() => setStartDate(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))} className="px-4 py-1 text-xs font-bold text-slate-700 uppercase tracking-wide">Today</button>
+                     <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600"><ChevronRight size={16} /></button>
+                 </div>
+                 <span className="text-lg font-bold text-slate-800 tracking-tight">
+                     {format(startDate, "MMMM yyyy")}
+                 </span>
+             </div>
+             <div className="flex items-center gap-4">
+                 {/* Export button moved to ProjectApp header */}
+                 <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mr-4">
+                     <div className="w-3 h-3 rounded bg-indigo-500"></div> Project
+                     <div className="w-3 h-3 rounded bg-emerald-500 ml-2"></div> Done
+                     <div className="w-3 h-3 rounded bg-amber-500 ml-2"></div> Blocked
+                 </div>
+             </div>
           </div>
           <span className="text-lg font-bold text-white tracking-tight">{format(startDate, "MMMM yyyy")}</span>
         </div>
@@ -829,47 +877,112 @@ const GanttChart = ({ projects, setProjects }) => {
                   </div>
                 </div>
 
-                {/* Subtasks */}
-                {project.expanded &&
-                  project.subtasks?.map((subtask) => (
-                    <div
-                      key={subtask.id}
-                      className={`group flex items-center hover:bg-gray-700/30 transition-colors border-b border-gray-700 relative ${
-                        focusedId && project.id === focusedId ? "z-20" : "z-10"
-                      }`}
-                    >
-                      <div className="w-80 shrink-0 py-3 pl-16 pr-6 flex items-center gap-3 bg-[#333333] border-r border-gray-700">
-                        <div className="w-2 h-2 rounded-full border border-gray-500 bg-gray-700 relative z-10"></div>
-                        <div className="flex-1 min-w-0 flex items-center justify-between pr-2">
-                          <div className="font-medium text-gray-300 text-xs truncate hover:text-indigo-400 transition-colors cursor-pointer">
-                            <span className="relative z-40">{subtask.name}</span>
-                          </div>
-                        </div>
-                      </div>
+                  {projects.map(project => (
+                     <React.Fragment key={project.id}>
+                        {/* Project Row */}
+                        <div className={`group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative ${focusedId && project.id === focusedId ? 'z-30' : 'z-10'}`}>
+                           <div
+                             onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
+                             className={`w-80 shrink-0 py-4 pl-4 pr-6 flex items-center gap-3 bg-white border-r border-slate-100 group-hover:bg-slate-50/30 transition-colors`}
+                           >
+                               <input 
+                                    type="checkbox" 
+                                    checked={selectedProjects.has(project.id)}
+                                    onChange={(e) => { e.stopPropagation(); toggleSelection(project.id); }}
+                                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                               <button onClick={(e) => { e.stopPropagation(); toggleProject(project.id); }} className={`w-6 h-6 flex items-center justify-center rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all`}>
+                                   {project.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                               </button>
+                               <div className="flex-1 min-w-0">
+                                   <div className="font-extrabold text-slate-900 text-base truncate flex items-center gap-2">
+                                       <span onClick={() => setFocusedId(project.id)} className="relative z-50 pointer-events-auto cursor-pointer">{project.name}</span>
+                                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color }} />
+                                   </div>
+                                   <div className="text-[10px] text-slate-500 font-medium mt-0.5 flex items-center gap-1.5">
+                                       <span>{project.subtasks?.length || 0} tasks</span>
+                                       <span className="w-0.5 h-0.5 bg-slate-300 rounded-full"></span>
+                                       <span>{getColorMeaning(project.color)}</span>
+                                   </div>
+                               </div>
+                               
+                               {/* Edit & Add Subtask Buttons */}
+                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                   <button 
+                                       onClick={(e) => { e.stopPropagation(); onEdit(project); }}
+                                       className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                                       title="Edit Project"
+                                   >
+                                       <Edit size={14} />
+                                   </button>
+                                   <button 
+                                       onClick={(e) => { e.stopPropagation(); onAddSubtask(project.id); }}
+                                       className="p-1.5 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all"
+                                       title="Add Subtask"
+                                   >
+                                       <Plus size={14} />
+                                   </button>
+                               </div>
+                           </div>
+    
+                           {/* Project Bar */}
+                           <div className="relative h-14 flex-1">
+                               <div 
+                                       onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
+                                       className={`absolute h-8 top-3 rounded-full transition-all flex items-center justify-between px-3 overflow-visible`}
+                                       style={{ 
+                                           left: left(project.start), 
+                                           width: width(project.start, project.end)
+                                       }}
+                                       onMouseEnter={() => setHoveredTask(project.id)}
+                                       onMouseLeave={() => setHoveredTask(null)}
+                                    >
+                                    <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(90deg, ${project.color}, ${project.color}dd)` }} />
+                                    <span className={`relative z-40 text-[11px] font-bold truncate text-white drop-shadow-sm`}>{project.name}</span>
 
-                      <div className="relative h-12 flex-1">
-                        <div
-                          className="absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5"
-                          style={{
-                            left: left(subtask.start),
-                            width: width(subtask.start, subtask.end),
-                          }}
-                          onMouseEnter={() => setHoveredTask(subtask.id)}
-                          onMouseLeave={() => setHoveredTask(null)}
-                        >
-                          <div
-                            className="absolute inset-0 rounded-full"
-                            style={{
-                              background: subtask.color || project.color,
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                            }}
-                          >
-                             <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
-                          </div>
-                          <span className="relative z-40 text-[9px] font-bold text-white truncate drop-shadow-sm">{subtask.name}</span>
+                                   {/* Resize Handles */}
+                                    <div className="relative z-20 absolute left-0 top-0 bottom-0 w-4 rounded-l-full" />
+                                    <div className="relative z-20 absolute right-0 top-0 bottom-0 w-4 rounded-r-full" />
+                               </div>
+                           </div>
                         </div>
-                      </div>
-                    </div>
+    
+                        {/* Subtasks */}
+                        {project.expanded && project.subtasks?.map((subtask, index) => (
+                            <div key={subtask.id} className={`group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative ${focusedId && project.id === focusedId ? 'z-30' : 'z-10'}`}>
+                                <div className="w-80 shrink-0 py-3 pl-16 pr-6 flex items-center gap-3 bg-white border-r border-slate-100">
+                                    <div className="w-2 h-2 rounded-full border border-slate-300 bg-white relative z-10"></div>
+                                    <div className="flex-1 min-w-0 flex items-center justify-between pr-2">
+                                        <div className="font-medium text-slate-600 text-xs truncate hover:text-indigo-600 transition-colors cursor-pointer"><span className={`relative z-40`}>{subtask.name}</span></div>
+                                        
+                                        {/* Edit Subtask Button */}
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); onEdit(subtask); }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                                            title="Edit Subtask"
+                                        >
+                                            <Edit size={12} />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="relative h-12 flex-1">
+                                    <div 
+                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5`}
+                                        style={{ 
+                                            left: left(subtask.start), 
+                                            width: width(subtask.start, subtask.end),
+                                            opacity: dragging?.id === subtask.id ? 0.8 : 1
+                                        }}
+                                        onMouseEnter={() => setHoveredTask(subtask.id)}
+                                        onMouseLeave={() => setHoveredTask(null)}
+                                    >
+                                        <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(90deg, ${lighten(project.color, 0.6)}, ${lighten(project.color, 0.8)})` }} />
+                                        <span className={`relative z-40 text-[9px] font-bold text-slate-700 truncate`}>{subtask.name}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                     </React.Fragment>
                   ))}
               </React.Fragment>
             ))}
@@ -893,12 +1006,69 @@ export default function ProjectApp() {
     }
   })
 
+  
+  const [today] = React.useState(new Date())
+  const [startDate, setStartDate] = React.useState(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [draftParentId, setDraftParentId] = React.useState(null)
   const [editingId, setEditingId] = React.useState(null)
   const [draft, setDraft] = React.useState({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
   const [notification, setNotification] = React.useState({ show: false, message: "" })
   const [validationError, setValidationError] = React.useState("")
+  const [focusedId, setFocusedId] = React.useState(null)
+  const [selectedProjects, setSelectedProjects] = React.useState(new Set())
+
+  const toggleSelection = (id) => {
+    const newSet = new Set(selectedProjects)
+    if (newSet.has(id)) {
+      newSet.delete(id)
+    } else {
+      newSet.add(id)
+    }
+    setSelectedProjects(newSet)
+  }
+
+  const toggleAll = () => {
+    if (selectedProjects.size === projects.length && projects.length > 0) {
+      setSelectedProjects(new Set())
+    } else {
+      setSelectedProjects(new Set(projects.map(p => p.id)))
+    }
+  }
+
+  const [isExportModalOpen, setIsExportModalOpen] = React.useState(false)
+
+  const handleExport = (format) => {
+    // Check if anything is selected to export
+    let hasSelection = focusedId || selectedProjects.size > 0
+    // If no selection, we assume "all" - but logic below says "list = projects" if no selection. 
+    // Wait, original logic was:
+    // if focusedId -> export one
+    // else if selectedProjects > 0 -> export selected
+    // else -> export ALL
+    // So there is always something to export unless projects.length is 0.
+    if (projects.length === 0) return
+    setIsExportModalOpen(true)
+  }
+
+  const confirmExport = (company) => {
+    let list = []
+    if (focusedId) {
+      const one = projects.find((p) => p.id === focusedId)
+      if (one) list = [one]
+    } else {
+      if (selectedProjects.size > 0) {
+        list = projects.filter((p) => selectedProjects.has(p.id))
+      } else {
+        list = projects
+      }
+    }
+    
+    if (list.length > 0) {
+      exportProjectsAsSinglePDF(list, company)
+    }
+    setIsExportModalOpen(false)
+  }
 
   const activeProjectsCount = projects.filter((p) => (p.status || "todo") !== "done").length
   const doneProjectsCount = projects.filter((p) => (p.status || "todo") === "done").length
@@ -1014,18 +1184,67 @@ export default function ProjectApp() {
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-800">Project Management</h1>
           </div>
-          <div className="text-sm text-slate-500">
+          <div className="text-sm text-slate-500 flex items-center">
             <span className="mr-3">Active: {activeProjectsCount}</span>
             <span className="mr-3">Done: {doneProjectsCount}</span>
             <span>Total: {totalProjectsCount}</span>
-            <button
-              onClick={() => {
-                setDraftParentId(null)
-                setEditingId(null)
-                setDraft({ name: "", start: format(new Date(), "yyyy-MM-dd"), end: format(addDays(new Date(), 5), "yyyy-MM-dd"), status: "todo", color: DEFAULT_COLOR })
-                setIsModalOpen(true)
-              }}
-              className="ml-4 px-4 py-2 bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white rounded-lg text-sm font-bold shadow hover:shadow-lg transition-all"
+            
+            <div className="relative ml-4">
+                <button 
+                    onClick={() => handleExport('pdf')}
+                    disabled={selectedProjects.size === 0 && !focusedId}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${selectedProjects.size > 0 || focusedId ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                >
+                    <Download size={16} />
+                    Export PDF
+                </button>
+
+                {isExportModalOpen && (
+                    <>
+                        <div 
+                            className="fixed inset-0 z-[105] cursor-default" 
+                            onClick={() => setIsExportModalOpen(false)}
+                        />
+                        <div className="absolute top-full right-0 mt-2 z-[110] bg-white rounded-xl shadow-2xl w-[260px] overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-150 origin-top-right">
+                           <div className="py-1">
+                               <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-50 mb-1">
+                                   Select Header
+                               </div>
+                               
+                               <button 
+                                   onClick={() => confirmExport('EIT')}
+                                   className="w-full flex items-center px-4 py-2.5 hover:bg-slate-50 transition-colors group"
+                               >
+                                   <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mr-3 group-hover:bg-blue-200 transition-colors">
+                                       EIT
+                                   </div>
+                                   <div className="text-left">
+                                       <div className="text-sm font-semibold text-slate-700">EIT Lasertechnik</div>
+                                       <div className="text-[10px] text-slate-400">Default</div>
+                                   </div>
+                               </button>
+
+                               <button 
+                                   onClick={() => confirmExport('Einstein')}
+                                   className="w-full flex items-center px-4 py-2.5 hover:bg-slate-50 transition-colors group"
+                               >
+                                   <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold mr-3 group-hover:bg-purple-200 transition-colors">
+                                       EIN
+                                   </div>
+                                   <div className="text-left">
+                                       <div className="text-sm font-semibold text-slate-700">Einstein Industrial</div>
+                                       <div className="text-[10px] text-slate-400">Alternative</div>
+                                   </div>
+                               </button>
+                           </div>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <button 
+                onClick={() => { setDraftParentId(null); setIsModalOpen(true) }}
+                className="ml-4 px-4 py-2 bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white rounded-lg text-sm font-bold shadow hover:shadow-lg transition-all"
             >
               + New Project
             </button>
@@ -1034,10 +1253,23 @@ export default function ProjectApp() {
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        <GanttChart projects={projects} setProjects={setProjects} />
+          <GanttChart 
+            projects={projects} 
+            setProjects={setProjects} 
+            onAddSubtask={handleAddSubtask} 
+            onEdit={handleEditProject}
+            startDate={startDate}
+            setStartDate={setStartDate}
+            focusedId={focusedId}
+            setFocusedId={setFocusedId}
+            selectedProjects={selectedProjects}
+            toggleSelection={toggleSelection}
+            toggleAll={toggleAll}
+          />
       </div>
 
-      {/* Modal (kept from your code, simplified) */}
+      {/* Export Menu Modal (Compact) Removed */}
+
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xl p-4 animate-in fade-in duration-200">
           <div className="relative w-full max-w-md group">

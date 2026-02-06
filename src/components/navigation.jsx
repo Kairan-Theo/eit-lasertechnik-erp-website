@@ -323,14 +323,46 @@ export default function Navigation({ require }) {
         }
 
         const token = localStorage.getItem("authToken")
+        
+        // If no token, avoid 401 errors by using local storage only
+        if (!token) {
+          try {
+            const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
+            const local = Array.isArray(raw) ? raw : []
+            const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
+            setNotificationsCount(unread)
+            setNotifications(local.map(n => {
+              const msg = typeof n.message === "string" && (n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message
+              return {
+                id: n.id,
+                message: msg,
+                created_at: n.timestamp || n.created_at,
+                is_read: !n.unread,
+                type: n.type || "info"
+              }
+            }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+          } catch {
+            setNotificationsCount(0)
+            setNotifications([])
+          }
+          return
+        }
+
         const headers = {
           "Cache-Control": "no-store",
-          ...(token ? { "Authorization": `Token ${token}` } : {})
+          "Authorization": `Token ${token}`
         }
         const controller = new AbortController()
         const tid = setTimeout(() => controller.abort(), 3500)
         fetch(`${API_BASE_URL}/api/notifications/`, { headers, signal: controller.signal })
-          .then(r => r.ok ? r.json() : Promise.resolve([]))
+          .then(r => {
+            if (r.status === 401) {
+              // Token invalid/expired - clear it so we don't retry in vain
+              localStorage.removeItem("authToken")
+              throw new Error("Unauthorized")
+            }
+            return r.ok ? r.json() : Promise.resolve([])
+          })
           .then(list => {
             clearTimeout(tid)
             nextProbeTimeRef.current = 0

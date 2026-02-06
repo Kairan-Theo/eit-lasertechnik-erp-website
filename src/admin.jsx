@@ -887,6 +887,12 @@ function PermissionsManager() {
         const d = await r.json()
         setUsers(Array.isArray(d) ? d : [])
       } else {
+        if (r.status === 401) {
+          localStorage.removeItem("authToken")
+          localStorage.removeItem("userRole")
+          window.location.reload()
+          return
+        }
         setUsers([])
       }
     } catch {

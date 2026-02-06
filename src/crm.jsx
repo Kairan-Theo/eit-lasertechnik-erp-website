@@ -2936,6 +2936,10 @@ function CRMPage() {
                       type="button"
                       className="px-5 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
                       onClick={async () => {
+                        if (!newDeal.company || !newDeal.company.trim()) {
+                            showNotification("Please enter a company name")
+                            return
+                        }
                         let stageName = ""
                         try {
                           stageName = stages[newDeal.stageIndex]?.name || stages[0]?.name || ""

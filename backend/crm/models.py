@@ -242,6 +242,7 @@ class Project(models.Model):
     end_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planned')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='none')
+    color = models.CharField(max_length=20, default='#6366f1') # Default Indigo
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     def __str__(self):
@@ -265,9 +266,11 @@ class Task(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     assignee = models.CharField(max_length=100, blank=True)
-    due_date = models.DateField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True) # Used as End Date
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='none')
+    color = models.CharField(max_length=20, default='#64748b') # Default Slate
     reminder_sent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
