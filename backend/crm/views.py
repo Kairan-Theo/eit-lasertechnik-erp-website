@@ -763,21 +763,22 @@ def sync_users_permissions(request):
 def get_users(request):
     """
     Get all users and their allowed apps.
-    Only accessible by Admin users or specific admin email.
+    Only accessible by Admin users, staff, or accounts with 'permission_control' type.
     """
-    print(f"DEBUG: get_users called by {request.user.email} (staff={request.user.is_staff})")
-    # Allow staff or permission_control accounts (or specific email)
+    # Check if the user is a 'permission_control' account
     is_pc = hasattr(request.user, 'profile') and request.user.profile.account_type == 'permission_control'
+    
+    # Restrict access to Staff, Permission Control accounts, or specific whitelisted emails
     if not (request.user.is_staff or is_pc or request.user.email in ['htetyunn06@gmail.com', 'eit@eitlaser.com', 'shwinpyonethu0106@gmail.com']):
-        print("DEBUG: Permission denied")
         return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
+    # Fetch all users to display in the permission management interface
     users = User.objects.all().order_by('id')
-    print(f"DEBUG: Found {users.count()} users")
+    
     data = []
     for user in users:
         allowed = "all"
-        # Prefer PermissionControl if available, then Profile
+        # Determine allowed apps: Prefer PermissionControl model if available, otherwise fallback to Profile
         if hasattr(user, 'permission_control'):
              allowed = user.permission_control.allow_apps
         elif hasattr(user, 'profile'):
@@ -898,18 +899,78 @@ def set_user_password(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_notifications(request):
     """
-    Get recent notifications for admins.
+    Get notifications with filtering based on user permissions.
+    
+    Filtering Logic:
+    1. Admin / Permission Control Accounts: See ALL notifications.
+    2. Normal Accounts:
+       - CRM-related (crm_created, user_registration, etc.): Visible if allow_apps has 'crm' or 'admin'.
+       - Manufacturing-related (manufacturing_finish, etc.): Visible if allow_apps has 'manufacturing', 'inventory', or 'project_management'.
+       - Other types (info, etc.): Visible to everyone (unless restricted otherwise).
     """
-    # Get unread notifications or last 20
-    notifications = Notification.objects.all().order_by('-created_at')[:20]
+    user = request.user
+    if not user.is_authenticated:
+        return Response([])
+
+    # 1. Admin / Permission Control Account check
+    # If user is admin (is_staff) or has permission_control account type, show all
+    is_pc = hasattr(user, 'profile') and user.profile.account_type == 'permission_control'
+    if user.is_staff or is_pc:
+        notifications = Notification.objects.all().order_by('-created_at')[:50]
+    else:
+        # 2. Get allowed apps for normal user
+        allowed_apps_str = ""
+        if hasattr(user, 'profile'):
+            allowed_apps_str = user.profile.allowed_apps
+        
+        # Parse allowed apps (comma-separated string)
+        allowed_apps = [app.strip() for app in allowed_apps_str.split(',') if app.strip()]
+        
+        # If 'all' is in allowed_apps, show everything
+        if 'all' in allowed_apps:
+             notifications = Notification.objects.all().order_by('-created_at')[:50]
+        else:
+            # 3. Filter based on Notification Types mapping
+            
+            # CRM Group: Notifications related to CRM activities
+            # Requires: 'crm' or 'admin' in allowed_apps
+            crm_types = ['crm_created', 'user_registration', 'activity_schedule_reminder', 'billing_note_reminder']
+            crm_access = 'crm' in allowed_apps or 'admin' in allowed_apps
+
+            # Manufacturing/Ops Group: Notifications related to production and inventory
+            # Requires: 'manufacturing', 'inventory', or 'project_management' in allowed_apps
+            ops_types = ['manufacturing_finish', 'delivery_updates', 'inventory_updates']
+            ops_access = any(app in allowed_apps for app in ['manufacturing', 'inventory', 'project_management'])
+
+            from django.db.models import Q
+            q_filter = Q()
+            restricted_types = crm_types + ops_types
+            
+            # Add CRM notifications if user has access
+            if crm_access:
+                q_filter |= Q(type__in=crm_types)
+                
+            # Add Ops notifications if user has access
+            if ops_access:
+                q_filter |= Q(type__in=ops_types)
+            
+            # Include types that are NOT in the restricted list (legacy support or general info)
+            # This ensures that types like 'info', 'alert', 'signup' are visible to everyone
+            # unless we explicitly decide to restrict them later.
+            q_filter |= ~Q(type__in=restricted_types)
+            
+            notifications = Notification.objects.filter(q_filter).order_by('-created_at')[:50]
+
     data = []
     for n in notifications:
         msg = n.message
+        # Legacy fix for Google signup messages
         if n.type == 'signup' and isinstance(msg, str):
             msg = msg.replace('New Google user:', 'New user:')
+            
         data.append({
             'id': n.id,
             'message': msg,

@@ -193,10 +193,24 @@ class UserProfile(models.Model):
         return f"{self.user.username}'s Profile"
 
 class Notification(models.Model):
+    # Define notification types as controlled values
+    NOTIFICATION_TYPES = [
+        ('info', 'Info'),  # Default type
+        ('crm_created', 'CRM Created'),
+        ('user_registration', 'User Registration'),
+        ('activity_schedule_reminder', 'Activity Schedule Reminder'),
+        ('billing_note_reminder', 'Billing Note Reminder'),
+        ('manufacturing_finish', 'Manufacturing Finish'),
+        ('delivery_updates', 'Delivery Updates'),
+        ('inventory_updates', 'Inventory Updates'),
+        ('signup', 'Signup'), # For legacy compatibility if needed
+        ('alert', 'Alert'),   # For legacy compatibility if needed
+    ]
     message = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
-    type = models.CharField(max_length=50, default='info') # info, signup, alert
+    # Type field controls visibility based on user permissions
+    type = models.CharField(max_length=50, choices=NOTIFICATION_TYPES, default='info') 
 
     def __str__(self):
         return self.message

@@ -105,33 +105,58 @@ function NewMOPage() {
 
   const syncItemsFromBOM = React.useCallback(() => {
     const key = String(newOrder.productNo || "").trim().toLowerCase()
+    console.log("syncItemsFromBOM called with key:", key)
     if (!key) {
       setItems([])
       return false
     }
     try {
       // Use bomList state
+      console.log("bomList length:", bomList.length)
       if (!Array.isArray(bomList) || !bomList.length) return
-      const match = bomList.find(b => String(b.product || "").trim().toLowerCase() === key)
+      
+      const match = bomList.find(b => String(b.product || "").trim().toLowerCase() === key)  
+      console.log("BOM match found:", match)
+      
       if (!match) return false
-      const pt = match.productTree
+      
+      let pt = match.productTree
+      console.log("Raw productTree:", pt)
+      
+      // Handle case where productTree might be a JSON string
+      if (typeof pt === 'string') {
+        try {
+          pt = JSON.parse(pt)
+          console.log("Parsed productTree:", pt)
+        } catch (e) {
+          console.error("Failed to parse productTree JSON:", e)
+        }
+      }
+
       const systems = pt && !Array.isArray(pt)
         ? (pt.systems || [])
         : Array.isArray(pt)
           ? pt
           : []
+
+      console.log("Extracted systems:", systems)
+      
       const comps = systems.flatMap(s => (s.components || []).map(c => ({
         itemCode: "",
         description: String(c.name || "").trim(),
         qty: String(Number(c.qty) || 1),
         unit: "Unit",
       })))
+      
+      console.log("Extracted components:", comps)
+      
       if (comps.length) {
-        setItems(comps.map((x, idx) => ({ ...x, itemCode: x.itemCode || String(idx + 1) })))
+        setItems(comps.map((x, idx) => ({ ...x, itemCode: x.itemCode || String(idx + 1) }))) 
         return true
       }
       return false
-    } catch {
+    } catch (e) {
+      console.error("Error in syncItemsFromBOM:", e)
       return false
     }
   }, [newOrder.productNo, bomList])
@@ -144,10 +169,11 @@ function NewMOPage() {
         setItems([])
       }
     } else if (!itemsTouched) {
+      // If items haven't been manually modified, try to sync from BOM if a match is found.  
+      // This will check if the entered product name matches any BOM product and populate items.
       syncItemsFromBOM()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newOrder.productNo, itemsTouched, isEditMode])
+  }, [newOrder.productNo, itemsTouched, isEditMode, syncItemsFromBOM])
 
 
 
@@ -384,6 +410,38 @@ function NewMOPage() {
 
     // BOMs - backend only
     setBomList([])
+
+    // Fetch BOMs to allow auto-filling items based on product name.
+    // When a user enters a product name that matches a BOM product, we fetch its components.
+    // We also use localStorage as a fallback, similar to bom.jsx
+    const loadBoms = async () => {
+        let list = []
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/bom/`, { headers })
+            if (res.ok) {
+                const data = await res.json()
+                list = Array.isArray(data) ? data : []
+            }
+        } catch (e) {
+            console.error("Error fetching BOMs from API:", e)
+        }
+
+        // If API list is empty, try localStorage
+        if (!list.length) {
+            try {
+                const raw = JSON.parse(localStorage.getItem("mfgBOMs") || "[]")
+                list = Array.isArray(raw) ? raw : []
+                console.log("Loaded BOMs from localStorage:", list.length)
+            } catch (e) {
+                console.error("Error loading BOMs from localStorage:", e)
+            }
+        } else {
+             console.log("Loaded BOMs from API:", list.length)
+        }
+        
+        setBomList(list)
+    }
+    loadBoms()
 
     ;(async () => {
       try {
@@ -840,7 +898,7 @@ function NewMOPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Escape") setShowBomSuggestions(false)
                       }}
-                      placeholder="e.g. LCM-001"
+                      placeholder="e.g. Laser Marking Machine"
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                     />
                     {showBomSuggestions && String(newOrder.productNo || "").trim() && (() => {
