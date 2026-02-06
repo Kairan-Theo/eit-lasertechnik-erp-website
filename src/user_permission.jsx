@@ -1,14 +1,17 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
-import { LanguageProvider } from "./components/language-context"
+import { LanguageProvider } from "./components/language-context.jsx"
 import { PermissionsManager } from "./components/admin-page.jsx"
 import "./index.css"
 
+// SupportPermissionsPage: A standalone page for managing user permissions
+// Restricted to specific administrative users
 function SupportPermissionsPage() {
   const [user, setUser] = React.useState(null)
   const [loading, setLoading] = React.useState(true)
 
+  // Load current user from local storage on mount
   React.useEffect(() => {
     try {
       const u = JSON.parse(localStorage.getItem("currentUser") || "{}")
@@ -19,6 +22,8 @@ function SupportPermissionsPage() {
 
   if (loading) return null
 
+  // Strict Access Control: Only allow specific email (htetyunn06@gmail.com)
+  // This is a hardcoded safety check for this specific support page
   if (!user || user.email !== "htetyunn06@gmail.com") {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -46,6 +51,7 @@ function SupportPermissionsPage() {
           <h1 className="text-2xl font-bold text-gray-900">User Permission Control</h1>
           <p className="text-sm text-gray-500 mt-1">Manage which apps each user can access.</p>
         </div>
+        {/* Reuse the PermissionsManager component from admin-page */}
         <PermissionsManager />
       </div>
     </main>
