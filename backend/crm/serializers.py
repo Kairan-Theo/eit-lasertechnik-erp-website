@@ -75,6 +75,7 @@ class EmailLogSerializer(serializers.ModelSerializer):
 
 class DealHistorySerializer(serializers.ModelSerializer):
     deal_title = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
 
     class Meta:
         model = DealHistory
@@ -82,6 +83,11 @@ class DealHistorySerializer(serializers.ModelSerializer):
 
     def get_deal_title(self, obj):
         return obj.deal.title if obj.deal else ""
+
+    def get_company_name(self, obj):
+        if obj.deal and obj.deal.customer:
+            return obj.deal.customer.company_name
+        return ""
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
