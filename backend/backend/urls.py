@@ -25,6 +25,8 @@ from crm.views import DealViewSet, ActivityScheduleViewSet, ProjectViewSet, Task
 from crm.pdf_views import generate_quotation_pdf, generate_billing_note_pdf, generate_invoice_pdf
 
 router = DefaultRouter()
+router.register(r'project_management', ProjectManagementViewSet)
+router.register(r'subprojects', SubProjectViewSet)
 router.register(r'inventory', InventoryViewSet)
 router.register(r'delivery', DeliveryViewSet)
 router.register(r'eits', EITViewSet)

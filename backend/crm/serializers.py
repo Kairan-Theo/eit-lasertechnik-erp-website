@@ -1,6 +1,19 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
+from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject
+
+class SubProjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubProject
+        fields = ['id', 'subproject_name', 'subproject_duration']
+
+class ProjectManagementSerializer(serializers.ModelSerializer):
+    subprojects = SubProjectSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ProjectManagement
+        fields = ['id', 'project_name', 'duration', 'created_at', 'subprojects']
+
 
 class DeliverySerializer(serializers.ModelSerializer):
     company_name = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all(), required=False, allow_null=True)
