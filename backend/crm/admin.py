@@ -1,7 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, PermissionControl, ProjectManagement, SubProject
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, SupportTicket, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
+from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, PermissionControl, ProjectManagement, SubProject, Delivery
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
