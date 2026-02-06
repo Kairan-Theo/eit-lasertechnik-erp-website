@@ -6,8 +6,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer
 import json
 
 class ProjectManagementViewSet(viewsets.ModelViewSet):
@@ -440,18 +440,19 @@ def import_bom(request):
             created_rows += 1
     return Response({'status': 'ok', 'created_or_updated': created_rows})
 
-from .tracking_utils import fetch_tracking_status
+# from .tracking_utils import fetch_tracking_status
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def check_tracking_status(request):
-    courier = request.query_params.get('courier')
-    number = request.query_params.get('number')
-    if not courier or not number:
-        return Response({'error': 'courier and number required'}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'status': 'error', 'message': 'Tracking service unavailable'}, status=503)
+    # courier = request.query_params.get('courier')
+    # number = request.query_params.get('number')
+    # if not courier or not number:
+    #     return Response({'error': 'courier and number required'}, status=status.HTTP_400_BAD_REQUEST)
     
-    status_text = fetch_tracking_status(courier, number)
-    return Response({'status': status_text or 'Unknown'})
+    # status_text = fetch_tracking_status(courier, number)
+    # return Response({'status': status_text or 'Unknown'})
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
