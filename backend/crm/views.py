@@ -35,18 +35,27 @@ from django.http import HttpResponse
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_crm_analytics(request):
-    # Simple analytics
+    from django.db.models import Sum, Count
+    
+    # Deals Analytics
     total_deals = Deal.objects.count()
-    won_deals = Deal.objects.filter(stage__icontains='Won').count()
-    pipeline_value = 0
-    # Sum value? Deal doesn't have value field in standard, checking model...
-    # It has value in serializer but model?
-    # Let's just return counts for now
+    won_deals_qs = Deal.objects.filter(stage__icontains='Won')
+    won_deals = won_deals_qs.count()
+    won_value = won_deals_qs.aggregate(total=Sum('amount'))['total'] or 0
+    
+    # Deals by stage
+    by_stage = {}
+    stage_counts = Deal.objects.values('stage').annotate(count=Count('id'))
+    for entry in stage_counts:
+        by_stage[entry['stage']] = entry['count']
     
     return Response({
-        "total_deals": total_deals,
-        "won_deals": won_deals,
-        "pipeline_value": 0 # Placeholder
+        "deals": {
+            "total": total_deals,
+            "won_deals": won_deals,
+            "won_value": won_value,
+            "by_stage": by_stage
+        }
     })
 
 
@@ -111,20 +120,12 @@ def send_email_api(request):
         return Response({"error": str(e)}, status=500)
 
 
-class LeadViewSet(viewsets.ModelViewSet):
-    queryset = Lead.objects.all().order_by('-created_at')
-    serializer_class = LeadSerializer
-    permission_classes = [AllowAny] # Ideally IsAuthenticated
-
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all().order_by('company_name')
     serializer_class = CustomerSerializer
     permission_classes = [AllowAny] # Ideally IsAuthenticated, but sticking to pattern
 
-class SupportTicketViewSet(viewsets.ModelViewSet):
-    queryset = SupportTicket.objects.all().order_by('-updated_at')
-    serializer_class = SupportTicketSerializer
-    permission_classes = [AllowAny] # Ideally IsAuthenticated
+# Removed SupportTicketViewSet
 
 class DealViewSet(viewsets.ModelViewSet):
     queryset = Deal.objects.all().order_by('-id')
