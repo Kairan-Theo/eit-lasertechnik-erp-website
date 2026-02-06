@@ -6,8 +6,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, SupportTicketSerializer, LeadSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, StageSerializer, InventorySerializer, DeliverySerializer, CustomerPurchaseOrderSerializer, EITSerializer, BillingNoteSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, StageSerializer, InventorySerializer, DeliverySerializer, CustomerPurchaseOrderSerializer, EITSerializer, BillingNoteSerializer
 import json
 from datetime import date, timedelta
 import smtplib
@@ -25,18 +25,27 @@ from django.http import HttpResponse
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_crm_analytics(request):
-    # Simple analytics
+    from django.db.models import Sum, Count
+    
+    # Deals Analytics
     total_deals = Deal.objects.count()
-    won_deals = Deal.objects.filter(stage__icontains='Won').count()
-    pipeline_value = 0
-    # Sum value? Deal doesn't have value field in standard, checking model...
-    # It has value in serializer but model?
-    # Let's just return counts for now
+    won_deals_qs = Deal.objects.filter(stage__icontains='Won')
+    won_deals = won_deals_qs.count()
+    won_value = won_deals_qs.aggregate(total=Sum('amount'))['total'] or 0
+    
+    # Deals by stage
+    by_stage = {}
+    stage_counts = Deal.objects.values('stage').annotate(count=Count('id'))
+    for entry in stage_counts:
+        by_stage[entry['stage']] = entry['count']
     
     return Response({
-        "total_deals": total_deals,
-        "won_deals": won_deals,
-        "pipeline_value": 0 # Placeholder
+        "deals": {
+            "total": total_deals,
+            "won_deals": won_deals,
+            "won_value": won_value,
+            "by_stage": by_stage
+        }
     })
 
 
@@ -101,20 +110,12 @@ def send_email_api(request):
         return Response({"error": str(e)}, status=500)
 
 
-class LeadViewSet(viewsets.ModelViewSet):
-    queryset = Lead.objects.all().order_by('-created_at')
-    serializer_class = LeadSerializer
-    permission_classes = [AllowAny] # Ideally IsAuthenticated
-
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all().order_by('company_name')
     serializer_class = CustomerSerializer
     permission_classes = [AllowAny] # Ideally IsAuthenticated, but sticking to pattern
 
-class SupportTicketViewSet(viewsets.ModelViewSet):
-    queryset = SupportTicket.objects.all().order_by('-updated_at')
-    serializer_class = SupportTicketSerializer
-    permission_classes = [AllowAny] # Ideally IsAuthenticated
+# Removed SupportTicketViewSet
 
 class DealViewSet(viewsets.ModelViewSet):
     queryset = Deal.objects.all().order_by('-id')

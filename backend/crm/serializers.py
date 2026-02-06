@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, SupportTicket, Lead, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
+from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery
 
 class DeliverySerializer(serializers.ModelSerializer):
     company_name = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all(), required=False, allow_null=True)
@@ -70,34 +70,12 @@ class DealHistorySerializer(serializers.ModelSerializer):
     def get_deal_title(self, obj):
         return obj.deal.title if obj.deal else ""
 
-class LeadSerializer(serializers.ModelSerializer):
-    assigned_to_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Lead
-        fields = '__all__'
-
-    def get_assigned_to_name(self, obj):
-        return obj.assigned_to.first_name if obj.assigned_to else ""
-
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = '__all__'
 
-class SupportTicketSerializer(serializers.ModelSerializer):
-    customer_name = serializers.SerializerMethodField()
-    assigned_to_name = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = SupportTicket
-        fields = '__all__'
-        
-    def get_customer_name(self, obj):
-        return obj.customer.company_name if obj.customer else ""
-        
-    def get_assigned_to_name(self, obj):
-        return obj.assigned_to.first_name if obj.assigned_to else ""
+# Removed SupportTicketSerializer
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
