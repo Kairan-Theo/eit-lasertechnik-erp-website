@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, ArrowRight, RefreshCw, Calendar, Search, Paperclip, Trash2 } from 'lucide-react';
+import { Mail, ArrowRight, RefreshCw, Calendar, Search, Paperclip, Trash2, Info } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
 const CRMHistory = () => {
@@ -205,20 +205,29 @@ const CRMHistory = () => {
                 key={history.id} 
                 className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-start gap-4 transition-all hover:shadow-md group"
               >
-                {/* Visual Indicator: Blue dot to match the user's notification style request */}
-                <div className="mt-1.5 w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0 shadow-sm"></div>
+                {/* Visual Indicator: Blue Info Icon */}
+                <div className="flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+                    <Info className="w-5 h-5 text-blue-600" />
+                  </div>
+                </div>
                 
                 <div className="flex-1">
                   {/* 
-                      Main Content: Formatted string showing the movement.
-                      Matches format: CRM: Moved "Company Name" from Stage A --> Stage B 
+                      Main Content: 
+                      Line 1: CRM Movement: "company name":"deal name" was moved:
+                      Line 2: from "sales pipeline" to "sales pipeline"
                   */}
-                  <p className="text-slate-800 font-medium text-sm leading-relaxed">
-                    CRM: Moved <span className="font-bold text-slate-900">"{history.deal_title || `Deal #${history.deal}`}"</span> from <span className="text-slate-600">{history.from_stage}</span> <span className="text-slate-400 px-1">--&gt;</span> <span className="text-blue-600 font-semibold">{history.to_stage}</span>
+                  <p className="text-slate-900 font-medium text-sm">
+                    CRM Movement: "{history.company_name || 'Unknown Company'}":"{history.deal_title || `Deal #${history.deal}`}" was moved:
                   </p>
                   
-                  {/* Timestamp: Displayed in a subtle color below the main text */}
-                  <p className="text-slate-400 text-xs mt-1.5 font-medium">
+                  <p className="text-slate-500 text-xs mt-1">
+                    from "{history.from_stage}" to "{history.to_stage}"
+                  </p>
+                  
+                  {/* Timestamp */}
+                  <p className="text-slate-400 text-[10px] mt-1 font-medium">
                     {new Date(history.changed_at).toLocaleString()}
                   </p>
                 </div>
