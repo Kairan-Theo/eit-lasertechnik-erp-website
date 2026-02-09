@@ -1057,6 +1057,24 @@ export default function ProjectApp() {
     }
   }, [isModalOpen, draftParentId, draft.start, draft.end, projects])
 
+  const handleEditProject = (project) => {
+    setEditingId(project.id)
+    setDraft({
+      name: project.name,
+      start: project.start,
+      end: project.end,
+      status: project.status || "todo",
+      color: project.color || DEFAULT_COLOR
+    })
+    setIsModalOpen(true)
+  }
+
+  const handleAddSubtask = (parentId) => {
+    setDraftParentId(parentId)
+    setDraft({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
+    setIsModalOpen(true)
+  }
+
   const handleDeleteProject = (id) => {
     if (confirm("Are you sure you want to delete this project?")) {
       setProjects((prev) => prev.filter((p) => p.id !== id))
