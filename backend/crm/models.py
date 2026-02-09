@@ -67,6 +67,7 @@ class QuotationItem(models.Model):
     quo_description = models.TextField(blank=True)
     quantity = models.IntegerField(default=1)
     quo_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    image = models.ImageField(upload_to='quotation_items/', null=True, blank=True)
 
     def __str__(self):
         return f"{self.quo_item} ({self.quotation.qo_code})"

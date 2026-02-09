@@ -322,9 +322,19 @@ function useInvoiceState() {
              // If key is history:..., index is likely the array index
              if (invList[index]) {
                const inv = invList[index]
-               setCustomer(inv.customer)
-               setDetails(inv.details)
-               setItems(inv.items)
+               setCustomer(inv.customer || {
+                 company: "",
+                 address: "",
+                 taxId: "",
+                 telephone: "",
+                 fax: "",
+                 attn: "",
+                 div: "",
+                 mobile: "",
+                 email: ""
+               })
+               setDetails(prev => ({ ...prev, ...(inv.details || {}) }))
+               setItems(inv.items || [])
              }
           }
         } catch (e) {
@@ -587,9 +597,9 @@ function InvoiceDocument({ inv }) {
   const orgFax = isEinstein ? "02-052-9544" : "02-xxx-xxxx"
   const orgTaxId = isEinstein ? "0105547001928" : "010555xxxxxxx"
   
-  const customerName = inv.customer.company || inv.customer.name || ""
-  const customerTaxId = inv.customer.taxId || ""
-  const customerAddress = inv.customer.address || inv.customer.billingAddress1 || ""
+  const customerName = inv.customer?.company || inv.customer?.name || ""
+  const customerTaxId = inv.customer?.taxId || ""
+  const customerAddress = inv.customer?.address || inv.customer?.billingAddress1 || ""
   const paymentType = inv.details.paymentType || ""
   const poNo = inv.details.poNo || ""
   const issueDate = inv.details.date ? format(parseISO(inv.details.date), "dd/MM/yyyy") : ""
@@ -956,12 +966,12 @@ function InvoicePage() {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
-               <input value={inv.details.number} onChange={(e) => inv.setDetails({ ...inv.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Invoice number" />
-             </div>
-             <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
-               <DateField value={inv.details.date} onChange={(val) => inv.setDetails({ ...inv.details, date: val })} />
-             </div>
+              <input value={inv.details.number || ""} onChange={(e) => inv.setDetails({ ...inv.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Invoice number" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
+              <DateField value={inv.details.date || ""} onChange={(val) => inv.setDetails({ ...inv.details, date: val })} />
+            </div>
           </div>
         </div>
 
@@ -1011,19 +1021,19 @@ function InvoicePage() {
               </select>
              </div>
              <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-               <textarea value={inv.details.eitAddress} onChange={(e) => inv.setDetails({ ...inv.details, eitAddress: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
-             </div>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
-               <input value={inv.details.eitTelephone} onChange={(e) => inv.setDetails({ ...inv.details, eitTelephone: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Telephone" />
-             </div>
-             <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
-               <input value={inv.details.eitFax} onChange={(e) => inv.setDetails({ ...inv.details, eitFax: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Fax" />
-             </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+              <textarea value={inv.details.eitAddress || ""} onChange={(e) => inv.setDetails({ ...inv.details, eitAddress: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
+              <input value={inv.details.eitTelephone || ""} onChange={(e) => inv.setDetails({ ...inv.details, eitTelephone: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Telephone" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
+              <input value={inv.details.eitFax || ""} onChange={(e) => inv.setDetails({ ...inv.details, eitFax: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Fax" />
+            </div>
            </div>
         </div>
 
@@ -1035,33 +1045,33 @@ function InvoicePage() {
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
                <CustomerCombobox
-                  value={inv.customer.company}
+                  value={inv.customer?.company || ""}
                   options={inv.customerOptions}
                   onChange={(val) => {
                     const match = inv.customerOptions.find(c => c.customer_name === val)
                     if (match) {
                       inv.setCustomer({
-                        ...inv.customer,
+                        ...(inv.customer || {}),
                         company: val,
-                        taxId: match.tax_id || inv.customer.taxId,
-                        address: match.address || inv.customer.address,
-                        telephone: match.phone || inv.customer.telephone,
-                        attn: match.contact || inv.customer.attn,
-                        email: match.email || inv.customer.email
+                        taxId: match.tax_id || inv.customer?.taxId || "",
+                        address: match.address || inv.customer?.address || "",
+                        telephone: match.phone || inv.customer?.telephone || "",
+                        attn: match.contact || inv.customer?.attn || "",
+                        email: match.email || inv.customer?.email || ""
                       })
                     } else {
-                      inv.setCustomer({ ...inv.customer, company: val })
+                      inv.setCustomer({ ...(inv.customer || {}), company: val })
                     }
                   }}
                 />
              </div>
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Tax Code</label>
-               <input value={inv.customer.taxId} onChange={(e) => inv.setCustomer({ ...inv.customer, taxId: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Tax Code" />
+               <input value={inv.customer?.taxId || ""} onChange={(e) => inv.setCustomer({ ...(inv.customer || {}), taxId: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Tax Code" />
              </div>
              <div className="md:col-span-2">
                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-               <textarea value={inv.customer.address} onChange={(e) => inv.setCustomer({ ...inv.customer, address: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
+               <textarea value={inv.customer?.address || ""} onChange={(e) => inv.setCustomer({ ...(inv.customer || {}), address: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
              </div>
           </div>
         </div>
@@ -1073,7 +1083,7 @@ function InvoicePage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
               <input 
-                value={inv.details.paymentType} 
+                value={inv.details.paymentType || ""} 
                 onChange={(e) => inv.setDetails({ ...inv.details, paymentType: e.target.value })} 
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
                 placeholder="Payment Type" 
@@ -1081,12 +1091,12 @@ function InvoicePage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-              <DateField value={inv.details.dueDate} onChange={(val) => inv.setDetails({ ...inv.details, dueDate: val })} />
+              <DateField value={inv.details.dueDate || ""} onChange={(val) => inv.setDetails({ ...inv.details, dueDate: val })} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">PO No.</label>
               <Combobox 
-                value={inv.details.poNo} 
+                value={inv.details.poNo || ""} 
                 onChange={(val) => inv.setDetails({ ...inv.details, poNo: val })} 
                 options={inv.poOptions} 
                 placeholder="PO Number" 
@@ -1124,7 +1134,7 @@ function InvoicePage() {
                       </td>
                       <td className="p-3">
                         <textarea 
-                          value={it.description} 
+                          value={it.description || ""} 
                           onChange={(e) => inv.updateItem(i, "description", e.target.value)} 
                           className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none resize-y min-h-[32px]"
                           rows={1}
@@ -1132,13 +1142,13 @@ function InvoicePage() {
                         />
                       </td>
                       <td className="p-3">
-                        <input type="number" min="0" step="0.01" value={it.price} onChange={(e) => inv.updateItem(i, "price", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
+                        <input type="number" min="0" step="0.01" value={it.price || ""} onChange={(e) => inv.updateItem(i, "price", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
                       </td>
                       <td className="p-3">
-                        <input type="number" min="0" value={it.qty} onChange={(e) => inv.updateItem(i, "qty", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
+                        <input type="number" min="0" value={it.qty || ""} onChange={(e) => inv.updateItem(i, "qty", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
                       </td>
                       <td className="p-3">
-                        <input value={it.unit} onChange={(e) => inv.updateItem(i, "unit", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
+                        <input value={it.unit || ""} onChange={(e) => inv.updateItem(i, "unit", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
                       </td>
                       <td className="p-3 text-right text-sm text-gray-700">
                         {((Number(it.qty) || 0) * (Number(it.price) || 0)).toFixed(2)}
