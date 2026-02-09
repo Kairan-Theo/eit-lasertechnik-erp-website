@@ -4,7 +4,13 @@ import App from "./App.jsx"
 import { LanguageProvider } from "./components/language-context"
 import "./index.css"
 
-ReactDOM.createRoot(document.getElementById("root")).render(
+const container = document.getElementById("root")
+
+if (!window.__reactRoot) {
+  window.__reactRoot = ReactDOM.createRoot(container)
+}
+
+window.__reactRoot.render(
   <React.StrictMode>
     <LanguageProvider>
       <App />

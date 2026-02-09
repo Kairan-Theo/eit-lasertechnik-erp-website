@@ -1464,7 +1464,13 @@ function AdminRoot() {
   )
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
+const container = document.getElementById("root")
+
+if (!window.__reactRoot) {
+  window.__reactRoot = ReactDOM.createRoot(container)
+}
+
+window.__reactRoot.render(
   <React.StrictMode>
     <LanguageProvider>
       <AdminRoot />

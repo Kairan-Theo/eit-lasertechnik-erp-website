@@ -1,6 +1,6 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
-import { format, startOfWeek, addDays, isSameDay, isWeekend, differenceInDays, addWeeks } from "date-fns"
+import { format, startOfWeek, endOfWeek, addDays, isSameDay, isWeekend, differenceInDays, addWeeks } from "date-fns"
 import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizontal, ChevronDown, CornerDownRight, X, Trash2, Edit, AlertTriangle, Download } from "lucide-react"
 import html2pdf from "html2pdf.js"
 import Navigation from "./components/navigation.jsx"
@@ -59,24 +59,33 @@ const lighten = (hex, ratio = 0.5) => {
   return `#${toHex(lr)}${toHex(lg)}${toHex(lb)}`
 }
 
-// ======= EXPORT: Spreadsheet Style Gantt Chart =======
+// ======= EXPORT: Spreadsheet Style Gantt Chart (Consolidated) =======
 const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
-  const buildProjectHTML = (project) => {
-    // 1. Determine Date Range
-    let minDate = new Date(project.start)
-    let maxDate = new Date(project.end)
-    const subtasks = project.subtasks || []
-    
-    subtasks.forEach(sub => {
-      const s = new Date(sub.start)
-      const e = new Date(sub.end)
-      if (s < minDate) minDate = s
-      if (e > maxDate) maxDate = e
+    // 1. Determine Global Date Range from ALL projects
+    let minDateRaw = null
+    let maxDateRaw = null
+
+    const processDates = (s, e) => {
+        const start = new Date(s)
+        const end = new Date(e)
+        if (!minDateRaw || start < minDateRaw) minDateRaw = start
+        if (!maxDateRaw || end > maxDateRaw) maxDateRaw = end
+    }
+
+    list.forEach(project => {
+        processDates(project.start, project.end)
+        if (project.subtasks) {
+            project.subtasks.forEach(sub => processDates(sub.start, sub.end))
+        }
     })
 
-    // Snap to Week Start (Monday) and End (Sunday)
-    minDate = startOfWeek(addDays(minDate, -7), { weekStartsOn: 1 }) // Add buffer week before
-    maxDate = startOfWeek(addDays(maxDate, 7), { weekStartsOn: 1 }) // Add buffer week after
+    // Default if empty
+    if (!minDateRaw) minDateRaw = new Date()
+    if (!maxDateRaw) maxDateRaw = addDays(new Date(), 14)
+
+    // Snap to Week Start (Monday) and End (Sunday) with buffer
+    const minDate = startOfWeek(addWeeks(minDateRaw, -1), { weekStartsOn: 1 }) // 1 week before
+    const maxDate = endOfWeek(addWeeks(maxDateRaw, 2), { weekStartsOn: 1 })   // 2 weeks after
 
     const totalDays = differenceInDays(maxDate, minDate) + 1
     const days = Array.from({ length: totalDays }).map((_, i) => addDays(minDate, i))
@@ -94,11 +103,10 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     
     const TOTAL_WIDTH = NAME_COL_WIDTH + (totalDays * COL_WIDTH)
     
-    // If content fits in A4, center it. If larger, expand page.
-    const PAGE_CONTAINER_WIDTH = Math.max(PAGE_WIDTH_PX, TOTAL_WIDTH + 80)
-    
     // Header width should match table width (but min 700px for text)
     const HEADER_WIDTH = Math.max(TOTAL_WIDTH, 700)
+    // Page container needs to be wide enough
+    const PAGE_CONTAINER_WIDTH = Math.max(PAGE_WIDTH_PX, TOTAL_WIDTH + 80)
 
     // Colors (Spreadsheet Style)
     const COLORS = {
@@ -210,46 +218,90 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
         </div>
     `).join('')
 
-    // 3. Generate Subtask Rows
-    const subtaskRows = subtasks.map(sub => {
-        const start = new Date(sub.start)
-        const end = new Date(sub.end)
+    // 3. Generate ALL Rows (Consolidated)
+    const allRowsHtml = list.map(project => {
+        const subtasks = project.subtasks || []
         
-        const offsetDays = differenceInDays(start, minDate)
-        const durationDays = differenceInDays(end, start) + 1
-        
-        const left = offsetDays * COL_WIDTH
-        const width = durationDays * COL_WIDTH
-        
-        return `
-            <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; page-break-inside: avoid;">
+        // Subtask Rows
+        const subtaskRows = subtasks.map(sub => {
+            const start = new Date(sub.start)
+            const end = new Date(sub.end)
+            
+            const offsetDays = differenceInDays(start, minDate)
+            const durationDays = differenceInDays(end, start) + 1
+            
+            const left = offsetDays * COL_WIDTH
+            const width = durationDays * COL_WIDTH
+            
+            return `
+                <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; page-break-inside: avoid;">
+                    <div style="
+                        width: ${NAME_COL_WIDTH}px; 
+                        min-width: ${NAME_COL_WIDTH}px;
+                        padding: 0 15px; 
+                        display: flex; 
+                        align-items: center; 
+                        font-size: 11px;
+                        border-right: 1px solid ${COLORS.grid};
+                        background: #ffffff;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                    ">
+                        ${sub.name}
+                    </div>
+                    <div style="flex: 1; position: relative; display: flex;">
+                        <!-- Task Bar -->
+                        <div style="
+                            position: absolute;
+                            left: ${left}px;
+                            top: 0;
+                            width: ${width}px;
+                            height: 100%;
+                            background: ${COLORS.taskBar};
+                        "></div>
+
+                        <!-- Grid Lines -->
+                        ${days.map(() => `
+                            <div style="
+                                width: ${COL_WIDTH}px; 
+                                min-width: ${COL_WIDTH}px;
+                                height: 100%; 
+                                border-right: 1px solid ${COLORS.grid};
+                                position: relative;
+                                z-index: 1;
+                            "></div>
+                        `).join('')}
+                    </div>
+                </div>
+            `
+        }).join('')
+
+        // Project Header Row
+        const projectRow = `
+            <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; background: white; color: black; page-break-inside: avoid;">
                 <div style="
                     width: ${NAME_COL_WIDTH}px; 
                     min-width: ${NAME_COL_WIDTH}px;
                     padding: 0 15px; 
                     display: flex; 
                     align-items: center; 
-                    font-size: 11px;
+                    font-weight: bold; 
+                    font-size: 12px;
                     border-right: 1px solid ${COLORS.grid};
-                    background: #ffffff;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
                 ">
-                    ${sub.name}
+                    ${project.name}
                 </div>
-                <div style="flex: 1; position: relative; display: flex;">
-                    <!-- Task Bar -->
+                 <div style="flex: 1; position: relative; display: flex;">
                     <div style="
                         position: absolute;
-                        left: ${left}px;
+                        left: ${differenceInDays(new Date(project.start), minDate) * COL_WIDTH}px;
                         top: 0;
-                        width: ${width}px;
+                        width: ${(differenceInDays(new Date(project.end), new Date(project.start)) + 1) * COL_WIDTH}px;
                         height: 100%;
-                        background: ${COLORS.taskBar};
+                        background: #c0504d; 
                     "></div>
 
-                    <!-- Grid Lines -->
                     ${days.map(() => `
                         <div style="
                             width: ${COL_WIDTH}px; 
@@ -263,48 +315,10 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
                 </div>
             </div>
         `
+        return projectRow + subtaskRows
     }).join('')
 
-    // 4. Generate Group Header (Project Name)
-    const projectRow = `
-        <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; background: white; color: black; page-break-inside: avoid;">
-            <div style="
-                width: ${NAME_COL_WIDTH}px; 
-                min-width: ${NAME_COL_WIDTH}px;
-                padding: 0 15px; 
-                display: flex; 
-                align-items: center; 
-                font-weight: bold; 
-                font-size: 12px;
-                border-right: 1px solid ${COLORS.grid};
-            ">
-                ${project.name}
-            </div>
-             <div style="flex: 1; position: relative; display: flex;">
-                <div style="
-                    position: absolute;
-                    left: ${differenceInDays(new Date(project.start), minDate) * COL_WIDTH}px;
-                    top: 0;
-                    width: ${(differenceInDays(new Date(project.end), new Date(project.start)) + 1) * COL_WIDTH}px;
-                    height: 100%;
-                    background: #c0504d; 
-                "></div>
-
-                ${days.map(() => `
-                    <div style="
-                        width: ${COL_WIDTH}px; 
-                        min-width: ${COL_WIDTH}px;
-                        height: 100%; 
-                        border-right: 1px solid ${COLORS.grid};
-                        position: relative;
-                        z-index: 1;
-                    "></div>
-                `).join('')}
-            </div>
-        </div>
-    `
-
-    return `
+    const content = `
       <section class="page spreadsheet-page" style="width: ${PAGE_CONTAINER_WIDTH}px; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
         
         <!-- Invoice Header -->
@@ -370,13 +384,11 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
 
             <!-- Rows Container -->
             <div style="background: white;">
-                ${projectRow}
-                ${subtaskRows}
+                ${allRowsHtml}
             </div>
         </div>
       </section>
     `
-  }
 
   const element = document.createElement("div")
   element.className = "print-container"
@@ -408,11 +420,16 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
         .page { margin: 0; border: initial; width: initial; min-height: initial; box-shadow: initial; background: initial; page-break-after: always; }
       }
     </style>
-    ${list.map(buildProjectHTML).join("")}
+    ${content}
   `
   document.body.appendChild(element)
 
-  // Generate PDF (A4 Landscape)
+  // Generate PDF (Dynamic Width based on Content)
+  // Calculate width in mm (1 px = 0.264583 mm)
+  const contentWidthMM = (TOTAL_WIDTH + 80) * 0.2645833333
+  const minWidthMM = 297 // A4 Landscape width
+  const finalWidthMM = Math.max(minWidthMM, contentWidthMM)
+
   const opt = {
     margin: 0, // Manual padding in CSS
     filename: `Project_Plan_${format(new Date(), "yyyyMMdd")}.pdf`,
@@ -420,6 +437,14 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     html2canvas: { 
       scale: 2.5, // Higher scale for crisp text
       useCORS: true,
+      scrollY: 0,
+      windowWidth: TOTAL_WIDTH + 100, // Ensure ample space for capture
+      ignoreElements: (element) => {
+        if (element.tagName === 'STYLE' || element.tagName === 'LINK') {
+            if (element.id !== 'gantt-print-styles') return true;
+        }
+        return false;
+      },
       onclone: (clonedDoc) => {
         const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
         styles.forEach(style => {
@@ -431,7 +456,7 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
         clonedDoc.body.style.cssText = 'background: white; color: black; margin: 0; padding: 0;';
       }
     },
-    jsPDF: { unit: "mm", format: "a4", orientation: "landscape" }, 
+    jsPDF: { unit: "mm", format: [finalWidthMM, 210], orientation: "landscape" }, 
   }
 
   html2pdf()
@@ -478,7 +503,30 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
     }
 
     // Calendar calculations
-    const daysToShow = 28 // Increased for wider view
+    // Calculate total range needed to show all projects
+    const allItems = React.useMemo(() => {
+        let items = [...projects]
+        projects.forEach(p => {
+            if (p.subtasks) items = [...items, ...p.subtasks]
+        })
+        return items
+    }, [projects])
+
+    const maxEndDate = React.useMemo(() => {
+        if (allItems.length === 0) return addDays(new Date(), 28)
+        const dates = allItems.map(p => new Date(p.end || p.endDate))
+        return new Date(Math.max(...dates))
+    }, [allItems])
+
+    const minStartDate = React.useMemo(() => {
+        if (allItems.length === 0) return startOfWeek(new Date(), { weekStartsOn: 1 })
+        const dates = allItems.map(p => new Date(p.start || p.startDate))
+        return new Date(Math.min(...dates))
+    }, [allItems])
+
+    const daysNeeded = differenceInDays(maxEndDate, startDate) + 14 // Add 2 weeks buffer
+    const daysToShow = Math.max(28, daysNeeded) // Ensure at least 4 weeks
+    
     const days = Array.from({ length: daysToShow }).map((_, i) => addDays(startDate, i))
     const dayWidth = 50 // Slightly wider columns
   
@@ -589,8 +637,8 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
              <div className="flex items-center gap-4">
                  <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
                      <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600"><ChevronLeft size={16} /></button>
-                     <button onClick={() => setStartDate(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))} className="px-4 py-1 text-xs font-bold text-slate-700 uppercase tracking-wide">Today</button>
-                     <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600"><ChevronRight size={16} /></button>
+                     <button onClick={() => setStartDate(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))} className="px-3 py-1 text-xs font-bold text-slate-700 uppercase tracking-wide border-r border-slate-200 mr-1">Today</button>
+                     <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600 ml-1"><ChevronRight size={16} /></button>
                  </div>
                  <span className="text-lg font-bold text-slate-800 tracking-tight">
                      {format(startDate, "MMMM yyyy")}
@@ -703,7 +751,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                            <div className="relative h-14 flex-1">
                                <div 
                                        onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                                       className={`absolute h-8 top-3 rounded-full transition-all flex items-center justify-between px-3 overflow-visible`}
+                                       className={`absolute h-8 top-3 rounded-full ${dragging?.id === project.id ? 'transition-none' : 'transition-all'} flex items-center justify-between px-3 overflow-visible`}
                                        style={{ 
                                            left: left(project.start), 
                                            width: width(project.start, project.end)
@@ -713,10 +761,6 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                     >
                                     <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(90deg, ${project.color}, ${project.color}dd)` }} />
                                     <span className={`relative z-40 text-[11px] font-bold truncate text-white drop-shadow-sm`}>{project.name}</span>
-
-                                   {/* Resize Handles */}
-                                    <div className="relative z-20 absolute left-0 top-0 bottom-0 w-4 rounded-l-full" />
-                                    <div className="relative z-20 absolute right-0 top-0 bottom-0 w-4 rounded-r-full" />
                                </div>
                            </div>
                         </div>
@@ -741,7 +785,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                 </div>
                                 <div className="relative h-12 flex-1">
                                     <div 
-                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5`}
+                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible ${dragging?.id === subtask.id ? 'transition-none' : 'transition-all'} hover:shadow-md hover:-translate-y-0.5`}
                                         style={{ 
                                             left: left(subtask.start), 
                                             width: width(subtask.start, subtask.end),
@@ -825,15 +869,19 @@ function ProjectApp() {
 
   const confirmExport = (company) => {
     let list = []
-    if (focusedId) {
+    
+    // 1. Priority: Selected projects (checkboxes)
+    if (selectedProjects.size > 0) {
+      list = projects.filter((p) => selectedProjects.has(p.id))
+    } 
+    // 2. Priority: Focused project (zoomed in)
+    else if (focusedId) {
       const one = projects.find((p) => p.id === focusedId)
       if (one) list = [one]
-    } else {
-      if (selectedProjects.size > 0) {
-        list = projects.filter((p) => selectedProjects.has(p.id))
-      } else {
-        list = projects
-      }
+    } 
+    // 3. Priority: All projects
+    else {
+      list = projects
     }
     
     if (list.length > 0) {
@@ -880,10 +928,6 @@ function ProjectApp() {
         setValidationError("Please select valid dates")
       } else if (ds > de) {
         setValidationError("Start date must be before end date")
-      } else if (ds < ps) {
-        setValidationError("Task starts earlier than parent")
-      } else if (de > pe) {
-        setValidationError("Task ends later than parent")
       } else {
         setValidationError("")
       }
@@ -942,16 +986,25 @@ function ProjectApp() {
             }
             // Check if it's a subtask update
             if (p.subtasks && p.subtasks.some(s => s.id === editingId)) {
+                // Update subtask
+                const updatedSubtasks = p.subtasks.map(s => s.id === editingId ? { ...s, ...draft } : s)
+                
+                // Auto-expand Project to fit subtasks
                 const ps = new Date(p.start)
                 const pe = new Date(p.end)
                 const ds = new Date(draft.start)
                 const de = new Date(draft.end)
-                const cs = ds < ps ? ps : ds
-                const ce = de > pe ? pe : de
-                const fixed = cs > ce ? { start: format(ps, "yyyy-MM-dd"), end: format(pe, "yyyy-MM-dd") } : { start: format(cs, "yyyy-MM-dd"), end: format(ce, "yyyy-MM-dd") }
+                
+                let newStart = ps
+                let newEnd = pe
+                if (ds < ps) newStart = ds
+                if (de > pe) newEnd = de
+                
                 return {
                     ...p,
-                    subtasks: p.subtasks.map(s => s.id === editingId ? { ...s, ...draft, ...fixed } : s)
+                    start: format(newStart, "yyyy-MM-dd"),
+                    end: format(newEnd, "yyyy-MM-dd"),
+                    subtasks: updatedSubtasks
                 }
             }
             return p
@@ -962,20 +1015,25 @@ function ProjectApp() {
           return
         }
         setProjects(prev => prev.map(p => {
-            if (p.id === draftParentId) {
+        if (p.id === draftParentId) {
                 const ps = new Date(p.start)
                 const pe = new Date(p.end)
                 const ds = new Date(draft.start)
                 const de = new Date(draft.end)
-                const cs = ds < ps ? ps : ds
-                const ce = de > pe ? pe : de
-                const fixedStart = cs > ce ? ps : cs
-                const fixedEnd = cs > ce ? pe : ce
+                
+                // Auto-expand Project
+                let newStart = ps
+                let newEnd = pe
+                if (ds < ps) newStart = ds
+                if (de > pe) newEnd = de
+
                 return {
                     ...p,
+                    start: format(newStart, "yyyy-MM-dd"),
+                    end: format(newEnd, "yyyy-MM-dd"),
                     subtasks: [
                         ...(p.subtasks || []),
-                        { id: Date.now(), ...draft, start: format(fixedStart, "yyyy-MM-dd"), end: format(fixedEnd, "yyyy-MM-dd") }
+                        { id: Date.now(), ...draft }
                     ],
                     expanded: true
                 }
@@ -1033,8 +1091,7 @@ function ProjectApp() {
             <div className="relative ml-4">
                 <button 
                     onClick={() => handleExport('pdf')}
-                    disabled={selectedProjects.size === 0 && !focusedId}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${selectedProjects.size > 0 || focusedId ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${selectedProjects.size > 0 || focusedId ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                 >
                     <Download size={16} />
                     Export PDF
@@ -1239,5 +1296,10 @@ function ProjectApp() {
   )
 }
 
-const root = ReactDOM.createRoot(document.getElementById("root"))
-root.render(<ProjectApp />)
+const container = document.getElementById("root")
+
+if (!window.__reactRoot) {
+  window.__reactRoot = ReactDOM.createRoot(container)
+}
+
+window.__reactRoot.render(<ProjectApp />)
