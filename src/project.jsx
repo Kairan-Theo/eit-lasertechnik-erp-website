@@ -701,6 +701,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
       }, [dragging, handleMouseMove, handleMouseUp])
 
     return (
+      <>
       <div className="flex flex-col h-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6]">
         {/* Date Controls */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white shadow-sm z-50">
@@ -931,7 +932,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
