@@ -1,6 +1,13 @@
 from django.contrib import admin
 from django import forms
-from .models import Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, Invoice, PurchaseOrder, Customer, Contact, Project, Task, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, PermissionControl, ProjectManagement, SubProject, Delivery
+from .models import (
+    Deal, ActivitySchedule, UserProfile, Notification, Quotation, QuotationItem, 
+    Invoice, PurchaseOrder, Customer, Contact, Project, Task, ManufacturingOrder, 
+    Product, ProductVersion, ProductType, System, Component, SystemComponent, 
+    ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, 
+    PermissionControl, ProjectManagement, SubProject, Delivery, EmailLog, 
+    EmailAttachment, DealHistory
+)
 
 APPS_CHOICES = [
     ("Manufacturing", "Manufacturing"),
@@ -221,3 +228,20 @@ class ProjectManagementAdmin(admin.ModelAdmin):
     list_display = ("project_name", "duration", "created_at")
     inlines = [SubProjectInline]
     search_fields = ("project_name",)
+
+@admin.register(EmailLog)
+class EmailLogAdmin(admin.ModelAdmin):
+    list_display = ("recipient", "subject", "sent_at")
+    search_fields = ("recipient", "subject", "body")
+    list_filter = ("sent_at",)
+
+@admin.register(EmailAttachment)
+class EmailAttachmentAdmin(admin.ModelAdmin):
+    list_display = ("filename", "email_log", "created_at")
+    search_fields = ("filename", "email_log__subject")
+
+@admin.register(DealHistory)
+class DealHistoryAdmin(admin.ModelAdmin):
+    list_display = ("deal", "from_stage", "to_stage", "changed_at")
+    list_filter = ("from_stage", "to_stage", "changed_at")
+    search_fields = ("deal__title",)

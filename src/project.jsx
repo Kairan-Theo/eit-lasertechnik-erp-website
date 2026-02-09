@@ -95,12 +95,12 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     const PAGE_WIDTH_PX = 1123 // ~297mm at 96 DPI
     const NAME_COL_WIDTH = 380 // px
     const HEADER_HEIGHT = 50 // px
-    const ROW_HEIGHT = 45 // px
+    const ROW_HEIGHT = 60 // px
 
     // Dynamic Column Width to fit A4
     const availableDateSpace = PAGE_WIDTH_PX - NAME_COL_WIDTH - 60 // 60px padding/margin safety
     let calcColWidth = Math.floor(availableDateSpace / totalDays)
-    const COL_WIDTH = Math.max(24, Math.min(40, calcColWidth)) // Daily width
+    const COL_WIDTH = Math.max(30, Math.min(60, calcColWidth)) // Daily width
     
     const TOTAL_WIDTH = NAME_COL_WIDTH + (totalDays * COL_WIDTH)
     
@@ -109,15 +109,18 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     // Page container needs to be wide enough
     const PAGE_CONTAINER_WIDTH = Math.max(PAGE_WIDTH_PX, TOTAL_WIDTH + 80)
 
-    // Colors (Spreadsheet Style)
+    // Colors (EIT Modern Theme)
     const COLORS = {
-        headerBlue: '#4472C4', 
-        headerOrange: '#FFC000', 
-        headerDateBg: '#FFFFFF', 
-        groupBg: '#A5A5A5', 
-        taskBar: '#ED7D31', 
-        border: '#000000', // Black border
-        grid: '#000000' // Black grid lines
+        headerBlue: '#2D4485', // EIT Blue
+        headerLight: '#F8FAFC', // Very light slate
+        headerDateBg: '#2D4485', // Dark blue for month header
+        headerDateText: '#FFFFFF',
+        grid: '#E2E8F0', // Light slate grid
+        taskBar: '#2D4485', // EIT Blue for subtasks
+        projectBar: '#1E3A8A', // Dark blue for project bar
+        text: '#334155', // Slate 700
+        border: '#CBD5E1', // Slate 300
+        groupBg: '#F1F5F9'
     }
 
     // Invoice Header Data
@@ -145,24 +148,25 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     const details = companyDetails[company] || companyDetails.EIT
 
     const invoiceHeader = `
-        <div style="margin-bottom: 15px; font-family: sans-serif;">
-            <div style="display: flex; justify-content: flex-start; margin-bottom: 15px; height: 80px;">
-                <img src="${headerImgSrc}" style="height: 100%; width: auto; object-fit: contain;" />
+        <div style="margin-bottom: 25px; font-family: 'Inter', sans-serif;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                <img src="${headerImgSrc}" style="height: 60px; width: auto; object-fit: contain;" />
+                <div style="text-align: right;">
+                    <div style="font-size: 24px; font-weight: 800; color: ${COLORS.headerBlue}; letter-spacing: -0.5px;">PROJECT PLAN</div>
+                    <div style="color: ${COLORS.text}; font-size: 12px; margin-top: 4px;">Date: ${format(new Date(), 'dd MMM yyyy')}</div>
+                </div>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 9px; align-items: flex-start;">
-                 <div style="border: 1px solid #000; padding: 8px; width: 60%; border-radius: 4px;">
-                    <div style="font-weight: bold; font-size: 10px;">${details.thaiName}</div>
-                    <div style="font-weight: bold; font-size: 10px;">${details.engName}</div>
-                    <div style="margin-top: 4px;">${details.address}</div>
-                    <div style="margin-top: 2px;">TEL : ${details.tel}    Fax : ${details.fax}</div>
-                    <div style="display: flex; gap: 10px; margin-top: 2px;">
-                        <span>Tax ID : ${details.taxId}</span>
-                        <span>(Head Office)</span>
-                    </div>
+            
+            <div style="display: flex; gap: 20px; font-size: 10px; color: ${COLORS.text}; border-top: 2px solid ${COLORS.headerBlue}; padding-top: 15px;">
+                 <div style="flex: 1;">
+                    <div style="font-weight: bold; font-size: 11px; margin-bottom: 2px;">${details.thaiName}</div>
+                    <div style="font-weight: bold; font-size: 11px; margin-bottom: 4px;">${details.engName}</div>
+                    <div>${details.address}</div>
                  </div>
-                 <div style="text-align: right; width: 35%;">
-                    <div style="font-size: 14px; font-weight: bold; color: ${COLORS.headerBlue}; margin-bottom: 5px;">PROJECT PLAN</div>
-                    <div>Date: ${format(new Date(), 'dd/MM/yyyy')}</div>
+                 <div style="text-align: right;">
+                    <div style="margin-bottom: 2px;">TEL : ${details.tel}</div>
+                    <div style="margin-bottom: 2px;">Fax : ${details.fax}</div>
+                    <div style="font-weight: 600;">Tax ID : ${details.taxId} (Head Office)</div>
                  </div>
             </div>
         </div>
@@ -190,12 +194,14 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
             width: ${m.count * COL_WIDTH}px; 
             min-width: ${m.count * COL_WIDTH}px;
             text-align: center; 
-            border-right: 1px solid ${COLORS.grid}; 
-            font-size: 13px;
-            font-weight: bold;
-            padding: 6px 0;
+            border-right: 1px solid rgba(255,255,255,0.2); 
+            font-size: 12px;
+            font-weight: 600;
+            padding: 8px 0;
             background: ${COLORS.headerDateBg};
-            color: #222;
+            color: ${COLORS.headerDateText};
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         ">
             ${m.name}
         </div>
@@ -205,14 +211,14 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
         <div style="
             width: ${COL_WIDTH}px; 
             min-width: ${COL_WIDTH}px;
-            height: 45px;
+            height: 35px;
             display: flex;
             align-items: center;
             justify-content: center;
             border-right: 1px solid ${COLORS.grid}; 
-            font-size: 11px;
-            background: white;
-            color: #444;
+            font-size: 10px;
+            background: ${COLORS.headerLight};
+            color: ${COLORS.text};
             font-weight: 600;
         ">
             ${format(d, 'd')}
@@ -235,7 +241,7 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
             const width = durationDays * COL_WIDTH
             
             return `
-                <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; page-break-inside: avoid;">
+                <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; page-break-inside: avoid; transition: background 0.2s;">
                     <div style="
                         width: ${NAME_COL_WIDTH}px; 
                         min-width: ${NAME_COL_WIDTH}px;
@@ -245,10 +251,13 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
                         font-size: 11px;
                         border-right: 1px solid ${COLORS.grid};
                         background: #ffffff;
+                        color: ${COLORS.text};
+                        font-weight: 500;
                         overflow: hidden;
                         text-overflow: ellipsis;
                         white-space: nowrap;
                     ">
+                        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${COLORS.taskBar}; margin-right: 8px;"></span>
                         ${sub.name}
                     </div>
                     <div style="flex: 1; position: relative; display: flex;">
@@ -256,10 +265,12 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
                         <div style="
                             position: absolute;
                             left: ${left}px;
-                            top: 0;
+                            top: 10px;
+                            bottom: 10px;
                             width: ${width}px;
-                            height: 100%;
                             background: ${COLORS.taskBar};
+                            border-radius: 12px;
+                            box-shadow: 0 2px 4px rgba(45, 68, 133, 0.3);
                         "></div>
 
                         <!-- Grid Lines -->
@@ -280,15 +291,16 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
 
         // Project Header Row
         const projectRow = `
-            <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; background: white; color: black; page-break-inside: avoid;">
+            <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; background: ${COLORS.groupBg}; color: black; page-break-inside: avoid;">
                 <div style="
                     width: ${NAME_COL_WIDTH}px; 
                     min-width: ${NAME_COL_WIDTH}px;
                     padding: 0 15px; 
                     display: flex; 
                     align-items: center; 
-                    font-weight: bold; 
+                    font-weight: 700; 
                     font-size: 12px;
+                    color: ${COLORS.projectBar};
                     border-right: 1px solid ${COLORS.grid};
                 ">
                     ${project.name}
@@ -297,10 +309,11 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
                     <div style="
                         position: absolute;
                         left: ${differenceInDays(new Date(project.start), minDate) * COL_WIDTH}px;
-                        top: 0;
+                        top: 12px;
+                        bottom: 12px;
                         width: ${(differenceInDays(new Date(project.end), new Date(project.start)) + 1) * COL_WIDTH}px;
-                        height: 100%;
-                        background: #c0504d; 
+                        background: ${COLORS.projectBar}; 
+                        border-radius: 4px;
                     "></div>
 
                     ${days.map(() => `
@@ -320,10 +333,10 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     }).join('')
 
     const content = `
-      <section class="page spreadsheet-page" style="width: ${PAGE_CONTAINER_WIDTH}px; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+      <section class="page spreadsheet-page" style="width: ${PAGE_CONTAINER_WIDTH}px; padding: 40px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
         
         <!-- Invoice Header -->
-        <div style="width: ${HEADER_WIDTH}px; max-width: 100%; margin-bottom: 20px;">
+        <div style="width: ${HEADER_WIDTH}px; max-width: 100%; margin-bottom: 80px;">
            ${invoiceHeader}
         </div>
         
@@ -332,57 +345,45 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
             <div style="
                 width: ${TOTAL_WIDTH}px; 
                 margin: 0 auto;
-                border: 1px solid ${COLORS.border}; 
-                border-radius: 4px; 
+                border: 1px solid ${COLORS.grid}; 
+                border-radius: 8px; 
                 background: white;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                overflow: hidden;
             ">
-            <!-- Main Title Header -->
-            <div style="
-                background: white; 
-                color: black; 
-                text-align: center; 
-                font-weight: bold; 
-                padding: 10px; 
-                font-size: 14px;
-                letter-spacing: 1px;
-                text-transform: uppercase;
-                border-bottom: 1px solid ${COLORS.grid};
-            ">
-                Project Schedule
-            </div>
-          </div>
-
-
+            
             <!-- Date Headers Container -->
-            <div style="display: flex; border-bottom: 1px solid ${COLORS.grid};">
-                <!-- Empty Corner for Task Names -->
-                <div style="
-                    width: ${NAME_COL_WIDTH}px; 
-                    min-width: ${NAME_COL_WIDTH}px;
-                    background: white; 
-                    border-right: 1px solid ${COLORS.grid};
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-weight: bold;
-                    color: black;
-                    font-size: 12px;
-                ">
-                    TASK NAME
-                </div>
-                
-                <!-- Date Columns -->
-                <div style="flex: 1; display: flex; flex-direction: column;">
-                    <!-- Month Row -->
-                    <div style="display: flex; border-bottom: 1px solid ${COLORS.grid}; background: ${COLORS.headerDateBg};">
+            <div style="display: flex; flex-direction: column;">
+                 <!-- Month Row -->
+                 <div style="display: flex; width: 100%;">
+                    <div style="width: ${NAME_COL_WIDTH}px; min-width: ${NAME_COL_WIDTH}px; background: white; border-right: 1px solid ${COLORS.grid};"></div>
+                    <div style="display: flex; flex: 1; background: ${COLORS.headerDateBg};">
                         ${monthHeaderCells}
                     </div>
-                    <!-- Day Row -->
-                    <div style="display: flex; background: white;">
+                 </div>
+                 
+                 <!-- Day Row & Task Label -->
+                 <div style="display: flex; border-bottom: 1px solid ${COLORS.grid};">
+                    <div style="
+                        width: ${NAME_COL_WIDTH}px; 
+                        min-width: ${NAME_COL_WIDTH}px;
+                        background: ${COLORS.headerLight}; 
+                        border-right: 1px solid ${COLORS.grid};
+                        display: flex;
+                        align-items: center;
+                        padding-left: 15px;
+                        font-weight: 700;
+                        color: ${COLORS.text};
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    ">
+                        Task Name
+                    </div>
+                    <div style="flex: 1; display: flex; background: ${COLORS.headerLight};">
                         ${dayHeaderCells}
                     </div>
-                </div>
+                 </div>
             </div>
 
             <!-- Rows Container -->
@@ -724,62 +725,18 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                </div>
            </div>
         </div>
-        <span className="text-lg font-bold text-white tracking-tight">{format(startDate, "MMMM yyyy")}</span>
-
-      <div className="flex items-center gap-4">
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              disabled={selectedProjects.size === 0 && !focusedId}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                selectedProjects.size > 0 || focusedId
-                  ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
-                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
-              }`}
-            >
-              <Download size={14} />
-              Export {focusedId ? "Focused" : `Selected (${selectedProjects.size})`}
-              <ChevronDown size={14} className={`transition-transform ${showExportMenu ? "rotate-180" : ""}`} />
-            </button>
-
-            {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-[70] animate-in fade-in zoom-in-95 duration-200">
-                <button
-                  onClick={handleExportPDF}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                >
-                  <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">PDF</span>
-                  Report (PDF)
-                </button>
-                <button
-                  onClick={handleExportExcel}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                >
-                  <span className="bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded text-[10px] font-bold">XLS</span>
-                  Excel Sheet
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mr-4">
-            <div className="w-3 h-3 rounded bg-indigo-500"></div> Project
-            <div className="w-3 h-3 rounded bg-emerald-500 ml-2"></div> Done
-            <div className="w-3 h-3 rounded bg-amber-500 ml-2"></div> Blocked
-          </div>
-        </div>
       </div>
 
       <div className="flex-1 overflow-hidden relative flex flex-col">
-        <div className="flex-1 overflow-auto custom-scrollbar bg-[#2b2b2b] relative">
+        <div className="flex-1 overflow-auto custom-scrollbar bg-white relative">
           {/* Header */}
-          <div className="flex border-b border-gray-700 sticky top-0 bg-[#333333]/95 backdrop-blur-sm z-30 shadow-sm">
-            <div className="w-80 shrink-0 p-4 pl-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-3 bg-[#333333] border-r border-gray-700">
+          <div className="flex border-b border-slate-200 sticky top-0 bg-white/95 backdrop-blur-sm z-30 shadow-sm">
+            <div className="w-80 shrink-0 p-4 pl-4 text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-3 bg-white border-r border-slate-200">
               <input
                 type="checkbox"
                 checked={selectedProjects.size === projects.length && projects.length > 0}
                 onChange={toggleAll}
-                className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                className="w-4 h-4 rounded border-slate-300 bg-white text-indigo-600 focus:ring-indigo-500 cursor-pointer"
               />
               Project / Task
             </div>
@@ -790,19 +747,19 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                   <div
                     key={day.toString()}
                     style={{ width: dayWidth }}
-                    className={`shrink-0 border-r border-gray-700/50 p-2 text-center flex flex-col justify-center items-center ${
-                      isWknd ? "bg-gray-800/50" : ""
+                    className={`shrink-0 border-r border-slate-200 p-2 text-center flex flex-col justify-center items-center ${
+                      isWknd ? "bg-slate-50" : ""
                     }`}
                   >
-                    <div className="text-[10px] font-bold mb-1 uppercase tracking-wider text-gray-400">{format(day, "EEE")}</div>
-                    <div className="text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center transition-all text-gray-300 hover:bg-gray-700">
+                    <div className="text-[10px] font-bold mb-1 uppercase tracking-wider text-slate-500">{format(day, "EEE")}</div>
+                    <div className="text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center transition-all text-slate-700 hover:bg-slate-100">
                       {format(day, "d")}
                     </div>
                   </div>
                 )
               })}
             </div>
-            {focusedId && <div className="absolute top-0 bottom-0 right-0 left-80 bg-black/50 z-50" />}
+            {focusedId && <div className="absolute top-0 bottom-0 right-0 left-80 bg-black/5 z-50" />}
           </div>
 
           {/* Projects */}
@@ -821,7 +778,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                 <div
                   key={`grid-${day}`}
                   style={{ width: dayWidth }}
-                  className={`shrink-0 border-r border-dashed border-gray-700 h-full relative ${isWeekend(day) ? "bg-gray-800/30" : ""}`}
+                  className={`shrink-0 border-r border-dashed border-slate-200 h-full relative ${isWeekend(day) ? "bg-slate-50/50" : ""}`}
                 />
               ))}
             </div>

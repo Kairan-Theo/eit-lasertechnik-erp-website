@@ -6,8 +6,9 @@ import Navigation from "./components/navigation.jsx"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText, ClipboardList } from "lucide-react"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText, ClipboardList, Download } from "lucide-react"
 import { CustomerCombobox } from "./components/customer-combobox.jsx"
+import html2pdf from "html2pdf.js"
 import "./index.css"
 
 function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
@@ -176,7 +177,7 @@ function useQuotationState() {
     paymentTerms: ""
   })
 
-  const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0 }])
+  const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0, image: "" }])
   const [sourceKey, setSourceKey] = React.useState(null)
   const [sourceIndex, setSourceIndex] = React.useState(null)
   const [eitOptions, setEitOptions] = React.useState([])
@@ -218,7 +219,7 @@ function useQuotationState() {
 
   const total = items.reduce((sum, it) => sum + (parseNumber(it.qty) || 0) * (parseNumber(it.price) || 0), 0)
 
-  const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0 }])
+  const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0, image: "" }])
   const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, value) =>
     setItems((prev) =>
@@ -287,7 +288,8 @@ function useQuotationState() {
                   model: i.quo_model || i.model || "",
                   description: i.quo_description || i.description || "",
                   qty: qty,
-                  price: qty > 0 ? total / qty : 0
+                  price: qty > 0 ? total / qty : 0,
+                  image: i.image || ""
                 }
               }))
             }
@@ -319,6 +321,7 @@ function useQuotationState() {
 function QuotationPage() {
   const q = useQuotationState()
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
+  const [showPreview, setShowPreview] = React.useState(false)
 
   const handlePrintPdf = async () => {
     try {
@@ -328,7 +331,8 @@ function QuotationPage() {
         items: q.items.map(i => ({
           ...i,
           qty: parseNumber(i.qty),
-          price: parseNumber(i.price)
+          price: parseNumber(i.price),
+          image: i.image // Pass image path
         })),
         totals: { total: q.total }
       }
@@ -546,6 +550,7 @@ function QuotationPage() {
                <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold">
                  <tr>
                    <th className="p-3 border-b w-16">Item</th>
+                   <th className="p-3 border-b w-20">Image</th>
                    <th className="p-3 border-b">Model</th>
                    <th className="p-3 border-b">Description</th>
                    <th className="p-3 border-b w-32">Price</th>
@@ -559,6 +564,54 @@ function QuotationPage() {
                    <tr key={i} className="hover:bg-gray-50 transition border-b border-gray-100">
                      <td className="p-3 text-center text-sm text-gray-700">
                        {i + 1}
+                     </td>
+                     <td className="p-3">
+                        {item.image ? (
+                           <div className="relative group w-12 h-12">
+                             <img src={`${API_BASE_URL}/media/${item.image.replace(/^\/?media\/?/, '')}`} alt="Item" className="w-full h-full object-cover rounded border border-gray-200" />
+                             <button 
+                               onClick={() => q.updateItem(i, "image", "")}
+                               className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hidden group-hover:block hover:bg-red-600 shadow-sm"
+                               title="Remove image"
+                             >
+                               <Trash className="w-3 h-3" />
+                             </button>
+                           </div>
+                        ) : (
+                           <div className="relative">
+                             <input 
+                               type="file" 
+                               accept="image/*"
+                               className="hidden" 
+                               id={`file-upload-${i}`}
+                               onChange={(e) => {
+                                 const file = e.target.files[0]
+                                 if (!file) return
+                                 
+                                 const formData = new FormData()
+                                 formData.append('image', file)
+                                 
+                                 fetch(`${API_BASE_URL}/api/upload-item-image/`, {
+                                    method: 'POST',
+                                    body: formData
+                                 })
+                                 .then(res => res.json())
+                                 .then(data => {
+                                    if (data.path) {
+                                       q.updateItem(i, "image", data.path)
+                                    }
+                                 })
+                                 .catch(err => console.error("Upload failed", err))
+                               }}
+                             />
+                             <label 
+                               htmlFor={`file-upload-${i}`}
+                               className="cursor-pointer text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 border border-dashed border-blue-300 rounded px-2 py-1 hover:bg-blue-50 transition"
+                             >
+                               <Plus className="w-3 h-3" /> Img
+                             </label>
+                           </div>
+                        )}
                      </td>
                      <td className="p-3">
                        <input value={item.model} onChange={(e) => q.updateItem(i, "model", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Model" />
@@ -772,7 +825,8 @@ function QuotationPage() {
                                 model: item.model || "",
                                 description: item.description || "",
                                 qty: item.qty || 1,
-                                price: item.price || 0
+                                price: item.price || 0,
+                                image: item.image || ""
                             }))
                         }
                         
@@ -820,17 +874,60 @@ function QuotationPage() {
                   className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
                   onClick={() => {
                     setOpenCreateConfirm(false)
-                    handlePrintPdf()
+                    setShowPreview(true)
                   }}
                 >
-                  Download Form
+                  Preview & Download
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
-      {/* Modal removed */}
+
+      {showPreview && (
+        <div className="fixed inset-0 z-50 bg-gray-100 overflow-auto flex justify-center">
+            <div className="no-print fixed top-4 right-4 flex gap-2 z-50">
+                <button 
+                    onClick={() => {
+                        const element = document.getElementById('quotation-preview-content');
+                        const opt = {
+                          margin: 0,
+                          filename: `Quotation-${q.details.number || 'Draft'}.pdf`,
+                          image: { type: 'jpeg', quality: 0.98 },
+                          html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+                          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                        };
+                        // Use html2pdf
+                        html2pdf().set(opt).from(element).save();
+                    }}
+                    className="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 flex items-center gap-2"
+                >
+                    <Download className="w-4 h-4" /> Download PDF
+                </button>
+                <button 
+                    onClick={() => window.print()}
+                    className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 flex items-center gap-2"
+                >
+                    <ClipboardList className="w-4 h-4" /> Print
+                </button>
+                <button 
+                    onClick={() => setShowPreview(false)}
+                    className="bg-gray-600 text-white px-4 py-2 rounded shadow hover:bg-gray-700 flex items-center gap-2"
+                >
+                    <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+            </div>
+            <div className="py-8 print:p-0 w-fit mx-auto" id="quotation-preview-content">
+                <QuotationTemplate data={{
+                    details: q.details,
+                    customer: q.customer,
+                    items: q.items,
+                    totals: { total: q.total }
+                }} />
+            </div>
+        </div>
+      )}
 
 
       </div>

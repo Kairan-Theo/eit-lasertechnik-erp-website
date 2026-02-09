@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from django.http import HttpResponse
@@ -287,6 +288,7 @@ def generate_quotation_pdf(request):
     # Headers - Using Table_Header which uses Calisto MT Bold
     table_data = [[
         Paragraph("ITEM", styles['Table_Header']),
+        Paragraph("IMAGE", styles['Table_Header']),
         Paragraph("MODEL", styles['Table_Header']),
         Paragraph("DESCRIPTION", styles['Table_Header']),
         Paragraph("PRICE", styles['Table_Header']),
@@ -307,8 +309,38 @@ def generate_quotation_pdf(request):
         line_total = qty * price
         total_amount += line_total
         
+        # Image processing
+        image_url = item.get('image')
+        img_obj = ""
+        if image_url:
+            # Handle full URL if present
+            if image_url.startswith('http'):
+                # Try to strip domain if it matches our server, otherwise problematic
+                # Easier to assume relative /media/ or standard path
+                pass 
+            
+            # Convert /media/ path to absolute filesystem path
+            image_path = None
+            if '/media/' in str(image_url):
+                # Extract relative path after /media/
+                rel_path = str(image_url).split('/media/')[-1]
+                image_path = os.path.join(settings.MEDIA_ROOT, rel_path.replace('/', os.sep))
+            else:
+                # Assume it is a relative path from MEDIA_ROOT
+                image_path = os.path.join(settings.MEDIA_ROOT, str(image_url).replace('/', os.sep))
+                
+            if image_path and os.path.exists(image_path):
+                try:
+                    # Resize maintaining aspect ratio? 
+                    # Fixed size 50x50 for now, or use KeepAspectRatio
+                    img_obj = Image(image_path, width=50, height=50)
+                    img_obj.hAlign = 'CENTER'
+                except Exception as e:
+                    print(f"Error loading item image: {e}")
+
         row = [
             Paragraph(str(i + 1), styles['Table_Data_Center']),
+            img_obj,
             Paragraph(txt(item.get('model')), styles['Table_Data']),
             Paragraph(txt(item.get('description')), styles['Table_Data']),
             Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
@@ -323,10 +355,12 @@ def generate_quotation_pdf(request):
     current_rows = len(items)
     if current_rows < min_rows:
         for _ in range(min_rows - current_rows):
-            table_data.append(["", "", "", "", "", ""])
+            table_data.append(["", "", "", "", "", "", ""])
 
     # Table Style
-    item_table = Table(table_data, colWidths=[35, 90, 205, 75, 40, 90])
+    # Updated colWidths to include IMAGE column
+    # ITEM(30), IMAGE(60), MODEL(80), DESC(155), PRICE(70), QTY(35), TOTAL(85) -> Total 515
+    item_table = Table(table_data, colWidths=[30, 60, 80, 155, 70, 35, 85])
     item_table.setStyle(TableStyle([
         # Header Style
         ('BACKGROUND', (0,0), (-1,0), colors.lavender),
@@ -346,9 +380,9 @@ def generate_quotation_pdf(request):
         # Content Style
         ('VALIGN', (0,1), (-1,-1), 'TOP'), # Data rows top aligned
         ('ALIGN', (0,1), (-1,-1), 'CENTER'), # Default center (Item, Model, Qty)
-        ('ALIGN', (2,1), (2,-1), 'LEFT'), # Description left
-        ('ALIGN', (3,1), (3,-1), 'RIGHT'), # Price right
-        ('ALIGN', (5,1), (5,-1), 'RIGHT'), # Total right
+        ('ALIGN', (3,1), (3,-1), 'LEFT'), # Description left (Index 3 now)
+        ('ALIGN', (4,1), (4,-1), 'RIGHT'), # Price right (Index 4 now)
+        ('ALIGN', (6,1), (6,-1), 'RIGHT'), # Total right (Index 6 now)
         
         # Padding
         ('TOPPADDING', (0,0), (-1,-1), 2),

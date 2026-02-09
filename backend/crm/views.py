@@ -32,6 +32,42 @@ from django.http import HttpResponse
 
 
 
+from django.conf import settings
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser])
+def upload_item_image(request):
+    if 'image' not in request.FILES:
+        return Response({'error': 'No image provided'}, status=400)
+    
+    image = request.FILES['image']
+    
+    # Save to quotation_items directory
+    save_path = os.path.join('quotation_items', image.name)
+    full_path = os.path.join(settings.MEDIA_ROOT, save_path)
+    
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    
+    # Handle duplicate names
+    base, ext = os.path.splitext(image.name)
+    counter = 1
+    while os.path.exists(full_path):
+        new_name = f"{base}_{counter}{ext}"
+        save_path = os.path.join('quotation_items', new_name)
+        full_path = os.path.join(settings.MEDIA_ROOT, save_path)
+        counter += 1
+        
+    with open(full_path, 'wb+') as destination:
+        for chunk in image.chunks():
+            destination.write(chunk)
+            
+    # Return the relative path that can be assigned to ImageField
+    # We replace backslashes with forward slashes for DB consistency/URL usage
+    db_path = save_path.replace('\\', '/')
+    return Response({'path': db_path, 'url': f"{settings.MEDIA_URL}{db_path}"})
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_crm_analytics(request):

@@ -295,7 +295,8 @@ class QuotationSerializer(serializers.ModelSerializer):
                 quo_model=str(item.get('model', '')),
                 quo_description=str(item.get('description', '')),
                 quantity=int(qty),
-                quo_total=total
+                quo_total=total,
+                image=item.get('image')  # Handle image field
             )
             
         return quotation
@@ -366,7 +367,8 @@ class QuotationSerializer(serializers.ModelSerializer):
                     quo_model=str(item.get('model', '')),
                     quo_description=str(item.get('description', '')),
                     quantity=int(qty),
-                    quo_total=total
+                    quo_total=total,
+                    image=item.get('image')  # Handle image field
                 )
         
         return instance
