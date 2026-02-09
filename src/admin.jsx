@@ -5,7 +5,6 @@ import {
   FileText, 
   Receipt, 
   ShoppingCart, 
-  Users, 
   Search, 
   Plus, 
   Download,
@@ -13,12 +12,12 @@ import {
   ExternalLink,
   Lock,
   ClipboardList,
-  Building2
+  Building2 // Added for EIT Organizations sidebar icon
 } from "lucide-react"
 
 import Navigation from "./components/navigation.jsx"
 import PurchaseOrderPage from "./components/purchase-order-page.jsx"
-import EitManagement from "./components/eit-management.jsx"
+import EitManagement from "./components/eit-management.jsx" // Added EIT Management component
 import { LanguageProvider } from "./components/language-context"
 import { API_BASE_URL } from "./config"
 import "./index.css"
@@ -1424,8 +1423,6 @@ function AdminPage() {
             {activeTab === "quotations" && "Quotations"}
             {activeTab === "invoices" && "Invoices"}
             {activeTab === "billing-notes" && "Billing Notes"}
-            {activeTab === "eit-management" && "EIT Organizations"}
-            {activeTab === "permissions" && "User Permissions"}
           </h1>
         </header>
 
@@ -1434,8 +1431,7 @@ function AdminPage() {
         {activeTab === "quotations" && <QuotationList list={data.quotations} refreshData={loadData} />}
         {activeTab === "invoices" && <InvoiceList list={data.invoices} refreshData={loadData} />}
         {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} refreshData={loadData} />}
-        {activeTab === "eit-management" && <EitManagement />}
-        {activeTab === "permissions" && <PermissionsManager />}
+        {activeTab === "eit-management" && <EitManagement />} {/* Added EIT Management view */}
       </main>
     </div>
   )

@@ -480,7 +480,7 @@ export default function Navigation({ require }) {
               Admin
             </a>
             {user && (user.role === "Admin" || user.account_type === "permission_control") && (
-              <a href="/admin.html?view=permissions" className="nav-link text-white hover:text-gray-200 transition">
+              <a href="/support.html" className="nav-link text-white hover:text-gray-200 transition">
                 User Permissions
               </a>
             )}

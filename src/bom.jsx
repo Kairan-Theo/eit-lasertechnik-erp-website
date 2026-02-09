@@ -4,16 +4,6 @@ import Navigation from "./components/navigation.jsx"
 import "./index.css"
 import { API_BASE_URL } from "./config"
 
-function dataURLtoBlob(dataurl) {
-  if (!dataurl || !dataurl.includes(',')) return null;
-  var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
-      bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-  while(n--){
-      u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new Blob([u8arr], {type:mime});
-}
-
 const NodeMenu = ({ onEdit, onDelete }) => {
   const [isOpen, setIsOpen] = React.useState(false)
   const menuRef = React.useRef(null)
@@ -785,27 +775,10 @@ function BOMPage() {
                         }))
                       }))
                     }
-
-                    const formData = new FormData();
-                    formData.append('json_data', JSON.stringify(payload));
-                    
-                    const appendImage = (key, dataUrl) => {
-                        const blob = dataURLtoBlob(dataUrl);
-                        if (blob) formData.append(key, blob, "image.png");
-                    };
-
-                    appendImage('product_image', newBom.photo);
-                    
-                    (newBom.systems || []).forEach((sys, i) => {
-                        appendImage(`sys_${i}_image`, sys.photo);
-                        (sys.components || []).forEach((comp, j) => {
-                            appendImage(`sys_${i}_comp_${j}_image`, comp.photo);
-                        });
-                    });
-
                     fetch(`${API_BASE_URL}/api/bom/import/`, {
                       method: "POST",
-                      body: formData
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(payload)
                     }).then(async (res)=>{
                       if (!res || !res.ok) {
                         const msg = res ? await res.text().catch(()=>"") : ""
@@ -1040,7 +1013,7 @@ function BOMPage() {
                     setAndPersist(next)
                     try {
                       const bom = next.find((x)=>x.id===openTreeId) || {}
-                      const px = {
+                      const payload = {
                         product: editingTree.product || "Untitled",
                         version: editingTree.version || "",
                         type: editingTree.type || "",
@@ -1052,27 +1025,11 @@ function BOMPage() {
                           }))
                         }))
                       }
-                      
-                      const formData = new FormData();
-                      formData.append('json_data', JSON.stringify(px));
-                      
-                      const appendImage = (key, dataUrl) => {
-                          const blob = dataURLtoBlob(dataUrl);
-                          if (blob) formData.append(key, blob, "image.png");
-                      };
-
-                      appendImage('product_image', editingTree.photo);
-                      
-                      (editingTree.systems || []).forEach((sys, i) => {
-                          appendImage(`sys_${i}_image`, sys.photo);
-                          (sys.components || []).forEach((comp, j) => {
-                              appendImage(`sys_${i}_comp_${j}_image`, comp.photo);
-                          });
-                      });
-
+                      const headers = { "Content-Type": "application/json" }
                       const res = await fetch(`${API_BASE_URL}/api/bom/import/`, {
                         method: "POST",
-                        body: formData
+                        headers,
+                        body: JSON.stringify(payload)
                       }).catch(()=>null)
                       if (!res || !res.ok) {
                         const msg = res ? await res.text().catch(()=> "") : ""
