@@ -352,8 +352,7 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
                 Project Schedule
             </div>
           </div>
-        `
-      }).join('')
+
 
             <!-- Date Headers Container -->
             <div style="display: flex; border-bottom: 1px solid ${COLORS.grid};">
@@ -571,25 +570,8 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
   }
   // ======= END EXPORT =======
 
-  // Calendar calculations
-  const daysToShow = 28
-  const days = Array.from({ length: daysToShow }).map((_, i) => addDays(startDate, i))
-  const dayWidth = 50
 
-  const left = (dateStr) => {
-    const date = new Date(dateStr)
-    const diff = differenceInDays(date, startDate)
-    return diff * dayWidth
-  }
 
-  const width = (startStr, endStr) => {
-    const start = new Date(startStr)
-    const end = new Date(endStr)
-    const diff = differenceInDays(end, start) + 1
-    return diff * dayWidth
-  }
-
-<<<<<<< HEAD
     // Calendar calculations
     // Calculate total range needed to show all projects
     const allItems = React.useMemo(() => {
@@ -622,28 +604,14 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
       const date = new Date(dateStr)
       const diff = differenceInDays(date, startDate)
       return diff * dayWidth
-=======
-  // (drag logic kept minimal; your UI works without it)
-  const handleMouseMove = React.useCallback(
-    (e) => {
-      if (!dragging) return
-      // You can re-add your full dragging logic here if you want
-    },
-    [dragging]
-  )
-  const handleMouseUp = React.useCallback(() => setDragging(null), [])
+    }
 
-  React.useEffect(() => {
-    if (dragging) {
-      window.addEventListener("mousemove", handleMouseMove)
-      window.addEventListener("mouseup", handleMouseUp)
->>>>>>> 86e99fdf600c404fb111ea94ac956405ee104956
+    const width = (startStr, endStr) => {
+      const start = new Date(startStr)
+      const end = new Date(endStr)
+      const diff = differenceInDays(end, start) + 1
+      return diff * dayWidth
     }
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
-    }
-  }, [dragging, handleMouseMove, handleMouseUp])
 
     // Drag & Drop Logic
     const handleMouseMove = React.useCallback((e) => {
@@ -733,32 +701,31 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
       }, [dragging, handleMouseMove, handleMouseUp])
 
     return (
-        <div className="flex flex-col h-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6]">
-          {/* Date Controls */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white shadow-sm z-50">
-             <div className="flex items-center gap-4">
-                 <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
-                     <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600"><ChevronLeft size={16} /></button>
-                     <button onClick={() => setStartDate(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))} className="px-3 py-1 text-xs font-bold text-slate-700 uppercase tracking-wide border-r border-slate-200 mr-1">Today</button>
-                     <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600 ml-1"><ChevronRight size={16} /></button>
-                 </div>
-                 <span className="text-lg font-bold text-slate-800 tracking-tight">
-                     {format(startDate, "MMMM yyyy")}
-                 </span>
-             </div>
-             <div className="flex items-center gap-4">
-                 {/* Export button moved to ProjectApp header */}
-                 <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mr-4">
-                     <div className="w-3 h-3 rounded bg-indigo-500"></div> Project
-                     <div className="w-3 h-3 rounded bg-emerald-500 ml-2"></div> Done
-                     <div className="w-3 h-3 rounded bg-amber-500 ml-2"></div> Blocked
-                 </div>
-             </div>
-          </div>
-          <span className="text-lg font-bold text-white tracking-tight">{format(startDate, "MMMM yyyy")}</span>
+      <div className="flex flex-col h-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6]">
+        {/* Date Controls */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white shadow-sm z-50">
+           <div className="flex items-center gap-4">
+               <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
+                   <button onClick={() => setStartDate(d => addWeeks(d, -1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600"><ChevronLeft size={16} /></button>
+                   <button onClick={() => setStartDate(addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), -1))} className="px-3 py-1 text-xs font-bold text-slate-700 uppercase tracking-wide border-r border-slate-200 mr-1">Today</button>
+                   <button onClick={() => setStartDate(d => addWeeks(d, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600 ml-1"><ChevronRight size={16} /></button>
+               </div>
+               <span className="text-lg font-bold text-slate-800 tracking-tight">
+                   {format(startDate, "MMMM yyyy")}
+               </span>
+           </div>
+           <div className="flex items-center gap-4">
+               {/* Export button moved to ProjectApp header */}
+               <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mr-4">
+                   <div className="w-3 h-3 rounded bg-indigo-500"></div> Project
+                   <div className="w-3 h-3 rounded bg-emerald-500 ml-2"></div> Done
+                   <div className="w-3 h-3 rounded bg-amber-500 ml-2"></div> Blocked
+               </div>
+           </div>
         </div>
+        <span className="text-lg font-bold text-white tracking-tight">{format(startDate, "MMMM yyyy")}</span>
 
-        <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4">
           <div className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
@@ -860,75 +827,6 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
 
             {projects.map((project) => (
               <React.Fragment key={project.id}>
-                {/* Project Row */}
-                <div
-                  className={`group flex items-center hover:bg-gray-700/30 transition-colors border-b border-gray-700 relative ${
-                    focusedId && project.id === focusedId ? "z-20" : "z-10"
-                  }`}
-                >
-                  <div
-                    onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                    className="w-80 shrink-0 py-4 pl-4 pr-6 flex items-center gap-3 bg-[#333333] border-r border-gray-700 group-hover:bg-gray-700/30 transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedProjects.has(project.id)}
-                      onChange={(e) => {
-                        e.stopPropagation()
-                        toggleSelection(project.id)
-                      }}
-                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleProject(project.id)
-                      }}
-                      className="w-6 h-6 flex items-center justify-center rounded-md text-gray-500 hover:text-indigo-400 hover:bg-gray-700 transition-all"
-                    >
-                      {project.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-extrabold text-white text-base truncate flex items-center gap-2">
-                        <span className="relative z-50 pointer-events-auto cursor-pointer">{project.name}</span>
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color }} />
-                      </div>
-                      <div className="text-[10px] text-gray-400 font-medium mt-0.5 flex items-center gap-1.5">
-                        <span>{project.subtasks?.length || 0} tasks</span>
-                        <span className="w-0.5 h-0.5 bg-gray-600 rounded-full"></span>
-                        <span>{getColorMeaning(project.color)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Project Bar */}
-                  <div className="relative h-14 flex-1">
-                    <div
-                      onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                      className="absolute h-8 top-3 rounded-full transition-all flex items-center justify-between px-3 overflow-visible"
-                      style={{
-                        left: left(project.start),
-                        width: width(project.start, project.end),
-                      }}
-                      onMouseEnter={() => setHoveredTask(project.id)}
-                      onMouseLeave={() => setHoveredTask(null)}
-                    >
-                      <div
-                        className="absolute inset-0 rounded-full shadow-sm"
-                        style={{
-                          background: project.color,
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                        }}
-                      >
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
-                      </div>
-                      <span className="relative z-40 text-xs font-bold text-white truncate drop-shadow-sm">{project.name}</span>
-                    </div>
-                  </div>
-                </div>
-
-                  {projects.map(project => (
-                     <React.Fragment key={project.id}>
                         {/* Project Row */}
                         <div className={`group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative ${focusedId && project.id === focusedId ? 'z-30' : 'z-10'}`}>
                            <div
@@ -1028,8 +926,6 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                 </div>
                             </div>
                         ))}
-                     </React.Fragment>
-                  ))}
               </React.Fragment>
             ))}
           </div>
@@ -1148,7 +1044,6 @@ export default function ProjectApp() {
       const pe = new Date(parent.end)
       const ds = new Date(draft.start)
       const de = new Date(draft.end)
-<<<<<<< HEAD
       if (isNaN(ds) || isNaN(de)) {
         setValidationError("Please select valid dates")
       } else if (ds > de) {
@@ -1156,13 +1051,6 @@ export default function ProjectApp() {
       } else {
         setValidationError("")
       }
-=======
-      if (isNaN(ds) || isNaN(de)) setValidationError("Please select valid dates")
-      else if (ds > de) setValidationError("Start date must be before end date")
-      else if (ds < ps) setValidationError("Task starts earlier than parent")
-      else if (de > pe) setValidationError("Task ends later than parent")
-      else setValidationError("")
->>>>>>> 86e99fdf600c404fb111ea94ac956405ee104956
     } else {
       setValidationError("")
     }
@@ -1179,7 +1067,6 @@ export default function ProjectApp() {
     if (!draft.name || !draft.start || !draft.end) return
 
     if (editingId) {
-<<<<<<< HEAD
         setProjects(prev => prev.map(p => {
             if (p.id === editingId) {
                 return { ...p, ...draft }
@@ -1240,47 +1127,6 @@ export default function ProjectApp() {
             }
             return p
         }))
-=======
-      setProjects((prev) =>
-        prev.map((p) => {
-          if (p.id === editingId) return { ...p, ...draft }
-          if (p.subtasks && p.subtasks.some((s) => s.id === editingId)) {
-            const ps = new Date(p.start)
-            const pe = new Date(p.end)
-            const ds = new Date(draft.start)
-            const de = new Date(draft.end)
-            const cs = ds < ps ? ps : ds
-            const ce = de > pe ? pe : de
-            const fixed = cs > ce ? { start: format(ps, "yyyy-MM-dd"), end: format(pe, "yyyy-MM-dd") } : { start: format(cs, "yyyy-MM-dd"), end: format(ce, "yyyy-MM-dd") }
-            return { ...p, subtasks: p.subtasks.map((s) => (s.id === editingId ? { ...s, ...draft, ...fixed } : s)) }
-          }
-          return p
-        })
-      )
-    } else if (draftParentId) {
-      if (validationError) {
-        showNotification(validationError)
-        return
-      }
-      setProjects((prev) =>
-        prev.map((p) => {
-          if (p.id !== draftParentId) return p
-          const ps = new Date(p.start)
-          const pe = new Date(p.end)
-          const ds = new Date(draft.start)
-          const de = new Date(draft.end)
-          const cs = ds < ps ? ps : ds
-          const ce = de > pe ? pe : de
-          const fixedStart = cs > ce ? ps : cs
-          const fixedEnd = cs > ce ? pe : ce
-          return {
-            ...p,
-            subtasks: [...(p.subtasks || []), { id: Date.now(), ...draft, start: format(fixedStart, "yyyy-MM-dd"), end: format(fixedEnd, "yyyy-MM-dd") }],
-            expanded: true,
-          }
-        })
-      )
->>>>>>> 86e99fdf600c404fb111ea94ac956405ee104956
     } else {
       setProjects((p) => [...p, { id: Date.now(), ...draft, subtasks: [], expanded: true }])
     }
@@ -1495,17 +1341,6 @@ export default function ProjectApp() {
     </main>
   )
 }
-<<<<<<< HEAD
-
-const container = document.getElementById("root")
-
-if (!window.__reactRoot) {
-  window.__reactRoot = ReactDOM.createRoot(container)
-}
-
-window.__reactRoot.render(<ProjectApp />)
-=======
-  
 // Fix for "container has already been passed to createRoot" warning
 const container = document.getElementById("root")
 if (container) {
@@ -1519,4 +1354,3 @@ if (container) {
     container._reactRoot.render(<ProjectApp />)
   }
 }
->>>>>>> 86e99fdf600c404fb111ea94ac956405ee104956
