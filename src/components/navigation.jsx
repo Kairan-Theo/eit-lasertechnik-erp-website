@@ -1,7 +1,7 @@
 "use client"
 import React from "react"
 import { API_BASE_URL } from "../config"
-import { User, LogOut, ChevronDown, Lock, Edit, Bell, Clock, AlertCircle, Check, CheckCheck, Info, Settings, LayoutDashboard, Menu, X } from "lucide-react"
+import { User, LogOut, ChevronDown, Lock, Edit, Bell, Clock, AlertCircle, Check, CheckCheck, Info, Settings, LayoutDashboard, Menu, X, Truck, Package } from "lucide-react"
 import { format } from "date-fns"
 import {
   Dialog,
@@ -550,12 +550,16 @@ export default function Navigation({ require }) {
                                                 n.type === 'alert' || n.type === 'activity_schedule_reminder' ? 'bg-red-100 text-red-600' : 
                                                 n.type === 'billing_note_reminder' ? 'bg-orange-100 text-orange-600' :
                                                 n.type === 'manufacturing_finish' ? 'bg-blue-200 text-blue-900' :
+                                                n.type === 'delivery_updates' ? 'bg-green-100 text-green-800' :
+                                                n.type === 'inventory_updates' ? 'bg-purple-100 text-purple-600' :
                                                 'bg-blue-100 text-blue-600'
                                             }`}>
                                                  {n.type === 'alert' ? <AlertCircle className="w-5 h-5" /> : 
                                                   n.type === 'activity_schedule_reminder' ? <AlertCircle className="w-5 h-5" /> : 
                                                   n.type === 'billing_note_reminder' ? <AlertCircle className="w-5 h-5" /> :
                                                   n.type === 'manufacturing_finish' ? <CheckCheck className="w-5 h-5" /> :
+                                                  n.type === 'delivery_updates' ? <Truck className="w-5 h-5" /> :
+                                                  n.type === 'inventory_updates' ? <Package className="w-5 h-5" /> :
                                                   (n.type === 'signup' || n.type === 'user_registration') ? <User className="w-5 h-5" /> : 
                                                   <Info className="w-5 h-5" />}
                                             </div>
