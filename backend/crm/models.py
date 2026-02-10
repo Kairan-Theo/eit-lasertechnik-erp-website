@@ -558,6 +558,14 @@ def update_inventory_on_delivery_status_change(sender, instance, created, **kwar
     old_status = getattr(instance, '_old_status', None)
     new_status = instance.delivery_status
     
+    # Notification for Successful Delivery
+    if new_status == 'delivered' and old_status != 'delivered':
+        customer_name = instance.company_name.company_name if instance.company_name else "Unknown Customer"
+        Notification.objects.create(
+            message=f'Delivery: Successful delivery to the "{customer_name}"',
+            type='delivery_updates'
+        )
+
     # If no product linked, we cannot update stock
     if not instance.inventory_product_name:
         return
@@ -571,4 +579,32 @@ def update_inventory_on_delivery_status_change(sender, instance, created, **kwar
     elif old_status == 'delivered' and new_status != 'delivered':
         instance.inventory_product_name.inventory_stock += int(instance.order_amount or 0)
         instance.inventory_product_name.save()
+
+@receiver(pre_save, sender=Inventory)
+def inventory_pre_save_stock_check(sender, instance, **kwargs):
+    if instance.pk:
+        try:
+            old_instance = Inventory.objects.get(pk=instance.pk)
+            instance._old_stock = old_instance.inventory_stock
+        except Inventory.DoesNotExist:
+            instance._old_stock = None
+    else:
+        instance._old_stock = None
+
+@receiver(post_save, sender=Inventory)
+def notify_inventory_stock_change(sender, instance, created, **kwargs):
+    old_stock = getattr(instance, '_old_stock', None)
+    new_stock = instance.inventory_stock
+    
+    # If created, old_stock is None, we can consider it 0 or just skip if we only want updates
+    # User said: stock changes from "old value" to "new value"
+    # Let's handle creation as 0 -> new
+    
+    actual_old = old_stock if old_stock is not None else 0
+    
+    if actual_old != new_stock:
+        Notification.objects.create(
+            message=f'Inventory Updates: "{instance.inventory_product_name}" stock changes from "{actual_old}" to "{new_stock}"',
+            type='inventory_updates'
+        )
 
