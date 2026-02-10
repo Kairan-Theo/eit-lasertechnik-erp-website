@@ -258,8 +258,8 @@ function useQuotationState() {
               email: data.customer_details?.email || ""
             })
             setDetails({
-              number: data.qo_code,
-              date: data.created_date,
+              number: data.qo_code || "",
+              date: data.created_date || new Date().toISOString().slice(0, 10),
               validUntil: "",
               currency: "THB",
               deliveryTerms: "Ex-Works",
@@ -299,10 +299,35 @@ function useQuotationState() {
           if (storedItem) {
             if (storedItem.quotations && storedItem.quotations[index]) {
               const qData = storedItem.quotations[index]
-              setDetails(prev => ({ ...prev, ...qData.details }))
-              setItems(qData.items || [])
+              
+              // Sanitize details to prevent null values (controlled input error)
+              const safeDetails = { ...qData.details }
+              Object.keys(safeDetails).forEach(k => {
+                if (safeDetails[k] === null || safeDetails[k] === undefined) {
+                   // Preserve null for 'eit' as it's handled by select logic
+                   if (k === 'eit') return
+                   safeDetails[k] = ""
+                }
+              })
+              setDetails(prev => ({ ...prev, ...safeDetails }))
+              
+              const safeItems = Array.isArray(qData.items) ? qData.items.map(i => ({
+                item: i.item || "",
+                model: i.model || "",
+                description: i.description || "",
+                qty: i.qty || 1,
+                price: i.price || 0
+              })) : []
+              setItems(safeItems)
+
               if (storedItem.customer) {
-                 setCustomer(storedItem.customer)
+                 const safeCustomer = { ...storedItem.customer }
+                 Object.keys(safeCustomer).forEach(k => {
+                   if (safeCustomer[k] === null || safeCustomer[k] === undefined) {
+                     safeCustomer[k] = ""
+                   }
+                 })
+                 setCustomer(prev => ({ ...prev, ...safeCustomer }))
               }
             }
           }
@@ -402,6 +427,9 @@ function QuotationPage() {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+               {/* Select EIT organization to populate details. 
+                   The options are fetched from /api/eits/ and include "EIT Lasertechnik Co.,Ltd." 
+                   and "Einstein Industrietechnik Corporation Co.,LTD" as populated by the backend. */}
                <select 
                  value={q.details.eit || ""} 
                  onChange={(e) => {
