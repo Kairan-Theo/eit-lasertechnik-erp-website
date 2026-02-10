@@ -984,6 +984,58 @@ def check_activity_reminders():
         if not Notification.objects.filter(message=msg, type='activity_schedule_reminder').exists():
             Notification.objects.create(message=msg, type='activity_schedule_reminder')
 
+def check_billing_note_reminders():
+    """
+    Check for billing notes due within 5 days and generate notifications.
+    """
+    now = timezone.now().date()
+    target_date = now + timedelta(days=5)
+    
+    # Filter billing notes due between now and 5 days from now
+    # Also ensure we haven't already sent a notification for this BN code
+    upcoming_bns = BillingNote.objects.filter(
+        bn_due_date__gte=now,
+        bn_due_date__lte=target_date
+    )
+    
+    for bn in upcoming_bns:
+        # Format: Billing Note: "company name": billing note due date on "due date"
+        due_str = bn.bn_due_date.strftime('%Y-%m-%d')
+        customer_name = bn.customer.company_name if bn.customer else "Unknown Customer"
+        
+        msg = f'Billing Note: "{customer_name}": billing note due date on "{due_str}"'
+        
+        # Check if notification already exists to avoid duplicates
+        # We assume one reminder per billing note is sufficient for this logic, 
+        # or we could rely on a flag if we added one to the model.
+        # Since we can't easily add fields, we check for the specific message existence.
+        if not Notification.objects.filter(message=msg, type='billing_note_reminder').exists():
+            Notification.objects.create(message=msg, type='billing_note_reminder')
+
+def check_manufacturing_finish_notifications():
+    """
+    Check for completed Manufacturing Orders and generate notifications.
+    """
+    # Assuming 'state' or 'component_status' indicates completion. 
+    # Based on models.py, fields are 'state' and 'component_status'.
+    # We'll check for "Finished" or "Completed" in either (case-insensitive usually safe, but let's guess standard terms).
+    # Common statuses: 'Finished', 'Completed', 'Done'.
+    
+    finished_mos = ManufacturingOrder.objects.filter(
+        state__in=['Finished', 'Completed', 'Done']
+    ) | ManufacturingOrder.objects.filter(
+        component_status__in=['Finished', 'Completed', 'Done']
+    )
+    
+    for mo in finished_mos:
+        # Format: Manufacturing finished: Product No. under Job Order Code is complete.
+        product_no = mo.product_no if mo.product_no else "N/A"
+        msg = f'Manufacturing finished: {product_no} under {mo.job_order_code} is complete.'
+        
+        # Avoid duplicates
+        if not Notification.objects.filter(message=msg, type='manufacturing_finish').exists():
+            Notification.objects.create(message=msg, type='manufacturing_finish')
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_notifications(request):
@@ -993,19 +1045,37 @@ def get_notifications(request):
     Filtering Logic:
     1. Admin / Permission Control Accounts: See ALL notifications.
     2. Normal Accounts:
-       - CRM-related (crm_created, user_registration, etc.): Visible if allow_apps has 'crm' or 'admin'.
-       - Manufacturing-related (manufacturing_finish, etc.): Visible if allow_apps has 'manufacturing', 'inventory', or 'project_management'.
-       - Other types (info, etc.): Visible to everyone (unless restricted otherwise).
+    3. Filter based on Notification Types mapping
+            
+            # CRM Group: Notifications related to CRM activities
+            # Requires: 'crm' or 'admin' in allowed_apps
+            crm_types = ['crm_created', 'user_registration', 'activity_schedule_reminder', 'billing_note_reminder']
+            crm_access = 'crm' in allowed_apps or 'admin' in allowed_apps
+
+            # Manufacturing/Ops Group: Notifications related to production and inventory
+            # Requires: 'manufacturing', 'inventory', or 'project_management' in allowed_apps
+            ops_types = ['manufacturing_finish', 'delivery_updates', 'inventory_updates']
+            ops_access = any(app in allowed_apps for app in ['manufacturing', 'inventory', 'project_management'])
+            
+            # Manufacturing Finish should be visible to "users who has access to any apps" per user request.
+            # So if allowed_apps is not empty, they can see it.
+            # But the logic below combines ops_types. We might need to separate 'manufacturing_finish' if the rule is looser.
+            # "show on Notification on users who has access to any apps" -> basically everyone except maybe those with NO apps?
+            # Or does it mean "any of the apps"?
+            # Let's assume standard Ops access for now, but user said "any apps".
+            # If "any apps", then basically all authenticated users with at least one app.
     """
     user = request.user
     if not user.is_authenticated:
         return Response([])
 
-    # Trigger activity reminders check
+    # Trigger checks
     try:
         check_activity_reminders()
+        check_billing_note_reminders()
+        check_manufacturing_finish_notifications()
     except Exception as e:
-        print(f"Error checking activity reminders: {e}")
+        print(f"Error checking notifications: {e}")
 
     # 1. Admin / Permission Control Account check
     # If user is admin (is_staff) or has permission_control account type, show all

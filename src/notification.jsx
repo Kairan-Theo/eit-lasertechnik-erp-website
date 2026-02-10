@@ -296,9 +296,16 @@ function NotificationsPage() {
                     className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer group flex gap-4 items-center
                       ${!n.is_read ? "bg-blue-50/50" : ""}`}
                   >
-                    <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${n.type === 'alert' || n.type === 'activity_schedule_reminder' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                    <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                        n.type === 'alert' || n.type === 'activity_schedule_reminder' ? 'bg-red-100 text-red-600' : 
+                        n.type === 'billing_note_reminder' ? 'bg-orange-100 text-orange-600' :
+                        n.type === 'manufacturing_finish' ? 'bg-blue-200 text-blue-900' :
+                        'bg-blue-100 text-blue-600'
+                    }`}>
                          {n.type === 'alert' ? <AlertCircle className="w-5 h-5" /> : 
                           n.type === 'activity_schedule_reminder' ? <AlertCircle className="w-5 h-5" /> : 
+                          n.type === 'billing_note_reminder' ? <AlertCircle className="w-5 h-5" /> :
+                          n.type === 'manufacturing_finish' ? <CheckCheck className="w-5 h-5" /> :
                           (n.type === 'signup' || n.type === 'user_registration') ? <User className="w-5 h-5" /> : 
                           <Info className="w-5 h-5" />}
                     </div>
