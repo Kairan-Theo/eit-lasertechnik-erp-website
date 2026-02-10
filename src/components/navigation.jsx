@@ -1,7 +1,7 @@
 "use client"
 import React from "react"
 import { API_BASE_URL } from "../config"
-import { User, LogOut, ChevronDown, Lock, Edit, Bell, Clock, AlertCircle, Check, Info, Settings, LayoutDashboard, Menu, X } from "lucide-react"
+import { User, LogOut, ChevronDown, Lock, Edit, Bell, Clock, AlertCircle, Check, CheckCheck, Info, Settings, LayoutDashboard, Menu, X } from "lucide-react"
 import { format } from "date-fns"
 import {
   Dialog,
@@ -546,9 +546,16 @@ export default function Navigation({ require }) {
                                           onClick={(e) => markAsRead(n.id, e)}
                                         >
                                             {/* Icon */}
-                                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${n.type === 'alert' || n.type === 'activity_schedule_reminder' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                                                n.type === 'alert' || n.type === 'activity_schedule_reminder' ? 'bg-red-100 text-red-600' : 
+                                                n.type === 'billing_note_reminder' ? 'bg-orange-100 text-orange-600' :
+                                                n.type === 'manufacturing_finish' ? 'bg-blue-200 text-blue-900' :
+                                                'bg-blue-100 text-blue-600'
+                                            }`}>
                                                  {n.type === 'alert' ? <AlertCircle className="w-5 h-5" /> : 
                                                   n.type === 'activity_schedule_reminder' ? <AlertCircle className="w-5 h-5" /> : 
+                                                  n.type === 'billing_note_reminder' ? <AlertCircle className="w-5 h-5" /> :
+                                                  n.type === 'manufacturing_finish' ? <CheckCheck className="w-5 h-5" /> :
                                                   (n.type === 'signup' || n.type === 'user_registration') ? <User className="w-5 h-5" /> : 
                                                   <Info className="w-5 h-5" />}
                                             </div>
