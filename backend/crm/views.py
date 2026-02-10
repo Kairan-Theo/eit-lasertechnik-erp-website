@@ -6,7 +6,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject
+from django.utils import timezone
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl
 from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer
 import json
 
@@ -501,6 +502,7 @@ def signup(request):
     serializer = UserSerializer(data=data)
     if serializer.is_valid():
         user = serializer.save()
+        print(f"DEBUG_SIGNUP: Created user {user.email} (ID: {user.id})")
         token, created = Token.objects.get_or_create(user=user)
         # Ensure profile exists (signal should handle it, but safe check)
         if not hasattr(user, 'profile'):
@@ -525,9 +527,10 @@ def signup(request):
             print(f"Error creating PermissionControl: {e}")
 
         # Create notification for admins
+        print(f"DEBUG_SIGNUP: Creating notification for {user.email}")
         Notification.objects.create(
             message=f"New user registered: {user.email} ({user.first_name or 'No Name'})",
-            type="signup"
+            type="user_registration"
         )
             
         return Response({
@@ -647,8 +650,10 @@ def google_login(request):
         # Find or create user
         try:
             user = User.objects.get(email=email)
+            print(f"DEBUG_GOOGLE_LOGIN: User found {email}")
         except User.DoesNotExist:
             # Create new user
+            print(f"DEBUG_GOOGLE_LOGIN: Creating new user {email}")
             username = email.split('@')[0]
             # Ensure unique username
             base_username = username
@@ -667,7 +672,8 @@ def google_login(request):
             user.set_unusable_password()
             user.save()
             
-            Notification.objects.create(message=f"New user registered: {email}", type="signup")
+            print(f"DEBUG_GOOGLE_LOGIN: Creating notification for {email}")
+            Notification.objects.create(message=f"New user registered: {email}", type="user_registration")
 
         token, created = Token.objects.get_or_create(user=user)
         
@@ -934,6 +940,50 @@ def set_user_password(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+def check_activity_reminders():
+    """
+    Check for due and overdue activities and generate notifications.
+    """
+    now = timezone.now()
+    
+    # 1. Upcoming (Due within 24 hours)
+    upcoming_activities = ActivitySchedule.objects.filter(
+        completed=False,
+        due_at__gt=now,
+        due_at__lte=now + timedelta(days=1),
+        reminder_sent=False
+    )
+    for activity in upcoming_activities:
+        # Format: To do: "company name": "Activity schedule name" is due on "due date and time"
+        # Convert to local time (Asia/Bangkok) for display
+        local_due_at = timezone.localtime(activity.due_at)
+        due_str = local_due_at.strftime('%Y-%m-%d %H:%M')
+        
+        customer_name = activity.customer
+        if not customer_name and activity.deal and activity.deal.customer:
+            customer_name = activity.deal.customer.company_name
+            
+        msg = f'To do: "{customer_name}": "{activity.activity_name}" is due on "{due_str}"'
+        Notification.objects.create(message=msg, type='activity_schedule_reminder')
+        activity.reminder_sent = True
+        activity.save()
+
+    # 2. Missed (Overdue)
+    # Format: Missed activity: "company name": "Activity schedule name"
+    missed_activities = ActivitySchedule.objects.filter(
+        completed=False,
+        due_at__lt=now
+    )
+    for activity in missed_activities:
+        customer_name = activity.customer
+        if not customer_name and activity.deal and activity.deal.customer:
+            customer_name = activity.deal.customer.company_name
+
+        msg = f'Missed activity: "{customer_name}": "{activity.activity_name}"'
+        # Avoid duplicates
+        if not Notification.objects.filter(message=msg, type='activity_schedule_reminder').exists():
+            Notification.objects.create(message=msg, type='activity_schedule_reminder')
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_notifications(request):
@@ -951,10 +1001,18 @@ def get_notifications(request):
     if not user.is_authenticated:
         return Response([])
 
+    # Trigger activity reminders check
+    try:
+        check_activity_reminders()
+    except Exception as e:
+        print(f"Error checking activity reminders: {e}")
+
     # 1. Admin / Permission Control Account check
     # If user is admin (is_staff) or has permission_control account type, show all
     is_pc = hasattr(user, 'profile') and user.profile.account_type == 'permission_control'
-    if user.is_staff or is_pc:
+    whitelist = ['htetyunn06@gmail.com', 'eit@eitlaser.com', 'shwinpyonethu0106@gmail.com']
+    
+    if user.is_staff or is_pc or user.email in whitelist:
         notifications = Notification.objects.all().order_by('-created_at')[:50]
     else:
         # 2. Get allowed apps for normal user
@@ -1014,6 +1072,7 @@ def get_notifications(request):
             'is_read': n.is_read,
             'type': n.type
         })
+    print(f"DEBUG_NOTIF_PAYLOAD: Returning {len(data)} items. Top item: {data[0] if data else 'None'}")
     return Response(data)
 
 @api_view(['POST'])

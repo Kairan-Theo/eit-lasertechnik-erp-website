@@ -483,6 +483,34 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
 const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, setStartDate, focusedId, setFocusedId, selectedProjects, toggleSelection, toggleAll }) => {
   const [dragging, setDragging] = React.useState(null)
   const [hoveredTask, setHoveredTask] = React.useState(null)
+  const [showExportMenu, setShowExportMenu] = React.useState(false)
+
+  const toggleProject = (id) => {
+    setProjects(prev => prev.map(p => 
+      p.id === id ? { ...p, expanded: !p.expanded } : p
+    ))
+  }
+
+  const handleExportPDF = () => {
+    let projectsToExport = []
+    if (focusedId) {
+      const p = projects.find((proj) => proj.id === focusedId)
+      if (p) projectsToExport = [p]
+    } else if (selectedProjects.size > 0) {
+      projectsToExport = projects.filter((p) => selectedProjects.has(p.id))
+    } else {
+      // If nothing selected, maybe export all? 
+      // The UI says "Export Selected (0)" so maybe nothing.
+      // But let's check logic elsewhere. 
+      // If we follow handleExportExcel logic:
+      return
+    }
+
+    if (projectsToExport.length === 0) return
+
+    exportProjectsAsSinglePDF(projectsToExport)
+    setShowExportMenu(false)
+  }
 
 
   // ======= EXPORT: Visual Gantt Chart (Reference Style) =======
