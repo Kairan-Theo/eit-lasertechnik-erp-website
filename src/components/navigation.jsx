@@ -1,7 +1,7 @@
 "use client"
 import React from "react"
 import { API_BASE_URL } from "../config"
-import { User, LogOut, ChevronDown, Lock, Edit, Bell, Clock, AlertCircle, Check, Info } from "lucide-react"
+import { User, LogOut, ChevronDown, Lock, Edit, Bell, Clock, AlertCircle, Check, Info, Settings, LayoutDashboard, Menu, X } from "lucide-react"
 import { format } from "date-fns"
 import {
   Dialog,
@@ -306,7 +306,7 @@ export default function Navigation({ require }) {
             const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
             setNotificationsCount(unread)
             setNotifications(local.map(n => {
-              const msg = typeof n.message === "string" && (n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message
+              const msg = typeof n.message === "string" && (n.type === "signup" || n.type === "user_registration") ? n.message.replace("New Google user:", "New user:") : n.message
               return {
                 id: n.id,
                 message: msg,
@@ -332,7 +332,7 @@ export default function Navigation({ require }) {
             const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
             setNotificationsCount(unread)
             setNotifications(local.map(n => {
-              const msg = typeof n.message === "string" && (n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message
+              const msg = typeof n.message === "string" && (n.type === "signup" || n.type === "user_registration") ? n.message.replace("New Google user:", "New user:") : n.message
               return {
                 id: n.id,
                 message: msg,
@@ -357,6 +357,7 @@ export default function Navigation({ require }) {
         fetch(`${API_BASE_URL}/api/notifications/`, { headers, signal: controller.signal })
           .then(r => {
             if (r.status === 401) {
+              console.warn("Navigation: 401 Unauthorized - clearing token")
               // Token invalid/expired - clear it so we don't retry in vain
               localStorage.removeItem("authToken")
               throw new Error("Unauthorized")
@@ -366,28 +367,39 @@ export default function Navigation({ require }) {
           .then(list => {
             clearTimeout(tid)
             nextProbeTimeRef.current = 0
+            console.log("Navigation: fetched notifications:", list.length, list)
             if (Array.isArray(list) && list.length) {
               // Toast Logic for new alerts
               const newestId = Math.max(...list.map(n => n.id))
               if (lastNotifIdRef.current !== null) {
                 const newNotifs = list.filter(n => n.id > lastNotifIdRef.current)
                 newNotifs.forEach(n => {
-                  if (n.type === 'alert') {
+                  if (['alert', 'signup', 'user_registration', 'activity_schedule_reminder'].includes(n.type)) {
+                    let title = "New Notification"
+                    if (n.type === 'alert') title = "Reminder"
+                    else if (n.type === 'activity_schedule_reminder') title = "Activity Reminder"
+                    else if (['signup', 'user_registration'].includes(n.type)) title = "New Registration"
+
                     toast({
-                      title: "Reminder",
-                      description: n.message,
+                      title: title,
+                      description: (typeof n.message === "string" && n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message,
                     })
                   }
                 })
               } else if (!initialToastShownRef.current) {
                 const freshAlerts = list.filter(n => {
-                  if (n.type !== 'alert') return false
+                  if (!['alert', 'signup', 'user_registration', 'activity_schedule_reminder'].includes(n.type)) return false
                   const t = new Date(n.created_at).getTime()
                   return Date.now() - t < 2 * 60 * 1000
                 })
                 freshAlerts.forEach(n => {
+                  let title = "New Notification"
+                  if (n.type === 'alert') title = "Reminder"
+                  else if (n.type === 'activity_schedule_reminder') title = "Activity Reminder"
+                  else if (['signup', 'user_registration'].includes(n.type)) title = "New Registration"
+
                   toast({
-                    title: "Reminder",
+                    title: title,
                     description: (typeof n.message === "string" && n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message,
                   })
                 })
@@ -420,10 +432,11 @@ export default function Navigation({ require }) {
               setNotifications([])
             }
           })
-          .catch(() => {
+          .catch((err) => {
             clearTimeout(tid)
-            // Backoff 60s before probing backend again to prevent repeated console errors
-            nextProbeTimeRef.current = Date.now() + 60 * 1000
+            console.error("Navigation: fetch failed:", err)
+            // Backoff 5s (dev mode)
+            nextProbeTimeRef.current = Date.now() + 5 * 1000
             try {
               const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
               const local = Array.isArray(raw) ? raw : []
@@ -533,8 +546,11 @@ export default function Navigation({ require }) {
                                           onClick={(e) => markAsRead(n.id, e)}
                                         >
                                             {/* Icon */}
-                                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${n.type === 'alert' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                 {n.type === 'alert' ? <AlertCircle className="w-5 h-5" /> : <Info className="w-5 h-5" />}
+                                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${n.type === 'alert' || n.type === 'activity_schedule_reminder' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                 {n.type === 'alert' ? <AlertCircle className="w-5 h-5" /> : 
+                                                  n.type === 'activity_schedule_reminder' ? <AlertCircle className="w-5 h-5" /> : 
+                                                  (n.type === 'signup' || n.type === 'user_registration') ? <User className="w-5 h-5" /> : 
+                                                  <Info className="w-5 h-5" />}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                  <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>

@@ -2,7 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
-import { Trash, CheckCheck } from "lucide-react"
+import { Trash, CheckCheck, AlertCircle, User, Info } from "lucide-react"
 import { format } from "date-fns"
 import "./index.css"
 import { API_BASE_URL } from "./config"
@@ -293,12 +293,15 @@ function NotificationsPage() {
                   <div 
                     key={n.id}
                     onClick={() => markAsRead(n.id)}
-                    className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer group flex gap-4 items-start
+                    className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer group flex gap-4 items-center
                       ${!n.is_read ? "bg-blue-50/50" : ""}`}
                   >
-                    <div className={`mt-2 w-2 h-2 rounded-full flex-shrink-0 
-                      ${!n.is_read ? "bg-blue-600" : "bg-transparent"}`} 
-                    />
+                    <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${n.type === 'alert' || n.type === 'activity_schedule_reminder' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                         {n.type === 'alert' ? <AlertCircle className="w-5 h-5" /> : 
+                          n.type === 'activity_schedule_reminder' ? <AlertCircle className="w-5 h-5" /> : 
+                          (n.type === 'signup' || n.type === 'user_registration') ? <User className="w-5 h-5" /> : 
+                          <Info className="w-5 h-5" />}
+                    </div>
                     
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm ${!n.is_read ? "font-semibold text-slate-900" : "text-slate-600"}`}>
@@ -315,13 +318,18 @@ function NotificationsPage() {
                       </p>
                     </div>
 
-                    <button
-                      onClick={(e) => deleteNotification(n.id, e)}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
-                      title="Delete notification"
-                    >
-                      <Trash className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                         {!n.is_read && (
+                            <div className="w-2.5 h-2.5 bg-blue-600 rounded-full shadow-sm"></div>
+                         )}
+                         <button
+                           onClick={(e) => deleteNotification(n.id, e)}
+                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                           title="Delete notification"
+                         >
+                           <Trash className="w-4 h-4" />
+                         </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -11,7 +11,7 @@ import {
   eachDayOfInterval,
   isSameDay,
 } from "date-fns"
-import { ChevronLeft, ChevronRight, ChevronDown, Download, X, Trash2, AlertTriangle, FileSpreadsheet } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronDown, Download, X, Trash2, AlertTriangle, FileSpreadsheet, Edit, Plus } from "lucide-react"
 import html2pdf from "html2pdf.js"
 import { utils, writeFile } from "xlsx"
 import Navigation from "./components/navigation.jsx"
@@ -348,8 +348,6 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
                 Project Schedule
             </div>
           </div>
-        `
-      }).join('')
 
             <!-- Date Headers Container -->
             <div style="display: flex; border-bottom: 1px solid ${COLORS.grid};">
@@ -468,6 +466,34 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
 const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, setStartDate, focusedId, setFocusedId, selectedProjects, toggleSelection, toggleAll }) => {
   const [dragging, setDragging] = React.useState(null)
   const [hoveredTask, setHoveredTask] = React.useState(null)
+  const [showExportMenu, setShowExportMenu] = React.useState(false)
+
+  const toggleProject = (id) => {
+    setProjects(prev => prev.map(p => 
+      p.id === id ? { ...p, expanded: !p.expanded } : p
+    ))
+  }
+
+  const handleExportPDF = () => {
+    let projectsToExport = []
+    if (focusedId) {
+      const p = projects.find((proj) => proj.id === focusedId)
+      if (p) projectsToExport = [p]
+    } else if (selectedProjects.size > 0) {
+      projectsToExport = projects.filter((p) => selectedProjects.has(p.id))
+    } else {
+      // If nothing selected, maybe export all? 
+      // The UI says "Export Selected (0)" so maybe nothing.
+      // But let's check logic elsewhere. 
+      // If we follow handleExportExcel logic:
+      return
+    }
+
+    if (projectsToExport.length === 0) return
+
+    exportProjectsAsSinglePDF(projectsToExport)
+    setShowExportMenu(false)
+  }
 
 
   // ======= EXPORT: Visual Gantt Chart (Reference Style) =======
@@ -574,26 +600,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
     return diff * dayWidth
   }
 
-  // (drag logic kept minimal; your UI works without it)
-  const handleMouseMove = React.useCallback(
-    (e) => {
-      if (!dragging) return
-      // You can re-add your full dragging logic here if you want
-    },
-    [dragging]
-  )
-  const handleMouseUp = React.useCallback(() => setDragging(null), [])
-
-  React.useEffect(() => {
-    if (dragging) {
-      window.addEventListener("mousemove", handleMouseMove)
-      window.addEventListener("mouseup", handleMouseUp)
-    }
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
-    }
-  }, [dragging, handleMouseMove, handleMouseUp])
+  // Duplicate declarations removed
 
     // Drag & Drop Logic
     const handleMouseMove = React.useCallback((e) => {
@@ -684,7 +691,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
 
     return (
         <div className="flex flex-col h-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6]">
-          {/* Date Controls */}
+          {/* Date Controls & Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white shadow-sm z-50">
              <div className="flex items-center gap-4">
                  <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
@@ -696,8 +703,44 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                      {format(startDate, "MMMM yyyy")}
                  </span>
              </div>
+             
+             {/* Right Side Controls: Export & Legend */}
              <div className="flex items-center gap-4">
-                 {/* Export button moved to ProjectApp header */}
+                <div className="relative">
+                    <button
+                      onClick={() => setShowExportMenu(!showExportMenu)}
+                      disabled={selectedProjects.size === 0 && !focusedId}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                        selectedProjects.size > 0 || focusedId
+                          ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
+                          : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                      }`}
+                    >
+                      <Download size={14} />
+                      Export {focusedId ? "Focused" : `Selected (${selectedProjects.size})`}
+                      <ChevronDown size={14} className={`transition-transform ${showExportMenu ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {showExportMenu && (
+                      <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-[70] animate-in fade-in zoom-in-95 duration-200">
+                        <button
+                          onClick={handleExportPDF}
+                          className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">PDF</span>
+                          Report (PDF)
+                        </button>
+                        <button
+                          onClick={handleExportExcel}
+                          className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <span className="bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded text-[10px] font-bold">XLS</span>
+                          Excel Sheet
+                        </button>
+                      </div>
+                    )}
+                </div>
+
                  <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mr-4">
                      <div className="w-3 h-3 rounded bg-indigo-500"></div> Project
                      <div className="w-3 h-3 rounded bg-emerald-500 ml-2"></div> Done
@@ -705,54 +748,8 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                  </div>
              </div>
           </div>
-          <span className="text-lg font-bold text-white tracking-tight">{format(startDate, "MMMM yyyy")}</span>
-        </div>
 
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              disabled={selectedProjects.size === 0 && !focusedId}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                selectedProjects.size > 0 || focusedId
-                  ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
-                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
-              }`}
-            >
-              <Download size={14} />
-              Export {focusedId ? "Focused" : `Selected (${selectedProjects.size})`}
-              <ChevronDown size={14} className={`transition-transform ${showExportMenu ? "rotate-180" : ""}`} />
-            </button>
-
-            {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-[70] animate-in fade-in zoom-in-95 duration-200">
-                <button
-                  onClick={handleExportPDF}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                >
-                  <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">PDF</span>
-                  Report (PDF)
-                </button>
-                <button
-                  onClick={handleExportExcel}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                >
-                  <span className="bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded text-[10px] font-bold">XLS</span>
-                  Excel Sheet
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mr-4">
-            <div className="w-3 h-3 rounded bg-indigo-500"></div> Project
-            <div className="w-3 h-3 rounded bg-emerald-500 ml-2"></div> Done
-            <div className="w-3 h-3 rounded bg-amber-500 ml-2"></div> Blocked
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-hidden relative flex flex-col">
+          <div className="flex-1 overflow-hidden relative flex flex-col">
         <div className="flex-1 overflow-auto custom-scrollbar bg-[#2b2b2b] relative">
           {/* Header */}
           <div className="flex border-b border-gray-700 sticky top-0 bg-[#333333]/95 backdrop-blur-sm z-30 shadow-sm">
@@ -807,75 +804,6 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                 />
               ))}
             </div>
-
-            {projects.map((project) => (
-              <React.Fragment key={project.id}>
-                {/* Project Row */}
-                <div
-                  className={`group flex items-center hover:bg-gray-700/30 transition-colors border-b border-gray-700 relative ${
-                    focusedId && project.id === focusedId ? "z-20" : "z-10"
-                  }`}
-                >
-                  <div
-                    onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                    className="w-80 shrink-0 py-4 pl-4 pr-6 flex items-center gap-3 bg-[#333333] border-r border-gray-700 group-hover:bg-gray-700/30 transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedProjects.has(project.id)}
-                      onChange={(e) => {
-                        e.stopPropagation()
-                        toggleSelection(project.id)
-                      }}
-                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleProject(project.id)
-                      }}
-                      className="w-6 h-6 flex items-center justify-center rounded-md text-gray-500 hover:text-indigo-400 hover:bg-gray-700 transition-all"
-                    >
-                      {project.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-extrabold text-white text-base truncate flex items-center gap-2">
-                        <span className="relative z-50 pointer-events-auto cursor-pointer">{project.name}</span>
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color }} />
-                      </div>
-                      <div className="text-[10px] text-gray-400 font-medium mt-0.5 flex items-center gap-1.5">
-                        <span>{project.subtasks?.length || 0} tasks</span>
-                        <span className="w-0.5 h-0.5 bg-gray-600 rounded-full"></span>
-                        <span>{getColorMeaning(project.color)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Project Bar */}
-                  <div className="relative h-14 flex-1">
-                    <div
-                      onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                      className="absolute h-8 top-3 rounded-full transition-all flex items-center justify-between px-3 overflow-visible"
-                      style={{
-                        left: left(project.start),
-                        width: width(project.start, project.end),
-                      }}
-                      onMouseEnter={() => setHoveredTask(project.id)}
-                      onMouseLeave={() => setHoveredTask(null)}
-                    >
-                      <div
-                        className="absolute inset-0 rounded-full shadow-sm"
-                        style={{
-                          background: project.color,
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                        }}
-                      >
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
-                      </div>
-                      <span className="relative z-40 text-xs font-bold text-white truncate drop-shadow-sm">{project.name}</span>
-                    </div>
-                  </div>
-                </div>
 
                   {projects.map(project => (
                      <React.Fragment key={project.id}>
@@ -984,8 +912,6 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                         ))}
                      </React.Fragment>
                   ))}
-              </React.Fragment>
-            ))}
           </div>
         </div>
       </div>
@@ -1107,6 +1033,24 @@ export default function ProjectApp() {
       setValidationError("")
     }
   }, [isModalOpen, draftParentId, draft.start, draft.end, projects])
+
+  const handleAddSubtask = (parentId) => {
+    setDraftParentId(parentId)
+    setDraft({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
+    setIsModalOpen(true)
+  }
+
+  const handleEditProject = (item) => {
+    setEditingId(item.id)
+    setDraft({
+      name: item.name,
+      start: item.start,
+      end: item.end,
+      status: item.status,
+      color: item.color || DEFAULT_COLOR
+    })
+    setIsModalOpen(true)
+  }
 
   const handleDeleteProject = (id) => {
     if (confirm("Are you sure you want to delete this project?")) {
