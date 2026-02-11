@@ -12,12 +12,14 @@ import {
   ExternalLink,
   Lock,
   ClipboardList,
-  Building2 // Added for EIT Organizations sidebar icon
+  Building2, // Added for EIT Organizations sidebar icon
+  Box // Added for Product Details sidebar icon
 } from "lucide-react"
 
 import Navigation from "./components/navigation.jsx"
 import PurchaseOrderPage from "./components/purchase-order-page.jsx"
 import EitManagement from "./components/eit-management.jsx" // Added EIT Management component
+import ProductDetails from "./components/product-details.jsx" // Added Product Details component
 import { LanguageProvider } from "./components/language-context"
 import { API_BASE_URL } from "./config"
 import "./index.css"
@@ -1287,7 +1289,7 @@ function AdminPage() {
     try {
       const params = new URLSearchParams(window.location.search)
       const view = params.get("view")
-      const allowed = ["dashboard","purchase-orders","quotations","invoices","billing-notes","receipts","eit-management","permissions"]
+      const allowed = ["dashboard","purchase-orders","quotations","invoices","billing-notes","eit-management","permissions", "product-details"]
       if (view && allowed.includes(view)) {
         setActiveTab(view)
       }
@@ -1648,13 +1650,13 @@ function AdminPage() {
             Billing Notes
           </button>
           <button
-            onClick={() => setActiveTab("receipts")}
+            onClick={() => setActiveTab("product-details")}
             className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "receipts" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+              activeTab === "product-details" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
             }`}
           >
-            <Receipt className="w-5 h-5" />
-            Tax Invoices
+            <Box className="w-5 h-5" />
+            Product Details
           </button>
           <button
             onClick={() => setActiveTab("eit-management")}
@@ -1677,8 +1679,8 @@ function AdminPage() {
             {activeTab === "quotations" && "Quotations"}
             {activeTab === "invoices" && "Invoices"}
             {activeTab === "billing-notes" && "Billing Notes"}
-            {activeTab === "receipts" && "Tax Invoices"}
-            {activeTab === "eit-management" && "EIT Management"}
+            {activeTab === "product-details" && "Product Details"}
+            {activeTab === "eit-management" && "EIT Organizations"}
           </h1>
         </header>
 
@@ -1687,7 +1689,7 @@ function AdminPage() {
         {activeTab === "quotations" && <QuotationList list={data.quotations} refreshData={loadData} />}
         {activeTab === "invoices" && <InvoiceList list={data.invoices} refreshData={loadData} />}
         {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} refreshData={loadData} />}
-        {activeTab === "receipts" && <TaxInvoiceList list={data.taxInvoices} refreshData={loadData} />}
+        {activeTab === "product-details" && <ProductDetails />}
         {activeTab === "eit-management" && <EitManagement />} {/* Added EIT Management view */}
       </main>
     </div>

@@ -7,8 +7,8 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, Receipt, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, ReceiptSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer, PDMachineSerializer, PDSystemSerializer, PDWireSerializer, PDSparepartSerializer, PDServiceSerializer, PDSystemChildproductSerializer
 import json
 
 class ProjectManagementViewSet(viewsets.ModelViewSet):
@@ -28,6 +28,46 @@ class ReceiptViewSet(viewsets.ModelViewSet):
 class SubProjectViewSet(viewsets.ModelViewSet):
     queryset = SubProject.objects.all()
     serializer_class = SubProjectSerializer
+    permission_classes = [AllowAny]
+
+# PD ViewSets
+# The following viewset provides CRUD operations for PD_machine table via REST API.
+class PDMachineViewSet(viewsets.ModelViewSet):
+    # Query PDMachine records ordered by name for consistent listing
+    queryset = PDMachine.objects.all().order_by('name')
+    # Use the dedicated serializer to validate and serialize data
+    serializer_class = PDMachineSerializer
+    # Allow access to the endpoint for now; adjust permission as needed
+    permission_classes = [AllowAny]
+
+class PDSystemViewSet(viewsets.ModelViewSet):
+    # CRUD for PD_system table
+    queryset = PDSystem.objects.all().order_by('name')
+    serializer_class = PDSystemSerializer
+    permission_classes = [AllowAny]
+
+class PDWireViewSet(viewsets.ModelViewSet):
+    # CRUD for PD_wire table
+    queryset = PDWire.objects.all().order_by('name')
+    serializer_class = PDWireSerializer
+    permission_classes = [AllowAny]
+
+class PDSparepartViewSet(viewsets.ModelViewSet):
+    # CRUD for PD_sparepart table
+    queryset = PDSparepart.objects.all().order_by('name')
+    serializer_class = PDSparepartSerializer
+    permission_classes = [AllowAny]
+
+class PDServiceViewSet(viewsets.ModelViewSet):
+    # CRUD for PD_service table
+    queryset = PDService.objects.all().order_by('name')
+    serializer_class = PDServiceSerializer
+    permission_classes = [AllowAny]
+
+class PDSystemChildproductViewSet(viewsets.ModelViewSet):
+    # CRUD for PD_system_childproduct table
+    queryset = PDSystemChildproduct.objects.select_related('system').all().order_by('name')
+    serializer_class = PDSystemChildproductSerializer
     permission_classes = [AllowAny]
 from datetime import date, timedelta
 import smtplib

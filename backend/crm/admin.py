@@ -6,7 +6,11 @@ from .models import (
     Product, ProductVersion, ProductType, System, Component, SystemComponent, 
     ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, 
     PermissionControl, ProjectManagement, SubProject, Delivery, EmailLog, 
-    EmailAttachment, DealHistory
+    EmailAttachment, DealHistory,
+    # PD Models
+    # These imports bring the newly created PD_* models into the admin module
+    # so we can register them with Django Admin.
+    PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct
 )
 
 APPS_CHOICES = [
@@ -245,3 +249,50 @@ class DealHistoryAdmin(admin.ModelAdmin):
     list_display = ("deal", "from_stage", "to_stage", "changed_at")
     list_filter = ("from_stage", "to_stage", "changed_at")
     search_fields = ("deal__title",)
+
+# PD Admin Registrations
+# The following admin classes register the PD_* models with Django Admin
+# so that they appear in the admin UI. We include basic list_display and
+# search_fields for convenient usage.
+
+@admin.register(PDMachine)
+class PDMachineAdmin(admin.ModelAdmin):
+    # Show key fields of PD_machine records in the admin list
+    list_display = ("name", "description")
+    # Allow searching by name and description
+    search_fields = ("name", "description")
+
+@admin.register(PDSystem)
+class PDSystemAdmin(admin.ModelAdmin):
+    # Display name, product_total and specification for PD_system
+    list_display = ("name", "product_total")
+    # Enable searching by name and specification content
+    search_fields = ("name", "specification")
+
+@admin.register(PDWire)
+class PDWireAdmin(admin.ModelAdmin):
+    # Basic wire item fields list
+    list_display = ("name", "description")
+    # Search by name and description
+    search_fields = ("name", "description")
+
+@admin.register(PDSparepart)
+class PDSparepartAdmin(admin.ModelAdmin):
+    # Show spare part identity fields
+    list_display = ("name", "description")
+    # Search capabilities in admin
+    search_fields = ("name", "description")
+
+@admin.register(PDService)
+class PDServiceAdmin(admin.ModelAdmin):
+    # Show service identity fields
+    list_display = ("name", "description")
+    # Search by name and description
+    search_fields = ("name", "description")
+
+@admin.register(PDSystemChildproduct)
+class PDSystemChildproductAdmin(admin.ModelAdmin):
+    # Display child product with its parent PD_system
+    list_display = ("name", "system")
+    # Allow searching by child name and parent system name
+    search_fields = ("name", "system__name")
