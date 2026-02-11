@@ -57,6 +57,7 @@ router.register(r'deal_history', DealHistoryViewSet)
 router.register(r'customer_purchase_orders', CustomerPurchaseOrderViewSet)
 router.register(r'purchase_orders', PurchaseOrderViewSet)
 router.register(r'invoices', InvoiceViewSet)
+router.register(r'receipts', ReceiptViewSet)
 router.register(r'stages', StageViewSet)
 
 def health(request):

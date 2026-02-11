@@ -415,7 +415,7 @@ function useInventory() {
         : it
     ))
     saveItems(next)
-    logMove({ type: "purchase_receipt", sku, qty: qtyNum, ref, company })
+    logMove({ type: "purchase_receipt", sku, qty: qtyNum, ref, company, label: "Tax Invoice" })
     setShowReceive(null)
 
     // 3. Refresh

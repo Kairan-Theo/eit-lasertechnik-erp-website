@@ -559,6 +559,52 @@ class InvoiceSerializer(serializers.ModelSerializer):
             
         return super().update(instance, validated_data)
 
+class ReceiptSerializer(serializers.ModelSerializer):
+    eit_details = EITSerializer(source='eit', read_only=True)
+    eit = serializers.PrimaryKeyRelatedField(queryset=EIT.objects.all(), write_only=True, required=False)
+    
+    eit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_address = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_fax = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = Receipt
+        fields = '__all__'
+
+    def create(self, validated_data):
+        eit_name = validated_data.pop('eit_name', None)
+        # Ignore EIT details
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
+
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            validated_data['eit'] = eit
+            
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        eit_name = validated_data.pop('eit_name', None)
+        # Ignore EIT details
+        validated_data.pop('eit_address', '')
+        validated_data.pop('eit_mobile', '')
+        validated_data.pop('eit_phone', '')
+        validated_data.pop('eit_fax', '')
+
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            instance.eit = eit
+            
+        return super().update(instance, validated_data)
+
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     eit_details = EITSerializer(source='eit', read_only=True)
     eit = serializers.PrimaryKeyRelatedField(queryset=EIT.objects.all(), write_only=True, required=False)

@@ -9,7 +9,7 @@ import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
 import CRMActivities from "./crm-activities.jsx"
 import CRMHistory from "./components/crm/CRMHistory.jsx"
-import { Toaster } from "../components/ui/toaster"
+import { Toaster } from "./components/ui/toaster"
 
 const initialPipeline = {
   "Appointment Schedule": [

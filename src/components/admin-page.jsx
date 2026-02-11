@@ -101,7 +101,7 @@ function Dashboard({ data }) {
         </div>
         <div className="bg-white p-6 rounded-xl border shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-gray-500 text-sm font-medium">Total Invoices</h3>
+            <h3 className="text-gray-500 text-sm font-medium">Total Tax Invoices</h3>
             <div className="p-2 bg-green-50 rounded-lg">
               <Receipt className="w-5 h-5 text-green-600" />
             </div>
@@ -161,7 +161,7 @@ function Dashboard({ data }) {
         </div>
 
         <div className="bg-white rounded-xl border shadow-sm p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Recent Invoices</h3>
+          <h3 className="font-semibold text-gray-900 mb-4">Recent Tax Invoices</h3>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
@@ -184,7 +184,7 @@ function Dashboard({ data }) {
                   </tr>
                 ))}
                 {data.invoices.length === 0 && (
-                  <tr><td colSpan={4} className="py-4 text-center text-gray-500">No invoices found</td></tr>
+                  <tr><td colSpan={4} className="py-4 text-center text-gray-500">No tax invoices found</td></tr>
                 )}
               </tbody>
             </table>
@@ -393,14 +393,14 @@ function QuotationList({ list, refreshData }) {
   )
 }
 
-function InvoiceList({ list }) {
+function TaxInvoiceList({ list }) {
   return (
     <div className="bg-white rounded-xl border shadow-sm p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Invoices</h2>
-        <a href="/invoice.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+        <h2 className="text-lg font-semibold text-gray-900">Tax Invoices</h2>
+        <a href="/receipt.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
-          New Invoice
+          New Tax Invoice
         </a>
       </div>
       <div className="overflow-x-auto">
@@ -431,7 +431,7 @@ function InvoiceList({ list }) {
               </tr>
             ))}
             {list.length === 0 && (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No invoices found</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No tax invoices found</td></tr>
             )}
           </tbody>
         </table>
