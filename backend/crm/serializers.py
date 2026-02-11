@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject
+from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct
 
 class SubProjectSerializer(serializers.ModelSerializer):
     class Meta:
@@ -13,6 +13,45 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectManagement
         fields = ['id', 'project_name', 'duration', 'created_at', 'subprojects']
+
+
+# PD Serializers
+# The following serializer exposes the PD_machine table for API usage.
+class PDMachineSerializer(serializers.ModelSerializer):
+    # Simple model serializer for PD_machine to enable CRUD operations via API
+    class Meta:
+        model = PDMachine
+        fields = ['id', 'name', 'description', 'specification']
+
+class PDSystemSerializer(serializers.ModelSerializer):
+    # Serializer for PD_system including product_total
+    class Meta:
+        model = PDSystem
+        fields = ['id', 'name', 'description', 'specification', 'product_total']
+
+class PDWireSerializer(serializers.ModelSerializer):
+    # Serializer for PD_wire
+    class Meta:
+        model = PDWire
+        fields = ['id', 'name', 'description', 'specification']
+
+class PDSparepartSerializer(serializers.ModelSerializer):
+    # Serializer for PD_sparepart
+    class Meta:
+        model = PDSparepart
+        fields = ['id', 'name', 'description', 'specification']
+
+class PDServiceSerializer(serializers.ModelSerializer):
+    # Serializer for PD_service
+    class Meta:
+        model = PDService
+        fields = ['id', 'name', 'description', 'specification']
+
+class PDSystemChildproductSerializer(serializers.ModelSerializer):
+    # Serializer for PD_system_childproduct, exposes system as PK
+    class Meta:
+        model = PDSystemChildproduct
+        fields = ['id', 'name', 'system', 'specification']
 
 
 class DeliverySerializer(serializers.ModelSerializer):

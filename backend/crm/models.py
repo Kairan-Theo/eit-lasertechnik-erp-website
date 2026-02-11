@@ -608,3 +608,97 @@ def notify_inventory_stock_change(sender, instance, created, **kwargs):
             type='inventory_updates'
         )
 
+# PD Models
+# The following models implement the requested PD_* tables with explicit db_table
+# names to match the required table naming conventions.
+
+class PDMachine(models.Model):
+    # Human-readable name of the machine
+    name = models.CharField(max_length=255, blank=True, default="")
+    # Optional description of the machine
+    description = models.TextField(blank=True, default="")
+    # Free-form technical specification details
+    specification = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "PD_machine"
+
+    def __str__(self):
+        return self.name
+
+
+class PDSystem(models.Model):
+    # Name of the system
+    name = models.CharField(max_length=255, blank=True, default="")
+    # Optional description of the system
+    description = models.TextField(blank=True, default="")
+    # Technical specification for the system
+    specification = models.TextField(blank=True, default="")
+    # Total number of products under this system
+    product_total = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = "PD_system"
+
+    def __str__(self):
+        return self.name
+
+
+class PDWire(models.Model):
+    # Name of the wire item
+    name = models.CharField(max_length=255, blank=True, default="")
+    # Optional description
+    description = models.TextField(blank=True, default="")
+    # Technical specification details
+    specification = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "PD_wire"
+
+    def __str__(self):
+        return self.name
+
+
+class PDSparepart(models.Model):
+    # Name of the spare part
+    name = models.CharField(max_length=255, blank=True, default="")
+    # Optional description of the spare part
+    description = models.TextField(blank=True, default="")
+    # Technical specification for the spare part
+    specification = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "PD_sparepart"
+
+    def __str__(self):
+        return self.name
+
+
+class PDService(models.Model):
+    # Name of the service
+    name = models.CharField(max_length=255, blank=True, default="")
+    # Optional description of the service
+    description = models.TextField(blank=True, default="")
+    # Service specification or scope details
+    specification = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "PD_service"
+
+    def __str__(self):
+        return self.name
+
+
+class PDSystemChildproduct(models.Model):
+    # Child product name
+    name = models.CharField(max_length=255, blank=True, default="")
+    # Link to parent PD_system
+    system = models.ForeignKey(PDSystem, related_name="child_products", on_delete=models.CASCADE)
+    # Technical specification for the child product
+    specification = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "PD_system_childproduct"
+
+    def __str__(self):
+        return self.name
