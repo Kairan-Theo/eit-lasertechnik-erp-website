@@ -114,6 +114,20 @@ class Invoice(models.Model):
     def __str__(self):
         return f"Invoice {self.number}"
 
+class Receipt(models.Model):
+    number = models.CharField(max_length=100, unique=True)
+    customer = models.JSONField(default=dict, blank=True)
+    eit = models.ForeignKey(EIT, on_delete=models.SET_NULL, null=True, blank=True, related_name='receipts')
+    items = models.JSONField(default=list, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+    totals = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="receipts")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Receipt {self.number}"
+
 class PurchaseOrder(models.Model):
     number = models.CharField(max_length=100, unique=True)
     customer = models.JSONField(default=dict, blank=True)

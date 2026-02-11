@@ -28,6 +28,7 @@ const getAllData = () => {
     quotations: [],
     invoices: [],
     billingNotes: [],
+    taxInvoices: [],
     customers: [],
     purchaseOrders: []
   }
@@ -67,6 +68,13 @@ const getAllData = () => {
                 data.invoices.push({ ...inv, customerName: item.customer?.name || item.customer?.company, sourceKey: key, sourceIndex: idx })
               })
             }
+            // Check both old "receipts" and new "taxInvoices" keys for backward compatibility
+            const taxInvoices = item.taxInvoices || item.receipts
+            if (Array.isArray(taxInvoices)) {
+              taxInvoices.forEach((rc, idx) => {
+                data.taxInvoices.push({ ...rc, customerName: item.customer?.name || item.customer?.company, sourceKey: key, sourceIndex: idx })
+              })
+            }
           }
         } catch (e) {
           console.error("Error parsing key", key, e)
@@ -100,6 +108,7 @@ const getAllData = () => {
   data.invoices = deduplicate(data.invoices)
   data.quotations = deduplicate(data.quotations)
   data.billingNotes = deduplicate(data.billingNotes)
+  data.taxInvoices = deduplicate(data.taxInvoices)
 
   // Sort by QT Code ascending
   data.quotations.sort((a, b) => {
@@ -111,6 +120,7 @@ const getAllData = () => {
   })
   data.invoices.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
   data.billingNotes.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
+  data.taxInvoices.sort((a, b) => new Date(b.savedAt || b.details?.date) - new Date(a.savedAt || a.details?.date))
   data.purchaseOrders.sort((a, b) => new Date(b.updatedAt || b.extraFields?.orderDate) - new Date(a.updatedAt || a.extraFields?.orderDate))
   
   return data
@@ -119,7 +129,7 @@ const getAllData = () => {
 function Dashboard({ data }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-white p-6 rounded-xl border shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-500 text-sm font-medium">Purchase Orders</h3>
@@ -155,6 +165,15 @@ function Dashboard({ data }) {
             </div>
           </div>
           <div className="text-2xl font-bold text-gray-900">{data.billingNotes.length}</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-500 text-sm font-medium">Total Tax Invoices</h3>
+            <div className="p-2 bg-purple-50 rounded-lg">
+              <Receipt className="w-5 h-5 text-purple-600" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{data.taxInvoices.length}</div>
         </div>
       </div>
 
@@ -557,7 +576,7 @@ function InvoiceList({ list, refreshData }) {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-[#2D4485]">
             <Receipt className="w-6 h-6" />
-            <h1 className="text-xl font-bold">Invoices</h1>
+            <h1 className="text-xl font-bold">Invoices (Tax Invoice)</h1>
           </div>
           {selectedRows.length > 0 && (
             <button 
@@ -808,6 +827,182 @@ function BillingNoteList({ list, refreshData }) {
                 <div className="p-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Billing Notes</h3>
                     <p className="text-gray-600 mb-6">Are you sure you want to delete {selectedRows.length} selected billing notes?</p>
+                    <div className="flex justify-end gap-3">
+                        <button 
+                            onClick={() => setOpenDeleteConfirm(false)}
+                            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleDelete}
+                            className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors font-medium"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+function TaxInvoiceList({ list, refreshData }) {
+  const [selectedRows, setSelectedRows] = React.useState([])
+  const [openDeleteConfirm, setOpenDeleteConfirm] = React.useState(false)
+
+  const getUid = (item) => `${item.sourceKey}-${item.sourceIndex}`
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedRows(list.map(getUid))
+    } else {
+      setSelectedRows([])
+    }
+  }
+
+  const handleSelectRow = (uid) => {
+    if (selectedRows.includes(uid)) {
+      setSelectedRows(prev => prev.filter(x => x !== uid))
+    } else {
+      setSelectedRows(prev => [...prev, uid])
+    }
+  }
+
+  const handleDelete = async () => {
+    const itemsToDelete = list.filter(item => selectedRows.includes(getUid(item)))
+    
+    // API Deletion
+    const apiItems = itemsToDelete.filter(item => item.sourceKey === 'api')
+    for (const item of apiItems) {
+      try {
+        // Try both new and old API endpoints
+        const res = await fetch(`${API_BASE_URL}/api/tax-invoices/${item.id}/`, { method: 'DELETE' })
+        if (!res.ok) {
+          await fetch(`${API_BASE_URL}/api/receipts/${item.id}/`, { method: 'DELETE' })
+        }
+      } catch (e) {
+        console.error("Error deleting API item", e)
+      }
+    }
+
+    // LocalStorage Deletion
+    const localItems = itemsToDelete.filter(item => item.sourceKey !== 'api')
+    const groupedByKey = {}
+    localItems.forEach(item => {
+      if (!groupedByKey[item.sourceKey]) groupedByKey[item.sourceKey] = []
+      groupedByKey[item.sourceKey].push(item.sourceIndex)
+    })
+
+    Object.keys(groupedByKey).forEach(key => {
+      try {
+        const item = JSON.parse(localStorage.getItem(key))
+        if (item) {
+          const indicesToDelete = groupedByKey[key]
+          // Delete from both potential keys
+          if (Array.isArray(item.taxInvoices)) {
+            item.taxInvoices = item.taxInvoices.filter((_, idx) => !indicesToDelete.includes(idx))
+          }
+          if (Array.isArray(item.receipts)) {
+            item.receipts = item.receipts.filter((_, idx) => !indicesToDelete.includes(idx))
+          }
+          localStorage.setItem(key, JSON.stringify(item))
+        }
+      } catch (e) {
+        console.error("Error updating localStorage", e)
+      }
+    })
+
+    if (refreshData) refreshData()
+    setSelectedRows([])
+    setOpenDeleteConfirm(false)
+  }
+
+  return (
+    <div className="bg-white rounded-xl border shadow-sm p-6 relative">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-[#2D4485]">
+            <Receipt className="w-6 h-6" />
+            <h1 className="text-xl font-bold">Tax Invoices</h1>
+          </div>
+          {selectedRows.length > 0 && (
+            <button 
+              onClick={() => setOpenDeleteConfirm(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete ({selectedRows.length})
+            </button>
+          )}
+        </div>
+        <a href="/receipt.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+          <Plus className="w-4 h-4" />
+          New Tax Invoice
+        </a>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-gray-700 border-b">
+              <th className="p-3 w-10">
+                <input 
+                  type="checkbox" 
+                  className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                  checked={list.length > 0 && selectedRows.length === list.length}
+                  onChange={handleSelectAll}
+                />
+              </th>
+              <th className="p-3 text-left w-16">Index</th>
+              <th className="p-3 text-left">Tax Invoice Number</th>
+              <th className="p-3 text-left">Customer</th>
+              <th className="p-3 text-left">Date</th>
+              <th className="p-3 text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {list.map((item, i) => {
+              const uid = getUid(item)
+              return (
+                <tr key={uid} className={`hover:bg-gray-50 ${selectedRows.includes(uid) ? 'bg-blue-50' : ''}`}>
+                  <td className="p-3">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
+                      checked={selectedRows.includes(uid)}
+                      onChange={() => handleSelectRow(uid)}
+                    />
+                  </td>
+                  <td className="p-3 text-gray-500">{i + 1}</td>
+                  <td className="p-3 font-medium">
+                    <a href={`/receipt.html?key=${encodeURIComponent(item.sourceKey)}&index=${item.sourceIndex}`} className="text-[#2D4485] hover:underline">
+                      {item.details?.number}
+                    </a>
+                  </td>
+                  <td className="p-3">{item.customerName || "-"}</td>
+                  <td className="p-3">{item.details?.date}</td>
+                  <td className="p-3 text-right font-medium">
+                    {item.details?.currency} {item.totals?.total?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              )
+            })}
+            {list.length === 0 && (
+              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No tax invoices found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {openDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setOpenDeleteConfirm(false)}>
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <div className="p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Tax Invoices</h3>
+                    <p className="text-gray-600 mb-6">Are you sure you want to delete {selectedRows.length} selected tax invoices?</p>
                     <div className="flex justify-end gap-3">
                         <button 
                             onClick={() => setOpenDeleteConfirm(false)}
@@ -1086,13 +1281,13 @@ function PermissionsManager() {
 
 function AdminPage() {
   const [activeTab, setActiveTab] = React.useState("dashboard")
-  const [data, setData] = React.useState({ quotations: [], invoices: [], billingNotes: [], customers: [], purchaseOrders: [] })
+  const [data, setData] = React.useState({ quotations: [], invoices: [], billingNotes: [], taxInvoices: [], customers: [], purchaseOrders: [] })
 
   React.useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search)
       const view = params.get("view")
-      const allowed = ["dashboard","purchase-orders","quotations","invoices","billing-notes","eit-management","permissions"]
+      const allowed = ["dashboard","purchase-orders","quotations","invoices","billing-notes","receipts","eit-management","permissions"]
       if (view && allowed.includes(view)) {
         setActiveTab(view)
       }
@@ -1164,6 +1359,36 @@ function AdminPage() {
     return []
   }
 
+  const fetchTaxInvoices = async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { "Authorization": `Token ${token}` } : {}
+      const response = await fetch(`${API_BASE_URL}/api/tax-invoices/`, { headers })
+      if (response.ok) {
+        const apiReceipts = await response.json()
+        return apiReceipts.map(rc => ({
+          id: rc.id,
+          sourceKey: 'api',
+          sourceIndex: rc.id,
+          details: {
+            ...rc.details,
+            number: rc.number,
+            date: rc.details?.date || rc.created_at,
+            currency: rc.details?.currency || 'THB',
+          },
+          customerName: rc.customer?.company || rc.customer?.company_name || rc.customer?.name || 'Unknown',
+          items: rc.items || [],
+          totals: {
+            total: rc.totals?.total || 0
+          }
+        }))
+      }
+    } catch (e) {
+      console.error("Failed to fetch tax invoices from API", e)
+    }
+    return []
+  }
+
   const fetchInvoices = async () => {
     try {
       const token = localStorage.getItem("authToken")
@@ -1227,6 +1452,7 @@ function AdminPage() {
     const apiQuotations = await fetchQuotations()
     const apiBillingNotes = await fetchBillingNotes()
     const apiInvoices = await fetchInvoices()
+    const apiTaxInvoices = await fetchTaxInvoices()
     const apiPurchaseOrders = await fetchPurchaseOrders()
     
     if (apiPurchaseOrders !== null) {
@@ -1266,6 +1492,12 @@ function AdminPage() {
       
       // Merge the lists
       localData.invoices = [...localData.invoices, ...apiInvoices]
+    }
+
+    if (apiTaxInvoices.length > 0) {
+      const apiNumbers = new Set(apiTaxInvoices.map(rc => rc.details.number))
+      localData.taxInvoices = localData.taxInvoices.filter(rc => !apiNumbers.has(rc.details.number))
+      localData.taxInvoices = [...localData.taxInvoices, ...apiTaxInvoices]
     }
     
     setData(localData)
@@ -1322,6 +1554,19 @@ function AdminPage() {
               number: "BN-002",
               date: new Date().toISOString().slice(0, 10),
               dueDate: new Date(Date.now() + 30*24*60*60*1000).toISOString().slice(0, 10),
+              currency: "THB"
+            },
+            items: [
+               { product: "MODEL-002", description: "Test Product 002", qty: 2, price: 2500, unit: "pcs" }
+            ],
+            totals: { total: 5350 }
+          }
+        ],
+        receipts: [
+          {
+            details: {
+              number: `RE ${new Date().getFullYear()}-0002`,
+              date: new Date().toISOString().slice(0, 10),
               currency: "THB"
             },
             items: [
@@ -1391,7 +1636,7 @@ function AdminPage() {
             }`}
           >
             <Receipt className="w-5 h-5" />
-            Invoices
+            Tax Invoices (Old)
           </button>
           <button
             onClick={() => setActiveTab("billing-notes")}
@@ -1401,6 +1646,15 @@ function AdminPage() {
           >
             <ClipboardList className="w-5 h-5" />
             Billing Notes
+          </button>
+          <button
+            onClick={() => setActiveTab("receipts")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "receipts" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <Receipt className="w-5 h-5" />
+            Tax Invoices
           </button>
           <button
             onClick={() => setActiveTab("eit-management")}
@@ -1423,6 +1677,8 @@ function AdminPage() {
             {activeTab === "quotations" && "Quotations"}
             {activeTab === "invoices" && "Invoices"}
             {activeTab === "billing-notes" && "Billing Notes"}
+            {activeTab === "receipts" && "Tax Invoices"}
+            {activeTab === "eit-management" && "EIT Management"}
           </h1>
         </header>
 
@@ -1431,6 +1687,7 @@ function AdminPage() {
         {activeTab === "quotations" && <QuotationList list={data.quotations} refreshData={loadData} />}
         {activeTab === "invoices" && <InvoiceList list={data.invoices} refreshData={loadData} />}
         {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} refreshData={loadData} />}
+        {activeTab === "receipts" && <TaxInvoiceList list={data.taxInvoices} refreshData={loadData} />}
         {activeTab === "eit-management" && <EitManagement />} {/* Added EIT Management view */}
       </main>
     </div>

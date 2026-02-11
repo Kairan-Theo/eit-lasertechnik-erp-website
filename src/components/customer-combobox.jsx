@@ -29,7 +29,7 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
   const filteredOptions = query === "" 
     ? safeOptions 
     : safeOptions.filter((customer) =>
-        customer.customer_name && customer.customer_name.toLowerCase().includes(query.toLowerCase())
+        (customer.customer_name || "").toLowerCase().includes(query.toLowerCase())
       )
 
   const handleInputChange = (e) => {
@@ -40,8 +40,9 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
   }
 
   const handleSelect = (customerName) => {
-    setQuery(customerName)
-    onChange(customerName)
+    const safeName = customerName || ""
+    setQuery(safeName)
+    onChange(safeName)
     setIsOpen(false)
   }
 

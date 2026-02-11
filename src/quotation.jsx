@@ -6,103 +6,13 @@ import Navigation from "./components/navigation.jsx"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText, ClipboardList } from "lucide-react"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, ClipboardList, FileText } from "lucide-react"
 import { CustomerCombobox } from "./components/customer-combobox.jsx"
+import { DateField } from "./components/ui/date-field"
+
 import "./index.css"
 
-function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
-  const [open, setOpen] = React.useState(false)
-  const containerRef = React.useRef(null)
-  const defaultClassNames = getDefaultClassNames()
-  const selected = (() => {
-    try {
-      return value ? parseISO(value) : undefined
-    } catch {
-      return undefined
-    }
-  })()
-  const display = (() => {
-    try {
-      return selected ? format(selected, "dd/MM/yyyy") : ""
-    } catch {
-      return ""
-    }
-  })()
-  React.useEffect(() => {
-    if (!open) return
-    const handle = (e) => {
-      const el = containerRef.current
-      if (el && !el.contains(e.target)) setOpen(false)
-    }
-    const handleKey = (e) => {
-      if (e.key === "Escape") setOpen(false)
-    }
-    document.addEventListener("mousedown", handle)
-    document.addEventListener("touchstart", handle, { passive: true })
-    document.addEventListener("keydown", handleKey)
-    return () => {
-      document.removeEventListener("mousedown", handle)
-      document.removeEventListener("touchstart", handle)
-      document.removeEventListener("keydown", handleKey)
-    }
-  }, [open])
-  return (
-    <div ref={containerRef} className="relative inline-block w-full">
-      <input
-        type="text"
-        value={display}
-        placeholder={placeholder}
-        onClick={() => setOpen((o) => !o)}
-        readOnly
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
-      />
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-        aria-label="Open calendar"
-      >
-        <CalendarIcon className="size-4" aria-hidden="true" />
-      </button>
-      {open && (
-        <div onMouseDown={(e) => e.stopPropagation()} className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+2px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
-          <DayPicker
-            mode="single"
-            selected={selected}
-            onSelect={(d) => {
-              if (!d) return
-              const v = format(d, "yyyy-MM-dd")
-              onChange(v)
-            }}
-            captionLayout="buttons"
-            classNames={{
-              root: `w-fit ${defaultClassNames.root}`,
-              months: `flex flex-col ${defaultClassNames.months}`,
-              month: `rounded-2xl pt-8 ${defaultClassNames.month}`,
-              caption: `relative h-8 ${defaultClassNames.caption}`,
-              nav: `absolute left-3 right-3 top-0 flex items-center justify-between ${defaultClassNames.nav}`,
-              nav_button: `p-2 rounded-full hover:bg-slate-100 ${defaultClassNames.nav_button}`,
-              nav_button_previous: `${defaultClassNames.nav_button_previous}`,
-              nav_button_next: `${defaultClassNames.nav_button_next}`,
-              caption_label: `absolute left-1/2 -translate-x-1/2 top-0 h-8 leading-8 text-center font-semibold uppercase tracking-wide text-[#2D4485] ${defaultClassNames.caption_label}`,
-              table: `w-full border-collapse`,
-              weekdays: `flex justify-between border-b border-slate-200 pb-2 ${defaultClassNames.weekdays}`,
-              weekday: `text-slate-500 flex-1 text-sm text-center ${defaultClassNames.weekday}`,
-              week: `grid grid-cols-7 mt-2 ${defaultClassNames.week}`,
-              day: `mx-auto size-10 flex items-center justify-center rounded-full hover:bg-blue-50 ${defaultClassNames.day}`,
-              today: `bg-[#D6E4FF] text-[#2D4485] font-semibold ${defaultClassNames.today}`,
-              outside: `text-slate-400 ${defaultClassNames.outside}`,
-              disabled: `${defaultClassNames.disabled}`,
-            }}
-            modifiersClassNames={{
-              selected: "border-2 border-[#2D4485]/30 !bg-transparent text-[#2D4485] font-semibold",
-            }}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
+
 
 const parseNumber = (val) => {
   if (typeof val === 'number') return val
@@ -219,6 +129,16 @@ function useQuotationState() {
   const total = items.reduce((sum, it) => sum + (parseNumber(it.qty) || 0) * (parseNumber(it.price) || 0), 0)
 
   const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0 }])
+  const addSpecificItem = () => setItems((prev) => [...prev, { type: 'specific', item: "", model: "", description: "Specific Description", qty: 0, price: 0 }])
+
+  const insertRow = (index) => {
+    setItems((prevItems) => {
+      const newItems = [...prevItems]
+      newItems.splice(index + 1, 0, { item: "", model: "", description: "", qty: 1, price: 0 })
+      return newItems
+    })
+  }
+
   const removeItem = (i) => setItems((prev) => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, value) =>
     setItems((prev) =>
@@ -280,9 +200,15 @@ function useQuotationState() {
             const apiItems = data.quotation_items || data.items || data.products || []
             if (apiItems.length > 0) {
               setItems(apiItems.map(i => {
-                const qty = i.quantity || i.qty || 1
+                const rawQty = i.quantity !== undefined ? i.quantity : i.qty
+                const qty = rawQty !== undefined ? rawQty : 1
                 const total = parseFloat(i.quo_total || i.total || 0)
+                
+                // Identify specific description items: empty item/model and 0 quantity
+                const isSpecific = (!i.quo_item && !i.quo_model && qty === 0);
+
                 return {
+                  type: isSpecific ? 'specific' : undefined,
                   item: i.quo_item || i.item || "",
                   model: i.quo_model || i.model || "",
                   description: i.quo_description || i.description || "",
@@ -338,7 +264,7 @@ function useQuotationState() {
     }
   }, [])
 
-  return { customer, setCustomer, details, setDetails, items, addItem, removeItem, updateItem, total, sourceKey, sourceIndex, eitOptions, customerOptions }
+  return { customer, setCustomer, details, setDetails, items, setItems, addItem, addSpecificItem, insertItem: insertRow, removeItem, updateItem, total, sourceKey, sourceIndex, eitOptions, customerOptions }
 }
 
 function QuotationPage() {
@@ -568,6 +494,10 @@ function QuotationPage() {
                <Plus className="w-4 h-4" />
                <span className="text-sm font-medium">Add Item</span>
              </button>
+             <button onClick={q.addSpecificItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200">
+               <FileText className="w-4 h-4" />
+               <span className="text-sm font-medium">Add Specific Description</span>
+             </button>
            </div>
            <div className="overflow-x-auto">
              <table className="w-full text-left border-collapse">
@@ -588,6 +518,17 @@ function QuotationPage() {
                      <td className="p-3 text-center text-sm text-gray-700">
                        {i + 1}
                      </td>
+                     {item.type === 'specific' ? (
+                       <td className="p-3" colSpan={5}>
+                         <textarea 
+                            value={item.description} 
+                            onChange={(e) => q.updateItem(i, "description", e.target.value)} 
+                            className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none min-h-[40px] resize-y" 
+                            placeholder="Specific Description" 
+                         />
+                       </td>
+                     ) : (
+                       <>
                      <td className="p-3">
                        <input value={item.model} onChange={(e) => q.updateItem(i, "model", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Model" />
                      </td>
@@ -614,15 +555,30 @@ function QuotationPage() {
                      <td className="p-3 text-right text-sm text-gray-700">
                        {(parseNumber(item.qty || 0) * parseNumber(item.price || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                      </td>
+                       </>
+                     )}
                      <td className="p-3 text-right">
-                       <button onClick={() => q.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete"><Trash className="w-4 h-4" /></button>
+                       <div className="flex justify-end gap-2">
+                         <button onClick={() => q.insertItem(i)} className="text-[#2D4485] hover:text-[#1a2c5e]" title="Insert Item Below"><Plus className="w-4 h-4" /></button>
+                         <button onClick={() => q.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete"><Trash className="w-4 h-4" /></button>
+                       </div>
                      </td>
                    </tr>
                  ))}
                </tbody>
              </table>
            </div>
-           <div className="flex justify-end mt-4">
+           <div className="flex flex-col md:flex-row justify-between items-start mt-4 gap-4">
+             <div className="flex gap-2">
+               <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
+                 <Plus className="w-4 h-4" />
+                 <span className="text-sm font-medium">Add Item</span>
+               </button>
+               <button onClick={q.addSpecificItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200">
+                 <FileText className="w-4 h-4" />
+                 <span className="text-sm font-medium">Add Specific Description</span>
+               </button>
+             </div>
              <div className="w-64 space-y-2">
                <div className="flex justify-between text-base font-bold text-gray-900"><span>Total:</span> <span>{q.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                <div className="flex justify-between text-base font-bold text-gray-900"><span>VAT 7%:</span> <span>{(q.total * 0.07).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
@@ -866,8 +822,14 @@ function QuotationPage() {
   )
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <QuotationPage />
-  </React.StrictMode>,
-)
+const container = document.getElementById("root")
+if (container) {
+  if (!container._reactRoot) {
+    container._reactRoot = ReactDOM.createRoot(container)
+  }
+  container._reactRoot.render(
+    <React.StrictMode>
+      <QuotationPage />
+    </React.StrictMode>,
+  )
+}
