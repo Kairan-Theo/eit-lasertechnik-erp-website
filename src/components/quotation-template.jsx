@@ -374,7 +374,13 @@ export function QuotationTemplate({ data }) {
         <tbody>
             {items.map((item, i) => (
                 <tr key={i}>
-                    <td className="col-item">{i + 1}</td>
+                    <td className="col-item" style={{verticalAlign: 'top'}}>{i + 1}</td>
+                    {item.type === 'specific' ? (
+                        <td colSpan={5} className="col-desc" style={{padding: '10px 8px'}}>
+                           <div style={{whiteSpace: 'pre-wrap', paddingLeft: '8px'}}>{item.description}</div>
+                        </td>
+                    ) : (
+                        <>
                     <td className="col-model">{item.model}</td>
                     <td className="col-desc">
                         <div className="desc-cell-content">
@@ -394,6 +400,8 @@ export function QuotationTemplate({ data }) {
                     <td className="col-price">{fmt(Number(item.price))}</td>
                     <td className="col-qty">{item.qty}</td>
                     <td className="col-total">{fmt(Number(item.price) * Number(item.qty))}</td>
+                        </>
+                    )}
                 </tr>
             ))}
             

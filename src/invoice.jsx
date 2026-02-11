@@ -1,159 +1,22 @@
 import React from "react"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
-import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, Receipt } from "lucide-react"
+import { Plus, Trash, ArrowLeft, Receipt } from "lucide-react"
 import Navigation from "./components/navigation.jsx"
-import { CustomerCombobox } from "./components/customer-combobox"
-import { Combobox } from "./components/combobox"
+import { InvoiceForm } from "./components/invoice-form"
+import { THBText } from "./utils/currency"
 import "./index.css"
 
-function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
-  const [open, setOpen] = React.useState(false)
-  const containerRef = React.useRef(null)
-  const defaultClassNames = getDefaultClassNames()
-  const selected = (() => {
-    try {
-      return value ? parseISO(value) : undefined
-    } catch {
-      return undefined
-    }
-  })()
-  const display = (() => {
-    try {
-      return selected ? format(selected, "dd/MM/yyyy") : ""
-    } catch {
-      return ""
-    }
-  })()
-  React.useEffect(() => {
-    if (!open) return
-    const handle = (e) => {
-      const el = containerRef.current
-      if (el && !el.contains(e.target)) setOpen(false)
-    }
-    const handleKey = (e) => {
-      if (e.key === "Escape") setOpen(false)
-    }
-    document.addEventListener("mousedown", handle)
-    document.addEventListener("touchstart", handle, { passive: true })
-    document.addEventListener("keydown", handleKey)
-    return () => {
-      document.removeEventListener("mousedown", handle)
-      document.removeEventListener("touchstart", handle)
-      document.removeEventListener("keydown", handleKey)
-    }
-  }, [open])
-  return (
-    <div ref={containerRef} className="relative inline-block w-full">
-      <input
-        type="text"
-        value={display}
-        placeholder={placeholder}
-        onClick={() => setOpen((o) => !o)}
-        readOnly
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
-      />
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-        aria-label="Open calendar"
-      >
-        <CalendarIcon className="size-4" aria-hidden="true" />
-      </button>
-      {open && (
-        <div onMouseDown={(e) => e.stopPropagation()} className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+2px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
-          <DayPicker
-            mode="single"
-            selected={selected}
-            onSelect={(d) => {
-              if (!d) return
-              const v = format(d, "yyyy-MM-dd")
-              onChange(v)
-            }}
-            captionLayout="buttons"
-            classNames={{
-              root: `w-fit ${defaultClassNames.root}`,
-              months: `flex flex-col ${defaultClassNames.months}`,
-              month: `rounded-2xl pt-8 ${defaultClassNames.month}`,
-              caption: `relative h-8 ${defaultClassNames.caption}`,
-              nav: `absolute left-3 right-3 top-0 flex items-center justify-between ${defaultClassNames.nav}`,
-              nav_button: `p-2 rounded-full hover:bg-slate-100 ${defaultClassNames.nav_button}`,
-              nav_button_previous: `${defaultClassNames.nav_button_previous}`,
-              nav_button_next: `${defaultClassNames.nav_button_next}`,
-              caption_label: `absolute left-1/2 -translate-x-1/2 top-0 h-8 leading-8 text-center font-semibold uppercase tracking-wide text-[#2D4485] ${defaultClassNames.caption_label}`,
-              table: `w-full border-collapse`,
-              weekdays: `flex justify-between border-b border-slate-200 pb-2 ${defaultClassNames.weekdays}`,
-              weekday: `text-slate-500 flex-1 text-sm text-center ${defaultClassNames.weekday}`,
-              week: `grid grid-cols-7 mt-2 ${defaultClassNames.week}`,
-              day: `mx-auto size-10 flex items-center justify-center rounded-full hover:bg-blue-50 ${defaultClassNames.day}`,
-              today: `bg-[#D6E4FF] text-[#2D4485] font-semibold ${defaultClassNames.today}`,
-              outside: `text-slate-400 ${defaultClassNames.outside}`,
-              disabled: `${defaultClassNames.disabled}`,
-            }}
-            modifiersClassNames={{
-              selected: "border-2 border-[#2D4485]/30 !bg-transparent text-[#2D4485] font-semibold",
-            }}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
 
-function THBText(num) {
-  if (!num || num === 0) return "ศูนย์บาทถ้วน"
-  num = Number(num).toFixed(2)
-  let [baht, satang] = num.split(".")
-  const thaiNum = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
-  const unit = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
 
-  function convert(n) {
-    let res = ""
-    let len = n.length
-    for (let i = 0; i < len; i++) {
-      let digit = parseInt(n.charAt(i))
-      let pos = len - i - 1
-      if (digit !== 0) {
-        if (pos === 0 && digit === 1 && len > 1) res += "เอ็ด"
-        else if (pos === 1 && digit === 2) res += "ยี่"
-        else if (pos === 1 && digit === 1) res += ""
-        else res += thaiNum[digit]
 
-        if (pos === 0) res += ""
-        else if (pos === 1) res += "สิบ"
-        else res += unit[pos]
-      }
-    }
-    return res
-  }
 
-  let text = ""
-  if (parseInt(baht) > 0) {
-    if (baht.length > 6) {
-       let millions = baht.substring(0, baht.length - 6)
-       let remainder = baht.substring(baht.length - 6)
-       text += convert(millions) + "ล้าน" + convert(remainder)
-    } else {
-       text += convert(baht)
-    }
-    text += "บาท"
-  }
-
-  if (parseInt(satang) > 0) {
-    text += convert(satang) + "สตางค์"
-  } else {
-    text += "ถ้วน"
-  }
-  return text
-}
-
-function useInvoiceState() {
+export function useInvoiceState(config = { enableUrlLoading: true }) {
   const [customer, setCustomer] = React.useState({
     company: "",
     address: "",
     taxId: "",
+    branch: "",
     telephone: "",
     fax: "",
     attn: "",
@@ -185,16 +48,17 @@ function useInvoiceState() {
     const nums = invoices
       .map(n => String(n.number || n.details?.number || ""))
       .map(s => {
-        const m = s.match(new RegExp(`^VOI ${currentYear}-(\\d{4})$`, 'i'))
+        const m = s.match(new RegExp(`^INV ${currentYear}-(\\d{4})$`, 'i'))
         return m ? parseInt(m[1], 10) : null
       })
       .filter(n => Number.isFinite(n))
     const next = (nums.length ? Math.max(...nums) + 1 : 1)
-    return `VOI ${currentYear}-${String(next).padStart(4, "0")}`
+    return `INV ${currentYear}-${String(next).padStart(4, "0")}`
   }
 
   const [details, setDetails] = React.useState({
     number: getNextInvoiceNumber(),
+    isTaxInvoice: false,
     date: new Date().toISOString().slice(0, 10),
     dueDate: "",
     poNo: "",
@@ -270,6 +134,8 @@ function useInvoiceState() {
 
   // Initialization: load from URL or confirmedQuotation
   React.useEffect(() => {
+    if (!config.enableUrlLoading) return
+
     const params = new URLSearchParams(window.location.search)
     const key = params.get("key")
     const index = params.get("index")
@@ -563,6 +429,7 @@ function useInvoiceState() {
     customerOptions,
     poOptions,
     items,
+    setItems,
     addItem,
     removeItem,
     updateItem,
@@ -593,9 +460,9 @@ function InvoiceDocument({ inv }) {
     ? "1/120 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510"
     : "118/20 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510"
 
-  const orgTel = isEinstein ? "02-052-9544" : "02-xxx-xxxx"
-  const orgFax = isEinstein ? "02-052-9544" : "02-xxx-xxxx"
-  const orgTaxId = isEinstein ? "0105547001928" : "010555xxxxxxx"
+  const orgTel = isEinstein ? "02-052-9544" : "02-052-9544"
+  const orgFax = isEinstein ? "02-052-9544" : "02-052-9544"
+  const orgTaxId = isEinstein ? "0105547001928" : "0105560138141"
   
   const customerName = inv.customer?.company || inv.customer?.name || ""
   const customerTaxId = inv.customer?.taxId || ""
@@ -633,16 +500,12 @@ function InvoiceDocument({ inv }) {
 
          {/* Right: Doc Info */}
          <div className="w-[38%] pl-4">
-            <div className="flex justify-between mb-4">
-               <div>
-                  <div className="font-bold text-sm">ใบแจ้งหนี้</div>
-                  <div className="font-bold text-sm">INVOICE</div>
-                  <div className="text-[10px]">ไม่ใช่ใบกำกับภาษี</div>
-               </div>
-               <div className="text-right">
-                  <div className="font-bold text-sm">ต้นฉบับ</div>
-                  <div className="font-bold text-sm">Original</div>
-               </div>
+            <div className="mb-4 text-center">
+               <div className="font-bold text-sm mb-1">ต้นฉบับ/ Original</div>
+               <div className="font-bold text-sm">{inv.details.isTaxInvoice ? "ใบกำกับภาษี/ใบส่งสินค้า" : "ใบแจ้งหนี้"}</div>
+               <div className="font-bold text-sm">{inv.details.isTaxInvoice ? "TAX INVOICE/DELIVERY ORDER" : "INVOICE"}</div>
+               {inv.details.isTaxInvoice && <div className="text-xs">เอกสารออกเป็นชุด</div>}
+               {!inv.details.isTaxInvoice && <div className="text-[10px]">ไม่ใช่ใบกำกับภาษี</div>}
             </div>
             <div className="text-right text-xs">
                <div className="flex justify-end gap-2 mb-1">
@@ -650,7 +513,7 @@ function InvoiceDocument({ inv }) {
                   <span className="font-bold">เลขที่</span>
                   <span className="font-normal"> (No.)</span>
                   </span>
-                  <span>EIT {inv.details.number}</span>
+                  <span>{inv.details.number}</span>
                </div>
                <div className="flex justify-end gap-2">
                   <span className="w-24">
@@ -668,7 +531,7 @@ function InvoiceDocument({ inv }) {
          {/* Left: Customer */}
          <div className="w-[70%] border-r border-black p-2 min-h-[90px]">
             <div className="flex mb-1">
-               <div className="font-bold w-32">สำนักงานใหญ่</div>
+               <div className="font-bold w-32">{inv.customer?.branch || "สำนักงานใหญ่"}</div>
                <div className="flex-1 flex gap-2">
                   <span className="font-bold">เลขประจำตัวผู้เสียภาษี</span>
                   <span>{customerTaxId}</span>
@@ -751,7 +614,11 @@ function InvoiceDocument({ inv }) {
 
       {/* Row 5: Totals */}
       <div className="flex border border-black border-t-0">
-         <div className="flex-1 border-r border-black"></div> 
+         <div className="flex-1 border-r border-black p-2 relative">
+            {inv.details.notes && (
+               <div className="text-xs whitespace-pre-wrap">{inv.details.notes}</div>
+            )}
+         </div> 
          <div className="w-[30%]">
             <div className="flex border-b border-black">
                <div className="w-[60%] border-r border-black p-1 text-right font-normal text-[10px]">
@@ -826,6 +693,8 @@ function InvoiceDocument({ inv }) {
     </div>
   )
 }
+
+
 
 function InvoicePage() {
   const inv = useInvoiceState()
@@ -961,224 +830,7 @@ function InvoicePage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
-           <h2 className="text-xl font-bold text-[#2D4485]">Code</h2>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
-              <input value={inv.details.number || ""} onChange={(e) => inv.setDetails({ ...inv.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Invoice number" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
-              <DateField value={inv.details.date || ""} onChange={(val) => inv.setDetails({ ...inv.details, date: val })} />
-            </div>
-          </div>
-        </div>
-
-        {/* EIT Box */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
-           <h2 className="text-xl font-bold text-[#2D4485]">EIT/Einstein organization</h2>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-              <select 
-                value={inv.details.eit || ""} 
-                onChange={(e) => {
-                  const val = e.target.value
-                  if (!val) {
-                    inv.setDetails({ 
-                      ...inv.details, 
-                      eit: null, 
-                      salesPerson: "", 
-                      onBehalfOf: "",
-                      eitAddress: "",
-                      eitTelephone: "",
-                      eitFax: "",
-                      eitMobile: ""
-                    })
-                    return
-                  }
-                  const selected = inv.eitOptions.find(o => String(o.id) === val)
-                  if (selected) {
-                    inv.setDetails({ 
-                      ...inv.details, 
-                      eit: selected.id, 
-                      salesPerson: selected.organization_name, 
-                      onBehalfOf: selected.organization_name, 
-                      eitAddress: selected.address || "", 
-                      eitTelephone: selected.eit_telephone || "", 
-                      eitFax: selected.eit_fax || "", 
-                      eitMobile: selected.eit_mobile || ""
-                    })
-                  }
-                }} 
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
-              >
-                <option value="">Select Organization</option>
-                {inv.eitOptions.map(opt => (
-                  <option key={opt.id} value={opt.id}>{opt.organization_name}</option>
-                ))}
-              </select>
-             </div>
-             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-              <textarea value={inv.details.eitAddress || ""} onChange={(e) => inv.setDetails({ ...inv.details, eitAddress: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
-              <input value={inv.details.eitTelephone || ""} onChange={(e) => inv.setDetails({ ...inv.details, eitTelephone: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Telephone" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
-              <input value={inv.details.eitFax || ""} onChange={(e) => inv.setDetails({ ...inv.details, eitFax: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Fax" />
-            </div>
-           </div>
-        </div>
-
-        {/* Customer Information */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
-          <h2 className="text-xl font-bold text-[#2D4485]">Customer Information</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-               <CustomerCombobox
-                  value={inv.customer?.company || ""}
-                  options={inv.customerOptions}
-                  onChange={(val) => {
-                    const match = inv.customerOptions.find(c => c.customer_name === val)
-                    if (match) {
-                      inv.setCustomer({
-                        ...(inv.customer || {}),
-                        company: val,
-                        taxId: match.tax_id || inv.customer?.taxId || "",
-                        address: match.address || inv.customer?.address || "",
-                        telephone: match.phone || inv.customer?.telephone || "",
-                        attn: match.contact || inv.customer?.attn || "",
-                        email: match.email || inv.customer?.email || ""
-                      })
-                    } else {
-                      inv.setCustomer({ ...(inv.customer || {}), company: val })
-                    }
-                  }}
-                />
-             </div>
-             <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Tax Code</label>
-               <input value={inv.customer?.taxId || ""} onChange={(e) => inv.setCustomer({ ...(inv.customer || {}), taxId: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Tax Code" />
-             </div>
-             <div className="md:col-span-2">
-               <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-               <textarea value={inv.customer?.address || ""} onChange={(e) => inv.setCustomer({ ...(inv.customer || {}), address: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
-             </div>
-          </div>
-        </div>
-
-        {/* Payment Information */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
-          <h2 className="text-xl font-bold text-[#2D4485]">Payment Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
-              <input 
-                value={inv.details.paymentType || ""} 
-                onChange={(e) => inv.setDetails({ ...inv.details, paymentType: e.target.value })} 
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
-                placeholder="Payment Type" 
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-              <DateField value={inv.details.dueDate || ""} onChange={(val) => inv.setDetails({ ...inv.details, dueDate: val })} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">PO No.</label>
-              <Combobox 
-                value={inv.details.poNo || ""} 
-                onChange={(val) => inv.setDetails({ ...inv.details, poNo: val })} 
-                options={inv.poOptions} 
-                placeholder="PO Number" 
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Description Box (Items) */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 mb-8">
-           <div className="flex justify-between items-center mb-4">
-             <h2 className="text-xl font-bold text-[#2D4485]">Invoice Description</h2>
-             <button onClick={inv.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
-               <Plus className="w-4 h-4" />
-               <span className="text-sm font-medium">Add Item</span>
-             </button>
-           </div>
-           <div className="overflow-x-auto">
-             <table className="w-full text-left border-collapse">
-               <thead className="bg-gray-50 text-[#2D4485] uppercase text-xs font-bold">
-                 <tr>
-                   <th className="p-3 border-b w-16">No.</th>
-                   <th className="p-3 border-b">Description</th>
-                   <th className="p-3 border-b">Sales (ex. Vat)</th>
-                   <th className="p-3 border-b">Quantity</th>
-                   <th className="p-3 border-b">Unit</th>
-                   <th className="p-3 border-b text-right">Amount</th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-gray-100">
-                 {inv.items.map((it, i) => (
-                   <tr key={i} className="hover:bg-gray-50 transition border-b border-gray-100">
-                      <td className="p-3 text-center text-sm text-gray-700">
-                        {i + 1}
-                      </td>
-                      <td className="p-3">
-                        <textarea 
-                          value={it.description || ""} 
-                          onChange={(e) => inv.updateItem(i, "description", e.target.value)} 
-                          className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none resize-y min-h-[32px]"
-                          rows={1}
-                          placeholder="Description"
-                        />
-                      </td>
-                      <td className="p-3">
-                        <input type="number" min="0" step="0.01" value={it.price || ""} onChange={(e) => inv.updateItem(i, "price", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
-                      </td>
-                      <td className="p-3">
-                        <input type="number" min="0" value={it.qty || ""} onChange={(e) => inv.updateItem(i, "qty", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
-                      </td>
-                      <td className="p-3">
-                        <input value={it.unit || ""} onChange={(e) => inv.updateItem(i, "unit", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
-                      </td>
-                      <td className="p-3 text-right text-sm text-gray-700">
-                        {((Number(it.qty) || 0) * (Number(it.price) || 0)).toFixed(2)}
-                      </td>
-                   </tr>
-                 ))}
-               </tbody>
-             </table>
-           </div>
-
-           <div className="flex justify-end mt-4">
-              <div className="w-auto min-w-[250px] space-y-2">
-                <div className="flex justify-between text-sm gap-8">
-                  <span className="text-gray-600">Net amount</span>
-                  <span className="font-medium text-gray-900">{inv.subtotal.toFixed(2)} {inv.details.currency}</span>
-                </div>
-                <div className="flex justify-between text-sm gap-8">
-                  <span className="text-gray-600">Vat 7%</span>
-                  <span className="font-medium text-gray-900">{inv.taxTotal.toFixed(2)} {inv.details.currency}</span>
-                </div>
-                <div className="flex justify-between text-lg pt-2 border-t border-gray-200 gap-8">
-                  <span className="font-bold text-gray-900">Total of sales</span>
-                  <span className="font-bold text-[#2D4485]">{inv.total.toFixed(2)} {inv.details.currency}</span>
-                </div>
-                <div className="text-right text-base font-bold text-[#2D4485]">
-                  {THBText(inv.total)}
-                </div>
-              </div>
-           </div>
-        </div>
+        <InvoiceForm inv={inv} />
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href = "/admin.html"}>Cancel</button>

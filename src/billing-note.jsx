@@ -3,152 +3,60 @@ import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
-import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, FileText } from "lucide-react"
+import { Plus, Trash, ArrowLeft, FileText } from "lucide-react"
 import { CustomerCombobox } from "./components/customer-combobox"
 import { Combobox } from "./components/combobox"
-import html2pdf from "html2pdf.js"
+import { useInvoiceState } from "./invoice"
+import { InvoiceForm } from "./components/invoice-form"
+import { DateField } from "./components/ui/date-field"
+import { THBText } from "./utils/currency"
 import "./index.css"
 
-function DateField({ value, onChange, placeholder = "DD/MM/YYYY" }) {
-  const [open, setOpen] = React.useState(false)
-  const containerRef = React.useRef(null)
-  const defaultClassNames = getDefaultClassNames()
-  const selected = (() => {
-    try {
-      return value ? parseISO(value) : undefined
-    } catch {
-      return undefined
-    }
-  })()
-  const display = (() => {
-    try {
-      return selected ? format(selected, "dd/MM/yyyy") : ""
-    } catch {
-      return ""
-    }
-  })()
+
+
+
+
+function EmbeddedInvoice({ invoiceNo, allInvoices }) {
+  const inv = useInvoiceState({ enableUrlLoading: false })
+
   React.useEffect(() => {
-    if (!open) return
-    const handle = (e) => {
-      const el = containerRef.current
-      if (el && !el.contains(e.target)) setOpen(false)
+    if (invoiceNo && allInvoices && allInvoices.length > 0) {
+      const match = allInvoices.find(i => i.number === invoiceNo)
+      if (match) {
+        inv.setCustomer(prev => ({ ...prev, ...(match.customer || {}) }))
+        inv.setDetails(prev => ({ ...prev, ...(match.details || {}) }))
+        if (inv.setItems) {
+           inv.setItems(match.items || [])
+        }
+      }
     }
-    const handleKey = (e) => {
-      if (e.key === "Escape") setOpen(false)
-    }
-    document.addEventListener("mousedown", handle)
-    document.addEventListener("touchstart", handle, { passive: true })
-    document.addEventListener("keydown", handleKey)
-    return () => {
-      document.removeEventListener("mousedown", handle)
-      document.removeEventListener("touchstart", handle)
-      document.removeEventListener("keydown", handleKey)
-    }
-  }, [open])
+  }, [invoiceNo, allInvoices])
+
+  const [show, setShow] = React.useState(false)
+
+  if (!invoiceNo) return <div className="text-gray-400 italic text-xs">Select Invoice</div>
+
   return (
-    <div ref={containerRef} className="relative inline-block w-full">
-      <input
-        type="text"
-        value={display}
-        placeholder={placeholder}
-        onClick={() => setOpen((o) => !o)}
-        readOnly
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
-      />
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-        aria-label="Open calendar"
+    <div className="min-w-[200px]">
+      <button 
+        onClick={() => setShow(!show)}
+        className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 mb-2"
       >
-        <CalendarIcon className="size-4" aria-hidden="true" />
+        {show ? "Hide Invoice" : "Show Invoice"}
       </button>
-      {open && (
-        <div onMouseDown={(e) => e.stopPropagation()} className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+2px)] z-50 bg-white border border-slate-200 rounded-[22px] shadow-xl p-4 w-[340px]">
-          <DayPicker
-            mode="single"
-            selected={selected}
-            onSelect={(d) => {
-              if (!d) return
-              const v = format(d, "yyyy-MM-dd")
-              onChange(v)
-            }}
-            captionLayout="buttons"
-            classNames={{
-              root: `w-fit ${defaultClassNames.root}`,
-              months: `flex flex-col ${defaultClassNames.months}`,
-              month: `rounded-2xl pt-8 ${defaultClassNames.month}`,
-              caption: `relative h-8 ${defaultClassNames.caption}`,
-              nav: `absolute left-3 right-3 top-0 flex items-center justify-between ${defaultClassNames.nav}`,
-              nav_button: `p-2 rounded-full hover:bg-slate-100 ${defaultClassNames.nav_button}`,
-              nav_button_previous: `${defaultClassNames.nav_button_previous}`,
-              nav_button_next: `${defaultClassNames.nav_button_next}`,
-              caption_label: `absolute left-1/2 -translate-x-1/2 top-0 h-8 leading-8 text-center font-semibold uppercase tracking-wide text-[#2D4485] ${defaultClassNames.caption_label}`,
-              table: `w-full border-collapse`,
-              weekdays: `flex justify-between border-b border-slate-200 pb-2 ${defaultClassNames.weekdays}`,
-              weekday: `text-slate-500 flex-1 text-sm text-center ${defaultClassNames.weekday}`,
-              week: `grid grid-cols-7 mt-2 ${defaultClassNames.week}`,
-              day: `mx-auto size-10 flex items-center justify-center rounded-full hover:bg-blue-50 ${defaultClassNames.day}`,
-              today: `bg-[#D6E4FF] text-[#2D4485] font-semibold ${defaultClassNames.today}`,
-              outside: `text-slate-400 ${defaultClassNames.outside}`,
-              disabled: `${defaultClassNames.disabled}`,
-            }}
-            modifiersClassNames={{
-              selected: "border-2 border-[#2D4485]/30 !bg-transparent text-[#2D4485] font-semibold",
-            }}
-          />
+      {show && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShow(false)}>
+           <div className="bg-white w-full max-w-6xl h-[90vh] overflow-y-auto rounded-xl p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                 <h3 className="text-xl font-bold">Invoice Details: {invoiceNo}</h3>
+                 <button onClick={() => setShow(false)} className="text-gray-500 hover:text-gray-700">Close</button>
+              </div>
+              <InvoiceForm inv={inv} />
+           </div>
         </div>
       )}
     </div>
   )
-}
-
-function THBText(num) {
-  if (!num || num === 0) return "ศูนย์บาทถ้วน"
-  num = Number(num).toFixed(2)
-  let [baht, satang] = num.split(".")
-  const thaiNum = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
-  const unit = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
-
-  function convert(n) {
-    let res = ""
-    let len = n.length
-    for (let i = 0; i < len; i++) {
-      let digit = parseInt(n.charAt(i))
-      let pos = len - i - 1
-      if (digit !== 0) {
-        if (pos === 0 && digit === 1 && len > 1) res += "เอ็ด"
-        else if (pos === 1 && digit === 2) res += "ยี่"
-        else if (pos === 1 && digit === 1) res += ""
-        else res += thaiNum[digit]
-
-        if (pos === 0) res += ""
-        else if (pos === 1) res += "สิบ"
-        else res += unit[pos]
-      }
-    }
-    return res
-  }
-
-  let text = ""
-  if (parseInt(baht) > 0) {
-    if (baht.length > 6) {
-       let millions = baht.substring(0, baht.length - 6)
-       let remainder = baht.substring(baht.length - 6)
-       text += convert(millions) + "ล้าน" + convert(remainder)
-    } else {
-       text += convert(baht)
-    }
-    text += "บาท"
-  }
-
-  if (parseInt(satang) > 0) {
-    text += convert(satang) + "สตางค์"
-  } else {
-    text += "ถ้วน"
-  }
-  return text
 }
 
 function useBillingNoteState() {
@@ -773,16 +681,17 @@ function BillingNotePage() {
                    <th className="p-3 border-b w-32">จ ำนวนเงิน</th>
                    <th className="p-3 border-b w-32">ช ำระแล้ว</th>
                    <th className="p-3 border-b w-32">เงินคงค้ำง</th>
-                   <th className="p-3 border-b w-12"></th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-gray-100">
-                 {q.items.map((item, i) => (
-                   <tr key={i} className="hover:bg-gray-50 transition border-b border-gray-100">
-                     <td className="p-3 text-center text-sm text-gray-700">
-                       {i + 1}
-                     </td>
-                     <td className="p-3">
+                  <th className="p-3 border-b w-32">Details</th>
+                  <th className="p-3 border-b w-12"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {q.items.map((item, i) => (
+                  <tr key={i} className="hover:bg-gray-50 transition border-b border-gray-100">
+                    <td className="p-3 text-center text-sm text-gray-700">
+                      {i + 1}
+                    </td>
+                    <td className="p-3">
                        <Combobox 
                        placement="top"
                        value={item.invoiceNo} 
@@ -841,6 +750,9 @@ function BillingNotePage() {
                     </td>
                     <td className="p-3 text-right text-sm text-gray-700">
                       {((Number(String(item.amount).replace(/,/g, '') || 0)) - (Number(String(item.paid).replace(/,/g, '') || 0))).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </td>
+                    <td className="p-3">
+                      <EmbeddedInvoice invoiceNo={item.invoiceNo} allInvoices={q.invoices} />
                     </td>
                      <td className="p-3 text-right">
                        <button onClick={() => q.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete"><Trash className="w-4 h-4" /></button>

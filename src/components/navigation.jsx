@@ -10,11 +10,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "../../components/ui/dialog"
-import { Input } from "../../components/ui/input"
-import { Label } from "../../components/ui/label"
-import { Button } from "../../components/ui/button"
-import { useToast } from "../../components/ui/use-toast"
+} from "./ui/dialog"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
+import { Button } from "./ui/button"
+import { useToast } from "./ui/use-toast"
 
 export default function Navigation({ require }) {
   const { toast } = useToast()

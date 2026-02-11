@@ -279,7 +279,7 @@ function InventoryDetailPage() {
                     
                     let typeLabel = log.type
                     
-                    if (log.type === 'purchase_receipt') typeLabel = 'Receipt'
+                    if (log.type === 'purchase_receipt') typeLabel = 'Tax Invoice'
                     else if (log.type === 'sales_delivery') typeLabel = 'Delivery'
                     else if (log.type === 'adjustment') typeLabel = 'Adjustment'
                     else if (log.type === 'transfer') typeLabel = 'Transfer'
