@@ -475,7 +475,8 @@ export default function Navigation({ require }) {
   }, [isAuthenticated])
 
   return (
-    <nav className="sticky top-0 z-50 w-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white shadow-md">
+    // Increase z-index to 90 to ensure the user profile box (and other dropdowns) appear above the project management page's sticky headers and bars (which use z-30 to z-60)
+    <nav className="sticky top-0 z-[90] w-full bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <button

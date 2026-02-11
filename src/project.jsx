@@ -538,7 +538,6 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
 }
 
 const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, setStartDate, focusedId, setFocusedId, selectedProjects, toggleSelection, toggleAll }) => {
-  const [dragging, setDragging] = React.useState(null)
   const [hoveredTask, setHoveredTask] = React.useState(null)
   const [showExportMenu, setShowExportMenu] = React.useState(false)
 
@@ -699,92 +698,8 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
       return diff * dayWidth
     }
 
-    // Drag & Drop Logic
-    const handleMouseMove = React.useCallback((e) => {
-        if (!dragging) return
-    
-        const diffX = e.clientX - dragging.initialMouseX
-        const daysDiff = Math.round(diffX / dayWidth)
-    
-        if (daysDiff === 0) return
-    
-        const updateItem = (item) => {
-            const newStart = new Date(dragging.initialStart)
-            const newEnd = new Date(dragging.initialEnd)
-    
-            if (dragging.type === 'move') {
-                newStart.setDate(newStart.getDate() + daysDiff)
-                newEnd.setDate(newEnd.getDate() + daysDiff)
-            } else if (dragging.type === 'resize-start') {
-                newStart.setDate(newStart.getDate() + daysDiff)
-                if (newStart >= newEnd) return item // Prevent inversion
-            } else if (dragging.type === 'resize-end') {
-                newEnd.setDate(newEnd.getDate() + daysDiff)
-                if (newEnd <= newStart) return item // Prevent inversion
-            }
-    
-            return {
-                ...item,
-                start: format(newStart, "yyyy-MM-dd"),
-                end: format(newEnd, "yyyy-MM-dd")
-            }
-        }
-    
-        setProjects(prev => prev.map(p => {
-          // Check main project
-          if (p.id === dragging.id) {
-              return updateItem(p)
-          }
-    
-          // Check subtasks
-          if (p.subtasks) {
-              const updatedSubtasks = p.subtasks.map(sub => 
-                  sub.id === dragging.id ? (() => {
-                    const u = updateItem(sub)
-                    const ps = new Date(p.start)
-                    const pe = new Date(p.end)
-                    const us = new Date(u.start)
-                    const ue = new Date(u.end)
-                    const cs = us < ps ? ps : us
-                    const ce = ue > pe ? pe : ue
-                    if (cs > ce) {
-                      return { 
-                        ...sub, 
-                        start: format(ps, "yyyy-MM-dd"), 
-                        end: format(pe, "yyyy-MM-dd") 
-                      }
-                    }
-                    return { 
-                      ...u, 
-                      start: format(cs, "yyyy-MM-dd"), 
-                      end: format(ce, "yyyy-MM-dd") 
-                    }
-                  })() : sub
-              )
-              
-              if (updatedSubtasks.some((s, i) => s !== p.subtasks[i])) {
-                  return { ...p, subtasks: updatedSubtasks }
-              }
-          }
-    
-          return p
-        }))
-      }, [dragging, setProjects])
-    
-      const handleMouseUp = React.useCallback(() => {
-        setDragging(null)
-      }, [])
-    
-      React.useEffect(() => {
-        if (dragging) {
-          window.addEventListener('mousemove', handleMouseMove)
-          window.addEventListener('mouseup', handleMouseUp)
-        }
-        return () => {
-          window.removeEventListener('mousemove', handleMouseMove)
-          window.removeEventListener('mouseup', handleMouseUp)
-        }
-      }, [dragging, handleMouseMove, handleMouseUp])
+    // Drag & Drop Logic removed
+
 
     return (
       <>
@@ -813,7 +728,11 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
       </div>
 
       <div className="flex-1 overflow-hidden relative flex flex-col">
-        <div className="flex-1 overflow-auto custom-scrollbar bg-white relative">
+        {/* Main scroll container: disable horizontal touch scrolling to force button use */}
+        <div 
+          className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar bg-white relative"
+          style={{ touchAction: 'pan-y' }}
+        >
           {/* Header */}
           <div className="flex border-b border-slate-200 sticky top-0 bg-white/95 backdrop-blur-sm z-30 shadow-sm">
             <div className="sticky left-0 z-[60] w-80 shrink-0 p-4 pl-4 text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-3 bg-white border-r border-slate-200">
@@ -921,7 +840,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                            <div className="relative h-14 flex-1">
                                <div 
                                        onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                                       className={`absolute h-8 top-3 rounded-full ${dragging?.id === project.id ? 'transition-none' : 'transition-all'} flex items-center justify-between px-3 overflow-visible`}
+                                       className={`absolute h-8 top-3 rounded-full transition-all flex items-center justify-between px-3 overflow-visible`}
                                        style={{ 
                                            left: left(project.start), 
                                            width: width(project.start, project.end)
@@ -956,11 +875,11 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                 </div>
                                 <div className="relative h-12 flex-1">
                                     <div 
-                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible ${dragging?.id === subtask.id ? 'transition-none' : 'transition-all'} hover:shadow-md hover:-translate-y-0.5`}
+                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5`}
                                         style={{ 
                                             left: left(subtask.start), 
                                             width: width(subtask.start, subtask.end),
-                                            opacity: dragging?.id === subtask.id ? 0.8 : 1
+                                            opacity: 1
                                         }}
                                         onMouseEnter={() => setHoveredTask(subtask.id)}
                                         onMouseLeave={() => setHoveredTask(null)}
