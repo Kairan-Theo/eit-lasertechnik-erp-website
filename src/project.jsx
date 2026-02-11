@@ -94,7 +94,6 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     // Constants for A4 Landscape Optimization
     const PAGE_WIDTH_PX = 1123 // ~297mm at 96 DPI
     const NAME_COL_WIDTH = 380 // px
-    const HEADER_HEIGHT = 50 // px
     const ROW_HEIGHT = 60 // px
 
     // Dynamic Column Width to fit A4
@@ -131,9 +130,9 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
             thaiName: "บริษัท อีไอที เลเซอร์เทคนิค จำกัด",
             engName: "EIT LASERTECHNIK CO.,LTD",
             address: "118/20 Soi Ramkhamhaeng 184, Minburi, Minburi, Bangkok 10510 Thailand",
-            tel: "02-xxx-xxxx",
-            fax: "02-xxx-xxxx",
-            taxId: "010555xxxxxxx"
+            tel: "02-052-9544",
+            fax: "02-052-9544",
+            taxId: "0105560138141"
         },
         Einstein: {
             thaiName: "บริษัท ไอน์สไตน์ อินดัสเตรียล เทคนิค คอร์ปอเรชั่น จำกัด",
@@ -149,8 +148,10 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
 
     const invoiceHeader = `
         <div style="margin-bottom: 25px; font-family: 'Inter', sans-serif;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
-                <img src="${headerImgSrc}" style="height: 60px; width: auto; object-fit: contain;" />
+            <div style="margin-bottom: 20px;">
+                <img src="${headerImgSrc}" style="width: 50%; height: auto;" />
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
                 <div style="text-align: right;">
                     <div style="font-size: 24px; font-weight: 800; color: ${COLORS.headerBlue}; letter-spacing: -0.5px;">PROJECT PLAN</div>
                     <div style="color: ${COLORS.text}; font-size: 12px; margin-top: 4px;">Date: ${format(new Date(), 'dd MMM yyyy')}</div>
@@ -195,7 +196,7 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
             min-width: ${m.count * COL_WIDTH}px;
             text-align: center; 
             border-right: 1px solid rgba(255,255,255,0.2); 
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 600;
             padding: 8px 0;
             background: ${COLORS.headerDateBg};
@@ -216,7 +217,7 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
             align-items: center;
             justify-content: center;
             border-right: 1px solid ${COLORS.grid}; 
-            font-size: 10px;
+            font-size: 12px;
             background: ${COLORS.headerLight};
             color: ${COLORS.text};
             font-weight: 600;
@@ -225,72 +226,48 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
         </div>
     `).join('')
 
-    // 3. Generate ALL Rows (Consolidated)
-    const allRowsHtml = list.map(project => {
-        const subtasks = project.subtasks || []
-        
-        // Subtask Rows
-        const subtaskRows = subtasks.map(sub => {
-            const start = new Date(sub.start)
-            const end = new Date(sub.end)
-            
-            const offsetDays = differenceInDays(start, minDate)
-            const durationDays = differenceInDays(end, start) + 1
-            
-            const left = offsetDays * COL_WIDTH
-            const width = durationDays * COL_WIDTH
-            
-            return `
-                <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; page-break-inside: avoid; transition: background 0.2s;">
-                    <div style="
-                        width: ${NAME_COL_WIDTH}px; 
-                        min-width: ${NAME_COL_WIDTH}px;
-                        padding: 0 15px; 
-                        display: flex; 
-                        align-items: center; 
-                        font-size: 11px;
-                        border-right: 1px solid ${COLORS.grid};
-                        background: #ffffff;
-                        color: ${COLORS.text};
-                        font-weight: 500;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                        white-space: nowrap;
-                    ">
-                        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${COLORS.taskBar}; margin-right: 8px;"></span>
-                        ${sub.name}
-                    </div>
-                    <div style="flex: 1; position: relative; display: flex;">
-                        <!-- Task Bar -->
-                        <div style="
-                            position: absolute;
-                            left: ${left}px;
-                            top: 10px;
-                            bottom: 10px;
-                            width: ${width}px;
-                            background: ${COLORS.taskBar};
-                            border-radius: 12px;
-                            box-shadow: 0 2px 4px rgba(45, 68, 133, 0.3);
-                        "></div>
-
-                        <!-- Grid Lines -->
-                        ${days.map(() => `
-                            <div style="
-                                width: ${COL_WIDTH}px; 
-                                min-width: ${COL_WIDTH}px;
-                                height: 100%; 
-                                border-right: 1px solid ${COLORS.grid};
-                                position: relative;
-                                z-index: 1;
-                            "></div>
-                        `).join('')}
-                    </div>
+    const tableHeaderHtml = `
+        <!-- Date Headers Container -->
+        <div style="display: flex; flex-direction: column;">
+             <!-- Month Row -->
+             <div style="display: flex; width: 100%;">
+                <div style="width: ${NAME_COL_WIDTH}px; min-width: ${NAME_COL_WIDTH}px; background: white; border-right: 1px solid ${COLORS.grid};"></div>
+                <div style="display: flex; flex: 1; background: ${COLORS.headerDateBg};">
+                    ${monthHeaderCells}
                 </div>
-            `
-        }).join('')
+             </div>
+             
+             <!-- Day Row & Task Label -->
+             <div style="display: flex; border-bottom: 1px solid ${COLORS.grid};">
+                <div style="
+                    width: ${NAME_COL_WIDTH}px; 
+                    min-width: ${NAME_COL_WIDTH}px;
+                    background: ${COLORS.headerLight}; 
+                    border-right: 1px solid ${COLORS.grid};
+                    display: flex;
+                    align-items: center;
+                    padding-left: 15px;
+                    font-weight: 700;
+                    color: ${COLORS.text};
+                    font-size: 14px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                ">
+                    Task Name
+                </div>
+                <div style="flex: 1; display: flex; background: ${COLORS.headerLight};">
+                    ${dayHeaderCells}
+                </div>
+             </div>
+        </div>
+    `
 
+    // 3. Generate Flattened Rows (Project + Subtasks)
+    const rows = []
+    
+    list.forEach(project => {
         // Project Header Row
-        const projectRow = `
+        const projectRowHtml = `
             <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; background: ${COLORS.groupBg}; color: black; page-break-inside: avoid;">
                 <div style="
                     width: ${NAME_COL_WIDTH}px; 
@@ -299,7 +276,7 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
                     display: flex; 
                     align-items: center; 
                     font-weight: 700; 
-                    font-size: 12px;
+                    font-size: 14px;
                     color: ${COLORS.projectBar};
                     border-right: 1px solid ${COLORS.grid};
                 ">
@@ -329,70 +306,140 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
                 </div>
             </div>
         `
-        return projectRow + subtaskRows
-    }).join('')
+        rows.push({ html: projectRowHtml })
+        
+        if (project.subtasks) {
+            project.subtasks.forEach(sub => {
+                const start = new Date(sub.start)
+                const end = new Date(sub.end)
+                const offsetDays = differenceInDays(start, minDate)
+                const durationDays = differenceInDays(end, start) + 1
+                const left = offsetDays * COL_WIDTH
+                const width = durationDays * COL_WIDTH
+                
+                const subtaskRowHtml = `
+                    <div class="sheet-row" style="display: flex; height: ${ROW_HEIGHT}px; border-bottom: 1px solid ${COLORS.grid}; page-break-inside: avoid; transition: background 0.2s;">
+                        <div style="
+                            width: ${NAME_COL_WIDTH}px; 
+                            min-width: ${NAME_COL_WIDTH}px;
+                            padding: 0 15px; 
+                            display: flex; 
+                            align-items: center; 
+                            font-size: 13px;
+                            border-right: 1px solid ${COLORS.grid};
+                            background: #ffffff;
+                            color: ${COLORS.text};
+                            font-weight: 500;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                            white-space: nowrap;
+                        ">
+                            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${COLORS.taskBar}; margin-right: 8px;"></span>
+                            ${sub.name}
+                        </div>
+                        <div style="flex: 1; position: relative; display: flex;">
+                            <!-- Task Bar -->
+                            <div style="
+                                position: absolute;
+                                left: ${left}px;
+                                top: 10px;
+                                bottom: 10px;
+                                width: ${width}px;
+                                background: ${COLORS.taskBar};
+                                border-radius: 12px;
+                                box-shadow: 0 2px 4px rgba(45, 68, 133, 0.3);
+                            "></div>
 
-    const content = `
-      <section class="page spreadsheet-page" style="width: ${PAGE_CONTAINER_WIDTH}px; padding: 40px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
-        
-        <!-- Invoice Header -->
-        <div style="width: ${HEADER_WIDTH}px; max-width: 100%; margin-bottom: 80px;">
-           ${invoiceHeader}
-        </div>
-        
-        <!-- Table Container -->
-        <div style="display: flex; flex-direction: column; width: 100%; align-items: center;">
-            <div style="
-                width: ${TOTAL_WIDTH}px; 
-                margin: 0 auto;
-                border: 1px solid ${COLORS.grid}; 
-                border-radius: 8px; 
-                background: white;
-                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-                overflow: hidden;
-            ">
+                            <!-- Grid Lines -->
+                            ${days.map(() => `
+                                <div style="
+                                    width: ${COL_WIDTH}px; 
+                                    min-width: ${COL_WIDTH}px;
+                                    height: 100%; 
+                                    border-right: 1px solid ${COLORS.grid};
+                                    position: relative;
+                                    z-index: 1;
+                                "></div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `
+                rows.push({ html: subtaskRowHtml })
+            })
+        }
+    })
+
+    // 4. Pagination Logic
+    const pages = []
+    let currentPageRows = []
+    let currentHeight = 0
+    
+    // Page constraints (Approximate)
+    const PAGE_HEIGHT_PX = 700 // Reduced from 793 to prevent overflow (210mm @ 96dpi is ~793px)
+    const PADDING_Y = 80 // 40px top + 40px bottom
+    const INVOICE_HEIGHT = 300 // Increased estimate to account for image and text
+    const TABLE_HEADER_HEIGHT = 100 // Increased estimate for safety
+    
+    // First page available height
+    let availableHeight = PAGE_HEIGHT_PX - PADDING_Y - INVOICE_HEIGHT - TABLE_HEADER_HEIGHT
+
+    rows.forEach((row) => {
+        if (currentHeight + ROW_HEIGHT > availableHeight) {
+            // Push current page
+            pages.push({ rows: currentPageRows, isFirst: pages.length === 0 })
             
-            <!-- Date Headers Container -->
-            <div style="display: flex; flex-direction: column;">
-                 <!-- Month Row -->
-                 <div style="display: flex; width: 100%;">
-                    <div style="width: ${NAME_COL_WIDTH}px; min-width: ${NAME_COL_WIDTH}px; background: white; border-right: 1px solid ${COLORS.grid};"></div>
-                    <div style="display: flex; flex: 1; background: ${COLORS.headerDateBg};">
-                        ${monthHeaderCells}
-                    </div>
-                 </div>
-                 
-                 <!-- Day Row & Task Label -->
-                 <div style="display: flex; border-bottom: 1px solid ${COLORS.grid};">
-                    <div style="
-                        width: ${NAME_COL_WIDTH}px; 
-                        min-width: ${NAME_COL_WIDTH}px;
-                        background: ${COLORS.headerLight}; 
-                        border-right: 1px solid ${COLORS.grid};
-                        display: flex;
-                        align-items: center;
-                        padding-left: 15px;
-                        font-weight: 700;
-                        color: ${COLORS.text};
-                        font-size: 11px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                    ">
-                        Task Name
-                    </div>
-                    <div style="flex: 1; display: flex; background: ${COLORS.headerLight};">
-                        ${dayHeaderCells}
-                    </div>
-                 </div>
-            </div>
+            // Reset for next page
+            currentPageRows = []
+            currentHeight = 0
+            // Next pages don't have invoice header
+            availableHeight = PAGE_HEIGHT_PX - PADDING_Y - TABLE_HEADER_HEIGHT 
+        }
+        currentPageRows.push(row)
+        currentHeight += ROW_HEIGHT
+    })
+    
+    // Push last page
+    if (currentPageRows.length > 0) {
+        pages.push({ rows: currentPageRows, isFirst: pages.length === 0 })
+    }
 
-            <!-- Rows Container -->
-            <div style="background: white;">
-                ${allRowsHtml}
-            </div>
-        </div>
-      </section>
-    `
+    // 5. Generate Content HTML
+    const content = pages.map((page, index) => {
+        const rowsHtml = page.rows.map(r => r.html).join('')
+        
+        return `
+            <section class="page spreadsheet-page" style="width: ${PAGE_CONTAINER_WIDTH}px; padding: 40px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; page-break-after: always;">
+                
+                ${page.isFirst ? `
+                <!-- Invoice Header (First Page Only) -->
+                <div style="width: ${HEADER_WIDTH}px; max-width: 100%; margin-bottom: 40px;">
+                   ${invoiceHeader}
+                </div>
+                ` : ''}
+                
+                <!-- Table Container -->
+                <div style="display: flex; flex-direction: column; width: 100%; align-items: center;">
+                    <div style="
+                        width: ${TOTAL_WIDTH}px; 
+                        margin: 0 auto;
+                        border: 1px solid ${COLORS.grid}; 
+                        border-radius: 8px; 
+                        background: white;
+                        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                        overflow: hidden;
+                    ">
+                    
+                    ${tableHeaderHtml}
+
+                    <!-- Rows Container -->
+                    <div style="background: white;">
+                        ${rowsHtml}
+                    </div>
+                </div>
+                </div>
+            </section>
+        `
+    }).join('')
 
   const element = document.createElement("div")
   element.className = "print-container"
@@ -439,25 +486,35 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     filename: `Project_Plan_${format(new Date(), "yyyyMMdd")}.pdf`,
     image: { type: "jpeg", quality: 0.98 },
     html2canvas: { 
-      scale: 2.5, // Higher scale for crisp text
+      scale: 1.5, // Reduced scale for better stability
       useCORS: true,
       scrollY: 0,
       windowWidth: TOTAL_WIDTH + 100, // Ensure ample space for capture
-      ignoreElements: (element) => {
-        if (element.tagName === 'STYLE' || element.tagName === 'LINK') {
-            if (element.id !== 'gantt-print-styles') return true;
-        }
-        return false;
-      },
       onclone: (clonedDoc) => {
+        // 1. Remove incompatible styles (Tailwind's oklch colors cause crashes)
         const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
         styles.forEach(style => {
-          if (style.id !== 'gantt-print-styles') style.remove();
+          const isPrintStyle = style.id === 'gantt-print-styles';
+          const isGoogleFont = style.tagName === 'LINK' && style.href && style.href.includes('fonts.googleapis');
+          
+          if (!isPrintStyle && !isGoogleFont) {
+            style.remove();
+          }
         });
-        clonedDoc.body.className = '';
-        clonedDoc.documentElement.className = '';
-        clonedDoc.documentElement.style.cssText = 'background: white; color: black; margin: 0; padding: 0;';
-        clonedDoc.body.style.cssText = 'background: white; color: black; margin: 0; padding: 0;';
+
+        // 2. Force white background to prevent black PDF issues
+        const element = clonedDoc.querySelector('.print-container');
+        if (element) {
+          element.style.background = 'white';
+          element.style.backgroundColor = 'white';
+        }
+        clonedDoc.body.style.background = 'white';
+        clonedDoc.body.style.backgroundColor = 'white';
+        
+        // 3. Reset CSS variables on root just in case
+        clonedDoc.documentElement.style.cssText = '';
+        clonedDoc.documentElement.style.setProperty('--background', 'white');
+        clonedDoc.documentElement.style.setProperty('--foreground', 'black');
       }
     },
     jsPDF: { unit: "mm", format: [finalWidthMM, 210], orientation: "landscape" }, 
@@ -473,7 +530,7 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     })
     .catch((err) => {
       console.error("PDF Generation Error:", err)
-      alert("Failed to generate PDF.")
+      alert(`Failed to generate PDF: ${err.message || err}`)
       if (document.body.contains(element)) {
         document.body.removeChild(element)
       }
@@ -481,7 +538,6 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
 }
 
 const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, setStartDate, focusedId, setFocusedId, selectedProjects, toggleSelection, toggleAll }) => {
-  const [dragging, setDragging] = React.useState(null)
   const [hoveredTask, setHoveredTask] = React.useState(null)
   const [showExportMenu, setShowExportMenu] = React.useState(false)
 
@@ -642,92 +698,8 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
       return diff * dayWidth
     }
 
-    // Drag & Drop Logic
-    const handleMouseMove = React.useCallback((e) => {
-        if (!dragging) return
-    
-        const diffX = e.clientX - dragging.initialMouseX
-        const daysDiff = Math.round(diffX / dayWidth)
-    
-        if (daysDiff === 0) return
-    
-        const updateItem = (item) => {
-            const newStart = new Date(dragging.initialStart)
-            const newEnd = new Date(dragging.initialEnd)
-    
-            if (dragging.type === 'move') {
-                newStart.setDate(newStart.getDate() + daysDiff)
-                newEnd.setDate(newEnd.getDate() + daysDiff)
-            } else if (dragging.type === 'resize-start') {
-                newStart.setDate(newStart.getDate() + daysDiff)
-                if (newStart >= newEnd) return item // Prevent inversion
-            } else if (dragging.type === 'resize-end') {
-                newEnd.setDate(newEnd.getDate() + daysDiff)
-                if (newEnd <= newStart) return item // Prevent inversion
-            }
-    
-            return {
-                ...item,
-                start: format(newStart, "yyyy-MM-dd"),
-                end: format(newEnd, "yyyy-MM-dd")
-            }
-        }
-    
-        setProjects(prev => prev.map(p => {
-          // Check main project
-          if (p.id === dragging.id) {
-              return updateItem(p)
-          }
-    
-          // Check subtasks
-          if (p.subtasks) {
-              const updatedSubtasks = p.subtasks.map(sub => 
-                  sub.id === dragging.id ? (() => {
-                    const u = updateItem(sub)
-                    const ps = new Date(p.start)
-                    const pe = new Date(p.end)
-                    const us = new Date(u.start)
-                    const ue = new Date(u.end)
-                    const cs = us < ps ? ps : us
-                    const ce = ue > pe ? pe : ue
-                    if (cs > ce) {
-                      return { 
-                        ...sub, 
-                        start: format(ps, "yyyy-MM-dd"), 
-                        end: format(pe, "yyyy-MM-dd") 
-                      }
-                    }
-                    return { 
-                      ...u, 
-                      start: format(cs, "yyyy-MM-dd"), 
-                      end: format(ce, "yyyy-MM-dd") 
-                    }
-                  })() : sub
-              )
-              
-              if (updatedSubtasks.some((s, i) => s !== p.subtasks[i])) {
-                  return { ...p, subtasks: updatedSubtasks }
-              }
-          }
-    
-          return p
-        }))
-      }, [dragging, setProjects])
-    
-      const handleMouseUp = React.useCallback(() => {
-        setDragging(null)
-      }, [])
-    
-      React.useEffect(() => {
-        if (dragging) {
-          window.addEventListener('mousemove', handleMouseMove)
-          window.addEventListener('mouseup', handleMouseUp)
-        }
-        return () => {
-          window.removeEventListener('mousemove', handleMouseMove)
-          window.removeEventListener('mouseup', handleMouseUp)
-        }
-      }, [dragging, handleMouseMove, handleMouseUp])
+    // Drag & Drop Logic removed
+
 
     return (
       <>
@@ -756,10 +728,14 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
       </div>
 
       <div className="flex-1 overflow-hidden relative flex flex-col">
-        <div className="flex-1 overflow-auto custom-scrollbar bg-white relative">
+        {/* Main scroll container: disable horizontal touch scrolling to force button use */}
+        <div 
+          className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar bg-white relative"
+          style={{ touchAction: 'pan-y' }}
+        >
           {/* Header */}
           <div className="flex border-b border-slate-200 sticky top-0 bg-white/95 backdrop-blur-sm z-30 shadow-sm">
-            <div className="w-80 shrink-0 p-4 pl-4 text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-3 bg-white border-r border-slate-200">
+            <div className="sticky left-0 z-[60] w-80 shrink-0 p-4 pl-4 text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-3 bg-white border-r border-slate-200">
               <input
                 type="checkbox"
                 checked={selectedProjects.size === projects.length && projects.length > 0}
@@ -815,11 +791,12 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
               <React.Fragment key={project.id}>
                         {/* Project Row */}
                         <div className={`group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative ${focusedId && project.id === focusedId ? 'z-30' : 'z-10'}`}>
-                           <div
-                             onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                             className={`w-80 shrink-0 py-4 pl-4 pr-6 flex items-center gap-3 bg-white border-r border-slate-100 group-hover:bg-slate-50/30 transition-colors`}
-                           >
-                               <input 
+                            {/* Sticky Project Name Column - Use solid background on hover to prevent underlying text from showing through */}
+                            <div
+                              onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
+                              className={`sticky left-0 z-[50] w-80 shrink-0 py-4 pl-4 pr-6 flex items-center gap-3 bg-white border-r border-slate-100 group-hover:bg-slate-50 transition-colors`}
+                            >
+                                <input 
                                     type="checkbox" 
                                     checked={selectedProjects.has(project.id)}
                                     onChange={(e) => { e.stopPropagation(); toggleSelection(project.id); }}
@@ -863,7 +840,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                            <div className="relative h-14 flex-1">
                                <div 
                                        onClick={() => setFocusedId(focusedId === project.id ? null : project.id)}
-                                       className={`absolute h-8 top-3 rounded-full ${dragging?.id === project.id ? 'transition-none' : 'transition-all'} flex items-center justify-between px-3 overflow-visible`}
+                                       className={`absolute h-8 top-3 rounded-full transition-all flex items-center justify-between px-3 overflow-visible`}
                                        style={{ 
                                            left: left(project.start), 
                                            width: width(project.start, project.end)
@@ -880,7 +857,8 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                         {/* Subtasks */}
                         {project.expanded && project.subtasks?.map((subtask, index) => (
                             <div key={subtask.id} className={`group flex items-center hover:bg-slate-50/30 transition-colors border-b border-slate-100 relative ${focusedId && project.id === focusedId ? 'z-30' : 'z-10'}`}>
-                                <div className="w-80 shrink-0 py-3 pl-16 pr-6 flex items-center gap-3 bg-white border-r border-slate-100">
+                                {/* Sticky Subtask Name Column - Use solid background on hover to prevent underlying text from showing through */}
+                                <div className="sticky left-0 z-[50] w-80 shrink-0 py-3 pl-16 pr-6 flex items-center gap-3 bg-white border-r border-slate-100 group-hover:bg-slate-50 transition-colors">
                                     <div className="w-2 h-2 rounded-full border border-slate-300 bg-white relative z-10"></div>
                                     <div className="flex-1 min-w-0 flex items-center justify-between pr-2">
                                         <div className="font-medium text-slate-600 text-xs truncate hover:text-indigo-600 transition-colors cursor-pointer"><span className={`relative z-40`}>{subtask.name}</span></div>
@@ -897,11 +875,11 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                 </div>
                                 <div className="relative h-12 flex-1">
                                     <div 
-                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible ${dragging?.id === subtask.id ? 'transition-none' : 'transition-all'} hover:shadow-md hover:-translate-y-0.5`}
+                                        className={`absolute h-6 top-3 rounded-full flex items-center justify-between px-2.5 overflow-visible transition-all hover:shadow-md hover:-translate-y-0.5`}
                                         style={{ 
                                             left: left(subtask.start), 
                                             width: width(subtask.start, subtask.end),
-                                            opacity: dragging?.id === subtask.id ? 0.8 : 1
+                                            opacity: 1
                                         }}
                                         onMouseEnter={() => setHoveredTask(subtask.id)}
                                         onMouseLeave={() => setHoveredTask(null)}
