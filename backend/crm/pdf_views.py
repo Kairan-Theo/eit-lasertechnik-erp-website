@@ -1064,6 +1064,7 @@ def generate_billing_note_pdf(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def generate_invoice_pdf(request):
+    ensure_fonts_registered()
     data = request.data
     details = data.get('details', {})
     customer = data.get('customer', {})
@@ -1146,9 +1147,16 @@ def generate_invoice_pdf(request):
 
     # --- Row 1: Org Info & Doc Info ---
     org_name_th = "บริษัท ไอน์สไตน์ อินดัสเตรียล เทคนิค คอร์ปอเรชั่น จำกัด" if is_einstein else "บริษัท อีไอที เลเซอร์เทคนิค จำกัด"
-    org_name_en = "EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD." if is_einstein else "EIT LASERTECHNIK CO.,LTD."
-    org_addr = "1/120 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510" if is_einstein else "118/20 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510"
-    org_contact = "TEL : 02-052-9544    Fax : 02-052-9544" if is_einstein else "TEL : 02-xxx-xxxx    Fax : 02-xxx-xxxx"
+    org_name_en = ("EINSTEIN INDUSTRIETECHNIK CORPORATION CO.,LTD." if is_einstein else "EIT LASERTECHNIK CO.,LTD.")
+    # Allow overrides from form details
+    org_name_en = details.get('onBehalfOf', org_name_en) or org_name_en
+    org_addr = details.get('eitAddress') or ("1/120 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510" if is_einstein else "118/20 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510")
+    tel = details.get('eitTelephone')
+    fax = details.get('eitFax')
+    if tel or fax:
+        org_contact = f"TEL : {tel or '-'}    Fax : {fax or '-'}"
+    else:
+        org_contact = "TEL : 02-052-9544    Fax : 02-052-9544" if is_einstein else "TEL : 02-xxx-xxxx    Fax : 02-xxx-xxxx"
     org_tax = "0105547001928" if is_einstein else "010555xxxxxxx"
 
     # Left Info: Tax ID and Head Office on the same line, separated

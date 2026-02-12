@@ -578,7 +578,7 @@ function InvoiceList({ list, refreshData }) {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-[#2D4485]">
             <Receipt className="w-6 h-6" />
-            <h1 className="text-xl font-bold">Invoices (Tax Invoice)</h1>
+            <h1 className="text-xl font-bold">Invoices</h1>
           </div>
           {selectedRows.length > 0 && (
             <button 
@@ -1638,7 +1638,7 @@ function AdminPage() {
             }`}
           >
             <Receipt className="w-5 h-5" />
-            Tax Invoices (Old)
+            Invoices
           </button>
           <button
             onClick={() => setActiveTab("billing-notes")}
