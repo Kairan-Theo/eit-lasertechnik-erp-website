@@ -13,6 +13,7 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 import io
 import os
 from datetime import datetime
+import base64
 
 # Define BASE_DIR
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -317,40 +318,69 @@ def generate_quotation_pdf(request):
         line_total = qty * price
         total_amount += line_total
         
-        # Image processing
-        image_url = item.get('image')
+        # Image processing: support either stored media URL or inline base64 from UI (spec image)
         img_obj = ""
-        if image_url:
-            # Handle full URL if present
-            if image_url.startswith('http'):
-                # Try to strip domain if it matches our server, otherwise problematic
-                # Easier to assume relative /media/ or standard path
-                pass 
-            
-            # Convert /media/ path to absolute filesystem path
+        # Prefer first spec row's image if available
+        spec_rows = item.get('spec_rows') or []
+        spec_image_data = item.get('spec_image_data')
+        if not spec_image_data and spec_rows and isinstance(spec_rows, list):
+            try:
+                first_row = spec_rows[0] or {}
+                spec_image_data = first_row.get('image_data')
+            except Exception:
+                pass
+        image_url = item.get('image')
+        if spec_image_data and str(spec_image_data).startswith('data:image'):
+            try:
+                header, b64 = str(spec_image_data).split(',', 1)
+                raw = base64.b64decode(b64)
+                bio = io.BytesIO(raw)
+                img_obj = Image(bio, width=50, height=50)
+                img_obj.hAlign = 'CENTER'
+            except Exception as e:
+                print(f"Error decoding spec image data: {e}")
+        elif image_url:
+            # Convert /media/ path to absolute filesystem path when provided as URL/path
             image_path = None
+            if str(image_url).startswith('http'):
+                pass
             if '/media/' in str(image_url):
-                # Extract relative path after /media/
                 rel_path = str(image_url).split('/media/')[-1]
                 image_path = os.path.join(settings.MEDIA_ROOT, rel_path.replace('/', os.sep))
             else:
-                # Assume it is a relative path from MEDIA_ROOT
                 image_path = os.path.join(settings.MEDIA_ROOT, str(image_url).replace('/', os.sep))
-                
             if image_path and os.path.exists(image_path):
                 try:
-                    # Resize maintaining aspect ratio? 
-                    # Fixed size 50x50 for now, or use KeepAspectRatio
                     img_obj = Image(image_path, width=50, height=50)
                     img_obj.hAlign = 'CENTER'
                 except Exception as e:
                     print(f"Error loading item image: {e}")
 
+        # Build description including specification sections with numbering
+        desc_text = txt(item.get('description'))
+        spec_lines_legacy = item.get('spec_lines') or []
+        if spec_rows:
+            try:
+                sections = []
+                for idx, r in enumerate(spec_rows):
+                    lines = r.get('lines') or []
+                    # Filter out pure empty lines for PDF bullets but keep spacing via extra <br/>
+                    bullets = "<br/>".join([f"• {txt(line)}" for line in lines if str(line).strip() != ""])
+                    # Section header with item.subnumber (e.g., 1.1, 1.2)
+                    sections.append(f"<br/><b>Specification {i+1}.{idx+1}</b><br/>{bullets}")
+                if sections:
+                    desc_text = f"{desc_text}{''.join(sections)}"
+            except Exception:
+                pass
+        elif spec_lines_legacy:
+            bullets = "<br/>" + "<br/>".join([f"• {txt(line)}" for line in spec_lines_legacy])
+            desc_text = f"{desc_text}<br/><br/><b>Specification</b>{bullets}"
+
         row = [
             Paragraph(str(i + 1), styles['Table_Data_Center']),
             img_obj,
             Paragraph(txt(item.get('model')), styles['Table_Data']),
-            Paragraph(txt(item.get('description')), styles['Table_Data']),
+            Paragraph(desc_text, styles['Table_Data']),
             Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
             Paragraph(f"{qty:,.0f}", styles['Table_Data_Center']),
             Paragraph(f"{line_total:,.2f}", styles['Table_Data_Right']),
