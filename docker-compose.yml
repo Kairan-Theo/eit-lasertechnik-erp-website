@@ -13,7 +13,7 @@ services:
     # Run migrations, create superuser if missing, then start server
     command: >
       sh -c "python manage.py migrate &&
-             python create_superuser.py &&
+             python check_admin.py &&
              python manage.py runserver 0.0.0.0:8001"
 
   frontend:
@@ -24,14 +24,9 @@ services:
     ports:
       - "5174:5173"
     volumes:
-      - ./src:/app/src
-      - ./public:/app/public
-      - ./index.html:/app/index.html
-      - ./vite.config.js:/app/vite.config.js
-      - ./postcss.config.js:/app/postcss.config.js
-      - ./tailwind.config.js:/app/tailwind.config.js
+      - ./:/app
       - /app/node_modules
     environment:
-      - VITE_API_BASE_URL=http://localhost:8002
+      - VITE_API_BASE_URL=http://backend:8001
     depends_on:
       - backend

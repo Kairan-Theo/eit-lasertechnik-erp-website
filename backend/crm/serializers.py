@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct
+from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, Receipt, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct
 
 class SubProjectSerializer(serializers.ModelSerializer):
     class Meta:
