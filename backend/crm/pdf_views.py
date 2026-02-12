@@ -36,32 +36,41 @@ font_name = "Helvetica"
 font_name_bold = "Helvetica-Bold"
 font_name_eng = "Helvetica"
 font_name_eng_bold = "Helvetica-Bold"
+_fonts_initialized = False
 
-# Try to register Thai font (Prompt or Tahoma)
-try:
-    if os.path.exists(FONT_PATH) and os.path.exists(FONT_BOLD_PATH):
-        pdfmetrics.registerFont(TTFont('Prompt', FONT_PATH))
-        pdfmetrics.registerFont(TTFont('Prompt-Bold', FONT_BOLD_PATH))
-        registerFontFamily('Prompt', normal='Prompt', bold='Prompt-Bold', italic='Prompt', boldItalic='Prompt-Bold')
-        font_name = "Prompt"
-        font_name_bold = "Prompt-Bold"
-    elif os.path.exists(TAHOMA_PATH) and os.path.exists(TAHOMA_BOLD_PATH):
-        pdfmetrics.registerFont(TTFont('Tahoma', TAHOMA_PATH))
-        pdfmetrics.registerFont(TTFont('Tahoma-Bold', TAHOMA_BOLD_PATH))
-        registerFontFamily('Tahoma', normal='Tahoma', bold='Tahoma-Bold', italic='Tahoma', boldItalic='Tahoma-Bold')
-        font_name = "Tahoma"
-        font_name_bold = "Tahoma-Bold"
-    elif os.path.exists(SYSTEM_FONT_PATH) and os.path.exists(SYSTEM_FONT_BOLD_PATH):
-        # Fallback to System Tahoma
-        pdfmetrics.registerFont(TTFont('Tahoma', SYSTEM_FONT_PATH))
-        pdfmetrics.registerFont(TTFont('Tahoma-Bold', SYSTEM_FONT_BOLD_PATH))
-        registerFontFamily('Tahoma', normal='Tahoma', bold='Tahoma-Bold', italic='Tahoma', boldItalic='Tahoma-Bold')
-        font_name = "Tahoma"
-        font_name_bold = "Tahoma-Bold"
-    else:
-        print("No Thai compatible fonts found. Using Helvetica.")
-except Exception as e:
-    print(f"Could not register Thai font: {e}")
+def ensure_fonts_registered():
+    global _fonts_initialized, font_name, font_name_bold, font_name_eng, font_name_eng_bold
+    if _fonts_initialized:
+        return
+    try:
+        if os.path.exists(FONT_PATH) and os.path.exists(FONT_BOLD_PATH):
+            pdfmetrics.registerFont(TTFont('Prompt', FONT_PATH))
+            pdfmetrics.registerFont(TTFont('Prompt-Bold', FONT_BOLD_PATH))
+            registerFontFamily('Prompt', normal='Prompt', bold='Prompt-Bold', italic='Prompt', boldItalic='Prompt-Bold')
+            font_name = "Prompt"
+            font_name_bold = "Prompt-Bold"
+        elif os.path.exists(TAHOMA_PATH) and os.path.exists(TAHOMA_BOLD_PATH):
+            pdfmetrics.registerFont(TTFont('Tahoma', TAHOMA_PATH))
+            pdfmetrics.registerFont(TTFont('Tahoma-Bold', TAHOMA_BOLD_PATH))
+            registerFontFamily('Tahoma', normal='Tahoma', bold='Tahoma-Bold', italic='Tahoma', boldItalic='Tahoma-Bold')
+            font_name = "Tahoma"
+            font_name_bold = "Tahoma-Bold"
+        elif os.path.exists(SYSTEM_FONT_PATH) and os.path.exists(SYSTEM_FONT_BOLD_PATH):
+            pdfmetrics.registerFont(TTFont('Tahoma', SYSTEM_FONT_PATH))
+            pdfmetrics.registerFont(TTFont('Tahoma-Bold', SYSTEM_FONT_BOLD_PATH))
+            registerFontFamily('Tahoma', normal='Tahoma', bold='Tahoma-Bold', italic='Tahoma', boldItalic='Tahoma-Bold')
+            font_name = "Tahoma"
+            font_name_bold = "Tahoma-Bold"
+        else:
+            # Keep Helvetica defaults
+            pass
+    except Exception as e:
+        # Keep Helvetica defaults on error
+        pass
+    # English headers default to Times
+    font_name_eng = "Times-Roman"
+    font_name_eng_bold = "Times-Bold"
+    _fonts_initialized = True
 
 # Try to register Calisto MT (for English headers/labels) - DISABLED IN FAVOR OF TIMES NEW ROMAN
 # try:
@@ -80,13 +89,12 @@ except Exception as e:
 # except Exception as e:
 #     print(f"Could not register Calisto MT: {e}")
 
-# Use Times New Roman for English Headers/Design
-font_name_eng = "Times-Roman"
-font_name_eng_bold = "Times-Bold"
+# Use Times New Roman for English Headers/Design (set in ensure_fonts_registered)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def generate_quotation_pdf(request):
+    ensure_fonts_registered()
     data = request.data
     details = data.get('details', {})
     customer = data.get('customer', {})
