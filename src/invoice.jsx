@@ -399,6 +399,7 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
     }
   }
 
+
   const emailTo = () => {
     if (!customer.email) {
       return { ok: false, message: "No customer email provided" }
@@ -475,7 +476,7 @@ function InvoiceDocument({ inv }) {
   const headerImgSrc = window.location.origin + (isEinstein ? "/Einstein%20header.png" : "/EIT%20header.png")
 
   return (
-    <div className="mx-auto bg-white text-black font-sans p-[10px] w-full h-auto relative text-[10px] leading-tight">
+    <div className="mx-auto bg-white text-black invoice-doc p-[10px] w-full h-auto relative text-[10px] leading-tight">
       {/* Header Image */}
       <div className="mb-1 flex items-center justify-center">
         <img src={headerImgSrc} alt="Header" className="w-full h-auto object-contain" />
