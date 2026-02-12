@@ -33,6 +33,7 @@ export default defineConfig({
         project: path.resolve(__dirname, 'project.html'),
         newmo: path.resolve(__dirname, 'new-mo.html'),
         billingNote: path.resolve(__dirname, 'billing-note.html'),
+        taxInvoice: path.resolve(__dirname, 'tax-invoice.html'),
         printPo: path.resolve(__dirname, 'print-po.html'),
       },
     },

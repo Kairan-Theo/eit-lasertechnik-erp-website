@@ -504,6 +504,14 @@ function BillingNotePage() {
               <FileText className="w-8 h-8 text-gray-900" />
               <h1 className="text-3xl font-bold text-gray-900">New Billing Note</h1>
             </div>
+            <div className="ml-6">
+              <button
+                onClick={() => window.location.href = "/tax-invoice.html"}
+                className="px-3 py-1.5 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10"
+              >
+                Go to Tax Invoice
+              </button>
+            </div>
           </div>
         </div>
 
