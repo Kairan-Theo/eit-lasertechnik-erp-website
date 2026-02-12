@@ -446,7 +446,7 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
 
 function InvoiceDocument({ inv }) {
   const sym = inv.details.currency === "THB" ? "฿" : inv.details.currency === "USD" ? "$" : inv.details.currency === "EUR" ? "€" : inv.details.currency === "GBP" ? "£" : inv.details.currency
-  const orgName = inv.details.onBehalfOf || "EIT LASERTECHNIK CO.,LTD"
+  const orgName = inv.details.onBehalfOf || "EIT LASERTECHNIK CO.,LTD."
   const isEinstein = orgName.toUpperCase().includes("EINSTEIN")
   
   const orgThaiName = isEinstein 
@@ -461,8 +461,8 @@ function InvoiceDocument({ inv }) {
     ? "1/120 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510"
     : "118/20 ซอยรามคำแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510"
 
-  const orgTel = isEinstein ? "02-052-9544" : "02-052-9544"
-  const orgFax = isEinstein ? "02-052-9544" : "02-052-9544"
+  const orgTel = inv.details.eitTelephone || (isEinstein ? "02-052-9544" : "02-xxx-xxxx")
+  const orgFax = inv.details.eitFax || (isEinstein ? "02-052-9544" : "02-xxx-xxxx")
   const orgTaxId = isEinstein ? "0105547001928" : "0105560138141"
   
   const customerName = inv.customer?.company || inv.customer?.name || ""
@@ -488,7 +488,7 @@ function InvoiceDocument({ inv }) {
          <div className="border border-black p-2 w-[60%] min-h-[80px]">
             <div className="font-normal text-xs">{orgThaiName}</div>
             <div className="font-normal text-xs">{orgName}</div>
-            <div className="mt-1">{orgAddressLine1}</div>
+            <div className="mt-1">{inv.details.eitAddress || orgThaiAddress}</div>
             <div className="mt-1">TEL : {orgTel}    Fax : {orgFax}</div>
             <div className="mt-1 flex justify-between">
                <div className="flex gap-1">
