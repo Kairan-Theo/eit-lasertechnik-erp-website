@@ -17,6 +17,7 @@ import base64
 
 # Define BASE_DIR
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CRM_DIR = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(BASE_DIR, '..', 'public')
 
 # Font Configuration
@@ -24,8 +25,46 @@ FONT_PATH = os.path.join(BASE_DIR, 'Prompt-Regular.ttf')
 FONT_BOLD_PATH = os.path.join(BASE_DIR, 'Prompt-Bold.ttf')
 TAHOMA_PATH = os.path.join(BASE_DIR, 'tahoma.ttf')
 TAHOMA_BOLD_PATH = os.path.join(BASE_DIR, 'tahomabd.ttf')
+# System font fallbacks (Windows paths)
 SYSTEM_FONT_PATH = r'C:\Windows\Fonts\tahoma.ttf'
 SYSTEM_FONT_BOLD_PATH = r'C:\Windows\Fonts\tahomabd.ttf'
+# Additional Thai system font fallbacks
+# Try multiple common Windows file names to maximize hit rate
+SARABUN_CANDIDATES = [
+    r'C:\Windows\Fonts\THSarabunNew.ttf',
+    r'C:\Windows\Fonts\thsarabunnew.ttf'
+]
+SARABUN_BOLD_CANDIDATES = [
+    r'C:\Windows\Fonts\THSarabunNew Bold.ttf',
+    r'C:\Windows\Fonts\THSarabunNew-Bold.ttf',
+    r'C:\Windows\Fonts\thsarabunnewbold.ttf'
+]
+# Arial Unicode MS (broad Unicode coverage, includes Thai on many Windows installs)
+ARIAL_UNICODE_PATH = r'C:\Windows\Fonts\arialuni.ttf'
+# Linux font fallbacks (commonly present on many distros)
+LINUX_SARABUN_CANDIDATES = [
+    '/usr/share/fonts/thai/thsarabunnew.ttf',
+    '/usr/share/fonts/truetype/thai/THSarabunNew.ttf',
+    '/usr/share/fonts/truetype/thsarabunnew/THSarabunNew.ttf',
+    '/usr/share/fonts/truetype/thsarabunnew/thsarabunnew.ttf'
+]
+LINUX_SARABUN_BOLD_CANDIDATES = [
+    '/usr/share/fonts/truetype/thai/THSarabunNew-Bold.ttf',
+    '/usr/share/fonts/thai/thsarabunnewbold.ttf',
+    '/usr/share/fonts/truetype/thsarabunnew/THSarabunNew-Bold.ttf',
+    '/usr/share/fonts/truetype/thsarabunnew/thsarabunnewbold.ttf'
+]
+NOTO_THAI_CANDIDATES = [
+    '/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf',
+    '/usr/share/fonts/noto/NotoSansThai-Regular.ttf'
+]
+NOTO_THAI_BOLD_CANDIDATES = [
+    '/usr/share/fonts/truetype/noto/NotoSansThai-Bold.ttf',
+    '/usr/share/fonts/noto/NotoSansThai-Bold.ttf'
+]
+# Additional Windows Thai font (Angsana)
+ANGSANA_PATH = r'C:\Windows\Fonts\\angsa.ttf'
+ANGSANA_BOLD_PATH = r'C:\Windows\Fonts\\angsab.ttf'
 
 # Calisto MT Paths
 CALISTO_PATH = r'C:\Windows\Fonts\CALIST.TTF'
@@ -39,38 +78,124 @@ font_name_eng = "Helvetica"
 font_name_eng_bold = "Helvetica-Bold"
 _fonts_initialized = False
 
+# Project-local font locations (preferred to avoid OS dependency)
+# Place TTF files here to guarantee Thai rendering:
+#   backend/crm/fonts/Prompt-Regular.ttf
+#   backend/crm/fonts/Prompt-Bold.ttf
+#   backend/crm/fonts/NotoSansThai-Regular.ttf
+#   backend/crm/fonts/NotoSansThai-Bold.ttf
+# We search both backend/crm/fonts and backend/fonts (and repo-root/fonts)
+PROJECT_FONT_DIRS = [
+    os.path.join(CRM_DIR, 'fonts'),
+    os.path.join(BASE_DIR, 'fonts'),
+    os.path.join(os.path.dirname(BASE_DIR), 'fonts'),
+]
+
 def ensure_fonts_registered():
     global _fonts_initialized, font_name, font_name_bold, font_name_eng, font_name_eng_bold
     if _fonts_initialized:
         return
     try:
-        if os.path.exists(FONT_PATH) and os.path.exists(FONT_BOLD_PATH):
-            pdfmetrics.registerFont(TTFont('Prompt', FONT_PATH))
-            pdfmetrics.registerFont(TTFont('Prompt-Bold', FONT_BOLD_PATH))
+        # Helper: pick first existing path from candidates
+        def pick_first(paths):
+            for p in paths:
+                if os.path.exists(p):
+                    return p
+            return None
+
+        # Prefer bundled Prompt (if present in backend folder) or project-local fonts
+        prompt_local = None
+        prompt_bold_local = None
+        for _dir in PROJECT_FONT_DIRS:
+            try:
+                p_reg = os.path.join(_dir, 'Prompt-Regular.ttf')
+                p_bold = os.path.join(_dir, 'Prompt-Bold.ttf')
+                if (not prompt_local) and os.path.exists(p_reg):
+                    prompt_local = p_reg
+                if (not prompt_bold_local) and os.path.exists(p_bold):
+                    prompt_bold_local = p_bold
+            except Exception:
+                pass
+        if (os.path.exists(FONT_PATH) and os.path.exists(FONT_BOLD_PATH)) or (prompt_local and prompt_bold_local):
+            pdfmetrics.registerFont(TTFont('Prompt', FONT_PATH if os.path.exists(FONT_PATH) else prompt_local))
+            pdfmetrics.registerFont(TTFont('Prompt-Bold', FONT_BOLD_PATH if os.path.exists(FONT_BOLD_PATH) else prompt_bold_local))
             registerFontFamily('Prompt', normal='Prompt', bold='Prompt-Bold', italic='Prompt', boldItalic='Prompt-Bold')
             font_name = "Prompt"
             font_name_bold = "Prompt-Bold"
+        # Fallback to local Tahoma copies (if placed alongside backend)
         elif os.path.exists(TAHOMA_PATH) and os.path.exists(TAHOMA_BOLD_PATH):
             pdfmetrics.registerFont(TTFont('Tahoma', TAHOMA_PATH))
             pdfmetrics.registerFont(TTFont('Tahoma-Bold', TAHOMA_BOLD_PATH))
             registerFontFamily('Tahoma', normal='Tahoma', bold='Tahoma-Bold', italic='Tahoma', boldItalic='Tahoma-Bold')
             font_name = "Tahoma"
             font_name_bold = "Tahoma-Bold"
+        # Try Windows system Tahoma (broad coverage for Thai)
         elif os.path.exists(SYSTEM_FONT_PATH) and os.path.exists(SYSTEM_FONT_BOLD_PATH):
             pdfmetrics.registerFont(TTFont('Tahoma', SYSTEM_FONT_PATH))
             pdfmetrics.registerFont(TTFont('Tahoma-Bold', SYSTEM_FONT_BOLD_PATH))
             registerFontFamily('Tahoma', normal='Tahoma', bold='Tahoma-Bold', italic='Tahoma', boldItalic='Tahoma-Bold')
             font_name = "Tahoma"
             font_name_bold = "Tahoma-Bold"
+        # Try Windows system TH Sarabun New (popular Thai UI/document font)
         else:
-            # Keep Helvetica defaults
-            pass
+            sarabun = pick_first(SARABUN_CANDIDATES)
+            sarabun_bold = pick_first(SARABUN_BOLD_CANDIDATES)
+            if sarabun and sarabun_bold:
+                pdfmetrics.registerFont(TTFont('THSarabunNew', sarabun))
+                pdfmetrics.registerFont(TTFont('THSarabunNew-Bold', sarabun_bold))
+                registerFontFamily('THSarabunNew', normal='THSarabunNew', bold='THSarabunNew-Bold', italic='THSarabunNew', boldItalic='THSarabunNew-Bold')
+                font_name = "THSarabunNew"
+                font_name_bold = "THSarabunNew-Bold"
+            else:
+                # Try Linux Sarabun
+                sarabun = pick_first(LINUX_SARABUN_CANDIDATES)
+                sarabun_bold = pick_first(LINUX_SARABUN_BOLD_CANDIDATES)
+                if sarabun and sarabun_bold:
+                    pdfmetrics.registerFont(TTFont('THSarabunNew', sarabun))
+                    pdfmetrics.registerFont(TTFont('THSarabunNew-Bold', sarabun_bold))
+                    registerFontFamily('THSarabunNew', normal='THSarabunNew', bold='THSarabunNew-Bold', italic='THSarabunNew', boldItalic='THSarabunNew-Bold')
+                    font_name = "THSarabunNew"
+                    font_name_bold = "THSarabunNew-Bold"
+                else:
+                    # Try Noto Sans Thai on Linux
+                    noto = pick_first(NOTO_THAI_CANDIDATES)
+                    noto_bold = pick_first(NOTO_THAI_BOLD_CANDIDATES)
+                    if noto and noto_bold:
+                        pdfmetrics.registerFont(TTFont('NotoSansThai', noto))
+                        pdfmetrics.registerFont(TTFont('NotoSansThai-Bold', noto_bold))
+                        registerFontFamily('NotoSansThai', normal='NotoSansThai', bold='NotoSansThai-Bold', italic='NotoSansThai', boldItalic='NotoSansThai-Bold')
+                        font_name = "NotoSansThai"
+                        font_name_bold = "NotoSansThai-Bold"
+                    # Try Windows Angsana
+                    elif os.path.exists(ANGSANA_PATH) and os.path.exists(ANGSANA_BOLD_PATH):
+                        pdfmetrics.registerFont(TTFont('AngsanaUPC', ANGSANA_PATH))
+                        pdfmetrics.registerFont(TTFont('AngsanaUPC-Bold', ANGSANA_BOLD_PATH))
+                        registerFontFamily('AngsanaUPC', normal='AngsanaUPC', bold='AngsanaUPC-Bold', italic='AngsanaUPC', boldItalic='AngsanaUPC-Bold')
+                        font_name = "AngsanaUPC"
+                        font_name_bold = "AngsanaUPC-Bold"
+                    # Last resort: Arial Unicode MS
+                    elif os.path.exists(ARIAL_UNICODE_PATH):
+                        pdfmetrics.registerFont(TTFont('ArialUnicodeMS', ARIAL_UNICODE_PATH))
+                        registerFontFamily('ArialUnicodeMS', normal='ArialUnicodeMS', bold='ArialUnicodeMS', italic='ArialUnicodeMS', boldItalic='ArialUnicodeMS')
+                        font_name = "ArialUnicodeMS"
+                        font_name_bold = "ArialUnicodeMS"
+                    else:
+                        # Keep Helvetica defaults
+                        pass
     except Exception as e:
         # Keep Helvetica defaults on error
         pass
-    # English headers default to Times
-    font_name_eng = "Times-Roman"
-    font_name_eng_bold = "Times-Bold"
+    # Use Thai-capable base font for all mixed content (labels/headers) to ensure Thai glyphs render.
+    # If Tahoma/Prompt were registered above, reuse them here so Thai text never falls back to Helvetica.
+    font_name_eng = font_name
+    font_name_eng_bold = font_name_bold
+    # Debug: print selected font family to server logs for diagnostics
+    try:
+        print(f"PDF fonts initialized. Base: {font_name}, Bold: {font_name_bold}")
+        if font_name in ("Helvetica", "Times-Roman"):
+            print("WARNING: Thai-capable font not found. Place Prompt-Regular.ttf and Prompt-Bold.ttf in backend/crm or install TH Sarabun New / Noto Sans Thai / Tahoma / Arial Unicode MS on the host.")
+    except Exception:
+        pass
     _fonts_initialized = True
 
 # Try to register Calisto MT (for English headers/labels) - DISABLED IN FAVOR OF TIMES NEW ROMAN
@@ -421,6 +546,8 @@ def generate_quotation_pdf(request):
         ('ALIGN', (3,1), (3,-1), 'LEFT'), # Description left (Index 3 now)
         ('ALIGN', (4,1), (4,-1), 'RIGHT'), # Price right (Index 4 now)
         ('ALIGN', (6,1), (6,-1), 'RIGHT'), # Total right (Index 6 now)
+        # Ensure Thai-capable font applies to any non-Paragraph text
+        ('FONTNAME', (0,0), (-1,-1), font_name),
         
         # Padding
         ('TOPPADDING', (0,0), (-1,-1), 2),
@@ -533,6 +660,8 @@ def generate_quotation_pdf(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def generate_billing_note_pdf(request):
+    # Ensure Thai-capable fonts are registered so Thai text renders correctly
+    ensure_fonts_registered()
     data = request.data
     details = data.get('details', {})
     customer = data.get('customer', {})
@@ -843,6 +972,8 @@ def generate_billing_note_pdf(request):
         
         # Content Style
         ('VALIGN', (0,1), (-1,-1), 'TOP'),
+        # Enforce Thai-capable font for table text
+        ('FONTNAME', (0,0), (-1,-1), font_name),
         
         # Footer Row Spanning
         ('SPAN', (0,-1), (4,-1)), # Span first 5 cols for text amount
@@ -1376,6 +1507,7 @@ def generate_invoice_pdf(request):
         ('ALIGN', (0,0), (-1,0), 'CENTER'),
         ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
         ('VALIGN', (0,1), (-1,-1), 'TOP'),
+        ('FONTNAME', (0,0), (-1,-1), font_name),
         ('TOPPADDING', (0,0), (-1,-1), 3),
         ('BOTTOMPADDING', (0,0), (-1,-1), 3),
     ]))

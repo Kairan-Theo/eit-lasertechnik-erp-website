@@ -11,7 +11,8 @@ export function PurchaseOrderTemplate({ q, compact }) {
   const fmt = (n) => n?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"
 
   return (
-    <div className={`bg-white ${compact ? "p-4" : "p-6"} font-sans text-black`} id="po-template-root" style={{ width: "210mm", margin: "0 auto" }}>
+    // Use Thai-capable font family so browser print-to-PDF renders Thai properly
+    <div className={`bg-white ${compact ? "p-4" : "p-6"} font-sans text-black`} id="po-template-root" style={{ width: "210mm", margin: "0 auto", fontFamily: 'Tahoma, Prompt, "Times New Roman", Arial, sans-serif' }}>
       {/* Main Layout Table */}
       <table className="w-full border-collapse border border-black" style={{ width: "100%" }}>
         <tbody>
