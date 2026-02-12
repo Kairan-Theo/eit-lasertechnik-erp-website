@@ -306,3 +306,8 @@
   object-fit: contain; /* 👈 keeps ONE image, no repeat */ 
   display: block; 
 }
+
+/* Force robust font for invoice document (Thai + English) */
+.invoice-doc {
+  font-family: Tahoma, "Times New Roman", Arial, system-ui, sans-serif;
+}

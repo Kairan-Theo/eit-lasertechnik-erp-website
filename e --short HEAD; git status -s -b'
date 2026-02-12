@@ -1,0 +1,310 @@
+*   [33m8f2f94b[m[33m ([m[1;31morigin/shwin[m[33m, [m[1;31morigin/main[m[33m)[m Merge pull request #159 from Kairan-Theo/shwin
+[31m|[m[32m\[m  
+[31m|[m *   [33ma04419c[m Merge branch 'main' into shwin
+[31m|[m [33m|[m[31m\[m  
+[31m|[m [33m|[m[31m/[m  
+[31m|[m[31m/[m[33m|[m   
+[31m|[m * [33m2d9d3fe[m PD db tables
+[31m|[m [34m|[m *   [33mc47568d[m[33m ([m[1;31morigin/tex/hy[m[33m)[m finalize_merge
+[31m|[m [34m|[m [35m|[m[31m\[m  
+[31m|[m [34m|[m[31m_[m[35m|[m[31m/[m  
+[31m|[m[31m/[m[34m|[m [35m|[m   
+* [34m|[m [35m|[m   [33md7ac129[m Merge pull request #158 from Kairan-Theo/tex/hy
+[34m|[m[1;32m\[m [34m\[m [35m\[m  
+[34m|[m [1;32m|[m[34m/[m [35m/[m  
+[34m|[m[34m/[m[1;32m|[m [35m|[m   
+[34m|[m [1;32m|[m * [33m89089c8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mtex/hy[m[33m)[m conclude_merge
+[34m|[m [1;32m|[m[1;32m/[m[34m|[m 
+[34m|[m [1;32m|[m[34m/[m  
+[34m|[m[34m/[m[1;32m|[m   
+* [1;32m|[m   [33m25905e5[m Merge pull request #157 from Kairan-Theo/shwin
+[1;35m|[m[1;36m\[m [1;32m\[m  
+[1;35m|[m * [1;32m|[m [33m08f44b8[m PM ui
+[1;35m|[m[1;35m/[m [1;32m/[m  
+* [1;32m|[m   [33m53731cb[m Merge pull request #156 from Kairan-Theo/shwin
+[31m|[m[32m\[m [1;32m\[m  
+[31m|[m * [1;32m|[m [33me5c854a[m Project management pdf
+[31m|[m[31m/[m [1;32m/[m  
+[31m|[m * [33m0567d4d[m tex_invoice
+[31m|[m[31m/[m  
+*   [33mc181c7d[m[33m ([m[1;32minv/hy[m[33m)[m Merge pull request #155 from Kairan-Theo/shwin
+[33m|[m[34m\[m  
+[33m|[m * [33m444a042[m noti for Delivery updates/ Inventory updates
+[33m|[m[33m/[m  
+*   [33m7c78e72[m Merge pull request #154 from Kairan-Theo/shwin
+[35m|[m[36m\[m  
+[35m|[m * [33m487250d[m noti for billing note/Manufacturing Finish
+[35m|[m[35m/[m  
+*   [33m6f3acaf[m Merge pull request #153 from Kairan-Theo/shwin
+[1;31m|[m[1;32m\[m  
+[1;31m|[m *   [33mf6830e8[m Merge branch 'main' into shwin
+[1;31m|[m [1;33m|[m[1;31m\[m  
+[1;31m|[m [1;33m|[m[1;31m/[m  
+[1;31m|[m[1;31m/[m[1;33m|[m   
+* [1;33m|[m   [33m7f3f280[m[33m ([m[1;31morigin/inv/hy[m[33m)[m Merge pull request #152 from Kairan-Theo/inv/hy
+[1;35m|[m[1;36m\[m [1;33m\[m  
+[1;35m|[m * [1;33m|[m [33m1287e3d[m quo_redo
+[1;35m|[m[1;35m/[m [1;33m/[m  
+* [1;33m|[m   [33m11f5bd6[m[33m ([m[1;32mpjm-hy[m[33m)[m Merge pull request #151 from Kairan-Theo/pjm-hy
+[31m|[m[32m\[m [1;33m\[m  
+[31m|[m * [1;33m|[m [33ma7b373a[m[33m ([m[1;31morigin/pjm-hy[m[33m)[m cleanup
+[31m|[m * [1;33m|[m [33mc481b84[m Project table UI
+[31m|[m * [1;33m|[m [33m0c07766[m[33m ([m[1;32mpjm/hy[m[33m)[m table-good
+[31m|[m * [1;33m|[m [33m208f888[m fix_jsx_structure
+[31m|[m * [1;33m|[m [33m325a76e[m table_good
+[31m|[m[31m/[m [1;33m/[m  
+* [1;33m|[m   [33m1fffc74[m[33m ([m[1;31morigin/pjm/hy[m[33m)[m Merge pull request #150 from Kairan-Theo/pjm/pdfhy
+[33m|[m[34m\[m [1;33m\[m  
+[33m|[m * [1;33m\[m   [33m2ebef3a[m[33m ([m[1;31morigin/pjm/pdfhy[m[33m, [m[1;32mpjm/pdfhy[m[33m)[m  table good
+[33m|[m [35m|[m[36m\[m [1;33m\[m  
+[33m|[m * [36m|[m [1;33m|[m [33m668ddf2[m  table good
+[33m|[m [36m|[m [36m|[m * [33mc882cab[m noti for CRM created, registra, acti(due, missed), crm movement
+[33m|[m [36m|[m[33m_[m[36m|[m[33m/[m  
+[33m|[m[33m/[m[36m|[m [36m|[m   
+* [36m|[m [36m|[m   [33m2c72063[m Merge pull request #149 from Kairan-Theo/shwin
+[1;31m|[m[1;32m\[m [36m\[m [36m\[m  
+[1;31m|[m * [36m|[m [36m|[m [33m65b3669[m no edit for permission control acc
+* [1;32m|[m [36m|[m [36m|[m   [33m7261613[m Merge pull request #148 from Kairan-Theo/pjm/pdfhy
+[1;32m|[m[36m\[m [1;32m\[m [36m\[m [36m\[m  
+[1;32m|[m [36m|[m[1;32m/[m [36m/[m [36m/[m  
+[1;32m|[m[1;32m/[m[36m|[m [36m|[m [36m/[m   
+[1;32m|[m [36m|[m [36m|[m[36m/[m    
+[1;32m|[m [36m|[m[36m/[m[36m|[m     
+[1;32m|[m * [36m|[m   [33m86e99fd[m Merge branch 'main' into pjm/pdfhy
+[1;32m|[m [36m|[m[1;32m\[m [36m\[m  
+[1;32m|[m [36m|[m[1;32m/[m [36m/[m  
+[1;32m|[m[1;32m/[m[36m|[m [36m/[m   
+[1;32m|[m [36m|[m[36m/[m    
+* [36m|[m   [33maa4318d[m Merge pull request #147 from Kairan-Theo/shwin
+[31m|[m[32m\[m [36m\[m  
+[31m|[m * [36m|[m [33m16067fb[m notification and user permission logic + refetch the autofill bom and mo
+[31m|[m[31m/[m [36m/[m  
+* [36m|[m   [33m15bf8ac[m Merge pull request #146 from Kairan-Theo/shwin
+[33m|[m[34m\[m [36m\[m  
+[33m|[m * [36m|[m [33m8d56d1c[m pipeline movements noti ui
+[33m|[m[33m/[m [36m/[m  
+* [36m|[m   [33m50b68a0[m Merge pull request #145 from Kairan-Theo/shwin
+[35m|[m[36m\[m [36m\[m  
+[35m|[m * [36m|[m [33m2d2c7e6[m port 8002 issue and fully delete support ticket/lead
+[35m|[m[35m/[m [36m/[m  
+* [36m|[m   [33mc19efae[m Merge pull request #144 from Kairan-Theo/shwin
+[1;31m|[m[1;32m\[m [36m\[m  
+[1;31m|[m * [36m\[m   [33m98a3d61[m Merge branch 'main' into shwin
+[1;31m|[m [1;33m|[m[1;31m\[m [36m\[m  
+[1;31m|[m [1;33m|[m[1;31m/[m [36m/[m  
+[1;31m|[m[1;31m/[m[1;33m|[m [36m|[m   
+* [1;33m|[m [36m|[m   [33m347eada[m[33m ([m[1;31morigin/pjmn/hy[m[33m)[m Merge pull request #142 from Kairan-Theo/pjmn/hy
+[1;35m|[m[1;36m\[m [1;33m\[m [36m\[m  
+[1;35m|[m * [1;33m\[m [36m\[m   [33m39a5c92[m Merge branch 'main' into pjmn/hy
+[1;35m|[m [31m|[m[1;35m\[m [1;33m\[m [36m\[m  
+[1;35m|[m [31m|[m[1;35m/[m [1;33m/[m [36m/[m  
+[1;35m|[m[1;35m/[m[31m|[m [1;33m|[m [36m|[m   
+[1;35m|[m * [1;33m|[m [36m|[m [33mece8c90[m Restore full src directory from commit 9d8e5e3 to fix missing files like config.js
+[1;35m|[m * [1;33m|[m [36m|[m [33mcea6ac4[m Restore src/lib to fix missing utils dependency
+[1;35m|[m * [1;33m|[m [36m|[m [33m09ac9cc[m Restore App.jsx, index.css and components folder to fix build after merge
+[1;35m|[m * [1;33m|[m [36m|[m [33m27bf7dd[m Restore project.jsx and main.jsx after merge from main
+[1;35m|[m * [1;33m|[m [36m|[m   [33mb82a1a7[m Merge branch 'main' into pjmn/hy
+[1;35m|[m [33m|[m[34m\[m [1;33m\[m [36m\[m  
+[1;35m|[m * [34m|[m [1;33m|[m [36m|[m [33m1597997[m PDF ma p tyy buu
+[1;35m|[m * [34m|[m [1;33m|[m [36m|[m [33m9d8e5e3[m PDF ma p tyy buu
+[1;35m|[m [34m|[m [34m|[m * [36m|[m [33mcd1d6aa[m delete the support ticket/ lead
+[1;35m|[m [34m|[m[1;35m_[m[34m|[m[1;35m/[m [36m/[m  
+[1;35m|[m[1;35m/[m[34m|[m [34m|[m [36m|[m   
+[1;35m|[m [34m|[m [34m|[m * [33mb435b85[m pdf crete
+[1;35m|[m [34m|[m[1;35m_[m[34m|[m[1;35m/[m  
+[1;35m|[m[1;35m/[m[34m|[m [34m|[m   
+* [34m|[m [34m|[m   [33m755b81f[m[33m ([m[1;32mpjmn/hy[m[33m)[m Merge pull request #143 from Kairan-Theo/shwin
+[34m|[m[36m\[m [34m\[m [34m\[m  
+[34m|[m [36m|[m[34m_[m[34m|[m[34m/[m  
+[34m|[m[34m/[m[36m|[m [34m|[m   
+[34m|[m * [34m|[m [33m65555ed[m user permission
+[34m|[m[34m/[m [34m/[m  
+* [34m|[m   [33m29a839f[m Merge pull request #141 from Kairan-Theo/shwin
+[1;31m|[m[1;32m\[m [34m\[m  
+[1;31m|[m * [34m|[m [33mc1f53bb[m EIT table
+* [1;32m|[m [34m|[m [33m228d69a[m Merge pull request #140 from Kairan-Theo/shwin
+[1;33m|[m[1;32m\[m[1;32m|[m [34m|[m 
+[1;33m|[m * [34m|[m [33m2cd48ae[m new mo product's items autofill
+[1;33m|[m[1;33m/[m [34m/[m  
+* [34m|[m   [33maf4fecf[m Merge pull request #139 from Kairan-Theo/shwin
+[34m|[m[1;36m\[m [34m\[m  
+[34m|[m [1;36m|[m[34m/[m  
+[34m|[m[34m/[m[1;36m|[m   
+[34m|[m *   [33m7d0572f[m Merge branch 'main' into shwin
+[34m|[m [31m|[m[34m\[m  
+[34m|[m [31m|[m[34m/[m  
+[34m|[m[34m/[m[31m|[m   
+* [31m|[m   [33m0347338[m[33m ([m[1;31morigin/user/hy[m[33m, [m[1;32muser/hy[m[33m)[m Merge pull request #138 from Kairan-Theo/user/hy
+[33m|[m[34m\[m [31m\[m  
+[33m|[m * [31m\[m   [33m009f6a4[m Merge branch 'main' into user/hy
+[33m|[m [35m|[m[33m\[m [31m\[m  
+[33m|[m [35m|[m[33m/[m [31m/[m  
+[33m|[m[33m/[m[35m|[m [31m|[m   
+[33m|[m * [31m|[m [33mca7bb35[m user done
+[33m|[m * [31m|[m [33m1f4eae3[m user_permission_good
+[33m|[m [36m|[m * [33m154d344[m Bom image save
+[33m|[m [36m|[m[33m/[m  
+[33m|[m[33m/[m[36m|[m   
+* [36m|[m   [33m4550428[m Merge pull request #137 from Kairan-Theo/shwin
+[1;31m|[m[1;32m\[m [36m\[m  
+[1;31m|[m * [36m|[m [33m933f111[m Delivery Db table
+[1;31m|[m[1;31m/[m [36m/[m  
+* [36m|[m   [33mb3dfca8[m Merge pull request #136 from Kairan-Theo/shwin
+[36m|[m[1;34m\[m [36m\[m  
+[36m|[m [1;34m|[m[36m/[m  
+[36m|[m[36m/[m[1;34m|[m   
+[36m|[m * [33m0bc9d9a[m CRM and inventory db error fix
+* [1;34m|[m   [33m752d865[m Merge pull request #135 from Kairan-Theo/user/hy
+[1;34m|[m[1;36m\[m [1;34m\[m  
+[1;34m|[m [1;36m|[m[1;34m/[m  
+[1;34m|[m[1;34m/[m[1;36m|[m   
+[1;34m|[m * [33mb424b4a[m permission success
+* [1;36m|[m   [33m98612a4[m Merge pull request #134 from Kairan-Theo/shwin
+[1;36m|[m[32m\[m [1;36m\[m  
+[1;36m|[m [32m|[m[1;36m/[m  
+[1;36m|[m[1;36m/[m[32m|[m   
+[1;36m|[m * [33m37139ce[m inventory db + realtion with MO state
+[1;36m|[m[1;36m/[m  
+*   [33m44774aa[m[33m ([m[1;31morigin/master[m[33m, [m[1;32mmaster[m[33m)[m Merge pull request #133 from Kairan-Theo/shwin
+[33m|[m[34m\[m  
+[33m|[m * [33me08da4d[m inventory ui
+[33m|[m[33m/[m  
+*   [33mbf0a60c[m Merge pull request #132 from Kairan-Theo/pjmsn/hy
+[35m|[m[36m\[m  
+[35m|[m * [33mf69b15f[m[33m ([m[1;31morigin/pjmsn/hy[m[33m)[m pjm success
+* [36m|[m   [33mfa3105f[m Merge pull request #131 from Kairan-Theo/shwin
+[1;31m|[m[1;32m\[m [36m\[m  
+[1;31m|[m * [36m|[m [33m377b5dc[m Inventory new UI+ tracking
+* [1;32m|[m [36m|[m   [33m4fda58d[m Merge pull request #130 from Kairan-Theo/pjmn/hy
+[1;32m|[m[36m\[m [1;32m\[m [36m\[m  
+[1;32m|[m [36m|[m[1;32m/[m [36m/[m  
+[1;32m|[m[1;32m/[m[36m|[m [36m/[m   
+[1;32m|[m [36m|[m[36m/[m    
+[1;32m|[m * [33mf8eda43[m delete uncessary circle on duration bar
+[1;32m|[m[1;32m/[m  
+*   [33me5296ad[m[33m ([m[1;31morigin/inventry_hy[m[33m)[m Merge pull request #129 from Kairan-Theo/inventry_hy
+[1;35m|[m[1;36m\[m  
+[1;35m|[m * [33maecd0d6[m tracking appear
+[1;35m|[m[1;35m/[m  
+*   [33m31a7c7d[m Merge pull request #128 from Kairan-Theo/shwin
+[31m|[m[32m\[m  
+[31m|[m * [33m49e72f4[m update bom
+[31m|[m[31m/[m  
+*   [33m49c3ae9[m Merge pull request #127 from Kairan-Theo/shwin
+[33m|[m[34m\[m  
+[33m|[m * [33m54cc68c[m MO page/ PO realtion
+[33m|[m[33m/[m  
+*   [33m88d5056[m Merge pull request #126 from Kairan-Theo/shwin
+[35m|[m[36m\[m  
+[35m|[m * [33m60a8ddf[m CRM finish
+* [36m|[m [33maefd205[m Merge pull request #125 from Kairan-Theo/shwin
+[1;31m|[m[36m\[m[36m|[m 
+[1;31m|[m * [33m4eb3573[m sales pipelines finish
+[1;31m|[m[1;31m/[m  
+*   [33me408d41[m Merge pull request #124 from Kairan-Theo/shwin
+[1;33m|[m[1;34m\[m  
+[1;33m|[m * [33m80eea56[m billingnote finish
+* [1;34m|[m   [33mc980e51[m Merge pull request #123 from Kairan-Theo/inv/hy
+[1;34m|[m[1;36m\[m [1;34m\[m  
+[1;34m|[m [1;36m|[m[1;34m/[m  
+[1;34m|[m[1;34m/[m[1;36m|[m   
+[1;34m|[m * [33mc27fdcb[m inv chg
+* [1;36m|[m   [33md176406[m Merge pull request #122 from Kairan-Theo/shwin
+[1;36m|[m[32m\[m [1;36m\[m  
+[1;36m|[m [32m|[m[1;36m/[m  
+[1;36m|[m[1;36m/[m[32m|[m   
+[1;36m|[m * [33m6a01fec[m invoice finish
+* [32m|[m   [33m8c5e726[m Merge pull request #121 from Kairan-Theo/inv/hy
+[33m|[m[34m\[m [32m\[m  
+[33m|[m * [32m|[m [33me238b8d[m inv table adj
+[33m|[m[33m/[m [32m/[m  
+* [32m|[m   [33m252b835[m Merge pull request #120 from Kairan-Theo/pjm/hy
+[35m|[m[36m\[m [32m\[m  
+[35m|[m * [32m|[m [33m7d5d49a[m kanban delete
+* [36m|[m [32m|[m [33mae2a2f0[m Merge pull request #119 from Kairan-Theo/pjm/hy
+[32m|[m[36m\[m[36m|[m [32m|[m 
+[32m|[m [36m|[m[32m/[m  
+[32m|[m[32m/[m[36m|[m   
+[32m|[m *   [33m3932481[m Merge branch 'main' into pjm/hy - Resolve invoice conflict
+[32m|[m [1;33m|[m[1;34m\[m  
+[32m|[m [1;33m|[m *   [33m6d94d41[m Merge branch 'main' into pjm/hy
+[32m|[m [1;33m|[m [1;35m|[m[32m\[m  
+[32m|[m [1;33m|[m[32m_[m[1;35m|[m[32m/[m  
+[32m|[m[32m/[m[1;33m|[m [1;35m|[m   
+[32m|[m * [1;35m|[m   [33m95dc623[m Merge branch 'main' into pjm/hy - Resolve invoice conflict
+[32m|[m [1;35m|[m[32m\[m [1;35m\[m  
+[32m|[m [1;35m|[m[32m/[m [1;35m/[m  
+[32m|[m[32m/[m[1;35m|[m [1;35m/[m   
+[32m|[m [1;35m|[m[1;35m/[m    
+* [1;35m|[m   [33mec91a32[m Merge pull request #118 from Kairan-Theo/shwin
+[33m|[m[34m\[m [1;35m\[m  
+[33m|[m * [1;35m|[m [33m10a02d8[m invoice finish
+[33m|[m[33m/[m [1;35m/[m  
+[33m|[m * [33m3edde05[m Pjm can't move
+[33m|[m[33m/[m  
+*   [33mad5559e[m Merge pull request #117 from Kairan-Theo/shwin
+[35m|[m[36m\[m  
+[35m|[m * [33m714f7e6[m Invoice db
+[35m|[m[35m/[m  
+*   [33m3daad27[m Merge pull request #116 from Kairan-Theo/shwin
+[1;31m|[m[1;32m\[m  
+[1;31m|[m * [33m5baed3b[m QO finish
+[1;31m|[m[1;31m/[m  
+*   [33mb5d1d76[m Merge pull request #115 from Kairan-Theo/shwin
+[1;33m|[m[1;34m\[m  
+[1;33m|[m * [33mfcefa5e[m Customer purchase order db table finish
+[1;33m|[m[1;33m/[m  
+*   [33m1a02592[m Merge pull request #114 from Kairan-Theo/shwin
+[1;35m|[m[1;36m\[m  
+[1;35m|[m * [33m27c5e8b[m PO db table finish
+[1;35m|[m[1;35m/[m  
+*   [33m29f6192[m Merge pull request #113 from Kairan-Theo/shwin
+[31m|[m[32m\[m  
+[31m|[m * [33m9f77bba[m tables in admin ui
+[31m|[m[31m/[m  
+*   [33m2cc055a[m Merge pull request #112 from Kairan-Theo/shwin
+[33m|[m[34m\[m  
+[33m|[m * [33m7b12b9f[m Tables in admin panel UI + customer purchase order table in purchase order tab
+[33m|[m[33m/[m  
+*   [33mfd8a9e3[m Merge pull request #111 from Kairan-Theo/shwin
+[35m|[m[36m\[m  
+[35m|[m * [33mb027762[m PO file upload+ db connect
+[35m|[m[35m/[m  
+*   [33m76f759d[m Merge pull request #110 from Kairan-Theo/shwin
+[1;31m|[m[1;32m\[m  
+[1;31m|[m * [33m2615ddb[m PO pdf
+[1;31m|[m[1;31m/[m  
+*   [33m54d10ab[m Merge pull request #109 from Kairan-Theo/shwin
+[1;33m|[m[1;34m\[m  
+[1;33m|[m * [33mac5182f[m Po pdf
+[1;33m|[m[1;33m/[m  
+*   [33m36d199b[m Merge pull request #108 from Kairan-Theo/shwin
+[1;35m|[m[1;36m\[m  
+[1;35m|[m * [33m6e36753[m qo/bn pdf preview
+[1;35m|[m[1;35m/[m  
+*   [33m608f827[m Merge pull request #107 from Kairan-Theo/shwin
+[31m|[m[32m\[m  
+[31m|[m * [33m7a3b222[m MO pdf fix
+[31m|[m * [33m2dbb090[m BN pdf
+* [32m|[m   [33m1438083[m Merge pull request #106 from Kairan-Theo/act/hy
+[33m|[m[34m\[m [32m\[m  
+[33m|[m * [32m|[m [33meac0647[m[33m ([m[1;31morigin/act/hy[m[33m)[m activiteis done
+* [34m|[m [32m|[m   [33mfa32c99[m Merge pull request #105 from Kairan-Theo/shwin
+[34m|[m[32m\[m [34m\[m [32m\[m  
+[34m|[m [32m|[m[34m/[m [32m/[m  
+[34m|[m[34m/[m[32m|[m [32m/[m   
+[34m|[m [32m|[m[32m/[m    
+[34m|[m * [33mddd9fcc[m Update gitignore to hide local config and scripts
+[34m|[m * [33m3be4a41[m Update dist build artifacts
+[34m|[m * [33m1f5bef3[m Add admin page component
+[34m|[m * [33mba2e2e9[m BN pdf
+[34m|[m *   [33mc50c6ea[m Merge origin/main into shwin: keep BN PDF API and EIT endpoints
+[34m|[m [1;31m|[m[34m\[m  
+[34m|[m [1;31m|[m[34m/[m  
+[34m|[m[34m/[m[1;31m|[m   
+* [1;31m|[m   [33mb6ce63d[m[33m ([m[1;31morigin/voi/hy[m[33m)[m Merge pull request #104 from Kairan-Theo/voi/hy
+[1;33m|[m[1;34m\[m [1;31m\[m  
+[1;33m|[m * [1;31m|[m [33m774a452[m form one page
+* [1;34m|[m [1;31m|[m [33m774a1cd[m Merge pull request #103 from Kairan-Theo/voi/hy
+[1;35m|[m[1;34m\[m[1;34m|[m [1;31m|[m 
+[1;35m|[m * [1;31m|[m [33m5e89ed9[m voi form success
