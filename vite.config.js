@@ -23,6 +23,7 @@ export default defineConfig({
         inventoryDetail: resolve(__dirname, 'inventory-detail.html'),
         inventory: resolve(__dirname, 'inventory.html'),
         invoice: resolve(__dirname, 'invoice.html'),
+        taxInvoice: resolve(__dirname, 'tax-invoice.html'),
         login: resolve(__dirname, 'login.html'),
         manufacturing: resolve(__dirname, 'manufacturing.html'),
         newMo: resolve(__dirname, 'new-mo.html'),
