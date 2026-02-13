@@ -419,10 +419,9 @@ def generate_quotation_pdf(request):
     elements.append(Spacer(1, 5))
 
     # --- Items Table ---
-    # Headers - Using Table_Header which uses Calisto MT Bold
+    # Headers: Remove IMAGE column per request. Images appear only in spec rows across numeric columns.
     table_data = [[
         Paragraph("ITEM", styles['Table_Header']),
-        Paragraph("IMAGE", styles['Table_Header']),
         Paragraph("MODEL", styles['Table_Header']),
         Paragraph("DESCRIPTION", styles['Table_Header']),
         Paragraph("PRICE", styles['Table_Header']),
@@ -432,6 +431,14 @@ def generate_quotation_pdf(request):
     
     # Rows
     total_amount = 0
+    # Track main item rows (1, 2, 3, ...) to draw separators above and below
+    item_row_indices = []
+    # Track spec rows to selectively remove vertical separator lines on those rows
+    spec_row_indices = []
+    # Track the last row index of each specification block to draw a horizontal line after the spec
+    spec_block_end_indices = []
+    # Track spec rows that contain images so we can span the image across Price, Qty, and Total columns
+    spec_row_span_indices = []
     for i, item in enumerate(items):
         try:
             qty = float(str(item.get('qty', 0)).replace(',', ''))
@@ -443,67 +450,17 @@ def generate_quotation_pdf(request):
         line_total = qty * price
         total_amount += line_total
         
-        # Image processing: support either stored media URL or inline base64 from UI (spec image)
-        img_obj = ""
-        # Prefer first spec row's image if available
+        # Specification rows (added below) will carry images across Price/Qty/Total columns if present.
         spec_rows = item.get('spec_rows') or []
         spec_image_data = item.get('spec_image_data')
-        if not spec_image_data and spec_rows and isinstance(spec_rows, list):
-            try:
-                first_row = spec_rows[0] or {}
-                spec_image_data = first_row.get('image_data')
-            except Exception:
-                pass
-        image_url = item.get('image')
-        if spec_image_data and str(spec_image_data).startswith('data:image'):
-            try:
-                header, b64 = str(spec_image_data).split(',', 1)
-                raw = base64.b64decode(b64)
-                bio = io.BytesIO(raw)
-                img_obj = Image(bio, width=50, height=50)
-                img_obj.hAlign = 'CENTER'
-            except Exception as e:
-                print(f"Error decoding spec image data: {e}")
-        elif image_url:
-            # Convert /media/ path to absolute filesystem path when provided as URL/path
-            image_path = None
-            if str(image_url).startswith('http'):
-                pass
-            if '/media/' in str(image_url):
-                rel_path = str(image_url).split('/media/')[-1]
-                image_path = os.path.join(settings.MEDIA_ROOT, rel_path.replace('/', os.sep))
-            else:
-                image_path = os.path.join(settings.MEDIA_ROOT, str(image_url).replace('/', os.sep))
-            if image_path and os.path.exists(image_path):
-                try:
-                    img_obj = Image(image_path, width=50, height=50)
-                    img_obj.hAlign = 'CENTER'
-                except Exception as e:
-                    print(f"Error loading item image: {e}")
 
-        # Build description including specification sections with numbering
+        # Base description only; specification numbering will appear in ITEM column on separate rows
         desc_text = txt(item.get('description'))
         spec_lines_legacy = item.get('spec_lines') or []
-        if spec_rows:
-            try:
-                sections = []
-                for idx, r in enumerate(spec_rows):
-                    lines = r.get('lines') or []
-                    # Filter out pure empty lines for PDF bullets but keep spacing via extra <br/>
-                    bullets = "<br/>".join([f"• {txt(line)}" for line in lines if str(line).strip() != ""])
-                    # Section header with item.subnumber (e.g., 1.1, 1.2)
-                    sections.append(f"<br/><b>Specification {i+1}.{idx+1}</b><br/>{bullets}")
-                if sections:
-                    desc_text = f"{desc_text}{''.join(sections)}"
-            except Exception:
-                pass
-        elif spec_lines_legacy:
-            bullets = "<br/>" + "<br/>".join([f"• {txt(line)}" for line in spec_lines_legacy])
-            desc_text = f"{desc_text}<br/><br/><b>Specification</b>{bullets}"
 
+        # Main item row: ITEM, MODEL, DESCRIPTION, PRICE, QTY, TOTAL
         row = [
             Paragraph(str(i + 1), styles['Table_Data_Center']),
-            img_obj,
             Paragraph(txt(item.get('model')), styles['Table_Data']),
             Paragraph(desc_text, styles['Table_Data']),
             Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
@@ -511,6 +468,66 @@ def generate_quotation_pdf(request):
             Paragraph(f"{line_total:,.2f}", styles['Table_Data_Right']),
         ]
         table_data.append(row)
+        # Record index of the main item row; used to draw lines above/below per request
+        item_row_indices.append(len(table_data) - 1)
+        # Append numbered specification rows under the main item row (numbers in ITEM column)
+        if spec_rows and isinstance(spec_rows, list):
+            try:
+                # Remember where the spec block starts to know if we added any rows
+                spec_block_start_count = len(table_data)
+                for idx, r in enumerate(spec_rows):
+                    lines = r.get('lines') or []
+                    bullets = "<br/>".join([f"• {txt(line)}" for line in lines if str(line).strip() != ""])
+                    # If this spec row has an uploaded image, decode it and place it in Price column.
+                    # We'll span across Price, Qty, and Total (columns 4..6) after the table is created.
+                    img_obj_spec = ""
+                    img_data = r.get('image_data') or item.get('spec_image_data')
+                    if img_data and str(img_data).startswith('data:image'):
+                        try:
+                            header, b64 = str(img_data).split(',', 1)
+                            raw = base64.b64decode(b64)
+                            bio = io.BytesIO(raw)
+                            # Use adjustable size from payload; default to 64x64 if missing
+                            w = int(r.get('image_width') or item.get('spec_image_width') or 64)
+                            h = int(r.get('image_height') or item.get('spec_image_height') or 64)
+                            img_obj_spec = Image(bio, width=w, height=h)
+                            img_obj_spec.hAlign = 'CENTER'
+                        except Exception as e:
+                            print(f"Error decoding spec row image: {e}")
+                    # Spec row: show subnumber in ITEM, bullets in DESCRIPTION, and image across PRICE/QTY/TOTAL if present
+                    table_data.append([
+                        Paragraph(f"{i+1}.{idx+1}", styles['Table_Data_Center']),
+                        "",  # MODEL
+                        Paragraph(bullets, styles['Table_Data']),
+                        img_obj_spec or "",  # PRICE (will be spanned across 3 cols)
+                        "",  # QTY
+                        "",  # TOTAL
+                    ])
+                    # Record the spec row to remove vertical lines (cleaner look for spec sections)
+                    spec_row_indices.append(len(table_data) - 1)
+                    # Always span PRICE..QTY..TOTAL for spec rows to eliminate vertical boundaries across QTY
+                    # (Even if no image is present, we still merge these cells for a clean spec block.)
+                    spec_row_span_indices.append(len(table_data) - 1)
+            except Exception:
+                pass
+            # If at least one spec row was added, record the last row index for a horizontal line after the block
+            if len(table_data) > spec_block_start_count:
+                spec_block_end_indices.append(len(table_data) - 1)
+        elif spec_lines_legacy:
+            # Legacy single spec block without per-row objects -> number as 1.1
+            bullets = "<br/>" + "<br/>".join([f"• {txt(line)}" for line in spec_lines_legacy])
+            table_data.append([
+                Paragraph(f"{i+1}.1", styles['Table_Data_Center']),
+                "",  # MODEL
+                Paragraph(bullets, styles['Table_Data']),
+                "", "", ""  # PRICE, QTY, TOTAL
+            ])
+            # Record the legacy spec row for vertical-line removal
+            spec_row_indices.append(len(table_data) - 1)
+            # Also span PRICE..QTY..TOTAL for legacy spec block to remove QTY boundary entirely
+            spec_row_span_indices.append(len(table_data) - 1)
+            # Single legacy spec row -> horizontal line should be drawn after it
+            spec_block_end_indices.append(len(table_data) - 1)
         
     # Minimum rows to fill the page
     # Reduced min_rows from 10 to 8 to allow space for signature on same page
@@ -521,10 +538,11 @@ def generate_quotation_pdf(request):
             table_data.append(["", "", "", "", "", "", ""])
 
     # Table Style
-    # Updated colWidths to include IMAGE column
-    # ITEM(30), IMAGE(60), MODEL(80), DESC(155), PRICE(70), QTY(35), TOTAL(85) -> Total 515
-    item_table = Table(table_data, colWidths=[30, 60, 80, 155, 70, 35, 85])
-    item_table.setStyle(TableStyle([
+    # Updated widths after removing IMAGE column:
+    # ITEM(30), MODEL(80), DESC(215), PRICE(70), QTY(35), TOTAL(85) -> Total 515
+    item_table = Table(table_data, colWidths=[30, 80, 215, 70, 35, 85])
+    # Base table styles
+    table_styles = [
         # Header Style
         ('BACKGROUND', (0,0), (-1,0), colors.lavender),
         ('ALIGN', (0,0), (-1,0), 'CENTER'),
@@ -543,9 +561,9 @@ def generate_quotation_pdf(request):
         # Content Style
         ('VALIGN', (0,1), (-1,-1), 'TOP'), # Data rows top aligned
         ('ALIGN', (0,1), (-1,-1), 'CENTER'), # Default center (Item, Model, Qty)
-        ('ALIGN', (3,1), (3,-1), 'LEFT'), # Description left (Index 3 now)
-        ('ALIGN', (4,1), (4,-1), 'RIGHT'), # Price right (Index 4 now)
-        ('ALIGN', (6,1), (6,-1), 'RIGHT'), # Total right (Index 6 now)
+        ('ALIGN', (2,1), (2,-1), 'LEFT'),  # Description left (Index 2 now)
+        ('ALIGN', (3,1), (3,-1), 'RIGHT'), # Price right (Index 3 now)
+        ('ALIGN', (5,1), (5,-1), 'RIGHT'), # Total right (Index 5 now)
         # Ensure Thai-capable font applies to any non-Paragraph text
         ('FONTNAME', (0,0), (-1,-1), font_name),
         
@@ -554,7 +572,30 @@ def generate_quotation_pdf(request):
         ('BOTTOMPADDING', (0,0), (-1,-1), 2),
         ('LEFTPADDING', (0,0), (-1,-1), 3),
         ('RIGHTPADDING', (0,0), (-1,-1), 3),
-    ]))
+    ]
+    # Draw separator lines above and below each main item row (numbers without decimal).
+    # Skip LINEABOVE for the first item to avoid double line under the table header.
+    for idx, r in enumerate(item_row_indices):
+        table_styles.append(('LINEBELOW', (0, r), (-1, r), 1, colors.black))  # Line after item
+        if idx > 0:
+            table_styles.append(('LINEABOVE', (0, r), (-1, r), 1, colors.black))  # Line before item
+    # Remove vertical separator lines in the QTY column for specification rows only
+    # Left border of QTY is LINEBEFORE at column 4; right border is LINEBEFORE at column 5 (TOTAL).
+    for r in spec_row_indices:
+        table_styles.append(('LINEBEFORE', (4, r), (4, r), 0, colors.white))  # hide left border of QTY
+        table_styles.append(('LINEBEFORE', (5, r), (5, r), 0, colors.white))  # hide border between QTY and TOTAL
+        # Also remove potential LINEAFTER on the cells adjacent to QTY to ensure no vertical line remains
+        table_styles.append(('LINEAFTER', (3, r), (3, r), 0, colors.white))   # remove line after PRICE (left of QTY)
+        table_styles.append(('LINEAFTER', (4, r), (4, r), 0, colors.white))   # remove line after QTY (right of QTY)
+    # Draw a horizontal line after each specification block to visually separate it from the next content
+    for r in spec_block_end_indices:
+        table_styles.append(('LINEBELOW', (0, r), (-1, r), 1, colors.black))
+    # Span spec row images across Price, Qty, Total columns and center them
+    for r in spec_row_span_indices:
+        table_styles.append(('SPAN', (3, r), (5, r)))  # span PRICE..TOTAL (columns 3..5)
+        table_styles.append(('ALIGN', (3, r), (5, r), 'CENTER'))
+        table_styles.append(('VALIGN', (3, r), (5, r), 'MIDDLE'))
+    item_table.setStyle(TableStyle(table_styles))
     elements.append(item_table)
     
     # --- Totals ---
@@ -1479,18 +1520,42 @@ def generate_invoice_pdf(request):
             price = float(str(item.get('price', 0)).replace(',', ''))
         except: qty, price = 0, 0
         total = qty * price
-        
-        desc = item.get('description', '')
+        # Base description only; specification numbering will be added as separate rows (numbers in ITEM column)
+        desc_text = txt(item.get('description', ''))
+        spec_rows = item.get('spec_rows') or []
+        spec_lines_legacy = item.get('spec_lines') or []
         unit = item.get('unit', 'Pc.')
         
         table_data.append([
             Paragraph(str(i+1), styles['Table_Data_Center']),
-            Paragraph(desc, styles['Table_Data']),
+            Paragraph(desc_text, styles['Table_Data']),
             Paragraph(f"{qty:,.0f}", styles['Table_Data_Center']),
             Paragraph(unit, styles['Table_Data_Center']),
             Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
             Paragraph(f"{total:,.2f}", styles['Table_Data_Right'])
         ])
+        # Append numbered specification rows: itemnumber in ITEM column, bullets in Description, other cols empty
+        if spec_rows and isinstance(spec_rows, list):
+            try:
+                for idx, r in enumerate(spec_rows):
+                    lines = r.get('lines') or []
+                    bullets = "<br/>".join([f"• {txt(line)}" for line in lines if str(line).strip() != ""])
+                    table_data.append([
+                        Paragraph(f"{i+1}.{idx+1}", styles['Table_Data_Center']),
+                        Paragraph(bullets, styles['Table_Data']),
+                        "", "", "", ""
+                    ])
+                # Legacy single spec block -> number as i.1
+            except Exception:
+                pass
+        elif spec_lines_legacy:
+            bullets = "<br/>" + "<br/>".join([f"• {txt(line)}" for line in spec_lines_legacy])
+            table_data.append([
+                Paragraph(f"{i+1}.1", styles['Table_Data_Center']),
+                Paragraph(bullets, styles['Table_Data']),
+                "", "", "", ""
+            ])
+
 
     min_rows = 10
     if len(items) < min_rows:
