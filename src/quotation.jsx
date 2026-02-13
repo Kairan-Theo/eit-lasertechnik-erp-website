@@ -32,7 +32,9 @@ function useQuotationState() {
     attn: "",
     div: "",
     mobile: "",
-    email: ""
+    email: "",
+    // Multiple responsible contacts (Attn/CC/Mobile/Email)
+    responsibles: []
   })
 
   // Helper to get next quotation number
@@ -79,7 +81,8 @@ function useQuotationState() {
     eitTelephone: " 02-052-9544",
     eitFax: " 02-052 9544",
     eitAddress: "1/120 ซอยรามคําแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510",
-    tradeTerms: "",
+    // Default trade terms set to "Thai baht" but kept editable via input
+    tradeTerms: "Thai baht",
     validity: "",
     delivery: "",
     shipmentLocation: "",
@@ -188,6 +191,59 @@ function useQuotationState() {
 
   const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0, specRows: [], specEdit: false }])
   // Removed: addSpecificItem — per request to delete the button and function
+  // Add another responsible contact (Attn + CC) with separate Division/Mobile/Email for each line
+  const addResponsible = () => {
+    setCustomer(prev => {
+      const next = Array.isArray(prev.responsibles) ? [...prev.responsibles] : []
+      next.push({ 
+        attn: "", attnDiv: "", attnMobile: "", attnEmail: "",
+        cc: "", ccDiv: "", ccMobile: "", ccEmail: ""
+      })
+      return { ...prev, responsibles: next }
+    })
+  }
+  // Update a responsible contact field; mirror index 0 Attn line to top-level fields for backend compatibility
+  const updateResponsible = (idx, field, value) => {
+    setCustomer(prev => {
+      const base = Array.isArray(prev.responsibles) && prev.responsibles.length > 0
+        ? [...prev.responsibles]
+        : [{
+            attn: prev.attn || "", attnDiv: prev.div || "", attnMobile: prev.mobile || "", attnEmail: prev.email || "",
+            cc: "", ccDiv: "", ccMobile: "", ccEmail: ""
+          }]
+      const target = base[idx] || { 
+        attn: "", attnDiv: "", attnMobile: "", attnEmail: "",
+        cc: "", ccDiv: "", ccMobile: "", ccEmail: ""
+      }
+      base[idx] = { ...target, [field]: value }
+      const next = { ...prev, responsibles: base }
+      // Mirror the first Attn-line fields to legacy top-level values
+      if (idx === 0) {
+        if (field === 'attn') next.attn = value
+        if (field === 'attnDiv') next.div = value
+        if (field === 'attnMobile') next.mobile = value
+        if (field === 'attnEmail') next.email = value
+      }
+      return next
+    })
+  }
+  // Remove a responsible pair; if first is removed, mirror new first values to legacy top-level fields
+  const removeResponsible = (idx) => {
+    setCustomer(prev => {
+      const base = Array.isArray(prev.responsibles) ? [...prev.responsibles] : []
+      if (base.length === 0) return prev
+      base.splice(idx, 1)
+      const next = { ...prev, responsibles: base }
+      if (idx === 0) {
+        const first = base[0] || { attn: "", attnDiv: "", attnMobile: "", attnEmail: "" }
+        next.attn = first.attn || ""
+        next.div = first.attnDiv || ""
+        next.mobile = first.attnMobile || ""
+        next.email = first.attnEmail || ""
+      }
+      return next
+    })
+  }
 
   const insertRow = (index) => {
     setItems((prevItems) => {
@@ -422,7 +478,7 @@ function useQuotationState() {
   // Expose helpers and pd lookup for use in the Description combobox
   // Include setSpecImageSize so UI slider can adjust image dimensions
   // Exclude addSpecificItem per request (button and function removed)
-  return { customer, setCustomer, details, setDetails, items, setItems, addItem, insertItem: insertRow, removeItem, updateItem, applyPdSelection, updateSpecLines, setSpecEdit, setSpecImage, setSpecImageSize, addSpecRow, removeSpecRow, total, sourceKey, sourceIndex, eitOptions, customerOptions, pdDescriptionOptions, pdOptionLookup }
+  return { customer, setCustomer, details, setDetails, items, setItems, addItem, insertItem: insertRow, removeItem, updateItem, applyPdSelection, updateSpecLines, setSpecEdit, setSpecImage, setSpecImageSize, addSpecRow, removeSpecRow, addResponsible, updateResponsible, removeResponsible, total, sourceKey, sourceIndex, eitOptions, customerOptions, pdDescriptionOptions, pdOptionLookup }
 }
 
 function QuotationPage() {
@@ -647,23 +703,78 @@ function QuotationPage() {
              </div>
           </div>
 
-          <h3 className="text-base font-bold text-gray-900 pt-2">Customer Responsible</h3>
-
-          {/* Attn / Div / Mobile */}
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Attention(Attn.)</label>
-                <input value={q.customer.attn} onChange={(e) => q.setCustomer({ ...q.customer, attn: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Attention" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
-                <input value={q.customer.div} onChange={(e) => q.setCustomer({ ...q.customer, div: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
-                <input value={q.customer.mobile} onChange={(e) => q.setCustomer({ ...q.customer, mobile: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
-            </div>
+          <div className="flex items-center justify-between pt-2">
+             <h3 className="text-base font-bold text-gray-900">Customer Responsible</h3>
+             {/* Add Responsible (Attn + CC) */}
+             <button onClick={q.addResponsible} className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
+               <Plus className="w-4 h-4" />
+               <span className="text-sm font-medium">Add Attn + CC</span>
+             </button>
           </div>
+          {/* Render Responsibles in two rows per contact:
+              Row 1: Attn., Division, Mobile, Email
+              Row 2: CC., Division, Mobile, Email */}
+          {(() => {
+            const contacts = Array.isArray(q.customer.responsibles) && q.customer.responsibles.length > 0
+              ? q.customer.responsibles
+              : [{ 
+                  attn: q.customer.attn || "", attnDiv: q.customer.div || "", attnMobile: q.customer.mobile || "", attnEmail: q.customer.email || "",
+                  cc: "", ccDiv: "", ccMobile: "", ccEmail: "" 
+                }]
+            return contacts.map((c, idx) => (
+              <div key={`resp-block-${idx}`} className="mt-3">
+                {/* Delete this Attn+CC pair */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => q.removeResponsible(idx)}
+                    className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 text-sm"
+                    title="Delete Attn + CC"
+                  >
+                    <Trash className="w-4 h-4" />
+                    Delete
+                  </button>
+                </div>
+                {/* Attn row */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Attention(Attn.)</label>
+                    <input value={c.attn} onChange={(e) => q.updateResponsible(idx, 'attn', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Attention" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
+                    <input value={c.attnDiv || ""} onChange={(e) => q.updateResponsible(idx, 'attnDiv', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                    <input value={c.attnMobile || ""} onChange={(e) => q.updateResponsible(idx, 'attnMobile', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input value={c.attnEmail || ""} onChange={(e) => q.updateResponsible(idx, 'attnEmail', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Email" />
+                  </div>
+                </div>
+                {/* CC row */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">CC</label>
+                    <input value={c.cc || ""} onChange={(e) => q.updateResponsible(idx, 'cc', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="CC (optional)" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
+                    <input value={c.ccDiv || ""} onChange={(e) => q.updateResponsible(idx, 'ccDiv', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                    <input value={c.ccMobile || ""} onChange={(e) => q.updateResponsible(idx, 'ccMobile', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input value={c.ccEmail || ""} onChange={(e) => q.updateResponsible(idx, 'ccEmail', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Email" />
+                  </div>
+                </div>
+              </div>
+            ))
+          })()}
         </div>
 
 

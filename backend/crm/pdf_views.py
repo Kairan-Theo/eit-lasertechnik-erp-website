@@ -529,13 +529,8 @@ def generate_quotation_pdf(request):
             # Single legacy spec row -> horizontal line should be drawn after it
             spec_block_end_indices.append(len(table_data) - 1)
         
-    # Minimum rows to fill the page
-    # Reduced min_rows from 10 to 8 to allow space for signature on same page
-    min_rows = 8
-    current_rows = len(items)
-    if current_rows < min_rows:
-        for _ in range(min_rows - current_rows):
-            table_data.append(["", "", "", "", "", "", ""])
+    # Remove automatic filler rows — end the table at the last populated row
+    # per request, especially when there is only one specification row.
 
     # Table Style
     # Updated widths after removing IMAGE column:
