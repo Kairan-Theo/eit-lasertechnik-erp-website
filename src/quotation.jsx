@@ -102,6 +102,8 @@ function useQuotationState() {
   const [pdDescriptionOptions, setPdDescriptionOptions] = React.useState([])
   // Lookup map from rendered option label to its underlying PD data (name/description/specification/type)
   const [pdOptionLookup, setPdOptionLookup] = React.useState({})
+  // Map of PDSystem id -> array of child products { name, specification }
+  const [systemChildren, setSystemChildren] = React.useState({})
 
   React.useEffect(() => {
     fetch(`${API_BASE_URL}/api/deals/`)
@@ -155,34 +157,52 @@ function useQuotationState() {
     ]
     ;(async () => {
       try {
-        const results = await Promise.all(
-          endpoints.map(ep =>
-            fetch(`${API_BASE_URL}/api/${ep}/`, { headers })
-              .then(r => (r.ok ? r.json() : []))
-              .catch(() => [])
-          )
+        // Fetch each PD_* collection, remembering its type
+        const typedResults = await Promise.all(
+          endpoints.map(async (ep) => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/${ep}/`, { headers })
+              const data = res.ok ? await res.json() : []
+              return data.map((item) => ({ type: ep, item }))
+            } catch {
+              return []
+            }
+          })
         )
-        const raw = results.flat().filter(Boolean)
+        const all = typedResults.flat().filter(Boolean)
         const labels = []
         const lookup = {}
-        raw.forEach((d) => {
-          const name = (d && d.name) ? String(d.name).trim() : ""
-          const desc = (d && d.description) ? String(d.description).trim() : ""
-          const spec = (d && d.specification) ? String(d.specification).trim() : ""
+        const sysChildren = {}
+        all.forEach(({ type, item }) => {
+          const id = item?.id
+          const name = item?.name ? String(item.name).trim() : ""
+          const desc = item?.description ? String(item.description).trim() : ""
+          const spec = item?.specification ? String(item.specification).trim() : ""
           // Build label using specification if present; otherwise description; else just name.
           const detail = spec || desc
           const label = detail ? `${name} — ${detail}` : name
+          // Collect system child products grouped by PDSystem id
+          if (type === "pd_system_childproducts") {
+            const sysId = item?.system
+            if (sysId != null) {
+              if (!sysChildren[sysId]) sysChildren[sysId] = []
+              sysChildren[sysId].push({ name, specification: spec })
+            }
+          }
+          // Populate lookup for all resources with their type and id
           if (label && !lookup[label]) {
             labels.push(label)
-            lookup[label] = { name, description: desc, specification: spec }
+            lookup[label] = { id, type, name, description: desc, specification: spec }
           }
         })
         setPdDescriptionOptions(labels)
         setPdOptionLookup(lookup)
+        setSystemChildren(sysChildren)
       } catch (e) {
         console.error("Error loading PD description options", e)
         setPdDescriptionOptions([])
         setPdOptionLookup({})
+        setSystemChildren({})
       }
     })()
   }, [])
@@ -283,6 +303,28 @@ function useQuotationState() {
       next[rowIndex] = { 
         ...next[rowIndex], 
         specRows: [{ lines, image: null, edit: true }] 
+      }
+      // If a PD system is chosen, append its child products as new item rows with their specifications
+      if (meta?.type === "pd_systems" && meta?.id != null) {
+        const children = systemChildren[meta.id] || []
+        let insertAt = rowIndex + 1
+        children.forEach((c) => {
+          const childLines = String(c?.specification || "")
+            .split("\n")
+            .map(s => s.trim())
+            .filter(Boolean)
+          next.splice(insertAt, 0, {
+            item: "",
+            model: "",
+            description: c?.name || "",
+            qty: 1,
+            price: 0,
+            // Place child specifications under the child item
+            specRows: [{ lines: childLines, image: null, edit: false }],
+            specEdit: false
+          })
+          insertAt += 1
+        })
       }
       return next
     })
