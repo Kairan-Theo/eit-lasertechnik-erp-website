@@ -6,7 +6,7 @@ import Navigation from "./components/navigation.jsx"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, ClipboardList, FileText } from "lucide-react"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, ClipboardList } from "lucide-react"
 import { CustomerCombobox } from "./components/customer-combobox.jsx"
 // Import a typing+select combobox component to enhance description input
 import { Combobox } from "./components/combobox.jsx"
@@ -187,7 +187,7 @@ function useQuotationState() {
   const total = items.reduce((sum, it) => sum + (parseNumber(it.qty) || 0) * (parseNumber(it.price) || 0), 0)
 
   const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0, specRows: [], specEdit: false }])
-  const addSpecificItem = () => setItems((prev) => [...prev, { type: 'specific', item: "", model: "", description: "Specific Description", qty: 0, price: 0 }])
+  // Removed: addSpecificItem — per request to delete the button and function
 
   const insertRow = (index) => {
     setItems((prevItems) => {
@@ -263,8 +263,19 @@ function useQuotationState() {
     setItems(prev => prev.map((row, idx) => {
       if (idx !== rowIndex) return row
       const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
-      if (!rows[specIndex]) rows[specIndex] = { lines: [], image: dataUrl || null, edit: true }
-      else rows[specIndex] = { ...rows[specIndex], image: dataUrl || null }
+      // Initialize image with a default adjustable size so the user can tweak it
+      if (!rows[specIndex]) rows[specIndex] = { lines: [], image: dataUrl || null, imageWidth: 64, imageHeight: 64, edit: true }
+      else rows[specIndex] = { ...rows[specIndex], image: dataUrl || null, imageWidth: rows[specIndex].imageWidth || 64, imageHeight: rows[specIndex].imageHeight || 64 }
+      return { ...row, specRows: rows }
+    }))
+  }
+  // Adjust specification image size (uniform scale: width=height=size)
+  const setSpecImageSize = (rowIndex, size, specIndex = 0) => {
+    setItems(prev => prev.map((row, idx) => {
+      if (idx !== rowIndex) return row
+      const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
+      if (!rows[specIndex]) rows[specIndex] = { lines: [], image: null, imageWidth: size, imageHeight: size, edit: true }
+      else rows[specIndex] = { ...rows[specIndex], imageWidth: size, imageHeight: size }
       return { ...row, specRows: rows }
     }))
   }
@@ -275,6 +286,19 @@ function useQuotationState() {
       if (idx !== rowIndex) return row
       const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
       rows.push({ lines: [], image: null, edit: true })
+      return { ...row, specRows: rows }
+    }))
+  }
+
+  // Delete a specific specification row from an item
+  // Keeps remaining rows and their numbering consistent (1.1, 1.2, ...)
+  const removeSpecRow = (rowIndex, specIndex = 0) => {
+    setItems(prev => prev.map((row, idx) => {
+      if (idx !== rowIndex) return row
+      const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
+      if (specIndex >= 0 && specIndex < rows.length) {
+        rows.splice(specIndex, 1)
+      }
       return { ...row, specRows: rows }
     }))
   }
@@ -396,7 +420,9 @@ function useQuotationState() {
   }, [])
 
   // Expose helpers and pd lookup for use in the Description combobox
-  return { customer, setCustomer, details, setDetails, items, setItems, addItem, addSpecificItem, insertItem: insertRow, removeItem, updateItem, applyPdSelection, updateSpecLines, setSpecEdit, setSpecImage, addSpecRow, total, sourceKey, sourceIndex, eitOptions, customerOptions, pdDescriptionOptions, pdOptionLookup }
+  // Include setSpecImageSize so UI slider can adjust image dimensions
+  // Exclude addSpecificItem per request (button and function removed)
+  return { customer, setCustomer, details, setDetails, items, setItems, addItem, insertItem: insertRow, removeItem, updateItem, applyPdSelection, updateSpecLines, setSpecEdit, setSpecImage, setSpecImageSize, addSpecRow, removeSpecRow, total, sourceKey, sourceIndex, eitOptions, customerOptions, pdDescriptionOptions, pdOptionLookup }
 }
 
 function QuotationPage() {
@@ -432,7 +458,7 @@ function QuotationPage() {
           qty: parseNumber(i.qty),
           price: parseNumber(i.price),
           // Include specification rows for PDF (supports multiple spec rows)
-          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null })) : [],
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
           // Legacy fields kept for backward compatibility
           spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
           spec_image_data: i.specImage || null
@@ -646,14 +672,14 @@ function QuotationPage() {
         <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 mb-8">
            <div className="flex justify-between items-center mb-4">
              <h2 className="text-xl font-bold text-[#2D4485]">Quotation Description</h2>
-             <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
-               <Plus className="w-4 h-4" />
-               <span className="text-sm font-medium">Add Item</span>
-             </button>
-             <button onClick={q.addSpecificItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200">
-               <FileText className="w-4 h-4" />
-               <span className="text-sm font-medium">Add Specific Description</span>
-             </button>
+             {/* Action buttons: Add Item */}
+             <div className="flex items-center gap-2">
+               {/* Add Item: standard product/service line */}
+               <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
+                 <Plus className="w-4 h-4" />
+                 <span className="text-sm font-medium">Add Item</span>
+               </button>
+             </div>
            </div>
            <div className="overflow-x-auto">
              <table className="w-full text-left border-collapse">
@@ -823,9 +849,23 @@ function QuotationPage() {
                                     <img
                                       src={sr.image}
                                       alt="Specification"
-                                      className="h-16 w-16 object-cover rounded border border-gray-300 cursor-pointer"
+                                      style={{ width: `${sr.imageWidth || 64}px`, height: `${sr.imageHeight || 64}px` }}
+                                      className="object-cover rounded border border-gray-300 cursor-pointer"
                                       onClick={() => setPreviewSrc(sr.image)}
                                     />
+                                    {/* Image size slider: adjust width/height uniformly */}
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-600">Size</span>
+                                      <input
+                                        type="range"
+                                        min="40"
+                                        max="120"
+                                        step="4"
+                                        value={sr.imageWidth || 64}
+                                        onChange={(e) => q.setSpecImageSize(i, parseInt(e.target.value, 10), sIndex)}
+                                      />
+                                      <span className="text-xs text-gray-700">{sr.imageWidth || 64}px</span>
+                                    </div>
                                     <button
                                       className="text-red-600 hover:text-red-800 text-sm underline"
                                       onClick={() => q.setSpecImage(i, null, sIndex)}
@@ -834,6 +874,14 @@ function QuotationPage() {
                                     </button>
                                   </>
                                 )}
+                                {/* Delete this specification row */}
+                                <button
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Delete Specification"
+                                  onClick={() => q.removeSpecRow(i, sIndex)}
+                                >
+                                  <Trash className="w-4 h-4" />
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -847,18 +895,11 @@ function QuotationPage() {
                </tbody>
              </table>
            </div>
-           <div className="flex flex-col md:flex-row justify-between items-start mt-4 gap-4">
-             <div className="flex gap-2">
-               <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
-                 <Plus className="w-4 h-4" />
-                 <span className="text-sm font-medium">Add Item</span>
-               </button>
-               <button onClick={q.addSpecificItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200">
-                 <FileText className="w-4 h-4" />
-                 <span className="text-sm font-medium">Add Specific Description</span>
-               </button>
-             </div>
-             <div className="w-64 space-y-2">
+          {/* Align totals to the right (original placement). 
+              Using md:ml-auto pushes this block to the far right on desktop. */}
+          <div className="flex flex-col md:flex-row items-start mt-4 gap-4 justify-end">
+            {/* Totals summary block */}
+            <div className="w-64 space-y-2 md:ml-auto md:text-right">
                <div className="flex justify-between text-base font-bold text-gray-900"><span>Total:</span> <span>{q.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                <div className="flex justify-between text-base font-bold text-gray-900"><span>VAT 7%:</span> <span>{(q.total * 0.07).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                <div className="flex justify-between text-base font-bold text-[#2D4485] pt-2 border-t"><span>Grand Total:</span> <span>{(q.total * 1.07).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
