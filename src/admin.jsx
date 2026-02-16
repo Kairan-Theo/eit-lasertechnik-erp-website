@@ -941,7 +941,7 @@ function TaxInvoiceList({ list, refreshData }) {
             </button>
           )}
         </div>
-        <a href="/receipt.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+        <a href="/tax-invoice.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
           New Tax Invoice
         </a>
@@ -980,7 +980,7 @@ function TaxInvoiceList({ list, refreshData }) {
                   </td>
                   <td className="p-3 text-gray-500">{i + 1}</td>
                   <td className="p-3 font-medium">
-                    <a href={`/receipt.html?key=${encodeURIComponent(item.sourceKey)}&index=${item.sourceIndex}`} className="text-[#2D4485] hover:underline">
+                    <a href={`/tax-invoice.html?key=${encodeURIComponent(item.sourceKey)}&index=${item.sourceIndex}`} className="text-[#2D4485] hover:underline">
                       {item.details?.number}
                     </a>
                   </td>
@@ -1650,6 +1650,15 @@ function AdminPage() {
             Billing Notes
           </button>
           <button
+            onClick={() => setActiveTab("tax-invoices")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "tax-invoices" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <Receipt className="w-5 h-5" />
+            Tax Invoices
+          </button>
+          <button
             onClick={() => setActiveTab("product-details")}
             className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === "product-details" ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
@@ -1679,6 +1688,7 @@ function AdminPage() {
             {activeTab === "quotations" && "Quotations"}
             {activeTab === "invoices" && "Invoices"}
             {activeTab === "billing-notes" && "Billing Notes"}
+            {activeTab === "tax-invoices" && "Tax Invoices"}
             {activeTab === "product-details" && "Product Details"}
             {activeTab === "eit-management" && "EIT Organizations"}
           </h1>
@@ -1689,6 +1699,7 @@ function AdminPage() {
         {activeTab === "quotations" && <QuotationList list={data.quotations} refreshData={loadData} />}
         {activeTab === "invoices" && <InvoiceList list={data.invoices} refreshData={loadData} />}
         {activeTab === "billing-notes" && <BillingNoteList list={data.billingNotes} refreshData={loadData} />}
+        {activeTab === "tax-invoices" && <TaxInvoiceList list={data.taxInvoices} refreshData={loadData} />}
         {activeTab === "product-details" && <ProductDetails />}
         {activeTab === "eit-management" && <EitManagement />} {/* Added EIT Management view */}
       </main>

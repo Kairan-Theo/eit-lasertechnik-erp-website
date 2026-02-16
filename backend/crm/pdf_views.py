@@ -5,7 +5,7 @@ from django.http import HttpResponse, FileResponse
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether, PageBreak
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import registerFontFamily
 from reportlab.pdfbase.ttfonts import TTFont
@@ -1482,7 +1482,12 @@ def generate_invoice_pdf(request):
     totals = data.get('totals', {})
     
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=20, bottomMargin=20)
+    # Separate margins for Tax Invoice vs regular Invoice to keep original Invoice design
+    is_tax_invoice_flag = bool(details.get('isTaxInvoice'))
+    if is_tax_invoice_flag:
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=35, leftMargin=35, topMargin=25, bottomMargin=25)
+    else:
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=20, bottomMargin=20)
     
     elements = []
     styles = getSampleStyleSheet()
@@ -1603,13 +1608,24 @@ def generate_invoice_pdf(request):
     # Then Line
     # Then Details
     
-    # Header Title Table (Tax Invoice per reference image)
-    header_table_data = [
-        [Paragraph("ต้นฉบับ", styles['Header_Title_Bold']) , ""],
-        [Paragraph("Original", styles['Header_Title_Bold']), ""],
-        [Paragraph("ใบกำกับภาษี/ใบส่งของ", styles['Header_Title_Bold']), ""],
-        [Paragraph("TAX INVOICE/DELIVERY ORDER", styles['Header_Title_Bold']), ""]
-    ]
+    # Decide layout by flag
+    is_tax = is_tax_invoice_flag
+
+    # Header Title Table
+    header_table_data = (
+        [
+            [Paragraph("ต้นฉบับ", styles['Header_Title_Bold']) , ""],
+            [Paragraph("Original", styles['Header_Title_Bold']), ""],
+            [Paragraph("ใบกำกับภาษี/ใบส่งของ", styles['Header_Title_Bold']), ""],
+            [Paragraph("TAX INVOICE/DELIVERY ORDER", styles['Header_Title_Bold']), ""]
+        ]
+        if is_tax else
+        [
+            [Paragraph("ใบแจ้งหนี้", styles['Header_Title_Bold']), Paragraph("ต้นฉบับ", styles['Header_Title_Bold'])],
+            [Paragraph("INVOICE", styles['Header_Title_Bold']), Paragraph("Original", styles['Header_Title_Bold'])],
+            [Paragraph("ไม่ใชใบกำกับภาษี", styles['Table_Data_Center']), ""]
+        ]
+    )
     header_table = Table(header_table_data, colWidths=[140, 60])
     header_table.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -1667,6 +1683,247 @@ def generate_invoice_pdf(request):
     left_info_elements.append(Spacer(1, 25)) # Explicit spacer to push bottom content
     left_info_elements.append(tax_table)
 
+    if is_tax:
+        copy_lines = ["สำเนา / Copy", "ใบกำกับภาษี/ใบส่งสินค้า", "TAX INVOICE/DELIVERY ORDER", "เอกสารออกเป็นชุด", "ไม่ใช่ใบกำกับภาษี"]
+        variants = [copy_lines, copy_lines, copy_lines, copy_lines, copy_lines]
+        all_elements = []
+        for idx, header_lines in enumerate(variants):
+            local_elements = []
+            # Place EIT header image at the top of each page if available
+            if 'found_image' in locals() and found_image:
+                try:
+                    im = Image(found_image[0], width=found_image[1], height=found_image[2])
+                    im.hAlign = 'CENTER'
+                    local_elements.append(im)
+                    local_elements.append(Spacer(1, 5))
+                except Exception:
+                    pass
+            header_style = ParagraphStyle(name='Header_Title_Small', parent=styles['Header_Title_Bold'], fontSize=12, leading=14)
+            header_table_data = [[Paragraph(t, header_style)] for t in header_lines]
+            header_table = Table(header_table_data, colWidths=[190])
+            header_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ]))
+            # Wrap header in a framed box and center it within the right panel
+            header_frame = Table([[header_table]], colWidths=[200], rowHeights=[120])
+            header_frame.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('TOPPADDING', (0,0), (-1,-1), 2),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                ('LEFTPADDING', (0,0), (-1,-1), 4),
+                ('RIGHTPADDING', (0,0), (-1,-1), 4),
+            ]))
+            right_info = [
+                header_frame,
+                Spacer(1, 6),
+                Table([
+                    [Paragraph("เลขที่ (No.)", styles['Table_Data_Center']), Paragraph(inv_num, styles['Table_Data_Center'])],
+                    [Paragraph("วันที่ (Issue Date)", styles['Table_Data_Center']), Paragraph(details.get('date',''), styles['Table_Data_Center'])]
+                ], colWidths=[100, 100], style=TableStyle([
+                    ('BOX', (0,0), (-1,-1), 1, colors.black),
+                    ('INNERGRID', (0,0), (-1,-1), 1, colors.black),
+                    ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+                ]))
+            ]
+            left_info_elements = [
+                Paragraph(org_name_th, styles['Normal_Content']),
+                Paragraph(org_name_en, styles['Normal_Content']),
+                Paragraph(org_addr, styles['Normal_Content']),
+                Paragraph(org_contact, styles['Normal_Content']),
+                Spacer(1, 15),
+                tax_table
+            ]
+            row1 = Table([[left_info_elements, right_info]], colWidths=[330, 205])
+            row1.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+                ('LINEBEFORE', (1,0), (1,0), 1, colors.black),
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('VALIGN', (1,0), (1,0), 'MIDDLE'),
+                ('TOPPADDING', (0,0), (-1,-1), 5),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+                ('LEFTPADDING', (0,0), (0,0), 5),
+            ]))
+            local_elements.append(row1)
+            cust_tax = customer.get('taxId', '')
+            cust_name = customer.get('name', '') or customer.get('company', '')
+            cust_addr = customer.get('address', '') or customer.get('billingAddress1', '')
+            cust_col = [
+                Paragraph(f"<b>สำนักงานใหญ่</b>   <b>เลขประจำตัวผู้เสียภาษี</b> {cust_tax}", styles['Normal_Content']),
+                Paragraph("<b>ลูกค้า (customer)</b>", styles['Normal_Bold']),
+                Paragraph(f"<b>ชื่อ</b> {cust_name}", styles['Normal_Content']),
+                Paragraph(f"<b>ที่อยู่</b> {cust_addr}", styles['Normal_Content'])
+            ]
+            pay_col = [
+                Paragraph("ประเภทการจ่ายเงิน (Payment Type)", styles['Normal_Small']),
+                Paragraph(details.get('paymentType', '-'), styles['Normal_Content']),
+                Spacer(1, 5),
+                Paragraph("วันครบกำหนดชำระเงิน( Due date)", styles['Normal_Small']),
+                Paragraph(details.get('dueDate', ''), styles['Normal_Content']),
+                Spacer(1, 5),
+                Paragraph("เลขที่ใบสั่งซื้อ (PO.NO)", styles['Normal_Small']),
+                Paragraph(details.get('poNo', '-'), styles['Normal_Content'])
+            ]
+            row2 = Table([[cust_col, pay_col]], colWidths=[350, 185])
+            row2.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+                ('LINEBEFORE', (1,0), (1,-1), 1, colors.black),
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('TOPPADDING', (0,0), (-1,-1), 5),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ]))
+            local_elements.append(row2)
+            table_data = [[
+                Paragraph("รายการ<br/>Description", styles['Table_Header']),
+                Paragraph("ราคาขายไม่รวมภาษี<br/>Sales ex. Vat", styles['Table_Header']),
+                Paragraph("จำนวน<br/>Qty", styles['Table_Header']),
+                Paragraph("หน่วยนับ<br/>Unit", styles['Table_Header']),
+                Paragraph("จำนวนเงิน<br/>Amount", styles['Table_Header'])
+            ]]
+            for i, item in enumerate(items):
+                try:
+                    qty = float(str(item.get('qty', 0)).replace(',', ''))
+                    price = float(str(item.get('price', 0)).replace(',', ''))
+                except:
+                    qty, price = 0, 0
+                total = qty * price
+                base_desc = txt(item.get('description', ''))
+                desc_text = base_desc
+                spec_rows = item.get('spec_rows') or []
+                spec_lines_legacy = item.get('spec_lines') or []
+                unit = item.get('unit', 'Pc.')
+                table_data.append([
+                    Paragraph(desc_text, styles['Table_Data']),
+                    Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
+                    Paragraph(f"{qty:,.0f}", styles['Table_Data_Center']),
+                    Paragraph(unit, styles['Table_Data_Center']),
+                    Paragraph(f"{total:,.2f}", styles['Table_Data_Right'])
+                ])
+                if spec_rows and isinstance(spec_rows, list):
+                    try:
+                        for idx2, r in enumerate(spec_rows):
+                            lines = r.get('lines') or []
+                            bullets = "<br/>".join([f"• {txt(line)}" for line in lines if str(line).strip() != ""])
+                            table_data.append([
+                                Paragraph(bullets, styles['Table_Data']),
+                                "", "", "", ""
+                            ])
+                    except Exception:
+                        pass
+                elif spec_lines_legacy:
+                    bullets = "<br/>" + "<br/>".join([f"• {txt(line)}" for line in spec_lines_legacy])
+                    table_data.append([
+                        Paragraph(bullets, styles['Table_Data']),
+                        "", "", "", ""
+                    ])
+            min_rows = 8
+            if len(items) < min_rows:
+                for _ in range(min_rows - len(items)):
+                    table_data.append(["", "", "", "", ""])
+            item_table = Table(table_data, colWidths=[240, 100, 40, 50, 105])
+            item_table.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+                ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+                ('ALIGN', (0,0), (-1,0), 'CENTER'),
+                ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
+                ('VALIGN', (0,1), (-1,-1), 'TOP'),
+                ('FONTNAME', (0,0), (-1,-1), font_name),
+                ('TOPPADDING', (0,0), (-1,-1), 2),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                # Keep vertical separators only, remove horizontal grid lines
+                ('LINEBEFORE', (1,0), (1,-1), 1, colors.black),
+                ('LINEBEFORE', (2,0), (2,-1), 1, colors.black),
+                ('LINEBEFORE', (3,0), (3,-1), 1, colors.black),
+                ('LINEBEFORE', (4,0), (4,-1), 1, colors.black),
+            ]))
+            local_elements.append(item_table)
+            subtotal = totals.get('subtotal', 0)
+            vat = totals.get('taxTotal', 0)
+            grand_total = totals.get('total', 0)
+            discount = totals.get('discount', 0)
+            net_amount = max(subtotal - discount, 0)
+            total_data = [
+                ["", "ส่วนลด\nDiscount", f"{discount:,.2f}"],
+                ["", "จำนวนเงินสุทธิ\nNet Amount", f"{net_amount:,.2f}"],
+                ["", "ภาษีมูลค่าเพิ่ม\nVAT 7%", f"{vat:,.2f}"],
+                ["", "รวมเป็นมูลค่า\nTotal of sales", f"{grand_total:,.2f}"]
+            ]
+            total_table = Table(total_data, colWidths=[280, 150, 105])
+            total_table.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+                ('INNERGRID', (1,0), (-1,-1), 1, colors.black),
+                ('LINEBEFORE', (1,0), (1,-1), 1, colors.black),
+                ('ALIGN', (2,0), (2,-1), 'RIGHT'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('FONTNAME', (0,0), (-1,-1), font_name),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+            ]))
+            text_amt = totals.get('thaiText', '-')
+            text_row = Table([[
+                Paragraph("จำนวนเงินรวมทั้งสิ้น<br/>(The sum of baht)", styles['Table_Data_Center']),
+                Paragraph(text_amt, styles['Table_Data_Center'])
+            ]], colWidths=[150, 385])
+            text_row.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+                ('LINEBEFORE', (1,0), (1,0), 1, colors.black),
+                ('BACKGROUND', (1,0), (1,0), colors.lightgrey),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ]))
+            pay_row = Table([[Paragraph("ชำระเงินโดย", styles['Normal_Content']), ""]], colWidths=[150, 385])
+            pay_row.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+                ('LINEBEFORE', (1,0), (1,0), 1, colors.black),
+            ]))
+            def sig_cell(role_th, role_en):
+                title = Paragraph(f"{role_th} {role_en}", styles['Table_Data_Center'])
+                sub_data = [
+                    ["(", "", ")"],
+                    ["วันที่", "", ""]
+                ]
+                sub_table = Table(sub_data, colWidths=[25, 100, 25], rowHeights=[35, 25])
+                sub_table.setStyle(TableStyle([
+                    ('FONTNAME', (0,0), (-1,-1), font_name),
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+                    ('LINEBELOW', (1,0), (1,0), 0.5, colors.black),
+                    ('LINEBELOW', (1,1), (1,1), 0.5, colors.black),
+                    ('ALIGN', (0,1), (0,1), 'RIGHT'),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+                ]))
+                return [title, Spacer(1, 5), sub_table]
+            sig_data = [[
+                sig_cell("ผู้รับสินค้า", "Receiver"),
+                sig_cell("ผู้ส่งสินค้า", "Deliverer"),
+                sig_cell("ผู้มีอำนาจลงนาม", "Authorized Signature")
+            ]]
+            sig_table = Table(sig_data, colWidths=[178, 178, 179])
+            sig_table.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+                ('GRID', (0,0), (-1,-1), 1, colors.black),
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('TOPPADDING', (0,0), (-1,-1), 10),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+            ]))
+            local_elements.append(KeepTogether([total_table, text_row, pay_row, sig_table]))
+            all_elements.extend(local_elements)
+            if idx < len(variants) - 1:
+                all_elements.append(PageBreak())
+        try:
+            doc.build(all_elements)
+        except Exception as e:
+            print(f"PDF Build Error: {e}")
+            raise e
+        buffer.seek(0)
+        return HttpResponse(buffer, content_type='application/pdf')
     row1 = Table([[left_info_elements, right_info]], colWidths=[330, 205])
     row1.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1, colors.black),
@@ -1712,35 +1969,56 @@ def generate_invoice_pdf(request):
     elements.append(row2)
 
     # --- Row 3: Items Table ---
-    # Cols: Description, Sales ex. Vat, Qty, Unit, Amount
-    table_data = [[
-        Paragraph("รายการ<br/>Description", styles['Table_Header']),
-        Paragraph("ราคาขายไม่รวมภาษี<br/>Sales ex. Vat", styles['Table_Header']),
-        Paragraph("จำนวน<br/>Qty", styles['Table_Header']),
-        Paragraph("หน่วยนับ<br/>Unit", styles['Table_Header']),
-        Paragraph("จำนวนเงิน<br/>Amount", styles['Table_Header'])
-    ]]
+    # Columns differ for tax vs non-tax
+    if is_tax:
+        table_data = [[
+            Paragraph("รายการ<br/>Description", styles['Table_Header']),
+            Paragraph("ราคาขายไม่รวมภาษี<br/>Sales ex. Vat", styles['Table_Header']),
+            Paragraph("จำนวน<br/>Qty", styles['Table_Header']),
+            Paragraph("หน่วยนับ<br/>Unit", styles['Table_Header']),
+            Paragraph("จำนวนเงิน<br/>Amount", styles['Table_Header'])
+        ]]
+    else:
+        table_data = [[
+            Paragraph("ลำดับ<br/>No.", styles['Table_Header']),
+            Paragraph("รายการ<br/>Description", styles['Table_Header']),
+            Paragraph("จำนวน<br/>Qty", styles['Table_Header']),
+            Paragraph("หน่วยนับ<br/>Unit", styles['Table_Header']),
+            Paragraph("ราคาต่อหน่วย<br/>Unit Price", styles['Table_Header']),
+            Paragraph("จำนวนเงิน<br/>Amount", styles['Table_Header'])
+        ]]
 
     for i, item in enumerate(items):
         try:
             qty = float(str(item.get('qty', 0)).replace(',', ''))
             price = float(str(item.get('price', 0)).replace(',', ''))
-        except: qty, price = 0, 0
+        except:
+            qty, price = 0, 0
         total = qty * price
-        # Base description includes running number like "1- " as in sample
+        # Base description without running number prefix
         base_desc = txt(item.get('description', ''))
-        desc_text = f"{i+1}- {base_desc}" if base_desc else f"{i+1}-"
+        desc_text = base_desc
         spec_rows = item.get('spec_rows') or []
         spec_lines_legacy = item.get('spec_lines') or []
         unit = item.get('unit', 'Pc.')
         
-        table_data.append([
-            Paragraph(desc_text, styles['Table_Data']),
-            Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
-            Paragraph(f"{qty:,.0f}", styles['Table_Data_Center']),
-            Paragraph(unit, styles['Table_Data_Center']),
-            Paragraph(f"{total:,.2f}", styles['Table_Data_Right'])
-        ])
+        if is_tax:
+            table_data.append([
+                Paragraph(desc_text, styles['Table_Data']),
+                Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
+                Paragraph(f"{qty:,.0f}", styles['Table_Data_Center']),
+                Paragraph(unit, styles['Table_Data_Center']),
+                Paragraph(f"{total:,.2f}", styles['Table_Data_Right'])
+            ])
+        else:
+            table_data.append([
+                Paragraph(str(i+1), styles['Table_Data_Center']),
+                Paragraph(desc_text, styles['Table_Data']),
+                Paragraph(f"{qty:,.0f}", styles['Table_Data_Center']),
+                Paragraph(unit, styles['Table_Data_Center']),
+                Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
+                Paragraph(f"{total:,.2f}", styles['Table_Data_Right'])
+            ])
         # Append numbered specification rows: itemnumber in ITEM column, bullets in Description, other cols empty
         if spec_rows and isinstance(spec_rows, list):
             try:
@@ -1756,32 +2034,61 @@ def generate_invoice_pdf(request):
                 pass
         elif spec_lines_legacy:
             bullets = "<br/>" + "<br/>".join([f"• {txt(line)}" for line in spec_lines_legacy])
-            table_data.append([
-                Paragraph(bullets, styles['Table_Data']),
-                "", "", "", ""
-            ])
+            if is_tax:
+                table_data.append([
+                    Paragraph(bullets, styles['Table_Data']),
+                    "", "", "", ""
+                ])
+            else:
+                table_data.append([
+                    "", Paragraph(bullets, styles['Table_Data']),
+                    "", "", "", ""
+                ])
 
 
-    min_rows = 14
+    min_rows = 8 if is_tax else 10
     if len(items) < min_rows:
         for _ in range(min_rows - len(items)):
-            table_data.append(["", "", "", "", ""])
+            table_data.append(["", "", "", "", ""] if is_tax else ["", "", "", "", "", ""])
 
-    # Widths: Desc(240), Sales(100), Qty(40), Unit(50), Amount(105) -> Total 535
-    item_table = Table(table_data, colWidths=[240, 100, 40, 50, 105])
-    item_table.setStyle(TableStyle([
-        ('BOX', (0,0), (-1,-1), 1, colors.black),                # outer box only
-        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),          # header bg
-        ('ALIGN', (0,0), (-1,0), 'CENTER'),
-        ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
-        ('VALIGN', (0,1), (-1,-1), 'TOP'),
-        ('FONTNAME', (0,0), (-1,-1), font_name),
-        ('TOPPADDING', (0,0), (-1,-1), 3),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-        # horizontal lines only (remove vertical grid)
-        ('LINEBELOW', (0,0), (-1,0), 1, colors.black),            # line under header
-        ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.black),         # lines under each data row
-    ]))
+    # Widths
+    if is_tax:
+        # Desc(240), Sales(100), Qty(40), Unit(50), Amount(105) -> Total 535
+        item_table = Table(table_data, colWidths=[240, 100, 40, 50, 105])
+    else:
+        # No(30), Desc(220), Qty(40), Unit(50), Price(90), Amount(105)
+        item_table = Table(table_data, colWidths=[30, 220, 40, 50, 90, 105])
+    if is_tax:
+        # Remove vertical grid lines; keep outer box and horizontal lines
+        item_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+            ('ALIGN', (0,0), (-1,0), 'CENTER'),
+            ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
+            ('VALIGN', (0,1), (-1,-1), 'TOP'),
+            ('FONTNAME', (0,0), (-1,-1), font_name),
+            ('TOPPADDING', (0,0), (-1,-1), 2),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+            ('LINEBELOW', (0,0), (-1,0), 1, colors.black),   # header underline
+            ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.black) # horizontal row lines
+        ]))
+    else:
+        item_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+            ('ALIGN', (0,0), (-1,0), 'CENTER'),
+            ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
+            ('VALIGN', (0,1), (-1,-1), 'TOP'),
+            ('FONTNAME', (0,0), (-1,-1), font_name),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            # Keep only vertical separators; remove horizontal lines
+            ('LINEBEFORE', (1,0), (1,-1), 1, colors.black),
+            ('LINEBEFORE', (2,0), (2,-1), 1, colors.black),
+            ('LINEBEFORE', (3,0), (3,-1), 1, colors.black),
+            ('LINEBEFORE', (4,0), (4,-1), 1, colors.black),
+            ('LINEBEFORE', (5,0), (5,-1), 1, colors.black),
+        ]))
     elements.append(item_table)
 
     # --- Row 4: Totals ---
@@ -1808,7 +2115,7 @@ def generate_invoice_pdf(request):
         ('FONTNAME', (0,0), (-1,-1), font_name),
         ('FONTSIZE', (0,0), (-1,-1), 9),
     ]))
-    elements.append(total_table)
+    # Defer appending totals; we will KeepTogether with following blocks for Tax Invoice only
 
     # --- Row 5: Text Amount ---
     text_amt = totals.get('thaiText', '-')
@@ -1823,7 +2130,6 @@ def generate_invoice_pdf(request):
         ('BACKGROUND', (1,0), (1,0), colors.lightgrey),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
-    elements.append(text_row)
 
     # --- Row 6: Payment By ---
     pay_row = Table([[Paragraph("ชำระเงินโดย", styles['Normal_Content']), ""]], colWidths=[150, 385])
@@ -1831,7 +2137,7 @@ def generate_invoice_pdf(request):
         ('BOX', (0,0), (-1,-1), 1, colors.black),
         ('LINEBEFORE', (1,0), (1,0), 1, colors.black),
     ]))
-    elements.append(pay_row)
+    # Group totals, text amount and payment rows together with signatures to keep on same page (Tax Invoice only)
 
     # --- Row 7: Signatures ---
     # Combined into single row to avoid horizontal lines between text/signature/date
@@ -1894,7 +2200,13 @@ def generate_invoice_pdf(request):
         ('TOPPADDING', (0,0), (-1,-1), 10),
         ('BOTTOMPADDING', (0,0), (-1,-1), 10),
     ]))
-    elements.append(KeepTogether(sig_table))
+    if is_tax:
+        elements.append(KeepTogether([total_table, text_row, pay_row, sig_table]))
+    else:
+        elements.append(total_table)
+        elements.append(text_row)
+        elements.append(pay_row)
+        elements.append(KeepTogether(sig_table))
 
     try:
         doc.build(elements)

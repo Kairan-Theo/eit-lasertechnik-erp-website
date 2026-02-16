@@ -1,11 +1,12 @@
 import React from "react"
 import Navigation from "./components/navigation.jsx"
 import { ArrowLeft, Receipt } from "lucide-react"
-import InvoiceForm from "./components/invoice-form.jsx"
-import { useInvoiceState } from "./invoice.jsx"
+import { TaxInvoiceForm } from "./components/tax-invoice-form.jsx"
+import { API_BASE_URL } from "./config"
+import { THBText } from "./utils/currency"
 
 export default function TaxInvoicePage() {
-  const inv = useInvoiceState()
+  const inv = useTaxInvoiceState()
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
   const [isGenerating, setIsGenerating] = React.useState(false)
   const [notice, setNotice] = React.useState({ show: false, text: "" })
@@ -122,7 +123,7 @@ export default function TaxInvoicePage() {
           </div>
         </div>
 
-        <InvoiceForm inv={inv} />
+        <TaxInvoiceForm ti={inv} />
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href = "/admin.html"}>Cancel</button>
@@ -132,4 +133,98 @@ export default function TaxInvoicePage() {
     </main>
     </>
   )
+}
+
+function useTaxInvoiceState() {
+  const [customer, setCustomer] = React.useState({
+    company: "",
+    taxId: "",
+    branch: "",
+    address: "",
+    telephone: "",
+    attn: "",
+    email: ""
+  })
+  const [details, setDetails] = React.useState({
+    number: "",
+    date: new Date().toISOString().slice(0, 10),
+    isTaxInvoice: true,
+    paymentType: "",
+    dueDate: "",
+    poNo: "",
+    eit: null,
+    salesPerson: "",
+    onBehalfOf: "",
+    eitAddress: "",
+    eitTelephone: "",
+    eitFax: "",
+    eitMobile: "",
+    notes: "",
+    currency: "THB"
+  })
+  const [items, setItems] = React.useState([{ description: "", qty: 1, price: 0, unit: "pcs" }])
+  const [eitOptions, setEitOptions] = React.useState([])
+  const [customerOptions, setCustomerOptions] = React.useState([])
+  const [poOptions, setPoOptions] = React.useState([])
+
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/eits/`).then(r=>r.json()).then(d=>Array.isArray(d)?setEitOptions(d):setEitOptions([])).catch(()=>setEitOptions([]))
+    fetch(`${API_BASE_URL}/api/customers/`).then(r=>r.json()).then(d=>Array.isArray(d)?setCustomerOptions(d):setCustomerOptions([])).catch(()=>setCustomerOptions([]))
+    fetch(`${API_BASE_URL}/api/purchase-orders/numbers/`).then(r=>r.json()).then(d=>Array.isArray(d)?setPoOptions(d):setPoOptions([])).catch(()=>setPoOptions([]))
+  }, [])
+
+  const addItem = () => setItems(prev => [...prev, { description: "", qty: 1, price: 0, unit: "pcs" }])
+  const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i))
+  const updateItem = (i, k, v) => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [k]: v } : it))
+
+  const parseNumber = (val) => {
+    if (typeof val === 'number') return val
+    if (!val) return 0
+    return parseFloat(String(val).replace(/,/g, '')) || 0
+  }
+
+  const subtotal = items.reduce((s, it) => s + parseNumber(it.qty) * parseNumber(it.price), 0)
+  const taxTotal = subtotal * 0.07
+  const total = subtotal + taxTotal
+
+  const exportPdf = async () => {
+    const payload = {
+      details: { ...details, isTaxInvoice: true },
+      customer,
+      items: items.map(i => ({ ...i, qty: parseNumber(i.qty), price: parseNumber(i.price) })),
+      totals: { subtotal, taxTotal, total, thaiText: THBText(total) }
+    }
+    const res = await fetch(`${API_BASE_URL}/api/generate-invoice-pdf/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (!res.ok) throw new Error("Failed to generate PDF")
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    iframe.src = url
+    document.body.appendChild(iframe)
+    setTimeout(() => {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+    }, 500)
+    setTimeout(() => {
+      document.body.removeChild(iframe)
+      window.URL.revokeObjectURL(url)
+    }, 60000)
+  }
+
+  const confirm = async () => true
+  const sendToCustomer = async () => {}
+
+  return {
+    customer, setCustomer,
+    details, setDetails,
+    eitOptions, customerOptions, poOptions,
+    items, setItems, addItem, removeItem, updateItem,
+    subtotal, taxTotal, total,
+    confirm, exportPdf, sendToCustomer
+  }
 }
