@@ -348,8 +348,45 @@ class ManufacturingOrder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+class PMProject(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=200)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    task_total = models.IntegerField(default=0)
+    class Meta:
+        db_table = 'PM_project'
     def __str__(self):
-        return self.job_order_code
+        return self.name
+
+class PMTask(models.Model):
+    id = models.AutoField(primary_key=True)
+    project = models.ForeignKey(PMProject, on_delete=models.CASCADE, related_name='tasks', db_column='Project_id')
+    # Human-readable task name for display in admin/UI
+    name = models.CharField(max_length=200, blank=True, default='')
+    task_start_date = models.DateField(null=True, blank=True)
+    task_end_date = models.DateField(null=True, blank=True)
+    class Meta:
+        db_table = 'PM_task'
+    def __str__(self):
+        # Prefer the explicit name if present; otherwise show a compact range
+        return self.name or f"{self.project_id} [{self.task_start_date} -> {self.task_end_date}]"
+
+# Keep PM_project.task_total consistent when PM_task changes (admin/API)
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+@receiver(post_save, sender=PMTask)
+def update_task_total_on_save(sender, instance, **kwargs):
+    PMProject.objects.filter(pk=instance.project_id).update(
+        task_total=PMTask.objects.filter(project_id=instance.project_id).count()
+    )
+
+@receiver(post_delete, sender=PMTask)
+def update_task_total_on_delete(sender, instance, **kwargs):
+    PMProject.objects.filter(pk=instance.project_id).update(
+        task_total=PMTask.objects.filter(project_id=instance.project_id).count()
+    )
 
 
 class Product(models.Model):

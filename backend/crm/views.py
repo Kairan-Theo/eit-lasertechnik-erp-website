@@ -7,8 +7,8 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, Receipt, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, ReceiptSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer, PDMachineSerializer, PDSystemSerializer, PDWireSerializer, PDSparepartSerializer, PDServiceSerializer, PDSystemChildproductSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, Receipt, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, ReceiptSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer, PDMachineSerializer, PDSystemSerializer, PDWireSerializer, PDSparepartSerializer, PDServiceSerializer, PDSystemChildproductSerializer, PMProjectSerializer, PMTaskSerializer
 import json
 
 class ProjectManagementViewSet(viewsets.ModelViewSet):
@@ -329,6 +329,39 @@ class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [AllowAny]
 
+class PMProjectViewSet(viewsets.ModelViewSet):
+    queryset = PMProject.objects.all().order_by('-id')
+    serializer_class = PMProjectSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+class PMTaskViewSet(viewsets.ModelViewSet):
+    queryset = PMTask.objects.all().order_by('task_end_date')
+    serializer_class = PMTaskSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        PMProject.objects.filter(pk=instance.project_id).update(
+            task_total=PMTask.objects.filter(project_id=instance.project_id).count()
+        )
+    def perform_destroy(self, instance):
+        proj_id = instance.project_id
+        super().perform_destroy(instance)
+        PMProject.objects.filter(pk=proj_id).update(
+            task_total=PMTask.objects.filter(project_id=proj_id).count()
+        )
+    def perform_update(self, serializer):
+        old = self.get_object()
+        old_proj_id = old.project_id
+        instance = serializer.save()
+        if old_proj_id != instance.project_id:
+            PMProject.objects.filter(pk=old_proj_id).update(
+                task_total=PMTask.objects.filter(project_id=old_proj_id).count()
+            )
+        PMProject.objects.filter(pk=instance.project_id).update(
+            task_total=PMTask.objects.filter(project_id=instance.project_id).count()
+        )
 class ManufacturingOrderViewSet(viewsets.ModelViewSet):
     queryset = ManufacturingOrder.objects.defer('po_file_content').all().order_by('-created_at')
     serializer_class = ManufacturingOrderSerializer

@@ -5,6 +5,8 @@ import { Calendar, ChevronLeft, ChevronRight, Plus, Search, Filter, MoreHorizont
 import html2pdf from "html2pdf.js"
 import { utils, writeFile } from "xlsx"
 import Navigation from "./components/navigation.jsx"
+// Import API base URL for backend connectivity
+import { API_BASE_URL } from "./config.js"
 import "./index.css"
 
 const STORAGE_KEY = "eit-projects-v2"
@@ -993,6 +995,160 @@ export default function ProjectApp() {
     setTimeout(() => setNotification({ show: false, message: "" }), 3000)
   }
 
+  // Build list of API candidates and helper to call backend
+  // This tries API_BASE_URL first, then common localhost ports, returning the first response (even if not OK),
+  // so we can surface error messages from the backend.
+  const API_CANDIDATES = React.useMemo(() => {
+    const proto = window.location.protocol === "https:" ? "https" : "http"
+    const host = window.location.hostname || "127.0.0.1"
+    return Array.from(new Set([
+      API_BASE_URL,
+      `${proto}://${host}:8002`,
+      `${proto}://${host}:8001`,
+      `${proto}://${host}:8000`,
+    ]))
+  }, [])
+
+  const tryFetch = async (path, options) => {
+    for (const base of API_CANDIDATES) {
+      try {
+        const res = await fetch(`${base}${path}`, options)
+        return { res, base }
+      } catch {}
+    }
+    throw new Error("All API endpoints unreachable")
+  }
+
+  // Load PMProject/PMTask from backend and map into UI structure
+  React.useEffect(() => {
+    const loadFromBackend = async () => {
+      try {
+        const { res: pRes } = await tryFetch(`/api/pm_projects/`)
+        const { res: tRes } = await tryFetch(`/api/pm_tasks/`)
+        const apiProjects = pRes.ok ? await pRes.json() : []
+        const apiTasks = tRes.ok ? await tRes.json() : []
+        const mapped = apiProjects.map((proj) => ({
+          id: proj.id,
+          name: proj.name,
+          start: proj.start_date,
+          end: proj.end_date,
+          task_total: proj.task_total,
+          status: "todo",
+          color: DEFAULT_COLOR,
+          expanded: true,
+          apiId: proj.id,
+          api: true,
+          subtasks: apiTasks
+            .filter((t) => t.project === proj.id)
+            .map((t) => ({
+              id: t.id,
+              name: t.name || `Task ${t.id}`,
+              start: t.task_start_date,
+              end: t.task_end_date,
+              status: "todo",
+              color: DEFAULT_COLOR,
+              apiId: t.id,
+              api: true,
+            }))
+        }))
+        if (mapped.length > 0) {
+          setProjects(mapped)
+        }
+      } catch (e) {
+        console.error("Failed to load PM data", e)
+      }
+    }
+    loadFromBackend()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Helper: persist a project to PM_project table (create or update)
+  const persistProjectToAPI = async (project) => {
+    const payload = {
+      name: project.name,
+      start_date: project.start,
+      end_date: project.end,
+      task_total: Array.isArray(project.subtasks) ? project.subtasks.length : 0,
+    }
+    if (project.apiId) {
+      const { res, base } = await tryFetch(`/api/pm_projects/${project.apiId}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "")
+        console.error("Project PATCH failed", res.status, txt)
+        showNotification(`Failed to update backend (${base}): ${res.status}`)
+      }
+      return project.apiId
+    } else {
+      const { res, base } = await tryFetch(`/api/pm_projects/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setProjects(prev => prev.map(p => p.id === project.id ? { ...p, apiId: created.id, api: true } : p))
+        return created.id
+      } else {
+        const txt = await res.text().catch(() => "")
+        console.error("Project POST failed", res.status, txt)
+        showNotification(`Failed to save to backend (${base}): ${res.status}`)
+        return null
+      }
+    }
+  }
+
+  // Helper: persist a subtask to PM_task table (create or update)
+  const persistSubtaskToAPI = async (parentProject, subtask) => {
+    const projectId = await persistProjectToAPI(parentProject)
+    if (!projectId) return null
+    const payload = {
+      project: projectId,
+      name: subtask.name || "",
+      task_start_date: subtask.start,
+      task_end_date: subtask.end,
+    }
+    if (subtask.apiId) {
+      const { res, base } = await tryFetch(`/api/pm_tasks/${subtask.apiId}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "")
+        console.error("Task PATCH failed", res.status, txt)
+        showNotification(`Failed to update task (${base}): ${res.status}`)
+      }
+      return subtask.apiId
+    } else {
+      const { res, base } = await tryFetch(`/api/pm_tasks/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setProjects(prev => prev.map(p => {
+          if (p.id !== parentProject.id) return p
+          return {
+            ...p,
+            subtasks: (p.subtasks || []).map(s => s.id === subtask.id ? { ...s, apiId: created.id, api: true } : s)
+          }
+        }))
+        // Task total is maintained by backend; no manual patch here
+        return created.id
+      } else {
+        const txt = await res.text().catch(() => "")
+        console.error("Task POST failed", res.status, txt)
+        showNotification(`Failed to save task (${base}): ${res.status}`)
+        return null
+      }
+    }
+  }
+
   React.useEffect(() => {
     if (!isModalOpen) {
       setValidationError("")
@@ -1038,17 +1194,55 @@ export default function ProjectApp() {
     setIsModalOpen(true)
   }
 
-  const handleDeleteProject = (id) => {
-    if (confirm("Are you sure you want to delete this project?")) {
-      setProjects((prev) => prev.filter((p) => p.id !== id))
+  const handleDeleteProject = async (id) => {
+    // Delete either a project or a subtask and sync with backend PM_* tables
+    if (!confirm("Are you sure you want to delete this item?")) return
+    const project = projects.find(p => p.id === id)
+    if (project) {
+      // Delete a full project
+      try {
+        if (project.apiId) {
+          const { res, base } = await tryFetch(`/api/pm_projects/${project.apiId}/`, { method: "DELETE" })
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "")
+            console.error("Project delete failed", res.status, txt)
+            showNotification(`Failed to delete project (${base}): ${res.status}`)
+          }
+        }
+      } catch {}
+      setProjects(prev => prev.filter(p => p.id !== id))
+      setIsModalOpen(false)
+      setEditingId(null)
       showNotification("Project deleted successfully")
+      return
+    }
+    // Delete a subtask inside a project
+    const parent = projects.find(p => Array.isArray(p.subtasks) && p.subtasks.some(s => s.id === id))
+    if (parent) {
+      const sub = (parent.subtasks || []).find(s => s.id === id)
+      try {
+        if (sub && sub.apiId) {
+          const { res, base } = await tryFetch(`/api/pm_tasks/${sub.apiId}/`, { method: "DELETE" })
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "")
+            console.error("Subtask delete failed", res.status, txt)
+            showNotification(`Failed to delete task (${base}): ${res.status}`)
+          }
+        }
+        // Task total is maintained by backend; no manual patch here
+      } catch {}
+      setProjects(prev => prev.map(p => p.id === parent.id ? { ...p, subtasks: (p.subtasks || []).filter(s => s.id !== id) } : p))
+      setIsModalOpen(false)
+      setEditingId(null)
+      showNotification("Subtask deleted successfully")
     }
   }
 
-  const saveProject = () => {
+  const saveProject = async () => {
     if (!draft.name || !draft.start || !draft.end) return
 
     if (editingId) {
+        // Update either a project or an existing subtask
         setProjects(prev => prev.map(p => {
             if (p.id === editingId) {
                 return { ...p, ...draft }
@@ -1078,11 +1272,24 @@ export default function ProjectApp() {
             }
             return p
         }))
+        // Persist to backend
+        const targetProject = projects.find(p => p.id === editingId)
+        if (targetProject) {
+          await persistProjectToAPI({ ...targetProject, ...draft })
+        } else {
+          const parent = projects.find(p => Array.isArray(p.subtasks) && p.subtasks.some(s => s.id === editingId))
+          if (parent) {
+            const updated = { ...draft, id: editingId }
+            await persistSubtaskToAPI(parent, updated)
+          }
+        }
     } else if (draftParentId) {
         if (validationError) {
           showNotification(validationError)
           return
         }
+        // Add a new subtask to an existing project, and persist to backend
+        let newSubtaskId = Date.now()
         setProjects(prev => prev.map(p => {
         if (p.id === draftParentId) {
                 const ps = new Date(p.start)
@@ -1102,15 +1309,23 @@ export default function ProjectApp() {
                     end: format(newEnd, "yyyy-MM-dd"),
                     subtasks: [
                         ...(p.subtasks || []),
-                        { id: Date.now(), ...draft }
+                        { id: newSubtaskId, ...draft }
                     ],
                     expanded: true
                 }
             }
             return p
         }))
+        const parent = projects.find(p => p.id === draftParentId)
+        if (parent) {
+          await persistSubtaskToAPI(parent, { id: newSubtaskId, ...draft })
+        }
     } else {
-      setProjects((p) => [...p, { id: Date.now(), ...draft, subtasks: [], expanded: true }])
+      // Create a new project and persist to backend
+      const newId = Date.now()
+      const projectToCreate = { id: newId, ...draft, subtasks: [], expanded: true }
+      setProjects((p) => [...p, projectToCreate])
+      await persistProjectToAPI(projectToCreate)
     }
 
     showNotification(editingId ? "Project updated successfully" : "Project created successfully")
