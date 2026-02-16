@@ -1603,16 +1603,16 @@ def generate_invoice_pdf(request):
     # Then Line
     # Then Details
     
-    # Header Title Table
+    # Header Title Table (Tax Invoice per reference image)
     header_table_data = [
-        [Paragraph("ใบแจ้งหนี้", styles['Header_Title_Bold']), Paragraph("ต้นฉบับ", styles['Header_Title_Bold'])],
-        [Paragraph("INVOICE", styles['Header_Title_Bold']), Paragraph("Original", styles['Header_Title_Bold'])],
-        [Paragraph("ไม่ใชใบกำกับภาษี", styles['Table_Data_Center']), ""]
+        [Paragraph("ต้นฉบับ", styles['Header_Title_Bold']) , ""],
+        [Paragraph("Original", styles['Header_Title_Bold']), ""],
+        [Paragraph("ใบกำกับภาษี/ใบส่งของ", styles['Header_Title_Bold']), ""],
+        [Paragraph("TAX INVOICE/DELIVERY ORDER", styles['Header_Title_Bold']), ""]
     ]
-    header_table = Table(header_table_data, colWidths=[100, 100])
+    header_table = Table(header_table_data, colWidths=[140, 60])
     header_table.setStyle(TableStyle([
-        ('ALIGN', (0,0), (0,-1), 'CENTER'), # Left Col Center
-        ('ALIGN', (1,0), (1,-1), 'CENTER'), # Right Col Center
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('TOPPADDING', (0,0), (-1,-1), 0),
         ('BOTTOMPADDING', (0,0), (-1,-1), 0),
@@ -1712,13 +1712,12 @@ def generate_invoice_pdf(request):
     elements.append(row2)
 
     # --- Row 3: Items Table ---
-    # Cols: No, Description, Qty, Unit, Unit Price, Amount
+    # Cols: Description, Sales ex. Vat, Qty, Unit, Amount
     table_data = [[
-        Paragraph("ลำดับ<br/>No.", styles['Table_Header']),
         Paragraph("รายการ<br/>Description", styles['Table_Header']),
+        Paragraph("ราคาขายไม่รวมภาษี<br/>Sales ex. Vat", styles['Table_Header']),
         Paragraph("จำนวน<br/>Qty", styles['Table_Header']),
         Paragraph("หน่วยนับ<br/>Unit", styles['Table_Header']),
-        Paragraph("ราคาต่อหน่วย<br/>Unit Price", styles['Table_Header']),
         Paragraph("จำนวนเงิน<br/>Amount", styles['Table_Header'])
     ]]
 
@@ -1728,18 +1727,18 @@ def generate_invoice_pdf(request):
             price = float(str(item.get('price', 0)).replace(',', ''))
         except: qty, price = 0, 0
         total = qty * price
-        # Base description only; specification numbering will be added as separate rows (numbers in ITEM column)
-        desc_text = txt(item.get('description', ''))
+        # Base description includes running number like "1- " as in sample
+        base_desc = txt(item.get('description', ''))
+        desc_text = f"{i+1}- {base_desc}" if base_desc else f"{i+1}-"
         spec_rows = item.get('spec_rows') or []
         spec_lines_legacy = item.get('spec_lines') or []
         unit = item.get('unit', 'Pc.')
         
         table_data.append([
-            Paragraph(str(i+1), styles['Table_Data_Center']),
             Paragraph(desc_text, styles['Table_Data']),
+            Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
             Paragraph(f"{qty:,.0f}", styles['Table_Data_Center']),
             Paragraph(unit, styles['Table_Data_Center']),
-            Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
             Paragraph(f"{total:,.2f}", styles['Table_Data_Right'])
         ])
         # Append numbered specification rows: itemnumber in ITEM column, bullets in Description, other cols empty
@@ -1749,7 +1748,6 @@ def generate_invoice_pdf(request):
                     lines = r.get('lines') or []
                     bullets = "<br/>".join([f"• {txt(line)}" for line in lines if str(line).strip() != ""])
                     table_data.append([
-                        Paragraph(f"{i+1}.{idx+1}", styles['Table_Data_Center']),
                         Paragraph(bullets, styles['Table_Data']),
                         "", "", "", ""
                     ])
@@ -1759,30 +1757,30 @@ def generate_invoice_pdf(request):
         elif spec_lines_legacy:
             bullets = "<br/>" + "<br/>".join([f"• {txt(line)}" for line in spec_lines_legacy])
             table_data.append([
-                Paragraph(f"{i+1}.1", styles['Table_Data_Center']),
                 Paragraph(bullets, styles['Table_Data']),
                 "", "", "", ""
             ])
 
 
-    min_rows = 10
+    min_rows = 14
     if len(items) < min_rows:
         for _ in range(min_rows - len(items)):
-            table_data.append(["", "", "", "", "", ""])
+            table_data.append(["", "", "", "", ""])
 
-    # Widths: No(30), Desc(220), Qty(40), Unit(50), Price(90), Amount(105) -> Total 535
-    item_table = Table(table_data, colWidths=[30, 220, 40, 50, 90, 105])
+    # Widths: Desc(240), Sales(100), Qty(40), Unit(50), Amount(105) -> Total 535
+    item_table = Table(table_data, colWidths=[240, 100, 40, 50, 105])
     item_table.setStyle(TableStyle([
-        ('BOX', (0,0), (-1,-1), 1, colors.black),
-        ('GRID', (0,0), (-1,0), 1, colors.black), # Header grid
-        ('LINEBEFORE', (1,0), (-1,-1), 1, colors.black), # Vert lines
-        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('BOX', (0,0), (-1,-1), 1, colors.black),                # outer box only
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),          # header bg
         ('ALIGN', (0,0), (-1,0), 'CENTER'),
         ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
         ('VALIGN', (0,1), (-1,-1), 'TOP'),
         ('FONTNAME', (0,0), (-1,-1), font_name),
         ('TOPPADDING', (0,0), (-1,-1), 3),
         ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        # horizontal lines only (remove vertical grid)
+        ('LINEBELOW', (0,0), (-1,0), 1, colors.black),            # line under header
+        ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.black),         # lines under each data row
     ]))
     elements.append(item_table)
 
@@ -1790,9 +1788,12 @@ def generate_invoice_pdf(request):
     subtotal = totals.get('subtotal', 0)
     vat = totals.get('taxTotal', 0)
     grand_total = totals.get('total', 0)
+    discount = totals.get('discount', 0)
+    net_amount = max(subtotal - discount, 0)
     
     total_data = [
-        ["", "จำนวนเงินสุทธิ\nNet Amount", f"{subtotal:,.2f}"],
+        ["", "ส่วนลด\nDiscount", f"{discount:,.2f}"],
+        ["", "จำนวนเงินสุทธิ\nNet Amount", f"{net_amount:,.2f}"],
         ["", "ภาษีมูลค่าเพิ่ม\nVAT 7%", f"{vat:,.2f}"],
         ["", "รวมเป็นมูลค่า\nTotal of sales", f"{grand_total:,.2f}"]
     ]
