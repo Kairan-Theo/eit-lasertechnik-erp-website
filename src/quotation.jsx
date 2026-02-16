@@ -6,8 +6,10 @@ import Navigation from "./components/navigation.jsx"
 import { API_BASE_URL } from "./config"
 import { format, parseISO } from "date-fns"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
-import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, ClipboardList, FileText } from "lucide-react"
+import { Calendar as CalendarIcon, Plus, Trash, ArrowLeft, ClipboardList } from "lucide-react"
 import { CustomerCombobox } from "./components/customer-combobox.jsx"
+// Import a typing+select combobox component to enhance description input
+import { Combobox } from "./components/combobox.jsx"
 import { DateField } from "./components/ui/date-field"
 
 import "./index.css"
@@ -30,7 +32,9 @@ function useQuotationState() {
     attn: "",
     div: "",
     mobile: "",
-    email: ""
+    email: "",
+    // Multiple responsible contacts (Attn/CC/Mobile/Email)
+    responsibles: []
   })
 
   // Helper to get next quotation number
@@ -77,7 +81,8 @@ function useQuotationState() {
     eitTelephone: " 02-052-9544",
     eitFax: " 02-052 9544",
     eitAddress: "1/120 ซอยรามคําแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510",
-    tradeTerms: "",
+    // Default trade terms set to "Thai baht" but kept editable via input
+    tradeTerms: "Thai baht",
     validity: "",
     delivery: "",
     shipmentLocation: "",
@@ -86,11 +91,19 @@ function useQuotationState() {
     paymentTerms: ""
   })
 
-  const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0 }])
+  // Each item can include nested specification lines (specLines) shown as 1.1 under the item,
+  // plus optional image and edit mode flags for inline editing of specifications.
+  const [items, setItems] = React.useState([{ item: "", model: "", description: "", qty: 1, price: 0, specLines: [], specImage: null, specEdit: false }])
   const [sourceKey, setSourceKey] = React.useState(null)
   const [sourceIndex, setSourceIndex] = React.useState(null)
   const [eitOptions, setEitOptions] = React.useState([])
   const [customerOptions, setCustomerOptions] = React.useState([])
+  // Hold description suggestion options aggregated from PD_* tables
+  const [pdDescriptionOptions, setPdDescriptionOptions] = React.useState([])
+  // Lookup map from rendered option label to its underlying PD data (name/description/specification/type)
+  const [pdOptionLookup, setPdOptionLookup] = React.useState({})
+  // Map of PDSystem id -> array of child products { name, specification }
+  const [systemChildren, setSystemChildren] = React.useState({})
 
   React.useEffect(() => {
     fetch(`${API_BASE_URL}/api/deals/`)
@@ -126,10 +139,131 @@ function useQuotationState() {
       })
   }, [])
 
+  // Load product description suggestions from PD_* tables
+  // This provides selectable options in the Description field while still allowing free typing.
+  React.useEffect(() => {
+    const token = localStorage.getItem("authToken")
+    const headers = {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Token ${token}` } : {})
+    }
+    const endpoints = [
+      "pd_machines",
+      "pd_systems",
+      "pd_wires",
+      "pd_spareparts",
+      "pd_services",
+      "pd_system_childproducts",
+    ]
+    ;(async () => {
+      try {
+        // Fetch each PD_* collection, remembering its type
+        const typedResults = await Promise.all(
+          endpoints.map(async (ep) => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/${ep}/`, { headers })
+              const data = res.ok ? await res.json() : []
+              return data.map((item) => ({ type: ep, item }))
+            } catch {
+              return []
+            }
+          })
+        )
+        const all = typedResults.flat().filter(Boolean)
+        const labels = []
+        const lookup = {}
+        const sysChildren = {}
+        all.forEach(({ type, item }) => {
+          const id = item?.id
+          const name = item?.name ? String(item.name).trim() : ""
+          const desc = item?.description ? String(item.description).trim() : ""
+          const spec = item?.specification ? String(item.specification).trim() : ""
+          // Build label using specification if present; otherwise description; else just name.
+          const detail = spec || desc
+          const label = detail ? `${name} — ${detail}` : name
+          // Collect system child products grouped by PDSystem id
+          if (type === "pd_system_childproducts") {
+            const sysId = item?.system
+            if (sysId != null) {
+              if (!sysChildren[sysId]) sysChildren[sysId] = []
+              sysChildren[sysId].push({ name, specification: spec })
+            }
+          }
+          // Populate lookup for all resources with their type and id
+          if (label && !lookup[label]) {
+            labels.push(label)
+            lookup[label] = { id, type, name, description: desc, specification: spec }
+          }
+        })
+        setPdDescriptionOptions(labels)
+        setPdOptionLookup(lookup)
+        setSystemChildren(sysChildren)
+      } catch (e) {
+        console.error("Error loading PD description options", e)
+        setPdDescriptionOptions([])
+        setPdOptionLookup({})
+        setSystemChildren({})
+      }
+    })()
+  }, [])
+
   const total = items.reduce((sum, it) => sum + (parseNumber(it.qty) || 0) * (parseNumber(it.price) || 0), 0)
 
-  const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0 }])
-  const addSpecificItem = () => setItems((prev) => [...prev, { type: 'specific', item: "", model: "", description: "Specific Description", qty: 0, price: 0 }])
+  const addItem = () => setItems((prev) => [...prev, { item: "", model: "", description: "", qty: 1, price: 0, specRows: [], specEdit: false }])
+  // Removed: addSpecificItem — per request to delete the button and function
+  // Add another responsible contact (Attn + CC) with separate Division/Mobile/Email for each line
+  const addResponsible = () => {
+    setCustomer(prev => {
+      const next = Array.isArray(prev.responsibles) ? [...prev.responsibles] : []
+      next.push({ 
+        attn: "", attnDiv: "", attnMobile: "", attnEmail: "",
+        cc: "", ccDiv: "", ccMobile: "", ccEmail: ""
+      })
+      return { ...prev, responsibles: next }
+    })
+  }
+  // Update a responsible contact field; mirror index 0 Attn line to top-level fields for backend compatibility
+  const updateResponsible = (idx, field, value) => {
+    setCustomer(prev => {
+      const base = Array.isArray(prev.responsibles) && prev.responsibles.length > 0
+        ? [...prev.responsibles]
+        : [{
+            attn: prev.attn || "", attnDiv: prev.div || "", attnMobile: prev.mobile || "", attnEmail: prev.email || "",
+            cc: "", ccDiv: "", ccMobile: "", ccEmail: ""
+          }]
+      const target = base[idx] || { 
+        attn: "", attnDiv: "", attnMobile: "", attnEmail: "",
+        cc: "", ccDiv: "", ccMobile: "", ccEmail: ""
+      }
+      base[idx] = { ...target, [field]: value }
+      const next = { ...prev, responsibles: base }
+      // Mirror the first Attn-line fields to legacy top-level values
+      if (idx === 0) {
+        if (field === 'attn') next.attn = value
+        if (field === 'attnDiv') next.div = value
+        if (field === 'attnMobile') next.mobile = value
+        if (field === 'attnEmail') next.email = value
+      }
+      return next
+    })
+  }
+  // Remove a responsible pair; if first is removed, mirror new first values to legacy top-level fields
+  const removeResponsible = (idx) => {
+    setCustomer(prev => {
+      const base = Array.isArray(prev.responsibles) ? [...prev.responsibles] : []
+      if (base.length === 0) return prev
+      base.splice(idx, 1)
+      const next = { ...prev, responsibles: base }
+      if (idx === 0) {
+        const first = base[0] || { attn: "", attnDiv: "", attnMobile: "", attnEmail: "" }
+        next.attn = first.attn || ""
+        next.div = first.attnDiv || ""
+        next.mobile = first.attnMobile || ""
+        next.email = first.attnEmail || ""
+      }
+      return next
+    })
+  }
 
   const insertRow = (index) => {
     setItems((prevItems) => {
@@ -146,7 +280,126 @@ function useQuotationState() {
         idx === i ? { ...row, [field]: value } : row,
       ),
     )
+  
+  // When a PD option is selected from the Description combobox:
+  // - Put the PD "name" into the current row's description (the title)
+  // - Put the PD "specification" (or description fallback) into the NEXT LINE as a 'specific' row
+  //   so the specification appears below, not inside the title line.
+  const applyPdSelection = (rowIndex, label) => {
+    const meta = pdOptionLookup[label]
+    const pdName = (meta?.name || "").trim()
+    const specText = (meta?.specification || meta?.description || "").trim()
+    setItems((prev) => {
+      const next = [...prev]
+      if (next[rowIndex]) {
+        // Set the chosen PD name as the main description/title on this row
+        next[rowIndex] = { ...next[rowIndex], description: pdName || label }
+      }
+      // Initialize first specification row under the item with fetched lines
+      const lines = String(specText || "")
+        .split("\n")
+        .map(s => s.trim())
+        .filter(Boolean)
+      next[rowIndex] = { 
+        ...next[rowIndex], 
+        specRows: [{ lines, image: null, edit: true }] 
+      }
+      // If a PD system is chosen, append its child products as new item rows with their specifications
+      if (meta?.type === "pd_systems" && meta?.id != null) {
+        const children = systemChildren[meta.id] || []
+        let insertAt = rowIndex + 1
+        children.forEach((c) => {
+          const childLines = String(c?.specification || "")
+            .split("\n")
+            .map(s => s.trim())
+            .filter(Boolean)
+          next.splice(insertAt, 0, {
+            item: "",
+            model: "",
+            description: c?.name || "",
+            qty: 1,
+            price: 0,
+            // Place child specifications under the child item
+            specRows: [{ lines: childLines, image: null, edit: false }],
+            specEdit: false
+          })
+          insertAt += 1
+        })
+      }
+      return next
+    })
+  }
 
+  // Update a specific specification row's lines. Preserve spaces and blank lines;
+  // only normalize Windows CRLF to LF so the textarea behaves naturally.
+  const updateSpecLines = (rowIndex, text, specIndex = 0) => {
+    const lines = String(text || "")
+      .replace(/\r/g, "")
+      .split("\n")
+    setItems(prev => prev.map((row, idx) => {
+      if (idx !== rowIndex) return row
+      const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
+      if (!rows[specIndex]) rows[specIndex] = { lines: [], image: null, edit: true }
+      rows[specIndex] = { ...rows[specIndex], lines }
+      return { ...row, specRows: rows }
+    }))
+  }
+
+  // Toggle edit mode for a specific specification row
+  const setSpecEdit = (rowIndex, flag, specIndex = 0) => {
+    setItems(prev => prev.map((row, idx) => {
+      if (idx !== rowIndex) return row
+      const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
+      if (!rows[specIndex]) rows[specIndex] = { lines: [], image: null, edit: !!flag }
+      else rows[specIndex] = { ...rows[specIndex], edit: !!flag }
+      return { ...row, specRows: rows }
+    }))
+  }
+
+  // Set or remove image for a specific specification row
+  const setSpecImage = (rowIndex, dataUrl, specIndex = 0) => {
+    setItems(prev => prev.map((row, idx) => {
+      if (idx !== rowIndex) return row
+      const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
+      // Initialize image with a default adjustable size so the user can tweak it
+      if (!rows[specIndex]) rows[specIndex] = { lines: [], image: dataUrl || null, imageWidth: 64, imageHeight: 64, edit: true }
+      else rows[specIndex] = { ...rows[specIndex], image: dataUrl || null, imageWidth: rows[specIndex].imageWidth || 64, imageHeight: rows[specIndex].imageHeight || 64 }
+      return { ...row, specRows: rows }
+    }))
+  }
+  // Adjust specification image size (uniform scale: width=height=size)
+  const setSpecImageSize = (rowIndex, size, specIndex = 0) => {
+    setItems(prev => prev.map((row, idx) => {
+      if (idx !== rowIndex) return row
+      const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
+      if (!rows[specIndex]) rows[specIndex] = { lines: [], image: null, imageWidth: size, imageHeight: size, edit: true }
+      else rows[specIndex] = { ...rows[specIndex], imageWidth: size, imageHeight: size }
+      return { ...row, specRows: rows }
+    }))
+  }
+
+  // Add a new specification row under an item and open it for editing
+  const addSpecRow = (rowIndex) => {
+    setItems(prev => prev.map((row, idx) => {
+      if (idx !== rowIndex) return row
+      const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
+      rows.push({ lines: [], image: null, edit: true })
+      return { ...row, specRows: rows }
+    }))
+  }
+
+  // Delete a specific specification row from an item
+  // Keeps remaining rows and their numbering consistent (1.1, 1.2, ...)
+  const removeSpecRow = (rowIndex, specIndex = 0) => {
+    setItems(prev => prev.map((row, idx) => {
+      if (idx !== rowIndex) return row
+      const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
+      if (specIndex >= 0 && specIndex < rows.length) {
+        rows.splice(specIndex, 1)
+      }
+      return { ...row, specRows: rows }
+    }))
+  }
   // Load from URL params if present
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -264,12 +517,33 @@ function useQuotationState() {
     }
   }, [])
 
-  return { customer, setCustomer, details, setDetails, items, setItems, addItem, addSpecificItem, insertItem: insertRow, removeItem, updateItem, total, sourceKey, sourceIndex, eitOptions, customerOptions }
+  // Expose helpers and pd lookup for use in the Description combobox
+  // Include setSpecImageSize so UI slider can adjust image dimensions
+  // Exclude addSpecificItem per request (button and function removed)
+  return { customer, setCustomer, details, setDetails, items, setItems, addItem, insertItem: insertRow, removeItem, updateItem, applyPdSelection, updateSpecLines, setSpecEdit, setSpecImage, setSpecImageSize, addSpecRow, removeSpecRow, addResponsible, updateResponsible, removeResponsible, total, sourceKey, sourceIndex, eitOptions, customerOptions, pdDescriptionOptions, pdOptionLookup }
 }
 
 function QuotationPage() {
   const q = useQuotationState()
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
+  // Full-size preview for uploaded specification image
+  const [previewSrc, setPreviewSrc] = React.useState(null)
+  // Keep refs to each spec textarea so we can auto-size them to fit content.
+  const specTextareasRef = React.useRef({})
+
+  // Auto-grow each spec textarea to fit content whenever items/spec rows change.
+  React.useEffect(() => {
+    q.items.forEach((it, i) => {
+      const rows = Array.isArray(it.specRows) ? it.specRows : []
+      rows.forEach((sr, sIndex) => {
+        const el = specTextareasRef.current[`${i}-${sIndex}`]
+        if (el && sr?.edit) {
+          el.style.height = "auto"
+          el.style.height = `${el.scrollHeight}px`
+        }
+      })
+    })
+  }, [q.items])
 
   const handlePrintPdf = async () => {
     try {
@@ -278,8 +552,14 @@ function QuotationPage() {
         customer: q.customer,
         items: q.items.map(i => ({
           ...i,
+          // Send numeric values for calculations in PDF
           qty: parseNumber(i.qty),
-          price: parseNumber(i.price)
+          price: parseNumber(i.price),
+          // Include specification rows for PDF (supports multiple spec rows)
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+          // Legacy fields kept for backward compatibility
+          spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
+          spec_image_data: i.specImage || null
         })),
         totals: { total: q.total }
       }
@@ -465,23 +745,78 @@ function QuotationPage() {
              </div>
           </div>
 
-          <h3 className="text-base font-bold text-gray-900 pt-2">Customer Responsible</h3>
-
-          {/* Attn / Div / Mobile */}
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Attention(Attn.)</label>
-                <input value={q.customer.attn} onChange={(e) => q.setCustomer({ ...q.customer, attn: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Attention" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
-                <input value={q.customer.div} onChange={(e) => q.setCustomer({ ...q.customer, div: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
-                <input value={q.customer.mobile} onChange={(e) => q.setCustomer({ ...q.customer, mobile: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
-            </div>
+          <div className="flex items-center justify-between pt-2">
+             <h3 className="text-base font-bold text-gray-900">Customer Responsible</h3>
+             {/* Add Responsible (Attn + CC) */}
+             <button onClick={q.addResponsible} className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
+               <Plus className="w-4 h-4" />
+               <span className="text-sm font-medium">Add Attn + CC</span>
+             </button>
           </div>
+          {/* Render Responsibles in two rows per contact:
+              Row 1: Attn., Division, Mobile, Email
+              Row 2: CC., Division, Mobile, Email */}
+          {(() => {
+            const contacts = Array.isArray(q.customer.responsibles) && q.customer.responsibles.length > 0
+              ? q.customer.responsibles
+              : [{ 
+                  attn: q.customer.attn || "", attnDiv: q.customer.div || "", attnMobile: q.customer.mobile || "", attnEmail: q.customer.email || "",
+                  cc: "", ccDiv: "", ccMobile: "", ccEmail: "" 
+                }]
+            return contacts.map((c, idx) => (
+              <div key={`resp-block-${idx}`} className="mt-3">
+                {/* Delete this Attn+CC pair */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => q.removeResponsible(idx)}
+                    className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 text-sm"
+                    title="Delete Attn + CC"
+                  >
+                    <Trash className="w-4 h-4" />
+                    Delete
+                  </button>
+                </div>
+                {/* Attn row */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Attention(Attn.)</label>
+                    <input value={c.attn} onChange={(e) => q.updateResponsible(idx, 'attn', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Attention" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
+                    <input value={c.attnDiv || ""} onChange={(e) => q.updateResponsible(idx, 'attnDiv', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                    <input value={c.attnMobile || ""} onChange={(e) => q.updateResponsible(idx, 'attnMobile', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input value={c.attnEmail || ""} onChange={(e) => q.updateResponsible(idx, 'attnEmail', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Email" />
+                  </div>
+                </div>
+                {/* CC row */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">CC</label>
+                    <input value={c.cc || ""} onChange={(e) => q.updateResponsible(idx, 'cc', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="CC (optional)" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
+                    <input value={c.ccDiv || ""} onChange={(e) => q.updateResponsible(idx, 'ccDiv', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                    <input value={c.ccMobile || ""} onChange={(e) => q.updateResponsible(idx, 'ccMobile', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input value={c.ccEmail || ""} onChange={(e) => q.updateResponsible(idx, 'ccEmail', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Email" />
+                  </div>
+                </div>
+              </div>
+            ))
+          })()}
         </div>
 
 
@@ -490,14 +825,14 @@ function QuotationPage() {
         <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 mb-8">
            <div className="flex justify-between items-center mb-4">
              <h2 className="text-xl font-bold text-[#2D4485]">Quotation Description</h2>
-             <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
-               <Plus className="w-4 h-4" />
-               <span className="text-sm font-medium">Add Item</span>
-             </button>
-             <button onClick={q.addSpecificItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200">
-               <FileText className="w-4 h-4" />
-               <span className="text-sm font-medium">Add Specific Description</span>
-             </button>
+             {/* Action buttons: Add Item */}
+             <div className="flex items-center gap-2">
+               {/* Add Item: standard product/service line */}
+               <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
+                 <Plus className="w-4 h-4" />
+                 <span className="text-sm font-medium">Add Item</span>
+               </button>
+             </div>
            </div>
            <div className="overflow-x-auto">
              <table className="w-full text-left border-collapse">
@@ -514,7 +849,8 @@ function QuotationPage() {
                </thead>
                <tbody className="divide-y divide-gray-100">
                  {q.items.map((item, i) => (
-                   <tr key={i} className="hover:bg-gray-50 transition border-b border-gray-100">
+                   <>
+                   <tr key={`item-${i}`} className="hover:bg-gray-50 transition border-b border-gray-100">
                      <td className="p-3 text-center text-sm text-gray-700">
                        {i + 1}
                      </td>
@@ -533,7 +869,14 @@ function QuotationPage() {
                        <input value={item.model} onChange={(e) => q.updateItem(i, "model", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Model" />
                      </td>
                     <td className="p-3">
-                      <input value={item.description} onChange={(e) => q.updateItem(i, "description", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" placeholder="Description" />
+                      {/* Description combobox: select PD name; nested specifications render below as 1.x */}
+                      <Combobox
+                        value={item.description}
+                        onChange={(val) => q.updateItem(i, "description", val)}
+                        onSelect={(label) => q.applyPdSelection(i, label)}
+                        options={q.pdDescriptionOptions}
+                        placeholder="Select or type description..."
+                      />
                     </td>
                     <td className="p-3">
                       <input 
@@ -559,27 +902,157 @@ function QuotationPage() {
                      )}
                      <td className="p-3 text-right">
                        <div className="flex justify-end gap-2">
-                         <button onClick={() => q.insertItem(i)} className="text-[#2D4485] hover:text-[#1a2c5e]" title="Insert Item Below"><Plus className="w-4 h-4" /></button>
+                        {/* Plus now adds a specification row/editor for this item */}
+                        <button onClick={() => q.addSpecRow(i)} className="text-[#2D4485] hover:text-[#1a2c5e]" title="Add Specification"><Plus className="w-4 h-4" /></button>
                          <button onClick={() => q.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete"><Trash className="w-4 h-4" /></button>
                        </div>
                      </td>
                    </tr>
+                   {/* Render all specification lines under one subordinate row (1.1) since they are stored together.
+                       Show bullet list inside the description cell to keep them visually grouped. */}
+                  {(() => {
+                    // Determine spec rows (support legacy specLines/specImage/specEdit)
+                    const legacyRows = Array.isArray(item.specLines)
+                      ? [{ lines: item.specLines, image: item.specImage || null, edit: !!item.specEdit }]
+                      : []
+                    const specRows = Array.isArray(item.specRows) ? item.specRows : legacyRows
+                    const rowsToRender = specRows.length > 0 ? specRows : (item.specEdit ? [{ lines: [], image: null, edit: true }] : [])
+                    return rowsToRender.map((sr, sIndex) => (
+                      <tr key={`item-${i}-spec-${sIndex}`} className="hover:bg-gray-50 transition border-b border-gray-100">
+                        <td className="p-3 text-center text-sm text-gray-700">{`${i + 1}.${sIndex + 1}`}</td>
+                        <td className="p-3" colSpan={5}>
+                          {/* Full-width spec box with side actions */}
+                          <div className="flex items-start gap-4">
+                            {/* Left: specification content/editor */}
+                            <div className="flex-1">
+                              {!sr.edit ? (
+                                // Read-only spec box; allow double-click to enter edit mode
+                                <div
+                                  className="text-sm text-gray-800 rounded-lg border border-gray-300 p-3"
+                                  onDoubleClick={() => q.setSpecEdit(i, true, sIndex)}
+                                  title="Double-click to edit specification"
+                                >
+                                  {sr.lines.length === 1 ? (
+                                    sr.lines[0]
+                                  ) : (
+                                    <ul className="list-disc pl-5 space-y-1">
+                                      {sr.lines.map((line, si) => (
+                                        <li key={si}>{line}</li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              ) : (
+                                // Auto-resizing textarea: remove vertical resize, grow with content
+                                <textarea
+                                  value={sr.lines.join("\n")}
+                                  ref={(el) => { specTextareasRef.current[`${i}-${sIndex}`] = el }}
+                                  onChange={(e) => {
+                                    e.target.style.height = "auto"
+                                    e.target.style.height = `${e.target.scrollHeight}px`
+                                    q.updateSpecLines(i, e.target.value, sIndex)
+                                  }}
+                                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2D4485] outline-none min-h-[160px] resize-none overflow-hidden"
+                                  placeholder="Edit specifications (one per line)"
+                                  style={{ height: "auto" }}
+                                />
+                              )}
+                            </div>
+                            {/* Right: actions beside the spec box (Edit + Upload on the same line) */}
+                            <div className="w-64 shrink-0">
+                              <div className="flex items-center gap-3">
+                                {!sr.edit ? (
+                                  <button
+                                    className="text-[#2D4485] hover:text-[#1a2c5e] text-sm underline"
+                                    onClick={() => q.setSpecEdit(i, true, sIndex)}
+                                  >
+                                    Edit
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="text-[#2D4485] hover:text-[#1a2c5e] text-sm underline"
+                                    onClick={() => q.setSpecEdit(i, false, sIndex)}
+                                  >
+                                    Save
+                                  </button>
+                                )}
+                                <label
+                                  htmlFor={`spec-upload-${i}-${sIndex}`}
+                                  className="cursor-pointer text-sm text-[#2D4485] underline hover:text-[#1a2c5e]"
+                                >
+                                  Upload Image
+                                </label>
+                                <input
+                                  id={`spec-upload-${i}-${sIndex}`}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (!file) return
+                                    const reader = new FileReader()
+                                    reader.onload = () => q.setSpecImage(i, reader.result, sIndex)
+                                    reader.readAsDataURL(file)
+                                    e.target.value = ""
+                                  }}
+                                />
+                                {/* Show uploaded image preview right beside the Upload action */}
+                                {sr.image && (
+                                  <>
+                                    <img
+                                      src={sr.image}
+                                      alt="Specification"
+                                      style={{ width: `${sr.imageWidth || 64}px`, height: `${sr.imageHeight || 64}px` }}
+                                      className="object-cover rounded border border-gray-300 cursor-pointer"
+                                      onClick={() => setPreviewSrc(sr.image)}
+                                    />
+                                    {/* Image size slider: adjust width/height uniformly */}
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-600">Size</span>
+                                      <input
+                                        type="range"
+                                        min="40"
+                                        max="120"
+                                        step="4"
+                                        value={sr.imageWidth || 64}
+                                        onChange={(e) => q.setSpecImageSize(i, parseInt(e.target.value, 10), sIndex)}
+                                      />
+                                      <span className="text-xs text-gray-700">{sr.imageWidth || 64}px</span>
+                                    </div>
+                                    <button
+                                      className="text-red-600 hover:text-red-800 text-sm underline"
+                                      onClick={() => q.setSpecImage(i, null, sIndex)}
+                                    >
+                                      Remove Image
+                                    </button>
+                                  </>
+                                )}
+                                {/* Delete this specification row */}
+                                <button
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Delete Specification"
+                                  onClick={() => q.removeSpecRow(i, sIndex)}
+                                >
+                                  <Trash className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3 text-right"></td>
+                      </tr>
+                    ))
+                  })()}
+                   </>
                  ))}
                </tbody>
              </table>
            </div>
-           <div className="flex flex-col md:flex-row justify-between items-start mt-4 gap-4">
-             <div className="flex gap-2">
-               <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
-                 <Plus className="w-4 h-4" />
-                 <span className="text-sm font-medium">Add Item</span>
-               </button>
-               <button onClick={q.addSpecificItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200">
-                 <FileText className="w-4 h-4" />
-                 <span className="text-sm font-medium">Add Specific Description</span>
-               </button>
-             </div>
-             <div className="w-64 space-y-2">
+          {/* Align totals to the right (original placement). 
+              Using md:ml-auto pushes this block to the far right on desktop. */}
+          <div className="flex flex-col md:flex-row items-start mt-4 gap-4 justify-end">
+            {/* Totals summary block */}
+            <div className="w-64 space-y-2 md:ml-auto md:text-right">
                <div className="flex justify-between text-base font-bold text-gray-900"><span>Total:</span> <span>{q.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                <div className="flex justify-between text-base font-bold text-gray-900"><span>VAT 7%:</span> <span>{(q.total * 0.07).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                <div className="flex justify-between text-base font-bold text-[#2D4485] pt-2 border-t"><span>Grand Total:</span> <span>{(q.total * 1.07).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
@@ -816,7 +1289,32 @@ function QuotationPage() {
       )}
       {/* Modal removed */}
 
-
+      {/* Full-size image preview overlay */}
+      {previewSrc && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
+          onClick={() => setPreviewSrc(null)}
+        >
+          <div
+            className="max-w-[90vw] max-h-[90vh] bg-white rounded-lg shadow-2xl p-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={previewSrc}
+              alt="Preview"
+              className="max-w-[85vw] max-h-[80vh] object-contain rounded"
+            />
+            <div className="mt-3 text-right">
+              <button
+                className="px-3 py-1 text-sm rounded border border-gray-300 hover:bg-gray-100"
+                onClick={() => setPreviewSrc(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </main>
   )
