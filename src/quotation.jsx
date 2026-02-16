@@ -1494,88 +1494,58 @@ function QuotationPage() {
                 </div>
                 <button className="text-gray-500 hover:text-gray-900" onClick={() => setOpenCreateConfirm(false)}>✕</button>
               </div>
-              <div className="p-4 grid grid-cols-3 gap-4">
-                <button
-                  className="w-full px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                  onClick={() => { setOpenCreateConfirm(false); window.location.href = "/admin.html" }}
-                >
-                  Discard
-                </button>
-                <button
-                  className="w-full px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] min-w-[140px]"
-                  onClick={() => {
-                    const handleSave = async () => {
-                      try {
-                        // --- 1. LocalStorage Save (Legacy/Backup) ---
-                        const company = q.customer.company || "Unknown"
-                        const targetKey = `history:${company}`
-                        
-                        if (q.sourceKey && q.sourceKey !== targetKey && q.sourceIndex !== null) {
-                            try {
-                                const oldDataStr = localStorage.getItem(q.sourceKey)
-                                if (oldDataStr) {
-                                    const oldData = JSON.parse(oldDataStr)
-                                    if (oldData && Array.isArray(oldData.quotations)) {
-                                        oldData.quotations.splice(q.sourceIndex, 1)
-                                        localStorage.setItem(q.sourceKey, JSON.stringify(oldData))
-                                    }
-                                }
-                            } catch(e) { console.error("Error removing old record", e) }
-                        }
-
-                        let data = { customer: q.customer, quotations: [], invoices: [], billingNotes: [] }
+              <div className="p-4 space-y-3">
+                <div className="grid grid-cols-3 gap-4">
+                  <button
+                    className="w-full px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
+                    onClick={() => { setOpenCreateConfirm(false); window.location.href = "/admin.html" }}
+                  >
+                    Discard
+                  </button>
+                  <button
+                    className="w-full px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
+                    onClick={() => {
+                      const handleSaveAsNew = async () => {
                         try {
-                          const existing = localStorage.getItem(targetKey)
-                          if (existing) {
-                            const parsed = JSON.parse(existing)
-                            if (parsed) data = { ...data, ...parsed }
+                          const company = q.customer.company || "Unknown"
+                          const targetKey = `history:${company}`
+                          let data = { customer: q.customer, quotations: [], invoices: [], billingNotes: [] }
+                          try {
+                            const existing = localStorage.getItem(targetKey)
+                            if (existing) {
+                              const parsed = JSON.parse(existing)
+                              if (parsed) data = { ...data, ...parsed }
+                            }
+                          } catch (e) { console.error("Error parsing localStorage", e) }
+                          if (!Array.isArray(data.quotations)) data.quotations = []
+                          if (!data.customer || !data.customer.company) data.customer = q.customer
+                          const newQuotation = {
+                            id: Date.now(),
+                            savedAt: new Date().toISOString(),
+                            number: q.details.number,
+                            details: q.details,
+                            items: q.items,
+                            total: q.total,
+                            totals: { total: q.total },
+                            customerName: company
                           }
-                        } catch (e) { console.error("Error parsing localStorage", e) }
-
-                        if (!Array.isArray(data.quotations)) data.quotations = []
-                        if (!data.customer || !data.customer.company) data.customer = q.customer
-
-                        const newQuotation = {
-                          id: Date.now(),
-                          savedAt: new Date().toISOString(),
-                          number: q.details.number,
-                          details: q.details,
-                          items: q.items,
-                          total: q.total,
-                          totals: { total: q.total },
-                          customerName: company
-                        }
-
-                        let updateIndex = -1
-                        if (q.sourceKey === targetKey && q.sourceIndex !== null) {
-                             updateIndex = q.sourceIndex
-                        } else {
-                             updateIndex = data.quotations.findIndex(x => x.number === q.details.number)
-                        }
-
-                        if (updateIndex >= 0 && updateIndex < data.quotations.length) {
-                          data.quotations[updateIndex] = newQuotation
-                        } else {
                           data.quotations.push(newQuotation)
-                        }
-
-                        localStorage.setItem(targetKey, JSON.stringify(data))
-                        
-                        // --- 2. Backend Database Save ---
-                        // Use the first Attn/CC entry to persist into the Customer record.
-                        // This keeps a single canonical CC stored on the Customer table.
-                        // Build CSV strings for multiple Attn/CC entries from responsibles[]
-                        const list = Array.isArray(q.customer.responsibles) ? q.customer.responsibles : []
-                        const attnList = list.map(r => (r.attn || "").trim()).filter(Boolean)
-                        const attnDivList = list.map(r => (r.attnDiv || "").trim()).filter(Boolean)
-                        const attnMobileList = list.map(r => (r.attnMobile || "").trim()).filter(Boolean)
-                        const attnEmailList = list.map(r => (r.attnEmail || "").trim()).filter(Boolean)
-                        const ccList = list.map(r => (r.cc || "").trim()).filter(Boolean)
-                        const ccDivList = list.map(r => (r.ccDiv || "").trim()).filter(Boolean)
-                        const ccMobileList = list.map(r => (r.ccMobile || "").trim()).filter(Boolean)
-                        const ccEmailList = list.map(r => (r.ccEmail || "").trim()).filter(Boolean)
-                        const backendPayload = {
-                            qo_code: q.details.number,
+                          localStorage.setItem(targetKey, JSON.stringify(data))
+                          const list = Array.isArray(q.customer.responsibles) ? q.customer.responsibles : []
+                          const attnList = list.map(r => (r.attn || "").trim()).filter(Boolean)
+                          const attnDivList = list.map(r => (r.attnDiv || "").trim()).filter(Boolean)
+                          const attnMobileList = list.map(r => (r.attnMobile || "").trim()).filter(Boolean)
+                          const attnEmailList = list.map(r => (r.attnEmail || "").trim()).filter(Boolean)
+                          const ccList = list.map(r => (r.cc || "").trim()).filter(Boolean)
+                          const ccDivList = list.map(r => (r.ccDiv || "").trim()).filter(Boolean)
+                          const ccMobileList = list.map(r => (r.ccMobile || "").trim()).filter(Boolean)
+                          const ccEmailList = list.map(r => (r.ccEmail || "").trim()).filter(Boolean)
+                          let qo_code = q.details.number || `QUO-${Date.now()}`
+                          if (q.sourceKey === 'api') {
+                            qo_code = `${qo_code}-COPY-${Date.now()}`
+                          }
+                          const backendPayload = {
+                            qo_code,
                             created_date: q.details.date,
                             customer_name: q.customer.company || "Unknown",
                             customer_tax_id: q.customer.taxId || "",
@@ -1583,7 +1553,6 @@ function QuotationPage() {
                             customer_email: q.customer.email || "",
                             customer_phone: q.customer.telephone || "",
                             customer_fax: q.customer.fax || "",
-                            // Persist multi values as CSV strings
                             cus_respon_attn: attnList.join(','),
                             cus_respon_div: attnDivList.join(','),
                             cus_respon_mobile: attnMobileList.join(','),
@@ -1605,74 +1574,210 @@ function QuotationPage() {
                             invoice_date: (q.details.invoiceDate && q.details.invoiceDate !== "SAME AS DELIVERY DATE") ? q.details.invoiceDate : null,
                             remark: q.details.remark || "",
                             items: q.items.map(item => ({
-                                item: item.item || "",
-                                model: item.model || "",
-                                description: item.description || "",
-                                qty: item.qty || 1,
-                                price: item.price || 0
+                              item: item.item || "",
+                              model: item.model || "",
+                              description: item.description || "",
+                              qty: item.qty || 1,
+                              price: item.price || 0
                             }))
-                        }
-                        
-                        // Validate date format for backend
-                        if (backendPayload.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(backendPayload.invoice_date)) {
-                             backendPayload.invoice_date = null
-                        }
-
-                        console.log("Saving to backend...", backendPayload)
-                        
-                        let url = `${API_BASE_URL}/api/quotations/`
-                        let method = 'POST'
-                        
-                        if (q.sourceKey === 'api' && q.sourceIndex) {
-                            url = `${API_BASE_URL}/api/quotations/${q.sourceIndex}/`
-                            method = 'PUT'
-                        }
-
-                        const response = await fetch(url, {
-                            method: method,
+                          }
+                          if (backendPayload.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(backendPayload.invoice_date)) {
+                            backendPayload.invoice_date = null
+                          }
+                          let response = await fetch(`${API_BASE_URL}/api/quotations/`, {
+                            method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(backendPayload)
-                        })
-
-                        if (!response.ok) {
-                            const errText = await response.text()
-                            console.error("Backend save error:", errText)
-                            throw new Error("Failed to save to database: " + errText)
+                          })
+                          if (!response.ok) {
+                            backendPayload.qo_code = `${q.details.number || 'QUO'}-COPY-${Date.now()}`
+                            const retry = await fetch(`${API_BASE_URL}/api/quotations/`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(backendPayload)
+                            })
+                            if (!retry.ok) {
+                              const err2 = await retry.text()
+                              throw new Error("Failed to save new quotation: " + err2)
+                            }
+                          }
+                          alert("Saved as new quotation!")
+                          setOpenCreateConfirm(false)
+                          window.location.href = "/admin.html"
+                        } catch (error) {
+                          console.error(error)
+                          alert("Error saving as new: " + error.message)
                         }
-                        
-                        alert("Quotation saved successfully!")
-                        setOpenCreateConfirm(false)
-                        window.location.href = "/admin.html"
-                      } catch (error) {
-                        console.error(error)
-                        alert("Error saving quotation: " + error.message)
                       }
-                    }
-                    handleSave()
-                  }}
-                >
-                  Save Changes
-                </button>
-                <button
-                  className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[140px] whitespace-nowrap text-center"
-                  onClick={() => {
-                    setOpenCreateConfirm(false)
-                    handlePrintPdf()
-                  }}
-                >
-                  Download Form
-                </button>
-                <button
-                  className="w-full px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[220px] whitespace-nowrap text-center"
-                  onClick={() => {
-                    setOpenCreateConfirm(false)
-                    // New: combine with cover photo (media/ใบปะหน้า.pdf)
-                    handlePrintPdfWithCover()
-                  }}
-                >
-                  Download Form with cover photo
-                </button>
-                
+                      handleSaveAsNew()
+                    }}
+                  >
+                    Save as new
+                  </button>
+                  <button
+                    className="w-full px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6] min-w-[140px]"
+                    onClick={() => {
+                      const handleSave = async () => {
+                        try {
+                          const company = q.customer.company || "Unknown"
+                          const targetKey = `history:${company}`
+                          
+                          if (q.sourceKey && q.sourceKey !== targetKey && q.sourceIndex !== null) {
+                              try {
+                                  const oldDataStr = localStorage.getItem(q.sourceKey)
+                                  if (oldDataStr) {
+                                      const oldData = JSON.parse(oldDataStr)
+                                      if (oldData && Array.isArray(oldData.quotations)) {
+                                          oldData.quotations.splice(q.sourceIndex, 1)
+                                          localStorage.setItem(q.sourceKey, JSON.stringify(oldData))
+                                      }
+                                  }
+                              } catch(e) { console.error("Error removing old record", e) }
+                          }
+ 
+                          let data = { customer: q.customer, quotations: [], invoices: [], billingNotes: [] }
+                          try {
+                            const existing = localStorage.getItem(targetKey)
+                            if (existing) {
+                              const parsed = JSON.parse(existing)
+                              if (parsed) data = { ...data, ...parsed }
+                            }
+                          } catch (e) { console.error("Error parsing localStorage", e) }
+ 
+                          if (!Array.isArray(data.quotations)) data.quotations = []
+                          if (!data.customer || !data.customer.company) data.customer = q.customer
+ 
+                          const newQuotation = {
+                            id: Date.now(),
+                            savedAt: new Date().toISOString(),
+                            number: q.details.number,
+                            details: q.details,
+                            items: q.items,
+                            total: q.total,
+                            totals: { total: q.total },
+                            customerName: company
+                          }
+ 
+                          let updateIndex = -1
+                          if (q.sourceKey === targetKey && q.sourceIndex !== null) {
+                               updateIndex = q.sourceIndex
+                          } else {
+                               updateIndex = data.quotations.findIndex(x => x.number === q.details.number)
+                          }
+ 
+                          if (updateIndex >= 0 && updateIndex < data.quotations.length) {
+                            data.quotations[updateIndex] = newQuotation
+                          } else {
+                            data.quotations.push(newQuotation)
+                          }
+ 
+                          localStorage.setItem(targetKey, JSON.stringify(data))
+                          
+                          const list = Array.isArray(q.customer.responsibles) ? q.customer.responsibles : []
+                          const attnList = list.map(r => (r.attn || "").trim()).filter(Boolean)
+                          const attnDivList = list.map(r => (r.attnDiv || "").trim()).filter(Boolean)
+                          const attnMobileList = list.map(r => (r.attnMobile || "").trim()).filter(Boolean)
+                          const attnEmailList = list.map(r => (r.attnEmail || "").trim()).filter(Boolean)
+                          const ccList = list.map(r => (r.cc || "").trim()).filter(Boolean)
+                          const ccDivList = list.map(r => (r.ccDiv || "").trim()).filter(Boolean)
+                          const ccMobileList = list.map(r => (r.ccMobile || "").trim()).filter(Boolean)
+                          const ccEmailList = list.map(r => (r.ccEmail || "").trim()).filter(Boolean)
+                          const backendPayload = {
+                              qo_code: q.details.number,
+                              created_date: q.details.date,
+                              customer_name: q.customer.company || "Unknown",
+                              customer_tax_id: q.customer.taxId || "",
+                              customer_address: q.customer.address || "",
+                              customer_email: q.customer.email || "",
+                              customer_phone: q.customer.telephone || "",
+                              customer_fax: q.customer.fax || "",
+                              cus_respon_attn: attnList.join(','),
+                              cus_respon_div: attnDivList.join(','),
+                              cus_respon_mobile: attnMobileList.join(','),
+                              cus_respon_cc: ccList.join(','),
+                              cus_respon_cc_div: ccDivList.join(','),
+                              cus_respon_cc_mobile: ccMobileList.join(','),
+                              cus_respon_cc_email: ccEmailList.join(','),
+                              eit: q.details.eit,
+                              eit_name: q.details.salesPerson || "",
+                              eit_address: q.details.eitAddress || "",
+                              eit_mobile: q.details.eitMobile || "",
+                              eit_phone: q.details.eitTelephone || "",
+                              eit_fax: q.details.eitFax || "",
+                              trade_terms: q.details.tradeTerms || "",
+                              validity: q.details.validity || "",
+                              delivery: q.details.delivery || "",
+                              payment_terms: q.details.paymentTerms || "",
+                              shipment_location: q.details.shipmentLocation || "",
+                              invoice_date: (q.details.invoiceDate && q.details.invoiceDate !== "SAME AS DELIVERY DATE") ? q.details.invoiceDate : null,
+                              remark: q.details.remark || "",
+                              items: q.items.map(item => ({
+                                  item: item.item || "",
+                                  model: item.model || "",
+                                  description: item.description || "",
+                                  qty: item.qty || 1,
+                                  price: item.price || 0
+                              }))
+                          }
+                          
+                          if (backendPayload.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(backendPayload.invoice_date)) {
+                               backendPayload.invoice_date = null
+                          }
+ 
+                          let url = `${API_BASE_URL}/api/quotations/`
+                          let method = 'POST'
+                          
+                          if (q.sourceKey === 'api' && q.sourceIndex) {
+                              url = `${API_BASE_URL}/api/quotations/${q.sourceIndex}/`
+                              method = 'PUT'
+                          }
+ 
+                          const response = await fetch(url, {
+                              method: method,
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(backendPayload)
+                          })
+ 
+                          if (!response.ok) {
+                              const errText = await response.text()
+                              console.error("Backend save error:", errText)
+                              throw new Error("Failed to save to database: " + errText)
+                          }
+                          
+                          alert("Quotation saved successfully!")
+                          setOpenCreateConfirm(false)
+                          window.location.href = "/admin.html"
+                        } catch (error) {
+                          console.error(error)
+                          alert("Error saving quotation: " + error.message)
+                        }
+                      }
+                      handleSave()
+                    }}
+                  >
+                    Save Changes
+                  </button>
+                </div>
+                <div className="flex items-center gap-6">
+                  <button
+                    className="px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] whitespace-nowrap text-center"
+                    onClick={() => {
+                      setOpenCreateConfirm(false)
+                      handlePrintPdf()
+                    }}
+                  >
+                    Download Form
+                  </button>
+                  <button
+                    className="px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[220px] whitespace-nowrap text-center"
+                    onClick={() => {
+                      setOpenCreateConfirm(false)
+                      handlePrintPdfWithCover()
+                    }}
+                  >
+                    Download Form with cover photo
+                  </button>
+                </div>
               </div>
             </div>
           </div>
