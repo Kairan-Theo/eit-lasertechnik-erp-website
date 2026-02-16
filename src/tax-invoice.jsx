@@ -146,7 +146,7 @@ function useTaxInvoiceState() {
     email: ""
   })
   const [details, setDetails] = React.useState({
-    number: "",
+    number: "INV 2026-0001",
     date: new Date().toISOString().slice(0, 10),
     isTaxInvoice: true,
     paymentType: "",
@@ -171,6 +171,11 @@ function useTaxInvoiceState() {
     fetch(`${API_BASE_URL}/api/eits/`).then(r=>r.json()).then(d=>Array.isArray(d)?setEitOptions(d):setEitOptions([])).catch(()=>setEitOptions([]))
     fetch(`${API_BASE_URL}/api/customers/`).then(r=>r.json()).then(d=>Array.isArray(d)?setCustomerOptions(d):setCustomerOptions([])).catch(()=>setCustomerOptions([]))
     fetch(`${API_BASE_URL}/api/purchase-orders/numbers/`).then(r=>r.json()).then(d=>Array.isArray(d)?setPoOptions(d):setPoOptions([])).catch(()=>setPoOptions([]))
+  }, [])
+
+  // Set default Tax Invoice number if empty
+  React.useEffect(() => {
+    setDetails(prev => ({ ...prev, number: prev.number || "INV 2026-0001" }))
   }, [])
 
   const addItem = () => setItems(prev => [...prev, { description: "", qty: 1, price: 0, unit: "pcs" }])

@@ -13,7 +13,7 @@ export function TaxInvoiceForm({ ti }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tax Invoice Number</label>
-            <input value={ti.details.number || ""} onChange={(e) => ti.setDetails({ ...ti.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Number" />
+            <input value={ti.details.number || ""} onChange={(e) => ti.setDetails({ ...ti.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="INV 2026-0001" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Issue Date</label>
