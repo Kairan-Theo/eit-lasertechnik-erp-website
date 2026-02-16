@@ -17,15 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtiff5-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Python deps (no requirements.txt, install core libs directly)
-RUN pip install --no-cache-dir \
-    "Django>=4.2,<5.0" \
-    djangorestframework \
-    django-cors-headers \
-    requests \
-    reportlab \
-    Pillow \
-    psycopg2-binary
+# Python deps via requirements.txt (ensures pypdf available in container)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source
 COPY . .
