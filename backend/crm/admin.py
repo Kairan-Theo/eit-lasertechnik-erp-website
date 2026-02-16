@@ -10,7 +10,10 @@ from .models import (
     # PD Models
     # These imports bring the newly created PD_* models into the admin module
     # so we can register them with Django Admin.
-    PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct
+    PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct,
+    # PM Models
+    # Register PMProject and PMTask so they appear in Django Admin
+    PMProject, PMTask
 )
 
 APPS_CHOICES = [
@@ -296,3 +299,21 @@ class PDSystemChildproductAdmin(admin.ModelAdmin):
     list_display = ("name", "system")
     # Allow searching by child name and parent system name
     search_fields = ("name", "system__name")
+
+# PM Admin Registrations
+# These admin classes expose PM_project and PM_task tables to Django Admin.
+# PMTask stores FK in DB column Project_id, but Django uses 'project' relation.
+
+@admin.register(PMProject)
+class PMProjectAdmin(admin.ModelAdmin):
+    # Show primary fields of PM_project in list view
+    list_display = ("id", "name", "start_date", "end_date", "task_total")
+    search_fields = ("name",)
+    ordering = ("-id",)
+
+@admin.register(PMTask)
+class PMTaskAdmin(admin.ModelAdmin):
+    # Display PM_task fields with link to PM_project
+    list_display = ("id", "project", "name", "task_start_date", "task_end_date")
+    search_fields = ("project__name", "name")
+    list_filter = ("task_start_date", "task_end_date")
