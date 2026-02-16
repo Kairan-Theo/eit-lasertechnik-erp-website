@@ -98,6 +98,8 @@ function useQuotationState() {
   const [sourceIndex, setSourceIndex] = React.useState(null)
   const [eitOptions, setEitOptions] = React.useState([])
   const [customerOptions, setCustomerOptions] = React.useState([])
+  // Full Customer records from backend (includes CC fields). Used to populate Attn/CC on selection.
+  const [customerRecords, setCustomerRecords] = React.useState([])
   // Hold description suggestion options aggregated from PD_* tables
   const [pdDescriptionOptions, setPdDescriptionOptions] = React.useState([])
   // Lookup map from rendered option label to its underlying PD data (name/description/specification/type)
@@ -122,6 +124,42 @@ function useQuotationState() {
       .catch(err => console.error("Error loading deals for customers", err))
   }, [])
 
+  // Load canonical Customer records (with CC fields) so selection can hydrate Attn/CC automatically.
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/api/customers/`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setCustomerRecords(data)
+          // Merge real Customer table entries into the options list used by the combobox.
+          // Map to the same shape as Deal-derived options so matching logic continues to work.
+          const mapped = data.map(c => ({
+            customer_name: c.company_name || "",
+            tax_id: c.tax_id || "",
+            address: c.address || "",
+            phone: c.phone || "",
+            contact: c.attn || "",
+            email: c.email || ""
+          }))
+          // Merge unique by customer_name
+          setCustomerOptions(prev => {
+            const byName = {}
+            ;[...prev, ...mapped].forEach(entry => {
+              const name = String(entry.customer_name || "").trim()
+              if (!name) return
+              if (!byName[name]) byName[name] = entry
+            })
+            return Object.values(byName)
+          })
+        } else {
+          setCustomerRecords([])
+        }
+      })
+      .catch(err => {
+        console.error("Error loading customers", err)
+        setCustomerRecords([])
+      })
+  }, [])
   React.useEffect(() => {
     fetch(`${API_BASE_URL}/api/eits/`)
       .then(res => res.json())
@@ -419,17 +457,46 @@ function useQuotationState() {
           })
           .then(data => {
             // Map API data to state
-            setCustomer({
-              company: data.customer_details?.company_name || "",
-              taxId: data.customer_details?.tax_id || "",
-              address: data.customer_details?.address || "",
-              telephone: data.customer_details?.phone || "",
-              fax: data.customer_details?.cus_fax || "",
-              attn: data.customer_details?.attn || "",
-              div: data.customer_details?.division || "",
-              mobile: data.customer_details?.mobile || "",
-              email: data.customer_details?.email || ""
-            })
+            const cust = data.customer_details || {}
+            const top = {
+              company: cust.company_name || "",
+              taxId: cust.tax_id || "",
+              address: cust.address || "",
+              telephone: cust.phone || "",
+              fax: cust.cus_fax || "",
+              attn: cust.attn || "",
+              div: cust.attn_division || "",
+              mobile: cust.attn_mobile || "",
+              email: cust.email || ""
+            }
+            const splitCSV = (s) => String(s || "").split(',').map(t => t.trim()).filter(Boolean)
+            const attnCSV = splitCSV(cust.attn)
+            const attnDivCSV = splitCSV(cust.attn_division)
+            const attnMobileCSV = splitCSV(cust.attn_mobile)
+            const attnEmailCSV = splitCSV(cust.email)
+            const ccCSV = splitCSV(cust.cc)
+            const ccDivCSV = splitCSV(cust.cc_division)
+            const ccMobileCSV = splitCSV(cust.cc_mobile)
+            const ccEmailCSV = splitCSV(cust.cc_email)
+            const maxLen = Math.max(attnCSV.length, attnDivCSV.length, attnMobileCSV.length, attnEmailCSV.length, ccCSV.length, ccDivCSV.length, ccMobileCSV.length, ccEmailCSV.length)
+            const respList = []
+            for (let i = 0; i < Math.max(1, maxLen); i++) {
+              respList.push({
+                attn: attnCSV[i] || top.attn || "",
+                attnDiv: attnDivCSV[i] || top.div || "",
+                attnMobile: attnMobileCSV[i] || top.mobile || "",
+                attnEmail: attnEmailCSV[i] || top.email || "",
+                cc: ccCSV[i] || "",
+                ccDiv: ccDivCSV[i] || "",
+                ccMobile: ccMobileCSV[i] || "",
+                ccEmail: ccEmailCSV[i] || ""
+              })
+            }
+            setCustomer(prev => ({
+              ...prev,
+              ...top,
+              responsibles: respList
+            }))
             setDetails({
               number: data.qo_code || "",
               date: data.created_date || new Date().toISOString().slice(0, 10),
@@ -970,15 +1037,48 @@ function QuotationPage() {
                   options={q.customerOptions}
                   onChange={(val) => {
                     const match = q.customerOptions.find(c => c.customer_name === val)
-                    if (match) {
-                      q.setCustomer({ 
-                        ...q.customer, 
+                    // Also try to hydrate from real Customer table (includes CC fields)
+                    const cust = customerRecords.find(c => String(c.company_name).trim() === String(val).trim())
+                    if (match || cust) {
+                      const nextTop = {
                         company: val,
-                        taxId: match.tax_id || q.customer.taxId,
-                        address: match.address || q.customer.address,
-                        telephone: match.phone || q.customer.telephone,
-                        attn: match.contact || q.customer.attn,
-                        email: match.email || q.customer.email
+                        taxId: (match?.tax_id ?? cust?.tax_id ?? q.customer.taxId),
+                        address: (match?.address ?? cust?.address ?? q.customer.address),
+                        telephone: (match?.phone ?? cust?.phone ?? q.customer.telephone),
+                        fax: (cust?.cus_fax ?? q.customer.fax),
+                        attn: (match?.contact ?? cust?.attn ?? q.customer.attn),
+                        div: (cust?.attn_division ?? q.customer.div),
+                        mobile: (cust?.attn_mobile ?? q.customer.mobile),
+                        email: (cust?.email ?? match?.email ?? q.customer.email)
+                      }
+                      // Parse CSV values from Customer and initialize responsibles[]
+                      const splitCSV = (s) => String(s || "").split(',').map(t => t.trim()).filter(Boolean)
+                      const attnCSV = splitCSV(cust?.attn)
+                      const attnDivCSV = splitCSV(cust?.attn_division)
+                      const attnMobileCSV = splitCSV(cust?.attn_mobile)
+                      const attnEmailCSV = splitCSV(cust?.email) // single or CSV
+                      const ccCSV = splitCSV(cust?.cc)
+                      const ccDivCSV = splitCSV(cust?.cc_division)
+                      const ccMobileCSV = splitCSV(cust?.cc_mobile)
+                      const ccEmailCSV = splitCSV(cust?.cc_email)
+                      const maxLen = Math.max(attnCSV.length, attnDivCSV.length, attnMobileCSV.length, attnEmailCSV.length, ccCSV.length, ccDivCSV.length, ccMobileCSV.length, ccEmailCSV.length)
+                      const responsibles = []
+                      for (let i = 0; i < Math.max(1, maxLen); i++) {
+                        responsibles.push({
+                          attn: attnCSV[i] || nextTop.attn || "",
+                          attnDiv: attnDivCSV[i] || nextTop.div || "",
+                          attnMobile: attnMobileCSV[i] || nextTop.mobile || "",
+                          attnEmail: attnEmailCSV[i] || nextTop.email || "",
+                          cc: ccCSV[i] || "",
+                          ccDiv: ccDivCSV[i] || "",
+                          ccMobile: ccMobileCSV[i] || "",
+                          ccEmail: ccEmailCSV[i] || ""
+                        })
+                      }
+                      q.setCustomer({ 
+                        ...q.customer,
+                        ...nextTop,
+                        responsibles
                       })
                     } else {
                       q.setCustomer({ ...q.customer, company: val })
@@ -1462,6 +1562,18 @@ function QuotationPage() {
                         localStorage.setItem(targetKey, JSON.stringify(data))
                         
                         // --- 2. Backend Database Save ---
+                        // Use the first Attn/CC entry to persist into the Customer record.
+                        // This keeps a single canonical CC stored on the Customer table.
+                        // Build CSV strings for multiple Attn/CC entries from responsibles[]
+                        const list = Array.isArray(q.customer.responsibles) ? q.customer.responsibles : []
+                        const attnList = list.map(r => (r.attn || "").trim()).filter(Boolean)
+                        const attnDivList = list.map(r => (r.attnDiv || "").trim()).filter(Boolean)
+                        const attnMobileList = list.map(r => (r.attnMobile || "").trim()).filter(Boolean)
+                        const attnEmailList = list.map(r => (r.attnEmail || "").trim()).filter(Boolean)
+                        const ccList = list.map(r => (r.cc || "").trim()).filter(Boolean)
+                        const ccDivList = list.map(r => (r.ccDiv || "").trim()).filter(Boolean)
+                        const ccMobileList = list.map(r => (r.ccMobile || "").trim()).filter(Boolean)
+                        const ccEmailList = list.map(r => (r.ccEmail || "").trim()).filter(Boolean)
                         const backendPayload = {
                             qo_code: q.details.number,
                             created_date: q.details.date,
@@ -1471,9 +1583,14 @@ function QuotationPage() {
                             customer_email: q.customer.email || "",
                             customer_phone: q.customer.telephone || "",
                             customer_fax: q.customer.fax || "",
-                            cus_respon_attn: q.customer.attn || "",
-                            cus_respon_div: q.customer.div || "",
-                            cus_respon_mobile: q.customer.mobile || "",
+                            // Persist multi values as CSV strings
+                            cus_respon_attn: attnList.join(','),
+                            cus_respon_div: attnDivList.join(','),
+                            cus_respon_mobile: attnMobileList.join(','),
+                            cus_respon_cc: ccList.join(','),
+                            cus_respon_cc_div: ccDivList.join(','),
+                            cus_respon_cc_mobile: ccMobileList.join(','),
+                            cus_respon_cc_email: ccEmailList.join(','),
                             eit: q.details.eit,
                             eit_name: q.details.salesPerson || "",
                             eit_address: q.details.eitAddress || "",
