@@ -563,13 +563,13 @@ function QuotationPage() {
         })),
         totals: { total: q.total }
       }
-      // Use the merged cover-first endpoint so the downloaded/printed PDF starts with the front cover.
-      const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf-with-cover/`, {
+      // Generate base quotation PDF (without cover). We will open Print Preview first, then download.
+      const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-      if (!response.ok) throw new Error('Failed to generate PDF with cover')
+      if (!response.ok) throw new Error('Failed to generate PDF')
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       
@@ -634,7 +634,7 @@ function QuotationPage() {
   // Download/print the form combined with cover photo from backend media
   const handlePrintPdfWithCover = async () => {
     try {
-      // Step 1: Generate base quotation PDF first
+      // Step 1: Generate base quotation PDF first (ensures backend doesn't call itself internally)
       const basePayload = {
         details: q.details,
         customer: q.customer,
@@ -670,17 +670,188 @@ function QuotationPage() {
       if (!mergeRes.ok) throw new Error('Failed to merge cover with quotation')
       const blob = await mergeRes.blob()
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'quotation_with_cover.pdf'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => window.URL.revokeObjectURL(url), 5000)
+      // Open Print Preview using hidden iframe so user sees preview first
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      }, 500)
+      setTimeout(() => {
+        document.body.removeChild(iframe)
+        window.URL.revokeObjectURL(url)
+      }, 60000)
     } catch (error) {
       // Fallback to standard download if anything fails (network, backend merge, etc.)
       console.error("Error generating PDF with cover:", error)
       await handlePrintPdf()
+    }
+  }
+
+  // Preview the merged PDF (cover + quotation) in Chrome's built-in viewer
+  // This opens a new tab with the Blob URL so the user can inspect or print from Chrome UI.
+  const handlePreviewPdfWithCover = async () => {
+    try {
+      // Generate base PDF first
+      const basePayload = {
+        details: q.details,
+        customer: q.customer,
+        items: q.items.map(i => ({
+          ...i,
+          qty: parseNumber(i.qty),
+          price: parseNumber(i.price),
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+          spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
+          spec_image_data: i.specImage || null
+        })),
+        totals: { total: q.total }
+      }
+      const baseRes = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(basePayload)
+      })
+      if (!baseRes.ok) throw new Error('Failed to generate base quotation PDF')
+      const baseBlob = await baseRes.blob()
+      const baseArrayBuffer = await baseBlob.arrayBuffer()
+      const bytes = new Uint8Array(baseArrayBuffer)
+      let binary = ""
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+      const base64Pdf = window.btoa(binary)
+
+      // Merge cover + base on backend
+      const mergeRes = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf-with-cover/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base_pdf: `data:application/pdf;base64,${base64Pdf}` })
+      })
+      if (!mergeRes.ok) throw new Error('Failed to merge cover with quotation')
+      const blob = await mergeRes.blob()
+      const url = window.URL.createObjectURL(blob)
+      // Open in new tab to use Chrome's PDF viewer and print UI
+      const win = window.open(url, '_blank')
+      if (!win) {
+        // Popup blocked: show a small inline preview using an iframe
+        const iframe = document.createElement('iframe')
+        iframe.style.display = 'none'
+        iframe.src = url
+        document.body.appendChild(iframe)
+      }
+      // Cleanup the object URL later
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+    } catch (error) {
+      console.error("Error previewing merged PDF:", error)
+      // Fallback to the print path (no cover) to at least show something
+      await handlePrintPdf()
+    }
+  }
+  
+  // Open the browser Print Preview for the quotation PDF (without cover)
+  // The print dialog shows a live preview and options (destination, pages, etc.).
+  const handlePrintPreviewPdf = async () => {
+    try {
+      // Build the payload identical to the download path so content matches
+      const payload = {
+        details: q.details,
+        customer: q.customer,
+        items: q.items.map(i => ({
+          ...i,
+          qty: parseNumber(i.qty),
+          price: parseNumber(i.price),
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+          spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
+          spec_image_data: i.specImage || null
+        })),
+        totals: { total: q.total }
+      }
+      const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) throw new Error('Failed to generate PDF')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      // Use a hidden iframe and call print() to open the Print Preview dialog
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      // Wait a tick to ensure the PDF viewer loads before calling print()
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      }, 500)
+      // Cleanup (revoke object URL and remove iframe)
+      setTimeout(() => {
+        document.body.removeChild(iframe)
+        window.URL.revokeObjectURL(url)
+      }, 60000)
+    } catch (error) {
+      console.error("Error opening Print Preview:", error)
+      alert("Failed to open Print Preview")
+    }
+  }
+  
+  // Open the browser Print Preview for the merged PDF (cover + quotation)
+  // This mirrors the download-with-cover path but triggers the print dialog.
+  const handlePrintPreviewPdfWithCover = async () => {
+    try {
+      // Step 1: Generate base quotation PDF first
+      const basePayload = {
+        details: q.details,
+        customer: q.customer,
+        items: q.items.map(i => ({
+          ...i,
+          qty: parseNumber(i.qty),
+          price: parseNumber(i.price),
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+          spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
+          spec_image_data: i.specImage || null
+        })),
+        totals: { total: q.total }
+      }
+      const baseRes = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(basePayload)
+      })
+      if (!baseRes.ok) throw new Error('Failed to generate base quotation PDF')
+      const baseBlob = await baseRes.blob()
+      const baseArrayBuffer = await baseBlob.arrayBuffer()
+      // Convert to base64 so backend can merge with cover
+      const bytes = new Uint8Array(baseArrayBuffer)
+      let binary = ""
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+      const base64Pdf = window.btoa(binary)
+      // Step 2: Merge cover + base on backend
+      const mergeRes = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf-with-cover/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base_pdf: `data:application/pdf;base64,${base64Pdf}` })
+      })
+      if (!mergeRes.ok) throw new Error('Failed to merge cover with quotation')
+      const blob = await mergeRes.blob()
+      const url = window.URL.createObjectURL(blob)
+      // Hidden iframe + print() opens the browser Print Preview dialog
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      }, 500)
+      setTimeout(() => {
+        document.body.removeChild(iframe)
+        window.URL.revokeObjectURL(url)
+      }, 60000)
+    } catch (error) {
+      console.error("Error opening Print Preview with cover:", error)
+      // Fallback to preview without cover
+      await handlePrintPreviewPdf()
     }
   }
 
@@ -1384,6 +1555,7 @@ function QuotationPage() {
                 >
                   Download Form with cover photo
                 </button>
+                
               </div>
             </div>
           </div>
