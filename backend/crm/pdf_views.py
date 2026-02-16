@@ -1728,8 +1728,6 @@ def generate_invoice_pdf(request):
 
     # Details Table (No / Date)
     inv_num = details.get('number', '')
-    if inv_num and not inv_num.startswith('EIT'):
-        inv_num = f"EIT {inv_num}"
 
     details_table_data = [
         [Paragraph("<b>เลขที่</b> (No.)", styles['Normal_Small']), Paragraph(inv_num, styles['Normal_Content'])],
@@ -1773,7 +1771,7 @@ def generate_invoice_pdf(request):
     left_info_elements.append(Spacer(1, 25)) # Explicit spacer to push bottom content
     left_info_elements.append(tax_table)
 
-    if is_tax:
+    if is_tax and not is_einstein:
         copy_lines = ["สำเนา / Copy", "ใบกำกับภาษี/ใบส่งสินค้า", "TAX INVOICE/DELIVERY ORDER", "เอกสารออกเป็นชุด", "ไม่ใช่ใบกำกับภาษี"]
         variants = [copy_lines, copy_lines, copy_lines, copy_lines, copy_lines]
         all_elements = []

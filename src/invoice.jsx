@@ -48,12 +48,12 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
     const nums = invoices
       .map(n => String(n.number || n.details?.number || ""))
       .map(s => {
-        const m = s.match(new RegExp(`^INV ${currentYear}-(\\d{4})$`, 'i'))
+        const m = s.match(new RegExp(`^EIT VOI ${currentYear}-(\\d{4})$`, 'i'))
         return m ? parseInt(m[1], 10) : null
       })
       .filter(n => Number.isFinite(n))
     const next = (nums.length ? Math.max(...nums) + 1 : 1)
-    return `INV ${currentYear}-${String(next).padStart(4, "0")}`
+    return `EIT VOI ${currentYear}-${String(next).padStart(4, "0")}`
   }
 
   const [details, setDetails] = React.useState({
