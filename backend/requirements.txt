@@ -1,0 +1,9 @@
+Django>=4.2,<5.0
+djangorestframework
+django-cors-headers
+requests
+reportlab
+Pillow
+pypdf==4.2.0
+PyPDF2
+psycopg2-binary

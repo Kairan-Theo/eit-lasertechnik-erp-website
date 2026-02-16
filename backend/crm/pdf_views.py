@@ -1,7 +1,7 @@
 from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -14,6 +14,21 @@ import io
 import os
 from datetime import datetime
 import base64
+import json
+# Prefer module-level safe imports for PDF merging
+# First try modern 'pypdf', then fallback to 'PyPDF2'
+try:
+    from pypdf import PdfMerger, PdfReader, PdfWriter
+    MERGE_LIB = "pypdf"
+except Exception:
+    try:
+        from PyPDF2 import PdfMerger, PdfReader, PdfWriter
+        MERGE_LIB = "PyPDF2"
+    except Exception:
+        PdfMerger = None
+        PdfReader = None
+        PdfWriter = None
+        MERGE_LIB = None
 
 # Define BASE_DIR
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -693,6 +708,204 @@ def generate_quotation_pdf(request):
     buffer.seek(0)
     return HttpResponse(buffer, content_type='application/pdf')
 
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny])
+def generate_quotation_pdf_with_cover(request):
+    # Ensure fonts and environment are ready
+    ensure_fonts_registered()
+    # Early debug path: if ?cover_only=1 is set, serve the cover directly.
+    # This avoids calling generate_quotation_pdf when the request method is GET.
+    try:
+        cover_only_flag = request.query_params.get('cover_only') if hasattr(request, 'query_params') else request.GET.get('cover_only')
+    except Exception:
+        cover_only_flag = None
+    # Resolve cover PDF path under MEDIA_ROOT
+    cover_candidates = [
+        os.path.join(settings.MEDIA_ROOT, "template.pdf"),
+        os.path.join(settings.MEDIA_ROOT, "ใบปะหน้า.pdf"),
+        os.path.join(settings.MEDIA_ROOT, "cover.pdf"),
+        r'd:\EIT_ERT_s\eit-lasertechnik-erp-website\backend\media\template.pdf',
+        r'd:\EIT_ERT_s\eit-lasertechnik-erp-website\backend\media\ใบปะหน้า.pdf',
+    ]
+    cover_path = None
+    for p in cover_candidates:
+        try:
+            norm = os.path.normpath(p)
+            if os.path.exists(norm):
+                cover_path = norm
+                break
+        except Exception:
+            continue
+    print("MEDIA_ROOT:", settings.MEDIA_ROOT)
+    print("Found cover path:", cover_path)
+    if cover_only_flag:
+        if cover_path:
+            try:
+                with open(cover_path, "rb") as f:
+                    bytes_cover = f.read()
+                resp = HttpResponse(bytes_cover, content_type='application/pdf')
+                resp['Content-Disposition'] = 'attachment; filename="cover_only.pdf"'
+                return resp
+            except Exception as e:
+                print(f"[COVER_ONLY ERROR] {e}")
+        # Fallback: if cover not found or error, return a small empty PDF response
+        return HttpResponse(b"%PDF-1.4\n%%EOF", content_type='application/pdf')
+    # Prefer receiving base PDF via request (base64) to avoid any internal HTTP calls.
+    main_bytes = None
+    try:
+        incoming = request.data if hasattr(request, "data") else {}
+        b64 = incoming.get("base_pdf")
+        if b64:
+            if isinstance(b64, str) and b64.startswith("data:application/pdf;base64,"):
+                b64 = b64.split(",", 1)[1]
+            try:
+                main_bytes = base64.b64decode(b64)
+                print(f"[RECEIVED BASE_PDF] len={len(main_bytes)}")
+            except Exception as e:
+                print(f"[BASE_PDF DECODE ERROR] {e}")
+    except Exception as e:
+        print(f"[BASE_PDF READ ERROR] {e}")
+    # If not provided, try local HTTP as a fallback (may fail in some environments)
+    if not main_bytes:
+        try:
+            import requests
+            payload = request.data if hasattr(request, "data") else {}
+            url = "http://127.0.0.1:8002/api/generate-quotation-pdf/"
+            r = requests.post(url, data=json.dumps(payload), headers={"Content-Type": "application/json"}, timeout=15)
+            if r.status_code == 200 and r.content:
+                main_bytes = r.content
+                print(f"[FETCHED MAIN BYTES VIA HTTP] len={len(main_bytes)}")
+            else:
+                print(f"[HTTP FETCH FAILED] status={r.status_code} len={len(r.content) if r.content else 0}")
+        except Exception as e:
+            print(f"[HTTP FETCH ERROR] {e}")
+    # Debug: verify we got bytes from the main PDF generator
+    print("Merge lib:", MERGE_LIB)
+    print("Main bytes length:", len(main_bytes) if main_bytes else "None")
+    if not main_bytes:
+        # If we cannot obtain bytes, return a simple fallback: the unmerged quotation via HTTP if available
+        try:
+            return HttpResponse(r.content, content_type='application/pdf')
+        except Exception:
+            return HttpResponse(b"%PDF-1.4\n%%EOF", content_type='application/pdf')
+    # If cover file missing, return the base quotation PDF
+    if not cover_path:
+        resp = HttpResponse(main_bytes, content_type='application/pdf')
+        resp['Content-Disposition'] = 'attachment; filename="quotation.pdf"'
+        return resp
+    # If no merge library available, return the base quotation to avoid corrupt output
+    if PdfMerger is None and (PdfReader is None or PdfWriter is None):
+        resp = HttpResponse(main_bytes, content_type='application/pdf')
+        resp['Content-Disposition'] = 'attachment; filename="quotation.pdf"'
+        return resp
+    try:
+        # Prefer PdfMerger when available (handles page order cleanly)
+        with open(cover_path, "rb") as cf:
+            cover_bytes = cf.read()
+        if PdfMerger:
+            merger = PdfMerger()
+            merger.append(io.BytesIO(cover_bytes))   # Cover first
+            merger.append(io.BytesIO(main_bytes))    # Then quotation
+            out = io.BytesIO()
+            merger.write(out)
+            merger.close()
+            out.seek(0)
+            merged_bytes = out.getvalue()
+        else:
+            # In-memory merge using Reader/Writer
+            try:
+                cover_reader = PdfReader(io.BytesIO(cover_bytes))
+                main_reader = PdfReader(io.BytesIO(main_bytes))
+            except Exception:
+                # Retry with strict=False if supported by library
+                try:
+                    cover_reader = PdfReader(io.BytesIO(cover_bytes), strict=False)
+                    main_reader = PdfReader(io.BytesIO(main_bytes), strict=False)
+                except Exception as e2:
+                    print(f"[READER INIT ERROR] {e2}")
+                    raise
+            writer = PdfWriter()
+            for pg in getattr(cover_reader, "pages", []):
+                writer.add_page(pg)
+            for pg in getattr(main_reader, "pages", []):
+                writer.add_page(pg)
+            out = io.BytesIO()
+            writer.write(out)
+            out.seek(0)
+            merged_bytes = out.getvalue()
+        print(f"[MERGED BYTES LENGTH] {len(merged_bytes)}")
+        # Write to a file and serve via FileResponse for maximum reliability
+        merged_path = os.path.join(settings.MEDIA_ROOT, "quotation_with_cover_latest.pdf")
+        try:
+            with open(merged_path, "wb") as f:
+                f.write(merged_bytes)
+            fh = open(merged_path, "rb")
+            resp = FileResponse(fh, content_type='application/pdf')
+            resp['Content-Disposition'] = 'attachment; filename="quotation_with_cover.pdf"'
+            resp['Content-Length'] = str(len(merged_bytes))
+            return resp
+        except Exception as e:
+            print(f"[FILE RESPONSE FALLBACK ERROR] {e}")
+            resp = HttpResponse(merged_bytes, content_type='application/pdf')
+            resp['Content-Disposition'] = 'attachment; filename="quotation_with_cover.pdf"'
+            resp['Content-Length'] = str(len(merged_bytes))
+            return resp
+    except Exception as e:
+        # Fallback: write to temp file paths and try merging by file names
+        print(f"[MERGE IN-MEMORY FAILED] {e}")
+        temp_main_path = os.path.join(settings.MEDIA_ROOT, "quotation_export_temp.pdf")
+        try:
+            # Write main PDF bytes to temp file
+            with open(temp_main_path, "wb") as f:
+                f.write(main_bytes)
+            # Fallback: use Reader/Writer
+            cover_file = open(cover_path, 'rb')
+            cover_reader = PdfReader(cover_file)
+            main_reader = PdfReader(temp_main_path)
+            writer = PdfWriter()
+            for pg in cover_reader.pages:
+                writer.add_page(pg)
+            for pg in main_reader.pages:
+                writer.add_page(pg)
+            out = io.BytesIO()
+            writer.write(out)
+            out.seek(0)
+            cover_file.close()
+            merged_bytes = out.getvalue()
+            print(f"[MERGED BYTES LENGTH (TEMP)] {len(merged_bytes)}")
+            merged_path = os.path.join(settings.MEDIA_ROOT, "quotation_with_cover_latest.pdf")
+            try:
+                with open(merged_path, "wb") as f:
+                    f.write(merged_bytes)
+                fh = open(merged_path, "rb")
+                resp = FileResponse(fh, content_type='application/pdf')
+                resp['Content-Disposition'] = 'attachment; filename="quotation_with_cover.pdf"'
+                resp['Content-Length'] = str(len(merged_bytes))
+                return resp
+            except Exception as e:
+                print(f"[FILE RESPONSE FALLBACK ERROR (TEMP)] {e}")
+                resp = HttpResponse(merged_bytes, content_type='application/pdf')
+                resp['Content-Disposition'] = 'attachment; filename="quotation_with_cover.pdf"'
+                resp['Content-Length'] = str(len(merged_bytes))
+                return resp
+        finally:
+            # Clean up temp file if it exists
+            try:
+                if os.path.exists(temp_main_path):
+                    os.remove(temp_main_path)
+            except Exception:
+                pass
+    except Exception as e:
+        # Fallback to main PDF if merge fails
+        print(f"[PDF MERGE ERROR] {e}")
+        try:
+            cover_file.close()
+        except Exception:
+            pass
+        # Final fallback: return the base quotation PDF bytes
+        resp = HttpResponse(main_bytes, content_type='application/pdf')
+        resp['Content-Disposition'] = 'attachment; filename="quotation.pdf"'
+        return resp
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def generate_billing_note_pdf(request):
