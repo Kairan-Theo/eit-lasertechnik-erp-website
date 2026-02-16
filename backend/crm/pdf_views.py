@@ -378,6 +378,13 @@ def generate_quotation_pdf(request):
     def txt(val): 
         if not val: return "-"
         return str(val).replace('\n', '<br/>')
+    # Helper to split CSV strings into trimmed list
+    # Added to support multi-value Attn/CC fields coming from Customer table
+    def split_csv(s):
+        try:
+            return [t.strip() for t in str(s or "").split(",") if t.strip()]
+        except Exception:
+            return []
 
     # Helper to format label with Calisto font -> Now Times New Roman
     # Updated: Enforce size='9' to reduce visual weight of bold labels
@@ -391,12 +398,95 @@ def generate_quotation_pdf(request):
     elements.append(Paragraph(f"<font size='9'><b>เลขประจำตัวผู้เสียภาษี :</b></font> {txt(customer.get('taxId'))}", styles['Normal_Content']))
     elements.append(Spacer(1, 5))
 
+    # Build Attn/CC block:
+    # The requested format is:
+    #   attn1: <name>, <division>, <email>, <mobile>
+    #   attn2: <name>, <division>, <email>, <mobile>
+    #   cc1:   <name>, <division>, <email>, <mobile>
+    # Data sources:
+    # - Prefer customer['responsibles'] array from frontend UI
+    # - Fallback to CSV strings in customer fields: attn, attn_division, attn_mobile, email, cc, cc_division, cc_email, cc_mobile
+    responsibles = customer.get('responsibles') or []
+    attn_lines = []
+    cc_lines = []
+    if isinstance(responsibles, list) and len(responsibles) > 0:
+        # Iterate over responsibles[] and format lines
+        for i, r in enumerate(responsibles, start=1):
+            # Build Attn line if any Attn info present
+            attn_name = r.get('attn') or ""
+            attn_div = r.get('attnDiv') or ""
+            attn_email = r.get('attnEmail') or ""
+            attn_mobile = r.get('attnMobile') or ""
+            if any([attn_name, attn_div, attn_email, attn_mobile]):
+                attn_parts = []
+                if attn_name: attn_parts.append(txt(attn_name))
+                if attn_div: attn_parts.append(txt(attn_div))
+                if attn_email: attn_parts.append(txt(attn_email))
+                if attn_mobile: attn_parts.append(txt(attn_mobile))
+                attn_lines.append(f"Attn{i}: " + ", ".join(attn_parts))
+            # Build CC line if any CC info present
+            cc_name = r.get('cc') or ""
+            cc_div = r.get('ccDiv') or ""
+            cc_email = r.get('ccEmail') or ""
+            cc_mobile = r.get('ccMobile') or ""
+            if any([cc_name, cc_div, cc_email, cc_mobile]):
+                cc_parts = []
+                if cc_name: cc_parts.append(txt(cc_name))
+                if cc_div: cc_parts.append(txt(cc_div))
+                if cc_email: cc_parts.append(txt(cc_email))
+                if cc_mobile: cc_parts.append(txt(cc_mobile))
+                cc_lines.append(f"CC{i}: " + ", ".join(cc_parts))
+    else:
+        # Fallback: parse CSV fields from Customer
+        attn_csv = split_csv(customer.get('attn'))
+        attn_div_csv = split_csv(customer.get('div')) or split_csv(customer.get('attn_division'))
+        attn_email_csv = split_csv(customer.get('email'))
+        attn_mobile_csv = split_csv(customer.get('mobile')) or split_csv(customer.get('attn_mobile'))
+        cc_csv = split_csv(customer.get('cc'))
+        cc_div_csv = split_csv(customer.get('cc_division'))
+        cc_email_csv = split_csv(customer.get('cc_email'))
+        cc_mobile_csv = split_csv(customer.get('cc_mobile'))
+        max_len = max(
+            len(attn_csv), len(attn_div_csv), len(attn_email_csv), len(attn_mobile_csv),
+            len(cc_csv), len(cc_div_csv), len(cc_email_csv), len(cc_mobile_csv)
+        ) if any([
+            attn_csv, attn_div_csv, attn_email_csv, attn_mobile_csv,
+            cc_csv, cc_div_csv, cc_email_csv, cc_mobile_csv
+        ]) else 0
+        for i in range(max(1, max_len)):
+            # Attn lines
+            attn_parts = []
+            name = attn_csv[i] if i < len(attn_csv) else (customer.get('attn') or "")
+            divv = attn_div_csv[i] if i < len(attn_div_csv) else (customer.get('attn_division') or customer.get('div') or "")
+            emailv = attn_email_csv[i] if i < len(attn_email_csv) else (customer.get('email') or "")
+            mobilev = attn_mobile_csv[i] if i < len(attn_mobile_csv) else (customer.get('attn_mobile') or customer.get('mobile') or "")
+            if any([name, divv, emailv, mobilev]):
+                if name: attn_parts.append(txt(name))
+                if divv: attn_parts.append(txt(divv))
+                if emailv: attn_parts.append(txt(emailv))
+                if mobilev: attn_parts.append(txt(mobilev))
+                attn_lines.append(f"Attn{i+1}: " + ", ".join(attn_parts))
+            # CC lines
+            cc_parts = []
+            ccname = cc_csv[i] if i < len(cc_csv) else ""
+            ccdiv = cc_div_csv[i] if i < len(cc_div_csv) else ""
+            ccemail = cc_email_csv[i] if i < len(cc_email_csv) else ""
+            ccmobile = cc_mobile_csv[i] if i < len(cc_mobile_csv) else ""
+            if any([ccname, ccdiv, ccemail, ccmobile]):
+                if ccname: cc_parts.append(txt(ccname))
+                if ccdiv: cc_parts.append(txt(ccdiv))
+                if ccemail: cc_parts.append(txt(ccemail))
+                if ccmobile: cc_parts.append(txt(ccmobile))
+                cc_lines.append(f"CC{i+1}: " + ", ".join(cc_parts))
+    # Join Attn/CC lines with line breaks to render stacked entries
+    attn_cc_text = "<br/>".join(attn_lines + cc_lines) if (attn_lines or cc_lines) else "-"
+
     cust_info = [
         [Paragraph(label("SOLD TO"), styles['Normal_Content']), "", Paragraph(f"{label('DATE :')} {txt(details.get('date'))}", styles['Normal_Content'])],
         [Paragraph(f"{label('Company:')} {txt(customer.get('company'))}", styles['Normal_Content']), "", Paragraph(f"{label('Tel :')} {txt(customer.get('telephone'))}", styles['Normal_Content'])],
         [Paragraph(f"{label('Address :')} {txt(customer.get('address'))}", styles['Normal_Content']), "", Paragraph(f"{label('Fax :')} {txt(customer.get('fax'))}", styles['Normal_Content'])],
-        [Paragraph(f"{label('Attn:')} {txt(customer.get('attn'))}", styles['Normal_Content']), "", Paragraph(f"{label('Mobile :')} {txt(customer.get('mobile'))}", styles['Normal_Content'])],
-        [Paragraph(f"{label('Div:')} {txt(customer.get('div'))}", styles['Normal_Content']), "", ""]
+        # Replace single Attn/Div/Mobile rows with multi-line Attn/CC block per request
+        [Paragraph(f"{label('Attn/CC:')} {attn_cc_text}", styles['Normal_Content']), "", ""]
     ]
     
     info_table = Table(cust_info, colWidths=[300, 10, 220])

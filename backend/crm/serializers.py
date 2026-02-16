@@ -253,6 +253,11 @@ class QuotationSerializer(serializers.ModelSerializer):
     cus_respon_attn = serializers.CharField(write_only=True, required=False, allow_blank=True)
     cus_respon_div = serializers.CharField(write_only=True, required=False, allow_blank=True)
     cus_respon_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    # CC fields (mapped into Customer.cc* columns). These are write-only to avoid schema noise in the Quotation response.
+    cus_respon_cc = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_respon_cc_div = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_respon_cc_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cus_respon_cc_email = serializers.CharField(write_only=True, required=False, allow_blank=True)
     
     # Customer extra fields
     customer_tax_id = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -277,10 +282,15 @@ class QuotationSerializer(serializers.ModelSerializer):
         customer_name = validated_data.pop('customer_name', None)
         eit_name = validated_data.pop('eit_name', None)
         
-        # Extract customer details
+        # Extract customer details (CSV supported: "user1,user2")
         attn = validated_data.pop('cus_respon_attn', '')
         div = validated_data.pop('cus_respon_div', '')
         mobile = validated_data.pop('cus_respon_mobile', '')
+        # Extract CC details to persist into Customer (CSV supported)
+        cc = validated_data.pop('cus_respon_cc', '')
+        cc_div = validated_data.pop('cus_respon_cc_div', '')
+        cc_mobile = validated_data.pop('cus_respon_cc_mobile', '')
+        cc_email = validated_data.pop('cus_respon_cc_email', '')
         
         tax_id = validated_data.pop('customer_tax_id', '')
         address = validated_data.pop('customer_address', '')
@@ -297,9 +307,13 @@ class QuotationSerializer(serializers.ModelSerializer):
         if customer_name:
             customer, created = Customer.objects.get_or_create(company_name=customer_name)
             # Update customer details if provided
-            if attn: customer.attn = attn
-            if div: customer.division = div
-            if mobile: customer.mobile = mobile
+            if attn: customer.attn = attn  # CSV string
+            if div: customer.attn_division = div  # CSV string
+            if mobile: customer.attn_mobile = mobile  # CSV string
+            if cc: customer.cc = cc  # CSV string
+            if cc_div: customer.cc_division = cc_div  # CSV string
+            if cc_mobile: customer.cc_mobile = cc_mobile  # CSV string
+            if cc_email: customer.cc_email = cc_email  # CSV string
             
             if tax_id: customer.tax_id = tax_id
             if address: customer.address = address
@@ -345,10 +359,15 @@ class QuotationSerializer(serializers.ModelSerializer):
         customer_name = validated_data.pop('customer_name', None)
         eit_name = validated_data.pop('eit_name', None)
         
-        # Extract customer details
+        # Extract customer details (CSV supported)
         attn = validated_data.pop('cus_respon_attn', '')
         div = validated_data.pop('cus_respon_div', '')
         mobile = validated_data.pop('cus_respon_mobile', '')
+        # Extract CC details to persist into Customer (CSV supported)
+        cc = validated_data.pop('cus_respon_cc', '')
+        cc_div = validated_data.pop('cus_respon_cc_div', '')
+        cc_mobile = validated_data.pop('cus_respon_cc_mobile', '')
+        cc_email = validated_data.pop('cus_respon_cc_email', '')
         
         tax_id = validated_data.pop('customer_tax_id', '')
         address = validated_data.pop('customer_address', '')
@@ -365,8 +384,12 @@ class QuotationSerializer(serializers.ModelSerializer):
         if customer_name:
             customer, _ = Customer.objects.get_or_create(company_name=customer_name)
             if attn: customer.attn = attn
-            if div: customer.division = div
-            if mobile: customer.mobile = mobile
+            if div: customer.attn_division = div
+            if mobile: customer.attn_mobile = mobile
+            if cc: customer.cc = cc
+            if cc_div: customer.cc_division = cc_div
+            if cc_mobile: customer.cc_mobile = cc_mobile
+            if cc_email: customer.cc_email = cc_email
             
             if tax_id: customer.tax_id = tax_id
             if address: customer.address = address

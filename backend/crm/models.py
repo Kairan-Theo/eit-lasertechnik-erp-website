@@ -11,9 +11,16 @@ class Customer(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
     cus_fax = models.CharField(max_length=50, blank=True)
-    mobile = models.CharField(max_length=50, blank=True)
-    attn = models.CharField(max_length=255, blank=True)
-    division = models.CharField(max_length=255, blank=True)
+    # Multiple contacts support with CSV strings.
+    # Store comma-separated values in each field, e.g.:
+    # attn = "user1,user2,user3", cc = "user4,user5"
+    attn = models.TextField(blank=True)  # CSV of attention names
+    attn_mobile = models.TextField(blank=True)  # CSV of mobiles for attn
+    attn_division = models.TextField(blank=True)  # CSV of divisions for attn
+    cc = models.TextField(blank=True)  # CSV of CC names
+    cc_division = models.TextField(blank=True)  # CSV of divisions for CC
+    cc_mobile = models.TextField(blank=True)  # CSV of mobiles for CC
+    cc_email = models.TextField(blank=True)  # CSV of emails for CC
     industry = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
