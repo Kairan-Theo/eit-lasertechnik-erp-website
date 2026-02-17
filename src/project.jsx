@@ -11,15 +11,31 @@ import "./index.css"
 
 const STORAGE_KEY = "eit-projects-v2"
 
+// Replace grey with pink and define grouping semantics:
+// - In Progress: blue, red, pink
+// - Finished: green
+// - Cancelled: orange
 const COLORS = [
-  { hex: "#f43f5e", name: "Important" },
-  { hex: "#6366f1", name: "In Progress" },
-  { hex: "#10b981", name: "Done" },
-  { hex: "#64748b", name: "Not Started" },
-  { hex: "#f59e0b", name: "Blocked" },
+  { hex: "#f43f5e", name: "Red" },       // In Progress
+  { hex: "#6366f1", name: "Blue" },      // In Progress
+  { hex: "#10b981", name: "Green" },     // Finished
+  { hex: "#ec4899", name: "Pink" },      // In Progress
+  { hex: "#f59e0b", name: "Orange" },    // Cancelled
 ]
 
-const getColorMeaning = (hex) => COLORS.find((c) => c.hex === hex)?.name || "In Progress"
+const getColorGroup = (hex) => {
+  switch (hex) {
+    case "#10b981": return "Finished"
+    case "#f59e0b": return "Cancelled"
+    case "#f43f5e":
+    case "#6366f1":
+    case "#ec4899":
+      return "In Progress"
+    default:
+      return "In Progress"
+  }
+}
+const getColorMeaning = getColorGroup
 const DEFAULT_COLOR = "#6366f1"
 
 const calculateProgress = (project) => {
@@ -539,7 +555,8 @@ const exportProjectsAsSinglePDF = (list, company = 'EIT') => {
     })
 }
 
-const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, setStartDate, focusedId, setFocusedId, selectedProjects, toggleSelection, toggleAll }) => {
+// Add onDelete to support delete actions from list rows
+const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, onDelete, startDate, setStartDate, focusedId, setFocusedId, selectedProjects, toggleSelection, toggleAll }) => {
   const [hoveredTask, setHoveredTask] = React.useState(null)
   const [showExportMenu, setShowExportMenu] = React.useState(false)
 
@@ -720,10 +737,18 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
            </div>
            <div className="flex items-center gap-4">
                {/* Export button moved to ProjectApp header */}
-               <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mr-4">
-                   <div className="w-3 h-3 rounded bg-indigo-500"></div> Project
-                   <div className="w-3 h-3 rounded bg-emerald-500 ml-2"></div> Done
-                   <div className="w-3 h-3 rounded bg-amber-500 ml-2"></div> Blocked
+               {/* Legend: explain color meanings (In progress: Red/Blue/Pink; Finished: Green; Cancel: Orange) */}
+               <div className="flex items-center gap-3 text-xs font-medium text-slate-500 mr-4">
+                   <span className="text-slate-600">In progress</span>
+                   <div className="w-3 h-3 rounded bg-rose-500"></div>
+                   <div className="w-3 h-3 rounded bg-indigo-500"></div>
+                   <div className="w-3 h-3 rounded bg-pink-500"></div>
+                   <span className="text-slate-300">|</span>
+                   <span className="text-slate-600">Finished</span>
+                   <div className="w-3 h-3 rounded bg-emerald-500"></div>
+                   <span className="text-slate-300">|</span>
+                   <span className="text-slate-600">Cancel</span>
+                   <div className="w-3 h-3 rounded bg-amber-500"></div>
                </div>
            </div>
         </div>
@@ -809,7 +834,14 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                </button>
                                <div className="flex-1 min-w-0">
                                    <div className="font-extrabold text-slate-900 text-base truncate flex items-center gap-2">
-                                       <span onClick={() => setFocusedId(project.id)} className="relative z-50 pointer-events-auto cursor-pointer">{project.name}</span>
+                                       {/* Add native tooltip so long names can be read on hover */}
+                                       <span 
+                                         onClick={() => setFocusedId(project.id)} 
+                                         className="relative z-50 pointer-events-auto cursor-pointer"
+                                         title={project.name}
+                                       >
+                                         {project.name}
+                                       </span>
                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color }} />
                                    </div>
                                    <div className="text-[10px] text-slate-500 font-medium mt-0.5 flex items-center gap-1.5">
@@ -819,7 +851,7 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                    </div>
                                </div>
                                
-                               {/* Edit & Add Subtask Buttons */}
+                              {/* Edit, Add Subtask, and Delete Project Buttons */}
                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                    <button 
                                        onClick={(e) => { e.stopPropagation(); onEdit(project); }}
@@ -834,6 +866,14 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                        title="Add Subtask"
                                    >
                                        <Plus size={14} />
+                                   </button>
+                                  {/* Delete project: calls shared delete handler */}
+                                  <button 
+                                       onClick={(e) => { e.stopPropagation(); onDelete(project.id); }}
+                                       className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
+                                       title="Delete Project"
+                                   >
+                                       <Trash2 size={14} />
                                    </button>
                                </div>
                            </div>
@@ -851,7 +891,8 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                        onMouseLeave={() => setHoveredTask(null)}
                                     >
                                     <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(90deg, ${project.color}, ${project.color}dd)` }} />
-                                    <span className={`relative z-40 text-[11px] font-bold truncate text-white drop-shadow-sm`}>{project.name}</span>
+                                    {/* Add tooltip on bar label to reveal full long project name */}
+                                    <span className={`relative z-40 text-[11px] font-bold truncate text-white drop-shadow-sm`} title={project.name}>{project.name}</span>
                                </div>
                            </div>
                         </div>
@@ -862,17 +903,27 @@ const GanttChart = ({ projects, setProjects, onAddSubtask, onEdit, startDate, se
                                 {/* Sticky Subtask Name Column - Use solid background on hover to prevent underlying text from showing through */}
                                 <div className="sticky left-0 z-[50] w-80 shrink-0 py-3 pl-16 pr-6 flex items-center gap-3 bg-white border-r border-slate-100 group-hover:bg-slate-50 transition-colors">
                                     <div className="w-2 h-2 rounded-full border border-slate-300 bg-white relative z-10"></div>
-                                    <div className="flex-1 min-w-0 flex items-center justify-between pr-2">
+                                    {/* Place name and action icons closely to avoid large spacing */}
+                                    <div className="flex-1 min-w-0 flex items-center gap-2 pr-2">
                                         <div className="font-medium text-slate-600 text-xs truncate hover:text-indigo-600 transition-colors cursor-pointer"><span className={`relative z-40`}>{subtask.name}</span></div>
-                                        
-                                        {/* Edit Subtask Button */}
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); onEdit(subtask); }}
-                                            className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
-                                            title="Edit Subtask"
-                                        >
-                                            <Edit size={12} />
-                                        </button>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                                            {/* Edit Subtask */}
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onEdit(subtask); }}
+                                                className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                                                title="Edit Subtask"
+                                            >
+                                                <Edit size={12} />
+                                            </button>
+                                            {/* Delete Subtask */}
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onDelete(subtask.id); }}
+                                                className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
+                                                title="Delete Subtask"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="relative h-12 flex-1">
@@ -922,6 +973,11 @@ export default function ProjectApp() {
   const [editingId, setEditingId] = React.useState(null)
   const [draft, setDraft] = React.useState({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
   const [notification, setNotification] = React.useState({ show: false, message: "" })
+  // Track explicit modal mode to avoid title mixing between actions
+  // Modes: 'createProject' | 'editProject' | 'addSubtask' | 'editSubtask'
+  const [modalMode, setModalMode] = React.useState('createProject')
+  // Cache parent project for subtask modal context (name + date range)
+  const parentProject = React.useMemo(() => projects.find(p => p.id === draftParentId), [projects, draftParentId])
   const [validationError, setValidationError] = React.useState("")
   const [focusedId, setFocusedId] = React.useState(null)
   const [selectedProjects, setSelectedProjects] = React.useState(new Set())
@@ -982,8 +1038,13 @@ export default function ProjectApp() {
     setIsExportModalOpen(false)
   }
 
-  const activeProjectsCount = projects.filter((p) => (p.status || "todo") !== "done").length
-  const doneProjectsCount = projects.filter((p) => (p.status || "todo") === "done").length
+  // Group counts derived from color grouping
+  const finishedProjectsCount = projects.filter((p) => getColorGroup(p.color) === "Finished").length
+  const cancelledProjectsCount = projects.filter((p) => getColorGroup(p.color) === "Cancelled").length
+  const inProgressProjectsCount = projects.filter((p) => getColorGroup(p.color) === "In Progress").length
+  // For legacy UI labels, map to "Done"/"Active" semantics
+  const doneProjectsCount = finishedProjectsCount
+  const activeProjectsCount = inProgressProjectsCount
   const totalProjectsCount = projects.length
 
   React.useEffect(() => {
@@ -1033,8 +1094,8 @@ export default function ProjectApp() {
           start: proj.start_date,
           end: proj.end_date,
           task_total: proj.task_total,
-          status: "todo",
-          color: DEFAULT_COLOR,
+          status: proj.status || "active",
+          color: proj.color || DEFAULT_COLOR,
           expanded: true,
           apiId: proj.id,
           api: true,
@@ -1064,11 +1125,18 @@ export default function ProjectApp() {
 
   // Helper: persist a project to PM_project table (create or update)
   const persistProjectToAPI = async (project) => {
+    const statusByColor = (hex) => {
+      if (hex === "#10b981") return "done"
+      if (hex === "#f59e0b") return "cancelled"
+      return "active"
+    }
     const payload = {
       name: project.name,
       start_date: project.start,
       end_date: project.end,
       task_total: Array.isArray(project.subtasks) ? project.subtasks.length : 0,
+      color: project.color || DEFAULT_COLOR,
+      status: statusByColor(project.color || DEFAULT_COLOR),
     }
     if (project.apiId) {
       const { res, base } = await tryFetch(`/api/pm_projects/${project.apiId}/`, {
@@ -1168,6 +1236,9 @@ export default function ProjectApp() {
         setValidationError("Please select valid dates")
       } else if (ds > de) {
         setValidationError("Start date must be before end date")
+      } else if (ds < ps || de > pe) {
+        // Subtask must be within the parent project date window
+        setValidationError("Subtask dates must be within project start/end")
       } else {
         setValidationError("")
       }
@@ -1176,19 +1247,46 @@ export default function ProjectApp() {
     }
   }, [isModalOpen, draftParentId, draft.start, draft.end, projects])
 
-  const handleEditProject = (project) => {
-    setEditingId(project.id)
-    setDraft({
-      name: project.name,
-      start: project.start,
-      end: project.end,
-      status: project.status || "todo",
-      color: project.color || DEFAULT_COLOR
-    })
-    setIsModalOpen(true)
+  const handleEditProject = (item) => {
+    // Decide whether we're editing a project or a subtask based on where the id exists
+    const isProject = projects.some(p => p.id === item.id)
+    if (isProject) {
+      // Edit Project: clear subtask context and set appropriate mode
+      setModalMode('editProject')
+      setDraftParentId(null)
+      setEditingId(item.id)
+      setDraft({
+        name: item.name,
+        start: item.start,
+        end: item.end,
+        status: item.status || "todo",
+        color: item.color || DEFAULT_COLOR
+      })
+      setIsModalOpen(true)
+      return
+    }
+    // Edit Subtask: find parent project, set subtask context for title and date bounds
+    const parent = projects.find(p => Array.isArray(p.subtasks) && p.subtasks.some(s => s.id === item.id))
+    if (parent) {
+      setModalMode('editSubtask')
+      setEditingId(item.id)
+      setDraftParentId(parent.id)
+      setDraft({
+        name: item.name || "",
+        start: item.start || "",
+        end: item.end || "",
+        status: item.status || "todo",
+        color: item.color || DEFAULT_COLOR
+      })
+      setIsModalOpen(true)
+    }
   }
 
   const handleAddSubtask = (parentId) => {
+    // Add Subtask: ensure mode and context are correct
+    setModalMode('addSubtask')
+    // Clear any stale edit id from previous actions
+    setEditingId(null)
     setDraftParentId(parentId)
     setDraft({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
     setIsModalOpen(true)
@@ -1249,26 +1347,10 @@ export default function ProjectApp() {
             }
             // Check if it's a subtask update
             if (p.subtasks && p.subtasks.some(s => s.id === editingId)) {
-                // Update subtask
-                const updatedSubtasks = p.subtasks.map(s => s.id === editingId ? { ...s, ...draft } : s)
-                
-                // Auto-expand Project to fit subtasks
-                const ps = new Date(p.start)
-                const pe = new Date(p.end)
-                const ds = new Date(draft.start)
-                const de = new Date(draft.end)
-                
-                let newStart = ps
-                let newEnd = pe
-                if (ds < ps) newStart = ds
-                if (de > pe) newEnd = de
-                
-                return {
-                    ...p,
-                    start: format(newStart, "yyyy-MM-dd"),
-                    end: format(newEnd, "yyyy-MM-dd"),
-                    subtasks: updatedSubtasks
-                }
+                // Update subtask without color changes (color applies to projects only)
+                const updatedSubtasks = p.subtasks.map(s => s.id === editingId ? { ...s, name: draft.name, start: draft.start, end: draft.end } : s)
+                // Do not change project range when editing a subtask
+                return { ...p, subtasks: updatedSubtasks }
             }
             return p
         }))
@@ -1279,6 +1361,13 @@ export default function ProjectApp() {
         } else {
           const parent = projects.find(p => Array.isArray(p.subtasks) && p.subtasks.some(s => s.id === editingId))
           if (parent) {
+            // Ensure subtask remains within parent range
+            const ds = new Date(draft.start); const de = new Date(draft.end)
+            const ps = new Date(parent.start); const pe = new Date(parent.end)
+            if (isNaN(ds) || isNaN(de) || ds > de || ds < ps || de > pe) {
+              showNotification("Subtask dates must be within project start/end")
+              return
+            }
             const updated = { ...draft, id: editingId }
             await persistSubtaskToAPI(parent, updated)
           }
@@ -1288,28 +1377,18 @@ export default function ProjectApp() {
           showNotification(validationError)
           return
         }
-        // Add a new subtask to an existing project, and persist to backend
+        // Add a new subtask to an existing project (no color for subtasks), and persist to backend
         let newSubtaskId = Date.now()
         setProjects(prev => prev.map(p => {
         if (p.id === draftParentId) {
-                const ps = new Date(p.start)
-                const pe = new Date(p.end)
                 const ds = new Date(draft.start)
                 const de = new Date(draft.end)
-                
-                // Auto-expand Project
-                let newStart = ps
-                let newEnd = pe
-                if (ds < ps) newStart = ds
-                if (de > pe) newEnd = de
-
+                // Do not change project date range when adding subtask
                 return {
                     ...p,
-                    start: format(newStart, "yyyy-MM-dd"),
-                    end: format(newEnd, "yyyy-MM-dd"),
                     subtasks: [
                         ...(p.subtasks || []),
-                        { id: newSubtaskId, ...draft }
+                        { id: newSubtaskId, name: draft.name, start: draft.start, end: draft.end }
                     ],
                     expanded: true
                 }
@@ -1318,7 +1397,15 @@ export default function ProjectApp() {
         }))
         const parent = projects.find(p => p.id === draftParentId)
         if (parent) {
-          await persistSubtaskToAPI(parent, { id: newSubtaskId, ...draft })
+          // Ensure new subtask is within parent range
+          const ds = new Date(draft.start); const de = new Date(draft.end)
+          const ps = new Date(parent.start); const pe = new Date(parent.end)
+          if (isNaN(ds) || isNaN(de) || ds > de || ds < ps || de > pe) {
+            showNotification("Subtask dates must be within project start/end")
+            return
+          }
+          // Persist only core fields for subtask (no color)
+          await persistSubtaskToAPI(parent, { id: newSubtaskId, name: draft.name, start: draft.start, end: draft.end })
         }
     } else {
       // Create a new project and persist to backend
@@ -1351,8 +1438,10 @@ export default function ProjectApp() {
             <h1 className="text-xl font-bold text-slate-800">Project Management</h1>
           </div>
           <div className="text-sm text-slate-500 flex items-center">
-            <span className="mr-3">Active: {activeProjectsCount}</span>
-            <span className="mr-3">Done: {doneProjectsCount}</span>
+            {/* Show grouped counters based on color */}
+            <span className="mr-3">In Progress: {inProgressProjectsCount}</span>
+            <span className="mr-3">Finished: {finishedProjectsCount}</span>
+            <span className="mr-3">Cancelled: {cancelledProjectsCount}</span>
             <span>Total: {totalProjectsCount}</span>
             
             <div className="relative ml-4">
@@ -1408,7 +1497,14 @@ export default function ProjectApp() {
             </div>
 
             <button 
-                onClick={() => { setDraftParentId(null); setIsModalOpen(true) }}
+                onClick={() => { 
+                  // New Project: open modal in create mode, clear any previous context
+                  setModalMode('createProject')
+                  setEditingId(null)
+                  setDraftParentId(null)
+                  setDraft({ name: "", start: "", end: "", status: "todo", color: DEFAULT_COLOR })
+                  setIsModalOpen(true) 
+                }}
                 className="ml-4 px-4 py-2 bg-gradient-to-r from-[#2D4485] to-[#3D56A6] text-white rounded-lg text-sm font-bold shadow hover:shadow-lg transition-all"
             >
               + New Project
@@ -1423,6 +1519,8 @@ export default function ProjectApp() {
             setProjects={setProjects} 
             onAddSubtask={handleAddSubtask} 
             onEdit={handleEditProject}
+            // Wire delete to shared deletion handler (works for projects and subtasks)
+            onDelete={handleDeleteProject}
             startDate={startDate}
             setStartDate={setStartDate}
             focusedId={focusedId}
@@ -1437,51 +1535,82 @@ export default function ProjectApp() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xl p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md group">
+          {/* Increase modal max width to make the pop up box bigger */}
+          <div className="relative w-full max-w-2xl group">
             <div className="relative p-[2px] rounded-[2rem] bg-gradient-to-br from-white/80 via-white/20 to-white/60 shadow-2xl backdrop-blur-3xl">
               <div className="bg-white/90 backdrop-blur-2xl rounded-[1.9rem] overflow-hidden relative h-full">
-                <div className="px-6 py-4 border-b border-gray-100/50 flex justify-between items-center relative z-20 bg-gradient-to-r from-white/50 to-transparent">
-                  <h3 className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
-                    {editingId ? "Edit Project" : draftParentId ? "New Subtask" : "New Project"}
-                  </h3>
+                {/* Increase padding in header for a roomier look */}
+                <div className="px-8 py-6 border-b border-gray-100/50 flex justify-between items-center relative z-20 bg-gradient-to-r from-white/50 to-transparent">
+                  <div>
+                    {/* Modal title reflects current action */}
+                    <h3 className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
+                      {modalMode === 'editProject' ? "Edit Project" : modalMode === 'editSubtask' ? "Edit Subtask" : modalMode === 'addSubtask' ? "Add Sub Task" : "New Project"}
+                    </h3>
+                    {/* Parent project context: show name and (Start → End) range for subtask flows */}
+                    {(modalMode === 'addSubtask' || modalMode === 'editSubtask') && (
+                      <div className="mt-0.5 text-xs font-medium text-slate-500">
+                        <span>{parentProject?.name || "Selected Project"}</span>
+                        <span className="mx-1">•</span>
+                        <span>
+                          {parentProject ? `${format(new Date(parentProject.start), "yyyy-MM-dd")} → ${format(new Date(parentProject.end), "yyyy-MM-dd")}` : ""}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                   <button
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={() => { 
+                      // Reset modal state to avoid mixed titles between modes without page refresh
+                      setIsModalOpen(false)
+                      setEditingId(null)
+                      setDraftParentId(null)
+                      setModalMode('createProject')
+                      setValidationError("")
+                    }}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white/80 hover:shadow-sm transition-all duration-300"
                   >
                     <X size={20} />
                   </button>
                 </div>
 
-                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar relative z-20">
+                {/* Increase body padding and vertical spacing; allow slightly taller viewport */}
+                <div className="p-8 space-y-6 max-h-[85vh] overflow-y-visible relative z-20">
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Name</label>
+                    {/* Slightly taller input for better readability */}
                     <input
                       autoFocus
                       type="text"
-                      className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium"
+                      className="w-full px-5 py-3 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium"
                       placeholder="e.g. Design Phase"
                       value={draft.name}
                       onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Increase gap between date inputs */}
+                  <div className="grid grid-cols-2 gap-6">
                     <div>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Start Date</label>
+                      {/* Constrain subtask date pickers to the parent project's range */}
                       <input
                         type="date"
-                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium"
+                        className="w-full px-5 py-3 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium"
                         value={draft.start}
                         onChange={(e) => setDraft({ ...draft, start: e.target.value })}
+                        min={draftParentId ? parentProject?.start : undefined}
+                        max={draftParentId ? parentProject?.end : undefined}
                       />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">End Date</label>
+                      {/* Constrain subtask date pickers to the parent project's range */}
                       <input
                         type="date"
-                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium"
+                        className="w-full px-5 py-3 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 focus:bg-white outline-none transition-all text-sm font-medium"
                         value={draft.end}
                         onChange={(e) => setDraft({ ...draft, end: e.target.value })}
+                        min={draftParentId ? parentProject?.start : undefined}
+                        max={draftParentId ? parentProject?.end : undefined}
                       />
                     </div>
                   </div>
@@ -1493,25 +1622,57 @@ export default function ProjectApp() {
                     </div>
                   )}
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Color</label>
-                    <div className="flex flex-wrap gap-2">
-                      {COLORS.map((c) => (
-                        <button
-                          key={c.hex}
-                          onClick={() => setDraft({ ...draft, color: c.hex })}
-                          className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
-                            draft.color === c.hex ? "border-indigo-500 scale-110 shadow-md" : "border-transparent"
-                          }`}
-                          style={{ backgroundColor: c.hex }}
-                          title={c.name}
-                        />
-                      ))}
+                  {/* Show color picker only when creating/editing a project (not for subtasks) */}
+                  {(modalMode === 'createProject' || modalMode === 'editProject') && (
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Color</label>
+                      {/* Single-line layout: place group labels and their color options on one row */}
+                      {/* Prevent wrapping; hide horizontal overflow to avoid side arrows */}
+                      <div className="flex items-center gap-3 flex-nowrap overflow-x-hidden whitespace-nowrap">
+                        {/* In progress group with Red/Blue/Pink */}
+                        <span className="text-xs font-semibold text-slate-600">In progress</span>
+                        {COLORS.filter(c => getColorGroup(c.hex) === "In Progress").map((c) => (
+                          <button
+                            key={c.hex}
+                            onClick={() => setDraft({ ...draft, color: c.hex })}
+                            className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${draft.color === c.hex ? "border-indigo-500 scale-110 shadow-md" : "border-transparent"}`}
+                            style={{ backgroundColor: c.hex }}
+                            title={`${c.name} • In progress`}
+                          />
+                        ))}
+                        {/* Spacer between groups */}
+                        <span className="mx-2 text-slate-300">|</span>
+                        {/* Finished group with Green */}
+                        <span className="text-xs font-semibold text-slate-600">Finished</span>
+                        {COLORS.filter(c => getColorGroup(c.hex) === "Finished").map((c) => (
+                          <button
+                            key={c.hex}
+                            onClick={() => setDraft({ ...draft, color: c.hex })}
+                            className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${draft.color === c.hex ? "border-indigo-500 scale-110 shadow-md" : "border-transparent"}`}
+                            style={{ backgroundColor: c.hex }}
+                            title={`${c.name} • Finished`}
+                          />
+                        ))}
+                        {/* Spacer between groups */}
+                        <span className="mx-2 text-slate-300">|</span>
+                        {/* Cancel group with Orange */}
+                        <span className="text-xs font-semibold text-slate-600">Cancel</span>
+                        {COLORS.filter(c => getColorGroup(c.hex) === "Cancelled").map((c) => (
+                          <button
+                            key={c.hex}
+                            onClick={() => setDraft({ ...draft, color: c.hex })}
+                            className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${draft.color === c.hex ? "border-indigo-500 scale-110 shadow-md" : "border-transparent"}`}
+                            style={{ backgroundColor: c.hex }}
+                            title={`${c.name} • Cancel`}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                <div className="p-6 pt-2 relative z-20">
+                {/* Increase footer padding to balance the larger modal */}
+                <div className="p-8 pt-2 relative z-20">
                   <div className="flex gap-3">
                     {editingId && (
                       <button
@@ -1525,7 +1686,7 @@ export default function ProjectApp() {
                       onClick={saveProject}
                       className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold text-sm shadow-lg"
                     >
-                      {editingId ? "Save Changes" : "Create Project"}
+                      {modalMode === 'editProject' || modalMode === 'editSubtask' ? "Save Changes" : modalMode === 'addSubtask' ? "Add Sub Task" : "Create Project"}
                     </button>
                   </div>
                 </div>
