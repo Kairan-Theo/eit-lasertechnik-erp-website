@@ -23,48 +23,16 @@ export function TaxInvoiceForm({ ti }) {
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
-        <h2 className="text-xl font-bold text-[#2D4485]">EIT/Einstein organization</h2>
+        <h2 className="text-xl font-bold text-[#2D4485]">EIT organization</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-            <select 
-              value={ti.details.eit || ""} 
-              onChange={(e) => {
-                const val = e.target.value
-                if (!val) {
-                  ti.setDetails({ 
-                    ...ti.details, 
-                    eit: null, 
-                    salesPerson: "", 
-                    onBehalfOf: "",
-                    eitAddress: "",
-                    eitTelephone: "",
-                    eitFax: "",
-                    eitMobile: ""
-                  })
-                  return
-                }
-                const selected = ti.eitOptions.find(o => String(o.id) === val)
-                if (selected) {
-                  ti.setDetails({ 
-                    ...ti.details, 
-                    eit: selected.id, 
-                    salesPerson: selected.organization_name, 
-                    onBehalfOf: selected.organization_name, 
-                    eitAddress: selected.address || "", 
-                    eitTelephone: selected.eit_telephone || "", 
-                    eitFax: selected.eit_fax || "", 
-                    eitMobile: selected.eit_mobile || ""
-                  })
-                }
-              }} 
+            <input 
+              value={ti.details.onBehalfOf || ""} 
+              onChange={(e) => ti.setDetails({ ...ti.details, onBehalfOf: e.target.value, salesPerson: e.target.value })} 
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
-            >
-              <option value="">Select Organization</option>
-              {ti.eitOptions.map(opt => (
-                <option key={opt.id} value={opt.id}>{opt.organization_name}</option>
-              ))}
-            </select>
+              placeholder="EIT LASERTECHNIK CO.,LTD"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
@@ -121,6 +89,14 @@ export function TaxInvoiceForm({ ti }) {
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
             <textarea value={ti.customer?.address || ""} onChange={(e) => ti.setCustomer({ ...(ti.customer || {}), address: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="3" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
+            <input value={ti.customer?.telephone || ""} onChange={(e) => ti.setCustomer({ ...(ti.customer || {}), telephone: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
+            <input value={ti.customer?.fax || ""} onChange={(e) => ti.setCustomer({ ...(ti.customer || {}), fax: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
           </div>
         </div>
       </div>

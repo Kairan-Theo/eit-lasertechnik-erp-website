@@ -471,7 +471,7 @@ function InvoiceDocument({ inv }) {
   const issueDate = inv.details.date ? format(parseISO(inv.details.date), "dd/MM/yyyy") : ""
   const dueDate = inv.details.dueDate ? format(parseISO(inv.details.dueDate), "dd/MM/yyyy") : ""
 
-  const headerImgSrc = window.location.origin + (isEinstein ? "/Einstein%20header.png" : "/EIT%20header.png")
+  const headerImgSrc = isEinstein ? "/Einstein header.png" : "/EIT header.png"
 
   return (
     <div className="mx-auto bg-white text-black invoice-doc p-[10px] w-full h-auto relative text-[10px] leading-tight">
