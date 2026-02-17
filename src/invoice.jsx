@@ -97,7 +97,6 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
       })
   }, [])
 
-  // Load Customer options from Deals
   React.useEffect(() => {
     fetch(`${API_BASE_URL}/api/deals/`)
       .then(res => res.json())
@@ -115,7 +114,6 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
       .catch(err => console.error("Error loading deals for customers", err))
   }, [])
 
-  // Load PO options from CustomerPurchaseOrder
   React.useEffect(() => {
     fetch(`${API_BASE_URL}/api/customer_purchase_orders/`)
       .then(res => res.json())
