@@ -487,12 +487,17 @@ function QuotationList({ list, refreshData }) {
 function InvoiceList({ list, refreshData }) {
   const [selectedRows, setSelectedRows] = React.useState([])
   const [openDeleteConfirm, setOpenDeleteConfirm] = React.useState(false)
+  // Tab state: which organization to show in the list ("eit" or "einstein")
+  // We use a top tab bar UI similar to Purchase Order page
+  const [activeOrgTab, setActiveOrgTab] = React.useState("eit")
 
   const getUid = (inv) => `${inv.sourceKey}-${inv.sourceIndex}`
 
   const handleSelectAll = (e) => {
+    // Only select currently visible (filtered) rows in the active tab
+    const visible = filterByOrg(list, activeOrgTab)
     if (e.target.checked) {
-      setSelectedRows(list.map(getUid))
+      setSelectedRows(visible.map(getUid))
     } else {
       setSelectedRows([])
     }
@@ -507,7 +512,9 @@ function InvoiceList({ list, refreshData }) {
   }
 
   const handleDelete = async () => {
-    const itemsToDelete = list.filter(inv => selectedRows.includes(getUid(inv)))
+    // Delete only visible rows in the current tab to avoid cross-org deletion
+    const visible = filterByOrg(list, activeOrgTab)
+    const itemsToDelete = visible.filter(inv => selectedRows.includes(getUid(inv)))
     
     // API Deletion
     const apiItems = itemsToDelete.filter(inv => inv.sourceKey === 'api')
@@ -572,6 +579,16 @@ function InvoiceList({ list, refreshData }) {
     setOpenDeleteConfirm(false)
   }
 
+  // Determine organization from invoice details:
+  // Prefer details.onBehalfOf or details.salesPerson; default to EIT if absent
+  const getOrgKey = (item) => {
+    const hint = (item.details?.onBehalfOf || item.details?.salesPerson || "").toUpperCase()
+    return hint.includes("EINSTEIN") ? "einstein" : "eit"
+  }
+  // Filter list by active organization tab
+  const filterByOrg = (fullList, orgKey) => (fullList || []).filter(it => getOrgKey(it) === orgKey)
+  const visibleList = filterByOrg(list, activeOrgTab)
+
   return (
     <div className="bg-white rounded-xl border shadow-sm p-6 relative">
       <div className="flex justify-between items-center mb-6">
@@ -580,6 +597,41 @@ function InvoiceList({ list, refreshData }) {
             <Receipt className="w-6 h-6" />
             <h1 className="text-xl font-bold">Invoices</h1>
           </div>
+        </div>
+        <a href="/invoice.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+          <Plus className="w-4 h-4" />
+          New Invoice
+        </a>
+      </div>
+      {/* Organization Tab Bar - matches the PO page style; not small buttons */}
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center gap-6 border-b border-gray-200 mb-6" role="tablist" aria-label="Organization Tabs">
+          {/* EIT Tab */}
+          <div
+            role="tab"
+            aria-selected={activeOrgTab === "eit"}
+            onClick={() => { setActiveOrgTab("eit"); setSelectedRows([]) }}
+            className={`pb-3 text-sm font-medium transition-colors relative cursor-pointer ${activeOrgTab==='eit' ? 'text-[#2D4485]' : 'text-gray-500 hover:text-gray-700'}`}
+            title="Show EIT invoices"
+          >
+            EIT
+            {activeOrgTab==='eit' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2D4485]" />}
+          </div>
+          {/* Einstein Tab */}
+          <div
+            role="tab"
+            aria-selected={activeOrgTab === "einstein"}
+            onClick={() => { setActiveOrgTab("einstein"); setSelectedRows([]) }}
+            className={`pb-3 text-sm font-medium transition-colors relative cursor-pointer ${activeOrgTab==='einstein' ? 'text-[#2D4485]' : 'text-gray-500 hover:text-gray-700'}`}
+            title="Show Einstein invoices"
+          >
+            Einstein
+            {activeOrgTab==='einstein' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2D4485]" />}
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-4">
           {selectedRows.length > 0 && (
             <button 
               onClick={() => setOpenDeleteConfirm(true)}
@@ -590,10 +642,6 @@ function InvoiceList({ list, refreshData }) {
             </button>
           )}
         </div>
-        <a href="/invoice.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
-          <Plus className="w-4 h-4" />
-          New Invoice
-        </a>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
@@ -603,7 +651,8 @@ function InvoiceList({ list, refreshData }) {
                 <input 
                   type="checkbox" 
                   className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
-                  checked={list.length > 0 && selectedRows.length === list.length}
+                  // Compare against filtered list length for "select all"
+                  checked={visibleList.length > 0 && selectedRows.length === visibleList.length}
                   onChange={handleSelectAll}
                 />
               </th>
@@ -616,7 +665,8 @@ function InvoiceList({ list, refreshData }) {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {list.map((inv, i) => {
+            {/* Render only rows from the active tab's organization */}
+            {visibleList.map((inv, i) => {
               const uid = getUid(inv)
               return (
                 <tr key={uid} className={`hover:bg-gray-50 ${selectedRows.includes(uid) ? 'bg-blue-50' : ''}`}>
@@ -643,7 +693,7 @@ function InvoiceList({ list, refreshData }) {
                 </tr>
               )
             })}
-            {list.length === 0 && (
+            {visibleList.length === 0 && (
               <tr><td colSpan={7} className="p-8 text-center text-gray-500">No invoices found</td></tr>
             )}
           </tbody>
@@ -681,12 +731,15 @@ function InvoiceList({ list, refreshData }) {
 function BillingNoteList({ list, refreshData }) {
   const [selectedRows, setSelectedRows] = React.useState([])
   const [openDeleteConfirm, setOpenDeleteConfirm] = React.useState(false)
+  // Tab state: which organization to show ("eit" or "einstein")
+  const [activeOrgTab, setActiveOrgTab] = React.useState("eit")
 
   const getUid = (bn) => `${bn.sourceKey}-${bn.sourceIndex}`
 
   const handleSelectAll = (e) => {
+    const visible = filterByOrgBN(list, activeOrgTab)
     if (e.target.checked) {
-      setSelectedRows(list.map(getUid))
+      setSelectedRows(visible.map(getUid))
     } else {
       setSelectedRows([])
     }
@@ -701,7 +754,8 @@ function BillingNoteList({ list, refreshData }) {
   }
 
   const handleDelete = async () => {
-    const itemsToDelete = list.filter(bn => selectedRows.includes(getUid(bn)))
+    const visible = filterByOrgBN(list, activeOrgTab)
+    const itemsToDelete = visible.filter(bn => selectedRows.includes(getUid(bn)))
     
     // API Deletion
     const apiItems = itemsToDelete.filter(bn => bn.sourceKey === 'api')
@@ -739,6 +793,14 @@ function BillingNoteList({ list, refreshData }) {
     setOpenDeleteConfirm(false)
   }
 
+  // Determine organization for Billing Note using onBehalfOf or salesPerson
+  const getOrgKeyBN = (item) => {
+    const hint = (item.details?.onBehalfOf || item.details?.salesPerson || "").toUpperCase()
+    return hint.includes("EINSTEIN") ? "einstein" : "eit"
+  }
+  const filterByOrgBN = (fullList, orgKey) => (fullList || []).filter(it => getOrgKeyBN(it) === orgKey)
+  const visibleList = filterByOrgBN(list, activeOrgTab)
+
   return (
     <div className="bg-white rounded-xl border shadow-sm p-6 relative">
       <div className="flex justify-between items-center mb-6">
@@ -747,6 +809,39 @@ function BillingNoteList({ list, refreshData }) {
             <ClipboardList className="w-6 h-6" />
             <h1 className="text-xl font-bold">Billing Notes</h1>
           </div>
+        </div>
+        <a href="/billing-note.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+          <Plus className="w-4 h-4" />
+          New Billing Note
+        </a>
+      </div>
+      {/* Organization Tab Bar for Billing Notes */}
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center gap-6 border-b border-gray-200 mb-6" role="tablist" aria-label="Organization Tabs">
+          <div
+            role="tab"
+            aria-selected={activeOrgTab === "eit"}
+            onClick={() => { setActiveOrgTab("eit"); setSelectedRows([]) }}
+            className={`pb-3 text-sm font-medium transition-colors relative cursor-pointer ${activeOrgTab==='eit' ? 'text-[#2D4485]' : 'text-gray-500 hover:text-gray-700'}`}
+            title="Show EIT billing notes"
+          >
+            EIT
+            {activeOrgTab==='eit' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2D4485]" />}
+          </div>
+          <div
+            role="tab"
+            aria-selected={activeOrgTab === "einstein"}
+            onClick={() => { setActiveOrgTab("einstein"); setSelectedRows([]) }}
+            className={`pb-3 text-sm font-medium transition-colors relative cursor-pointer ${activeOrgTab==='einstein' ? 'text-[#2D4485]' : 'text-gray-500 hover:text-gray-700'}`}
+            title="Show Einstein billing notes"
+          >
+            Einstein
+            {activeOrgTab==='einstein' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2D4485]" />}
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-4">
           {selectedRows.length > 0 && (
             <button 
               onClick={() => setOpenDeleteConfirm(true)}
@@ -757,10 +852,6 @@ function BillingNoteList({ list, refreshData }) {
             </button>
           )}
         </div>
-        <a href="/billing-note.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
-          <Plus className="w-4 h-4" />
-          New Billing Note
-        </a>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
@@ -770,7 +861,7 @@ function BillingNoteList({ list, refreshData }) {
                 <input 
                   type="checkbox" 
                   className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
-                  checked={list.length > 0 && selectedRows.length === list.length}
+                  checked={visibleList.length > 0 && selectedRows.length === visibleList.length}
                   onChange={handleSelectAll}
                 />
               </th>
@@ -783,7 +874,7 @@ function BillingNoteList({ list, refreshData }) {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {list.map((bn, i) => {
+            {visibleList.map((bn, i) => {
               const uid = getUid(bn)
               const amount = (bn.items || []).reduce((sum, item) => sum + (Number(String(item.amount).replace(/,/g, '')) || 0), 0)
               const paid = (bn.items || []).reduce((sum, item) => sum + (Number(String(item.paid).replace(/,/g, '')) || 0), 0)
@@ -816,7 +907,7 @@ function BillingNoteList({ list, refreshData }) {
                 </tr>
               )
             })}
-            {list.length === 0 && (
+            {visibleList.length === 0 && (
               <tr><td colSpan={7} className="p-8 text-center text-gray-500">No billing notes found</td></tr>
             )}
           </tbody>
@@ -1332,6 +1423,8 @@ function AdminPage() {
       const response = await fetch(`${API_BASE_URL}/api/billing_notes/`, { headers })
       if (response.ok) {
         const apiBillingNotes = await response.json()
+        // Map API fields into our unified shape and preserve org info
+        // We copy EIT/Einstein organization fields so tabs can classify rows
         return apiBillingNotes.map(bn => ({
           id: bn.id,
           sourceKey: 'api',
@@ -1341,6 +1434,11 @@ function AdminPage() {
             date: bn.bn_created_date || bn.bn_date,
             dueDate: bn.bn_due_date || bn.bn_invoice_date,
             currency: bn.bn_currency || 'THB', 
+            // Preserve org identification for tab filtering:
+            // - bn_behalf_of corresponds to "onBehalfOf"
+            // - eit_details.organization_name corresponds to "salesPerson"
+            onBehalfOf: bn.bn_behalf_of || "",
+            salesPerson: bn.eit_details?.organization_name || "",
           },
           customerName: bn.customer_details?.company_name || bn.customer_name || 'Unknown',
           items: (bn.items || []).map(item => ({

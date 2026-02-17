@@ -98,6 +98,8 @@ export default function EitManagement() {
       eit_mobile: "000-000-0000",
       eit_telephone: "02-052-9544",
       eit_fax: "02-052-9544",
+      // Initialize tax_number to empty string so input is controlled
+      tax_number: "",
       address: "1/120 ซอยรามคําแหง 184 \n แขวงมีนบุรี เขตมีนบุรี \n กรุงเทพมหานคร 10510"
     })
   }
@@ -132,6 +134,8 @@ export default function EitManagement() {
                 <th className="p-3 text-left">Mobile</th>
                 <th className="p-3 text-left">Telephone</th>
                 <th className="p-3 text-left">Fax</th>
+                {/* New column: Tax Number placed between Fax and Address */}
+                <th className="p-3 text-left">Tax Number</th>
                 <th className="p-3 text-left">Address</th>
                 <th className="p-3 text-right">Actions</th>
               </tr>
@@ -172,6 +176,15 @@ export default function EitManagement() {
                       onChange={e => setFormData({...formData, eit_fax: e.target.value})}
                     />
                   </td>
+                  {/* Input for Tax Number - sits between Fax and Address */}
+                  <td className="p-3 align-top">
+                    <input
+                      className="w-full p-2 border rounded"
+                      placeholder="Tax Number"
+                      value={formData.tax_number || ""}
+                      onChange={e => setFormData({...formData, tax_number: e.target.value})}
+                    />
+                  </td>
                   <td className="p-3 align-top">
                     <textarea 
                       className="w-full p-2 border rounded"
@@ -202,6 +215,8 @@ export default function EitManagement() {
                     <td className="p-3 text-gray-600">{eit.eit_mobile}</td>
                     <td className="p-3 text-gray-600">{eit.eit_telephone}</td>
                     <td className="p-3 text-gray-600">{eit.eit_fax}</td>
+                    {/* Display Tax Number value fetched from API */}
+                    <td className="p-3 text-gray-600">{eit.tax_number || ""}</td>
                     <td className="p-3 text-gray-600 whitespace-pre-line">{eit.address}</td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -225,7 +240,8 @@ export default function EitManagement() {
               
               {eits.length === 0 && !isAdding && (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500">No organizations found. Click "Add Organization" to create one.</td>
+                  {/* Update colSpan to include new Tax Number column */}
+                  <td colSpan={7} className="p-8 text-center text-gray-500">No organizations found. Click "Add Organization" to create one.</td>
                 </tr>
               )}
             </tbody>

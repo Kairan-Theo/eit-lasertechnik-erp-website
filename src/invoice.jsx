@@ -260,6 +260,57 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
     })
   }, [])
 
+  // Ensure the invoice number is always new: merge API + local history and pick next sequence
+  React.useEffect(() => {
+    // We parse codes like "VOI YYYY-XXXX" and "EIT VOI YYYY-XXXX" and pick the highest XXXX for current year.
+    const currentYear = new Date().getFullYear()
+    const parseSeq = (s) => {
+      try {
+        const m = String(s || "").match(new RegExp(`^(?:EIT\\s+)?VOI ${currentYear}-(\\d{4})$`, 'i'))
+        return m ? parseInt(m[1], 10) : null
+      } catch { return null }
+    }
+    const toCode = (n) => `EIT VOI ${currentYear}-${String(n).padStart(4, "0")}`
+    const updateFromApi = async () => {
+      try {
+        // Check API invoices
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { "Authorization": `Token ${token}` } : {}
+        const res = await fetch(`${API_BASE_URL}/api/invoices/`, { headers })
+        let maxSeq = parseSeq(details.number) || 0
+        if (res.ok) {
+          const apiInvoices = await res.json()
+          if (Array.isArray(apiInvoices)) {
+            for (const inv of apiInvoices) {
+              const seq = parseSeq(inv.number || inv.details?.number)
+              if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq
+            }
+          }
+        }
+        // Also consider localStorage histories
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.startsWith("history:")) {
+              const item = JSON.parse(localStorage.getItem(key))
+              if (item && Array.isArray(item.invoices)) {
+                for (const inv of item.invoices) {
+                  const seq = parseSeq(inv.number || inv.details?.number)
+                  if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq
+                }
+              }
+            }
+          }
+        } catch {}
+        // If any sequence found, set next = max + 1
+        if (maxSeq >= 1) {
+          setDetails(prev => ({ ...prev, number: toCode(maxSeq + 1) }))
+        }
+      } catch {}
+    }
+    updateFromApi()
+  }, [])
+
   // Recalculate dueDate when date or paymentTermsDays change
   React.useEffect(() => {
     try {
