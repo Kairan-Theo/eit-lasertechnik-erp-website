@@ -88,7 +88,7 @@ class BillingNote(models.Model):
     bn_due_date = models.DateField(null=True, blank=True)
     
     bn_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    bn_paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    bn_paid_amount = models.DateField("Bn paid date", null=True, blank=True)
     bn_outstanding_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     bn_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     

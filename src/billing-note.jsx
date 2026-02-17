@@ -422,14 +422,16 @@ function BillingNotePage() {
   const handleSave = async () => {
     try {
       const company = q.customer.company || "Unknown"
-      
-      // Prepare payload for API
+
+      const paidDates = q.items.map(it => it.paid).filter(Boolean).sort()
+      const bnPaidDate = paidDates.length ? paidDates[paidDates.length - 1] : null
+
       const payload = {
         bn_code: q.details.number,
         bn_created_date: q.details.date || new Date().toISOString().slice(0, 10),
         bn_due_date: q.items[0]?.dueDate || null,
         bn_amount: q.total, 
-        bn_paid_amount: 0,
+        bn_paid_amount: bnPaidDate,
         bn_outstanding_balance: q.total,
         bn_total: q.total,
         bn_remark: q.details.remark,
@@ -446,15 +448,17 @@ function BillingNotePage() {
         cus_attn: q.customer.attn,
         cus_div: q.customer.div,
         cus_mobile: q.customer.mobile,
-        
-        eit: q.details.eit,
+
         eit_name: q.details.salesPerson,
         eit_address: q.details.eitAddress,
         eit_mobile: q.details.eitMobile,
         eit_phone: q.details.eitTelephone,
         eit_fax: q.details.eitFax,
-        
         items: q.items
+      }
+
+      if (q.details.eit != null) {
+        payload.eit = q.details.eit
       }
       
       let url = `${API_BASE_URL}/api/billing_notes/`
@@ -928,6 +932,7 @@ function BillingNoteDocument({ bn }) {
               <th className="border border-black px-1 py-1 text-center w-24">วันที่<br/>Date</th>
               <th className="border border-black px-1 py-1 text-center w-24">ครบกำหนด<br/>Due Date</th>
               <th className="border border-black px-1 py-1 text-right w-28">จำนวนเงิน<br/>Amount</th>
+              <th className="border border-black px-1 py-1 text-center w-24">ช ำระแล้ว ภาษี</th>
               <th className="border border-black px-1 py-1 text-right w-28">ยอดคงค้าง<br/>Balance</th>
             </tr>
           </thead>
@@ -944,6 +949,9 @@ function BillingNoteDocument({ bn }) {
                 <td className="border-l border-r border-black px-1 py-1 text-center">{item.date}</td>
                 <td className="border-l border-r border-black px-1 py-1 text-center">{item.dueDate}</td>
                 <td className="border-l border-r border-black px-1 py-1 text-right">{amt.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                <td className="border-l border-r border-black px-1 py-1 text-center">
+                  {item.paid ? format(parseISO(item.paid), "dd/MM/yyyy") : ""}
+                </td>
                 <td className="border-l border-r border-black px-1 py-1 text-right">{balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
               </tr>
             )})}
@@ -956,16 +964,17 @@ function BillingNoteDocument({ bn }) {
                 <td className="border-l border-r border-black px-1 py-1">&nbsp;</td>
                 <td className="border-l border-r border-black px-1 py-1">&nbsp;</td>
                 <td className="border-l border-r border-black px-1 py-1">&nbsp;</td>
+                <td className="border-l border-r border-black px-1 py-1">&nbsp;</td>
               </tr>
             ))}
             <tr className="border-t border-black">
-              <td colSpan={4} className="border border-black px-1 py-1 text-right font-bold">รวมเงิน (Total)</td>
+              <td colSpan={5} className="border border-black px-1 py-1 text-right font-bold">รวมเงิน (Total)</td>
               <td colSpan={2} className="border border-black px-1 py-1 text-right font-bold">
                  {bn.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </td>
             </tr>
             <tr>
-              <td colSpan={6} className="border border-black px-1 py-1 bg-gray-100 font-bold text-center">
+              <td colSpan={7} className="border border-black px-1 py-1 bg-gray-100 font-bold text-center">
                  ({THBText(bn.total)})
               </td>
             </tr>

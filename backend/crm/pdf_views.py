@@ -1237,8 +1237,8 @@ def generate_billing_note_pdf(request):
     # elements.append(Spacer(1, 10))
 
     # --- Items Table ---
-    # Headers: No., Invoice No, Date, Due Date, Amount, Paid, Outstanding
-    headers = ["No.", "เลขที่ใบกำกับ", "วันที่", "ครบกำหนด", "จำนวนเงิน", "ชำระแล้ว", "เงินคงค้าง"]
+    # Headers: No., Invoice No, Date, Due Date, Amount, Tax Paid Date, Outstanding
+    headers = ["No.", "เลขที่ใบกำกับ", "วันที่", "ครบกำหนด", "จำนวนเงิน", "ช ำระแล้วภาษี", "เงินคงค้าง"]
     
     table_data = [[Paragraph(h, styles['Table_Header']) for h in headers]]
     
@@ -1246,25 +1246,38 @@ def generate_billing_note_pdf(request):
     total_outstanding = 0
     
     for i, item in enumerate(items):
+        amount_raw = str(item.get('amount', 0)).replace(',', '')
+        paid_raw = item.get('paid', 0)
+
         try:
-            amount = float(str(item.get('amount', 0)).replace(',', ''))
-            paid = float(str(item.get('paid', 0)).replace(',', ''))
-            outstanding = amount - paid
+            amount = float(amount_raw)
         except:
             amount = 0
+
+        try:
+            paid = float(str(paid_raw).replace(',', ''))
+        except:
             paid = 0
-            outstanding = 0
+
+        outstanding = amount - paid
             
         total_amount += amount
         total_outstanding += outstanding # Sum of outstanding balances
         
+        paid_display = ""
+        if paid_raw:
+            try:
+                paid_display = datetime.strptime(str(paid_raw), '%Y-%m-%d').strftime('%d/%m/%Y')
+            except:
+                paid_display = str(paid_raw)
+
         row = [
             Paragraph(str(i + 1), styles['Table_Data_Center']),
             Paragraph(txt(item.get('invoiceNo')), styles['Table_Data_Center']),
             Paragraph(txt(item.get('date')), styles['Table_Data_Center']),
             Paragraph(txt(item.get('dueDate')), styles['Table_Data_Center']),
             Paragraph(f"{amount:,.2f}", styles['Table_Data_Right']),
-            Paragraph(f"{paid:,.2f}", styles['Table_Data_Right']),
+            Paragraph(paid_display, styles['Table_Data_Center']),
             Paragraph(f"{outstanding:,.2f}", styles['Table_Data_Right']),
         ]
         table_data.append(row)
