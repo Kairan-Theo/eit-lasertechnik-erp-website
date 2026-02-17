@@ -354,6 +354,9 @@ class PMProject(models.Model):
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     task_total = models.IntegerField(default=0)
+    # Persist UI color and lifecycle status
+    color = models.CharField(max_length=20, blank=True, default='#6366f1')
+    status = models.CharField(max_length=20, blank=True, default='active')  # active | done | cancelled
     class Meta:
         db_table = 'PM_project'
     def __str__(self):

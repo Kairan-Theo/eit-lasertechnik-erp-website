@@ -307,7 +307,7 @@ class PDSystemChildproductAdmin(admin.ModelAdmin):
 @admin.register(PMProject)
 class PMProjectAdmin(admin.ModelAdmin):
     # Show primary fields of PM_project in list view
-    list_display = ("id", "name", "start_date", "end_date", "task_total")
+    list_display = ("id", "name", "start_date", "end_date", "task_total", "status", "color")
     search_fields = ("name",)
     ordering = ("-id",)
 
