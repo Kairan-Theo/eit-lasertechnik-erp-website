@@ -13,18 +13,8 @@ export function InvoiceForm({ inv }) {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
-              <input value={inv.details.number || ""} onChange={(e) => inv.setDetails({ ...inv.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Invoice number" />
-              <div className="flex items-center gap-2 mt-2">
-                <input 
-                  type="checkbox" 
-                  id="isTaxInvoice" 
-                  checked={inv.details.isTaxInvoice || false} 
-                  onChange={(e) => inv.setDetails({ ...inv.details, isTaxInvoice: e.target.checked })} 
-                  className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]"
-                />
-                <label htmlFor="isTaxInvoice" className="text-sm text-gray-700">Tax Invoice (ใบกำกับภาษี)</label>
-              </div>
-            </div>
+               <input value={inv.details.number || ""} onChange={(e) => inv.setDetails({ ...inv.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Invoice number" />
+             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
               <DateField value={inv.details.date || ""} onChange={(val) => inv.setDetails({ ...inv.details, date: val })} />
@@ -114,6 +104,7 @@ export function InvoiceForm({ inv }) {
                         branch: "",
                         address: match.address || inv.customer?.address || "",
                         telephone: match.phone || inv.customer?.telephone || "",
+                        fax: match.fax || match.cus_fax || inv.customer?.fax || "",
                         attn: match.contact || inv.customer?.attn || "",
                         email: match.email || inv.customer?.email || ""
                       })
@@ -130,6 +121,14 @@ export function InvoiceForm({ inv }) {
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
                <input value={inv.customer?.branch || ""} onChange={(e) => inv.setCustomer({ ...(inv.customer || {}), branch: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Head Office / Branch No." />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
+               <input value={inv.customer?.telephone || ""} onChange={(e) => inv.setCustomer({ ...(inv.customer || {}), telephone: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Telephone" />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
+               <input value={inv.customer?.fax || ""} onChange={(e) => inv.setCustomer({ ...(inv.customer || {}), fax: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Fax" />
              </div>
              <div className="md:col-span-2">
                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
