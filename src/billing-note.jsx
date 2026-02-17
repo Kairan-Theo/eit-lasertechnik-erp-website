@@ -60,6 +60,10 @@ function EmbeddedInvoice({ invoiceNo, allInvoices }) {
 }
 
 function useBillingNoteState() {
+  // Detect edit mode from URL (key/index present) so we don't auto-generate codes
+  const urlParams = new URLSearchParams(window.location.search)
+  const initialKey = urlParams.get("key")
+  const initialIndex = urlParams.get("index")
   const [customer, setCustomer] = React.useState({
     company: "",
     // Add taxId to support Tax Number input beside Company Name
@@ -107,6 +111,8 @@ function useBillingNoteState() {
 
   // Ensure Billing Note number is always new: merge API + local history and pick next
   React.useEffect(() => {
+    // Skip auto-number when editing an existing record (has key/index in URL)
+    if (initialKey && initialIndex !== null) return
     const currentYear = new Date().getFullYear()
     const parseSeq = (s) => {
       try {
@@ -153,6 +159,59 @@ function useBillingNoteState() {
       } catch {}
     }
     updateFromApi()
+  }, [])
+
+  // If editing an API Billing Note, preload it and hydrate the form
+  React.useEffect(() => {
+    if (initialKey === "api" && initialIndex) {
+      const loadFromApi = async () => {
+        try {
+          const token = localStorage.getItem("authToken")
+          const headers = token ? { "Authorization": `Token ${token}` } : {}
+          const r = await fetch(`${API_BASE_URL}/api/billing_notes/${initialIndex}/`, { headers })
+          if (!r.ok) return
+          const bn = await r.json()
+          // Map API fields to UI state while preserving existing values if missing
+          setDetails(prev => ({
+            ...prev,
+            number: bn.bn_code || prev.number,
+            date: bn.bn_created_date || bn.bn_date || prev.date,
+            // Use the first item due date if provided; otherwise bn_due_date
+            dueDate: bn.bn_due_date || prev.dueDate,
+            currency: bn.bn_currency || prev.currency,
+            // Organization/EIT display fields
+            onBehalfOf: bn.bn_behalf_of || prev.onBehalfOf,
+            salesPerson: bn.eit_details?.organization_name || prev.salesPerson,
+            eitAddress: bn.eit_details?.address || prev.eitAddress,
+            eitMobile: bn.eit_details?.eit_mobile || prev.eitMobile,
+            eitTelephone: bn.eit_details?.eit_telephone || prev.eitTelephone,
+            eitFax: bn.eit_details?.eit_fax || prev.eitFax,
+          }))
+          setCustomer(prev => ({
+            ...prev,
+            company: bn.customer_details?.company_name || bn.customer_name || prev.company,
+            address: bn.customer_details?.address || prev.address,
+            telephone: bn.customer_details?.phone || prev.telephone,
+            fax: bn.customer_details?.cus_fax || prev.fax,
+            attn: bn.customer_details?.attn || prev.attn,
+            // taxId optional on BN; keep if present in deals
+            taxId: bn.customer_details?.tax_id || prev.taxId,
+            email: bn.customer_details?.email || prev.email,
+          }))
+          const uiItems = Array.isArray(bn.items) ? bn.items.map(item => ({
+            invoiceNo: item.invoice_no || item.invoiceNo || "",
+            date: item.date || "",
+            dueDate: item.due_date || item.dueDate || "",
+            amount: item.amount || 0,
+            paid: item.paid || 0,
+          })) : [{ invoiceNo: "", date: "", dueDate: "", amount: 0, paid: 0 }]
+          setItems(uiItems)
+        } catch (e) {
+          console.error("Failed to load Billing Note from API", e)
+        }
+      }
+      loadFromApi()
+    }
   }, [])
 
   const [details, setDetails] = React.useState({
