@@ -639,32 +639,13 @@ function BillingNotePage() {
                <textarea value={q.customer.address} onChange={(e) => q.setCustomer({ ...q.customer, address: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" rows="2" placeholder="Address" />
              </div>
           </div>
-
-          <h3 className="text-base font-bold text-gray-900 pt-2">Customer Responsible</h3>
-
-          {/* Attn / Div / Mobile */}
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Attention(Attn.)</label>
-                <input value={q.customer.attn} onChange={(e) => q.setCustomer({ ...q.customer, attn: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Attention" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
-                <input value={q.customer.div} onChange={(e) => q.setCustomer({ ...q.customer, div: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
-                <input value={q.customer.mobile} onChange={(e) => q.setCustomer({ ...q.customer, mobile: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
-            </div>
-          </div>
         </div>
 
-
-
+        
         {/* Description Box */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 mb-8">
            <div className="flex justify-between items-center mb-4">
-             <h2 className="text-xl font-bold text-[#2D4485]">Billing Note Description</h2>
+            <h2 className="text-xl font-bold text-[#2D4485]">Billing Note Description</h2>
              <button onClick={q.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
                <Plus className="w-4 h-4" />
                <span className="text-sm font-medium">Add Item</span>
@@ -679,13 +660,12 @@ function BillingNotePage() {
                    <th className="p-3 border-b">วันท</th>
                    <th className="p-3 border-b">ครบก ำหนด</th>
                    <th className="p-3 border-b w-32">จ ำนวนเงิน</th>
-                   <th className="p-3 border-b w-32">ช ำระแล้ว</th>
+                   <th className="p-3 border-b w-32">ช ำระแล้ว ภาษี</th>
                    <th className="p-3 border-b w-32">เงินคงค้ำง</th>
-                  <th className="p-3 border-b w-32">Details</th>
-                  <th className="p-3 border-b w-12"></th>
+                   <th className="p-3 border-b w-12"></th>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
+               </thead>
+               <tbody className="divide-y divide-gray-100">
                 {q.items.map((item, i) => (
                   <tr key={i} className="hover:bg-gray-50 transition border-b border-gray-100">
                     <td className="p-3 text-center text-sm text-gray-700">
@@ -711,7 +691,7 @@ function BillingNotePage() {
                                  q.updateItem(i, "dueDate", d.toISOString().split('T')[0])
                                } catch (e) {}
                             }
-
+ 
                             if (inv.totals?.total) {
                               q.updateItem(i, "amount", inv.totals.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}))
                               q.updateItem(i, "paid", "0.00")
@@ -739,20 +719,15 @@ function BillingNotePage() {
                       }} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none text-right" />
                     </td>
                     <td className="p-3">
-                      <input type="text" value={item.paid} onChange={(e) => {
-                        const val = e.target.value.replace(/,/g, '')
-                        if (val === '' || !isNaN(val)) {
-                          const parts = val.split('.')
-                          parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                          q.updateItem(i, "paid", parts.join('.'))
-                        }
-                      }} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none text-right" />
+                      <input type="date" value={item.paid} onChange={(e) => q.updateItem(i, "paid", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
                     </td>
                     <td className="p-3 text-right text-sm text-gray-700">
-                      {((Number(String(item.amount).replace(/,/g, '') || 0)) - (Number(String(item.paid).replace(/,/g, '') || 0))).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                    </td>
-                    <td className="p-3">
-                      <EmbeddedInvoice invoiceNo={item.invoiceNo} allInvoices={q.invoices} />
+                      {(() => {
+                        const amt = Number(String(item.amount).replace(/,/g, '') || 0)
+                        const paidStr = String(item.paid || '').replace(/,/g, '')
+                        const paidNum = paidStr && !isNaN(Number(paidStr)) ? Number(paidStr) : 0
+                        return (amt - paidNum).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                      })()}
                     </td>
                      <td className="p-3 text-right">
                        <button onClick={() => q.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete"><Trash className="w-4 h-4" /></button>
@@ -959,7 +934,8 @@ function BillingNoteDocument({ bn }) {
           <tbody>
             {bn.items.map((item, i) => {
                const amt = Number(String(item.amount).replace(/,/g, '')) || 0
-               const paid = Number(String(item.paid).replace(/,/g, '')) || 0
+               const paidStr = String(item.paid || '').replace(/,/g, '')
+               const paid = paidStr && !isNaN(Number(paidStr)) ? Number(paidStr) : 0
                const balance = amt - paid
                return (
               <tr key={i}>
