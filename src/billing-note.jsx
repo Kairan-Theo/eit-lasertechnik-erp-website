@@ -62,6 +62,8 @@ function EmbeddedInvoice({ invoiceNo, allInvoices }) {
 function useBillingNoteState() {
   const [customer, setCustomer] = React.useState({
     company: "",
+    // Add taxId to support Tax Number input beside Company Name
+    taxId: "",
     address: "",
     telephone: "",
     fax: "",
@@ -661,6 +663,8 @@ function BillingNotePage() {
                       q.setCustomer({
                         ...q.customer,
                         company: val,
+                        // Map tax number if available from deals (tax_id)
+                        taxId: match.tax_id || q.customer.taxId,
                         address: match.address || q.customer.address,
                         telephone: match.phone || q.customer.telephone,
                         // Note: billing note state has fax/attn/div/mobile/email
@@ -675,6 +679,16 @@ function BillingNotePage() {
                     }
                   }}
                 />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Tax Number</label>
+               {/* Tax Number input placed beside Company Name */}
+               <input
+                 value={q.customer.taxId}
+                 onChange={(e) => q.setCustomer({ ...q.customer, taxId: e.target.value })}
+                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                 placeholder="Tax Number"
+               />
              </div>
           </div>
 

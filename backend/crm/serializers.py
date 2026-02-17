@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, Receipt, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
+from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, Receipt, TaxInvoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
 
 class SubProjectSerializer(serializers.ModelSerializer):
     class Meta:
@@ -631,6 +631,50 @@ class ReceiptSerializer(serializers.ModelSerializer):
             instance.eit = eit
         return super().update(instance, validated_data)
 
+class TaxInvoiceSerializer(serializers.ModelSerializer):
+    # Read-only nested details for convenience
+    customer_details = CustomerSerializer(source='customer', read_only=True)
+    eit_details = EITSerializer(source='eit', read_only=True)
+    # Write using primary keys
+    customer = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all(), write_only=True, required=False)
+    eit = serializers.PrimaryKeyRelatedField(queryset=EIT.objects.all(), write_only=True, required=False)
+    # Fallback write-only names (like Quotation)
+    customer_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    eit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = TaxInvoice
+        fields = '__all__'
+
+    def create(self, validated_data):
+        # Resolve customer by name if FK not provided
+        customer_name = validated_data.pop('customer_name', None)
+        if not validated_data.get('customer') and customer_name:
+            cust, _ = Customer.objects.get_or_create(company_name=customer_name)
+            validated_data['customer'] = cust
+        # Resolve EIT by name if FK not provided
+        eit_name = validated_data.pop('eit_name', None)
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            validated_data['eit'] = eit
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # Resolve customer by name if FK not provided
+        customer_name = validated_data.pop('customer_name', None)
+        if not validated_data.get('customer') and customer_name:
+            cust, _ = Customer.objects.get_or_create(company_name=customer_name)
+            instance.customer = cust
+        # Resolve EIT by name if FK not provided
+        eit_name = validated_data.pop('eit_name', None)
+        if not validated_data.get('eit') and eit_name:
+            eit = EIT.objects.filter(organization_name=eit_name).first()
+            if not eit:
+                eit = EIT.objects.create(organization_name=eit_name)
+            instance.eit = eit
+        return super().update(instance, validated_data)
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     eit_details = EITSerializer(source='eit', read_only=True)
     eit = serializers.PrimaryKeyRelatedField(queryset=EIT.objects.all(), write_only=True, required=False)

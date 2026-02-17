@@ -1,5 +1,5 @@
 import React from "react"
-import { Plus } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { Combobox } from "./combobox"
 import { CustomerCombobox } from "./customer-combobox"
 import { DateField } from "./ui/date-field"
@@ -60,16 +60,21 @@ export function TaxInvoiceForm({ ti }) {
               value={ti.customer?.company || ""}
               options={ti.customerOptions}
               onChange={(val) => {
-                const match = ti.customerOptions.find(c => c.customer_name === val)
+                // Try matching by either 'customer_name' (legacy) or 'company_name' (current)
+                const match = ti.customerOptions.find(c => (c.customer_name || c.company_name) === val)
                 if (match) {
                   ti.setCustomer({
                     ...(ti.customer || {}),
                     company: val,
+                    // Map known fields from backend Customer model
                     taxId: match.tax_id || ti.customer?.taxId || "",
                     branch: "",
                     address: match.address || ti.customer?.address || "",
                     telephone: match.phone || ti.customer?.telephone || "",
-                    attn: match.contact || ti.customer?.attn || "",
+                    // Map fax from 'cus_fax' if present
+                    fax: match.cus_fax || ti.customer?.fax || "",
+                    // 'contact' may not be present; preserve existing
+                    attn: ti.customer?.attn || "",
                     email: match.email || ti.customer?.email || ""
                   })
                 } else {
@@ -135,7 +140,9 @@ export function TaxInvoiceForm({ ti }) {
                 <th className="p-3 border-b">Sales (ex. Vat)</th>
                 <th className="p-3 border-b">Quantity</th>
                 <th className="p-3 border-b">Unit</th>
+                <th className="p-3 border-b">Discount</th>
                 <th className="p-3 border-b text-right">Amount</th>
+                <th className="p-3 border-b w-12"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -153,8 +160,23 @@ export function TaxInvoiceForm({ ti }) {
                   <td className="p-3">
                     <input value={it.unit || ""} onChange={(e) => ti.updateItem(i, "unit", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
                   </td>
+                  <td className="p-3">
+                    <input type="number" min="0" step="0.01" value={it.discount || ""} onChange={(e) => ti.updateItem(i, "discount", e.target.value)} className="w-full bg-transparent border-b border-gray-300 px-2 py-1 text-sm focus:border-[#2D4485] outline-none" />
+                  </td>
                   <td className="p-3 text-right text-sm text-gray-700">
-                    {((Number(it.qty) || 0) * (Number(it.price) || 0)).toFixed(2)}
+                    {(((Number(it.qty) || 0) * (Number(it.price) || 0)) - (Number(it.discount) || 0)).toFixed(2)}
+                  </td>
+                  <td className="p-3 text-right">
+                    {/* Delete button removes this item row */}
+                    <button
+                      type="button"
+                      onClick={() => ti.removeItem(i)}
+                      className="inline-flex items-center justify-center p-2 rounded hover:bg-red-50"
+                      aria-label="Delete item"
+                      title="Delete item"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </button>
                   </td>
                 </tr>
               ))}

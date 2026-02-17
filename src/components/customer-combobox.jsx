@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { ChevronDown, Check } from "lucide-react"
 import { cn } from "../lib/utils"
 
-export function CustomerCombobox({ value, onChange, options = [] }) {
+export function CustomerCombobox({ value, onChange, onSelect, options = [] }) {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState("")
   const containerRef = useRef(null)
@@ -24,13 +24,16 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  // Normalize/display helpers:
+  // - label: shown string (supports new {label,value} shape or legacy customer_name/company_name)
+  // - val: returned value (prefer explicit 'value' or fallback to 'id' for ID-based selection)
   const safeOptions = Array.isArray(options) ? options : []
+  const getLabel = (opt) => String(opt?.label ?? opt?.customer_name ?? opt?.company_name ?? "").trim()
+  const getVal = (opt) => opt?.value ?? opt?.id ?? getLabel(opt)
 
   const filteredOptions = query === "" 
     ? safeOptions 
-    : safeOptions.filter((customer) =>
-        (customer.customer_name || "").toLowerCase().includes(query.toLowerCase())
-      )
+    : safeOptions.filter((opt) => getLabel(opt).toLowerCase().includes(query.toLowerCase()))
 
   const handleInputChange = (e) => {
     const newVal = e.target.value
@@ -39,10 +42,14 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
     setIsOpen(true)
   }
 
-  const handleSelect = (customerName) => {
-    const safeName = customerName || ""
-    setQuery(safeName)
-    onChange(safeName)
+  const handleSelectOption = (opt) => {
+    const lbl = getLabel(opt)
+    const val = getVal(opt)
+    setQuery(lbl)
+    // Update visible input text with the label
+    onChange(lbl)
+    // Notify consumer with the actual value (ID preferred)
+    if (typeof onSelect === "function") onSelect({ label: lbl, value: val })
     setIsOpen(false)
   }
 
@@ -82,19 +89,20 @@ export function CustomerCombobox({ value, onChange, options = [] }) {
           {/* Optional: Add "Select Customer" as a disabled header or placeholder if needed */}
           {/* <li className="px-3 py-2 text-slate-400 cursor-default">Select Customer</li> */}
           
-          {filteredOptions.map((customer) => (
+          {filteredOptions.map((opt, i) => (
             <li
-              key={customer.id || customer.customer_name}
+              // Prefer id/value if present; fallback to label
+              key={getVal(opt) ?? getLabel(opt) ?? i}
               className={cn(
                 "relative cursor-pointer select-none py-2 pl-3 pr-9 hover:bg-slate-100 text-slate-900",
-                value === customer.customer_name ? "bg-blue-50 text-blue-900" : ""
+                value === getLabel(opt) ? "bg-blue-50 text-blue-900" : ""
               )}
-              onClick={() => handleSelect(customer.customer_name)}
+              onClick={() => handleSelectOption(opt)}
             >
               <span className="block truncate">
-                {customer.customer_name}
+                {getLabel(opt)}
               </span>
-              {value === customer.customer_name && (
+              {value === getLabel(opt) && (
                 <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-blue-600">
                   <Check className="h-4 w-4" />
                 </span>

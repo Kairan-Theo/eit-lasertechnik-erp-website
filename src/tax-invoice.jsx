@@ -163,15 +163,84 @@ function useTaxInvoiceState() {
     notes: "",
     currency: "THB"
   })
-  const [items, setItems] = React.useState([{ description: "", qty: 1, price: 0, unit: "pcs" }])
+  const [items, setItems] = React.useState([{ description: "", qty: 1, price: 0, unit: "pcs", discount: 0 }])
   const [eitOptions, setEitOptions] = React.useState([])
   const [customerOptions, setCustomerOptions] = React.useState([])
   const [poOptions, setPoOptions] = React.useState([])
+  // Track editing context from URL parameters (e.g., /tax-invoice.html?key=api&index=123)
+  const [sourceKey, setSourceKey] = React.useState(null)
+  const [sourceIndex, setSourceIndex] = React.useState(null)
 
   React.useEffect(() => {
-    fetch(`${API_BASE_URL}/api/eits/`).then(r=>r.json()).then(d=>Array.isArray(d)?setEitOptions(d):setEitOptions([])).catch(()=>setEitOptions([]))
-    fetch(`${API_BASE_URL}/api/customers/`).then(r=>r.json()).then(d=>Array.isArray(d)?setCustomerOptions(d):setCustomerOptions([])).catch(()=>setCustomerOptions([]))
-    fetch(`${API_BASE_URL}/api/purchase-orders/numbers/`).then(r=>r.json()).then(d=>Array.isArray(d)?setPoOptions(d):setPoOptions([])).catch(()=>setPoOptions([]))
+    // Fetch EIT organizations
+    fetch(`${API_BASE_URL}/api/eits/`)
+      .then(r=>r.json())
+      .then(d=>Array.isArray(d)?setEitOptions(d):setEitOptions([]))
+      .catch(()=>setEitOptions([]))
+    // Fetch customers (backend provides 'company_name')
+    fetch(`${API_BASE_URL}/api/customers/`)
+      .then(r=>r.json())
+      .then(d=>Array.isArray(d)?setCustomerOptions(d):setCustomerOptions([]))
+      .catch(()=>setCustomerOptions([]))
+    // Fetch PO numbers from CustomerPurchaseOrder ViewSet action
+    fetch(`${API_BASE_URL}/api/customer_purchase_orders/numbers/`)
+      .then(r=>r.json())
+      .then(d=>Array.isArray(d)?setPoOptions(d):setPoOptions([]))
+      .catch(()=>setPoOptions([]))
+  }, [])
+
+  // Load existing Tax Invoice when navigated from Admin list (edit mode)
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const key = params.get("key")
+    const index = params.get("index")
+    if (key && index) {
+      setSourceKey(key)
+      setSourceIndex(index)
+      // If editing an API record, fetch it and hydrate the form
+      if (key === "api") {
+        fetch(`${API_BASE_URL}/api/tax_invoices/${index}/`)
+          .then(r => r.ok ? r.json() : null)
+          .then(rc => {
+            if (!rc) return
+            // Map API TaxInvoice fields to UI state
+            setDetails(prev => ({
+              ...prev,
+              number: rc.tax_invoice_code || prev.number,
+              date: rc.issued_date || prev.date,
+              paymentType: rc.payment_type || "",
+              dueDate: rc.due_date || "",
+              // Prefer existing eit FK if provided via nested eit_details
+              eit: rc.eit_details?.id ?? prev.eit,
+              salesPerson: rc.eit_details?.organization_name ?? prev.salesPerson,
+              onBehalfOf: rc.eit_details?.organization_name ?? prev.onBehalfOf,
+              eitAddress: rc.eit_details?.address ?? prev.eitAddress,
+              eitTelephone: rc.eit_details?.eit_telephone ?? prev.eitTelephone,
+              eitFax: rc.eit_details?.eit_fax ?? prev.eitFax,
+              eitMobile: rc.eit_details?.eit_mobile ?? prev.eitMobile,
+            }))
+            setCustomer(prev => ({
+              ...prev,
+              company: rc.customer_details?.company_name || prev.company,
+              taxId: rc.customer_details?.tax_id || prev.taxId,
+              branch: rc.customer_branch || prev.branch,
+              address: rc.customer_details?.address || prev.address,
+              telephone: rc.customer_details?.phone || prev.telephone,
+              fax: rc.customer_details?.cus_fax || prev.fax,
+              email: rc.customer_details?.email || prev.email
+            }))
+            const uiItems = Array.isArray(rc.items) ? rc.items.map(it => ({
+              description: it.description || "",
+              qty: parseNumber(it.qty),
+              price: parseNumber(it.price),
+              unit: it.unit || "pcs",
+              discount: parseNumber(it.discount)
+            })) : [{ description: "", qty: 1, price: 0, unit: "pcs" }]
+            setItems(uiItems)
+          })
+          .catch(() => {})
+      }
+    }
   }, [])
 
   React.useEffect(() => {
@@ -197,7 +266,7 @@ function useTaxInvoiceState() {
     setDetails(prev => ({ ...prev, number: prev.number || "INV 2026-0001" }))
   }, [])
 
-  const addItem = () => setItems(prev => [...prev, { description: "", qty: 1, price: 0, unit: "pcs" }])
+  const addItem = () => setItems(prev => [...prev, { description: "", qty: 1, price: 0, unit: "pcs", discount: 0 }])
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, k, v) => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [k]: v } : it))
 
@@ -207,7 +276,10 @@ function useTaxInvoiceState() {
     return parseFloat(String(val).replace(/,/g, '')) || 0
   }
 
-  const subtotal = items.reduce((s, it) => s + parseNumber(it.qty) * parseNumber(it.price), 0)
+  const subtotal = items.reduce((s, it) => {
+    const line = parseNumber(it.qty) * parseNumber(it.price) - parseNumber(it.discount)
+    return s + (line < 0 ? 0 : line)
+  }, 0)
   const taxTotal = subtotal * 0.07
   const total = subtotal + taxTotal
 
@@ -215,8 +287,8 @@ function useTaxInvoiceState() {
     const payload = {
       details: { ...details, isTaxInvoice: true },
       customer,
-      items: items.map(i => ({ ...i, qty: parseNumber(i.qty), price: parseNumber(i.price) })),
-      totals: { subtotal, taxTotal, total, thaiText: THBText(total) }
+      items: items.map(i => ({ ...i, qty: parseNumber(i.qty), price: parseNumber(i.price), discount: parseNumber(i.discount) })),
+      totals: { subtotal, taxTotal, total, discount: items.reduce((d, i) => d + parseNumber(i.discount), 0), thaiText: THBText(total) }
     }
     const res = await fetch(`${API_BASE_URL}/api/generate-invoice-pdf/`, {
       method: 'POST',
@@ -240,7 +312,61 @@ function useTaxInvoiceState() {
     }, 60000)
   }
 
-  const confirm = async () => true
+  const confirm = async () => {
+    // Build payload mapping UI fields to TaxInvoice model/serializer fields
+    const payload = {
+      // TaxInvoice fields
+      tax_invoice_code: details.number,
+      issued_date: details.date,
+      items: items.map(i => ({
+        description: i.description || "",
+        qty: parseNumber(i.qty),
+        price: parseNumber(i.price),
+        unit: i.unit || "pcs",
+        discount: parseNumber(i.discount)
+      })),
+      customer_branch: customer.branch || "",
+      payment_type: details.paymentType || "",
+      due_date: details.dueDate || null,
+      // Link by FK where possible; fall back to names (serializer supports both)
+      eit: details.eit || null,
+      eit_name: details.onBehalfOf || "",
+      customer: null,
+      customer_name: customer.company || customer.name || "",
+    }
+    // Include optional PO number inside items header via notes if needed; skip for now
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = { "Content-Type": "application/json" }
+      if (token) headers["Authorization"] = `Token ${token}`
+      // Clean payload for DRF: omit nullable FK fields rather than sending explicit nulls
+      // PrimaryKeyRelatedField (customer, eit) rejects explicit null; serializer supports name fallbacks
+      const body = { ...payload }
+      if (!body.eit) delete body.eit
+      if (!body.customer) delete body.customer
+      if (!body.customer_name) body.customer_name = customer.company || customer.name || "-"
+      // Use underscore per Django router: /api/tax_invoices/
+      // Decide create vs update based on editing context (sourceKey=api & sourceIndex present)
+      const isEdit = sourceKey === 'api' && !!sourceIndex
+      const url = isEdit
+        ? `${API_BASE_URL}/api/tax_invoices/${sourceIndex}/`
+        : `${API_BASE_URL}/api/tax_invoices/`
+      const method = isEdit ? "PUT" : "POST"
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: JSON.stringify(body)
+      })
+      if (!res.ok) {
+        console.error("Failed to save Tax Invoice", await res.text())
+        return false
+      }
+      return true
+    } catch (e) {
+      console.error("Error saving Tax Invoice", e)
+      return false
+    }
+  }
   const sendToCustomer = async () => {}
 
   return {

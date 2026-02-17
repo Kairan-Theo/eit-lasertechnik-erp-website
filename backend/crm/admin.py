@@ -6,7 +6,7 @@ from .models import (
     Product, ProductVersion, ProductType, System, Component, SystemComponent, 
     ComponentEntry, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, 
     PermissionControl, ProjectManagement, SubProject, Delivery, EmailLog, 
-    EmailAttachment, DealHistory,
+    EmailAttachment, DealHistory, TaxInvoice,
     # PD Models
     # These imports bring the newly created PD_* models into the admin module
     # so we can register them with Django Admin.
@@ -102,6 +102,12 @@ class QuotationAdmin(admin.ModelAdmin):
     list_display = ("qo_code", "created_by", "updated_at")
     search_fields = ("qo_code", "customer__company_name", "customer__email")
     inlines = [QuotationItemInline]
+
+@admin.register(TaxInvoice)
+class TaxInvoiceAdmin(admin.ModelAdmin):
+    list_display = ("tax_invoice_code", "issued_date", "customer", "eit", "updated_at")
+    search_fields = ("tax_invoice_code", "customer__company_name", "eit__organization_name")
+    list_filter = ("issued_date", "payment_type")
 
 @admin.register(BillingNote)
 class BillingNoteAdmin(admin.ModelAdmin):

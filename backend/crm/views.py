@@ -7,8 +7,8 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
-from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, Receipt, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, ReceiptSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer, PDMachineSerializer, PDSystemSerializer, PDWireSerializer, PDSparepartSerializer, PDServiceSerializer, PDSystemChildproductSerializer, PMProjectSerializer, PMTaskSerializer
+from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, Receipt, TaxInvoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, ReceiptSerializer, TaxInvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer, PDMachineSerializer, PDSystemSerializer, PDWireSerializer, PDSparepartSerializer, PDServiceSerializer, PDSystemChildproductSerializer, PMProjectSerializer, PMTaskSerializer
 import json
 
 class ProjectManagementViewSet(viewsets.ModelViewSet):
@@ -24,6 +24,13 @@ class ReceiptViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user if self.request.user.is_authenticated else None)
+
+class TaxInvoiceViewSet(viewsets.ModelViewSet):
+    # CRUD API for Tax_Invoice table with ordering by issue date then created_at
+    queryset = TaxInvoice.objects.all().order_by('-issued_date', '-created_at')
+    serializer_class = TaxInvoiceSerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
 class SubProjectViewSet(viewsets.ModelViewSet):
     queryset = SubProject.objects.all()
@@ -823,6 +830,23 @@ class CustomerPurchaseOrderViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerPurchaseOrderSerializer
     authentication_classes = []
     permission_classes = [AllowAny]
+
+    @action(detail=False, methods=['get'], url_path='numbers')
+    def list_po_numbers(self, request):
+        # Return distinct non-empty PO numbers as a simple list of strings
+        # Optional filter by customer_id (?customer_id=123)
+        customer_id = request.query_params.get('customer_id')
+        qs = CustomerPurchaseOrder.objects.all()
+        if customer_id:
+            qs = qs.filter(customer_id=customer_id)
+        nums = (
+            qs.values_list('po_number', flat=True)
+            .exclude(po_number__isnull=True)
+            .exclude(po_number__exact="")
+            .distinct()
+        )
+        # Using list(nums) to serialize as JSON array of strings
+        return Response(list(nums))
 
     @action(detail=True, methods=['get'], url_path='download')
     def download_po_file(self, request, pk=None):
