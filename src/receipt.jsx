@@ -284,12 +284,15 @@ function useReceiptState() {
         items, // Backend likely flexible, or will accept 'item' key
         details,
         totals: { subtotal, taxTotal, total, thaiText: THBText(total) },
-        eit: details.eit,
         eit_name: details.salesPerson,
         eit_address: details.eitAddress,
         eit_phone: details.eitTelephone,
         eit_fax: details.eitFax,
         eit_mobile: details.eitMobile
+      }
+
+      if (details.eit != null) {
+        body.eit = details.eit
       }
       let url = `${API_BASE_URL}/api/receipts/`
       let method = "POST"
