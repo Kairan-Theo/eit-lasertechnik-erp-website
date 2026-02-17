@@ -1,5 +1,5 @@
 import React from "react"
-import { Plus } from "lucide-react"
+import { Plus, Trash } from "lucide-react"
 import { Combobox } from "./combobox"
 import { CustomerCombobox } from "./customer-combobox"
 import { DateField } from "./ui/date-field"
@@ -172,7 +172,7 @@ export function InvoiceForm({ inv }) {
              <h2 className="text-xl font-bold text-[#2D4485]">Invoice Description</h2>
              <button onClick={inv.addItem} className="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
                <Plus className="w-4 h-4" />
-               <span className="text-sm font-medium">Add Item</span>
+              <span className="text-sm font-medium">Add Item</span>
              </button>
            </div>
            <div className="overflow-x-auto">
@@ -184,7 +184,8 @@ export function InvoiceForm({ inv }) {
                    <th className="p-3 border-b">Sales (ex. Vat)</th>
                    <th className="p-3 border-b">Quantity</th>
                    <th className="p-3 border-b">Unit</th>
-                   <th className="p-3 border-b text-right">Amount</th>
+                  <th className="p-3 border-b text-right">Amount</th>
+                  <th className="p-3 border-b w-12"></th>
                  </tr>
                </thead>
                <tbody className="divide-y divide-gray-100">
@@ -213,6 +214,11 @@ export function InvoiceForm({ inv }) {
                       </td>
                       <td className="p-3 text-right text-sm text-gray-700">
                         {((Number(it.qty) || 0) * (Number(it.price) || 0)).toFixed(2)}
+                      </td>
+                      <td className="p-3 text-right">
+                        <button onClick={() => inv.removeItem(i)} className="text-red-600 hover:text-red-800" title="Delete">
+                          <Trash className="w-4 h-4" />
+                        </button>
                       </td>
                    </tr>
                  ))}
