@@ -103,6 +103,56 @@ function useBillingNoteState() {
     return `BI ${currentYear}-${String(next).padStart(4, "0")}`
   }
 
+  // Ensure Billing Note number is always new: merge API + local history and pick next
+  React.useEffect(() => {
+    const currentYear = new Date().getFullYear()
+    const parseSeq = (s) => {
+      try {
+        const m = String(s || "").match(new RegExp(`^BI ${currentYear}-(\\d{4})$`, 'i'))
+        return m ? parseInt(m[1], 10) : null
+      } catch { return null }
+    }
+    const toCode = (n) => `BI ${currentYear}-${String(n).padStart(4, "0")}`
+    const updateFromApi = async () => {
+      try {
+        // Check API billing notes
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { "Authorization": `Token ${token}` } : {}
+        const res = await fetch(`${API_BASE_URL}/api/billing_notes/`, { headers })
+        let maxSeq = parseSeq(details.number) || 0
+        if (res.ok) {
+          const apiNotes = await res.json()
+          if (Array.isArray(apiNotes)) {
+            for (const bn of apiNotes) {
+              const seq = parseSeq(bn.bn_code || bn.details?.number)
+              if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq
+            }
+          }
+        }
+        // Also consider localStorage histories
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.startsWith("history:")) {
+              const item = JSON.parse(localStorage.getItem(key))
+              if (item && Array.isArray(item.billingNotes)) {
+                for (const bn of item.billingNotes) {
+                  const seq = parseSeq(bn.details?.number)
+                  if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq
+                }
+              }
+            }
+          }
+        } catch {}
+        // If any sequence found, set next = max + 1
+        if (maxSeq >= 1) {
+          setDetails(prev => ({ ...prev, number: toCode(maxSeq + 1) }))
+        }
+      } catch {}
+    }
+    updateFromApi()
+  }, [])
+
   const [details, setDetails] = React.useState({
     number: getNextBillingNoteNumber(),
     date: new Date().toISOString().slice(0, 10),

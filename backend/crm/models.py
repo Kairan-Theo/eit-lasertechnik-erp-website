@@ -35,6 +35,12 @@ class EIT(models.Model):
     eit_fax = models.CharField(max_length=50, blank=True, default="02-052-9544")
     address = models.TextField(blank=True, default="1/120 ซอยรามคําแหง 184 \n แขวงมีนบุรี เขตมีนบุรี \n กรุงเทพมหานคร 10510")
     header_image = models.ImageField(upload_to='eit_headers/', null=True, blank=True)
+    # External/system organization identifier (optional).
+    # Using PositiveIntegerField to capture numeric IDs when integrating with external systems.
+    # unique=True ensures no duplicate organization_id values exist across records.
+    organization_id = models.PositiveIntegerField(null=True, blank=True, unique=True)
+    # Tax number/Tax ID for the organization (optional). Stored as string to handle formats with leading zeros.
+    tax_number = models.CharField(max_length=50, blank=True, default="")
 
     def __str__(self):
         return self.organization_name

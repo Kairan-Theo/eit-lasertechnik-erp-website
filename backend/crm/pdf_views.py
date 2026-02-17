@@ -1597,16 +1597,23 @@ def generate_invoice_pdf(request):
     def label(text): return f"<font name='{font_name_eng}'>{text}</font>"
 
     # --- Header Image ---
-    # Prioritize checking 'eit' ID for organization name, but always use static header logos
+    # Step 1: Try to resolve EIT record by FK 'eit' (primary key id) and use its header_image from DB.
+    # Step 2: If unavailable, fall back to static header images based on organization name text.
     eit_id = details.get('eit')
     organization = None
+    header_image_path = None
     
     if eit_id:
         try:
+            # Load EIT model and fetch the selected organization by its primary key.
             from .models import EIT
             eit_obj = EIT.objects.get(pk=eit_id)
             organization = eit_obj.organization_name
+            # If the EIT record has an uploaded header image, prefer that for the PDF header.
+            if getattr(eit_obj, "header_image", None):
+                header_image_path = eit_obj.header_image.path
         except Exception:
+            # Silently ignore lookup errors; we will fall back to static images below.
             pass
 
     # Fallback to text fields if ID lookup failed or wasn't provided
@@ -1624,7 +1631,14 @@ def generate_invoice_pdf(request):
             break
     if not PUBLIC_DIR: PUBLIC_DIR, DIST_DIR = os.path.join(BASE_DIR, 'public'), os.path.join(BASE_DIR, 'dist')
 
+    # Build candidate header image list:
+    # - Highest priority: header image file from EIT table (if present)
+    # - Next: static image for Einstein when organization indicates Einstein
+    # - Next: static image for EIT (default)
     candidates = []
+    if header_image_path:
+        # Place DB image first so it is selected if the file exists
+        candidates.append((os.path.normpath(header_image_path), 530, 80))
     if is_tax_invoice_flag:
         candidates.extend([
             (os.path.join(PUBLIC_DIR, 'EIT header.png'), 530, 80),
