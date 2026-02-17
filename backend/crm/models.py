@@ -141,6 +141,34 @@ class Receipt(models.Model):
     def __str__(self):
         return f"Receipt {self.number}"
 
+class TaxInvoice(models.Model):
+    # Primary key for Tax_Invoice table
+    tax_invoice_id = models.AutoField(primary_key=True)
+    # Human-readable/sequence code for the tax invoice (e.g., TI 2026-0001)
+    tax_invoice_code = models.CharField(max_length=100, unique=True)
+    # Date the tax invoice is issued (defaults to current local date)
+    issued_date = models.DateField(default=timezone.localdate)
+    # Foreign keys: fetch from Customer and EIT tables, same pattern as Quotation
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='tax_invoices')
+    eit = models.ForeignKey(EIT, on_delete=models.SET_NULL, null=True, blank=True, related_name='tax_invoices')
+    # Line items for this tax invoice.
+    # Store an array of item dicts, each with keys like:
+    #   product, description, qty, price (Sales ex. VAT), tax, unit
+    # Example:
+    #   [{"product": "", "description": "D1", "qty": 1, "price": 500, "tax": 0, "unit": "set"},
+    #    {"product": "", "description": "D2", "qty": 2, "price": 1000, "tax": 0, "unit": "box"}]
+    items = models.JSONField(default=list, blank=True)
+    # Extra fields requested
+    customer_branch = models.CharField(max_length=255, blank=True)
+    payment_type = models.CharField(max_length=255, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    # Timestamps for auditing
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"TaxInvoice {self.tax_invoice_code}"
+
 class PurchaseOrder(models.Model):
     number = models.CharField(max_length=100, unique=True)
     customer = models.JSONField(default=dict, blank=True)

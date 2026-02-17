@@ -1782,6 +1782,26 @@ def generate_invoice_pdf(request):
 
     # Left Info as a Table to enforce height and bottom alignment of Tax ID?
     # Actually, simpler to just put elements in the cell.
+    # Build Customer info block (used on Tax Invoice left column)
+    # Move customer to the left column and remove EIT text block when generating Tax Invoice
+    cust_tax = customer.get('taxId', '')
+    cust_branch = customer.get('branch', '')
+    cust_name = customer.get('name', '') or customer.get('company', '')
+    cust_addr = customer.get('address', '') or customer.get('billingAddress1', '')
+    cust_tel = customer.get('telephone', '')
+    cust_fax = customer.get('fax', '')
+    cust_left_elements = [
+        Paragraph(f"<b>{cust_branch or 'สำนักงานใหญ่'}</b>   <b>เลขประจำตัวผู้เสียภาษี</b> {cust_tax}", styles['Normal_Content']),
+        Paragraph("<b>ลูกค้า (customer)</b>", styles['Normal_Bold']),
+        Paragraph(f"<b>ชื่อ</b> {cust_name}", styles['Normal_Content']),
+        Paragraph(f"<b>ที่อยู่</b> {cust_addr}", styles['Normal_Content']),
+    ]
+    if cust_tel or cust_fax:
+        cust_left_elements.append(
+            Paragraph(f"<b>Tel</b> {cust_tel or '-'}    <b>Fax</b> {cust_fax or '-'}", styles['Normal_Content'])
+        )
+
+    # Default left block (company org) for non-tax documents
     left_info_elements = []
     left_info_elements.append(Paragraph(org_name_th, styles['Normal_Content']))
     left_info_elements.append(Paragraph(org_name_en, styles['Normal_Content']))
@@ -1839,7 +1859,8 @@ def generate_invoice_pdf(request):
                     ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
                 ]))
             ]
-            left_info_elements = [
+            # For Tax Invoice, place Customer info in the left column (remove EIT text block)
+            left_block = cust_left_elements if is_tax else [
                 Paragraph(org_name_th, styles['Normal_Content']),
                 Paragraph(org_name_en, styles['Normal_Content']),
                 Paragraph(org_addr, styles['Normal_Content']),
@@ -1847,7 +1868,7 @@ def generate_invoice_pdf(request):
                 Spacer(1, 15),
                 tax_table
             ]
-            row1 = Table([[left_info_elements, right_info]], colWidths=[330, 205])
+            row1 = Table([[left_block, right_info]], colWidths=[330, 205])
             row1.setStyle(TableStyle([
                 ('BOX', (0,0), (-1,-1), 1, colors.black),
                 ('LINEBEFORE', (1,0), (1,0), 1, colors.black),
@@ -1858,25 +1879,6 @@ def generate_invoice_pdf(request):
                 ('LEFTPADDING', (0,0), (0,0), 5),
             ]))
             local_elements.append(row1)
-            cust_tax = customer.get('taxId', '')
-            cust_branch = customer.get('branch', '')
-            cust_name = customer.get('name', '') or customer.get('company', '')
-            cust_addr = customer.get('address', '') or customer.get('billingAddress1', '')
-            cust_tel = customer.get('telephone', '')
-            cust_fax = customer.get('fax', '')
-            cust_col = [
-                Paragraph(f"<b>{cust_branch or 'สำนักงานใหญ่'}</b>   <b>เลขประจำตัวผู้เสียภาษี</b> {cust_tax}", styles['Normal_Content']),
-                Paragraph("<b>ลูกค้า (customer)</b>", styles['Normal_Bold']),
-                Paragraph(f"<b>ชื่อ</b> {cust_name}", styles['Normal_Content']),
-                Paragraph(f"<b>ที่อยู่</b> {cust_addr}", styles['Normal_Content']),
-            ]
-            if cust_tel or cust_fax:
-                cust_col.append(
-                    Paragraph(
-                        f"<b>Tel</b> {cust_tel or '-'}    <b>Fax</b> {cust_fax or '-'}",
-                        styles['Normal_Content']
-                    )
-                )
             pay_col = [
                 Paragraph("ประเภทการจ่ายเงิน (Payment Type)", styles['Normal_Small']),
                 Paragraph(details.get('paymentType', '-'), styles['Normal_Content']),
@@ -1887,14 +1889,24 @@ def generate_invoice_pdf(request):
                 Paragraph("เลขที่ใบสั่งซื้อ (PO.NO)", styles['Normal_Small']),
                 Paragraph(details.get('poNo', '-'), styles['Normal_Content'])
             ]
-            row2 = Table([[cust_col, pay_col]], colWidths=[350, 185])
-            row2.setStyle(TableStyle([
-                ('BOX', (0,0), (-1,-1), 1, colors.black),
-                ('LINEBEFORE', (1,0), (1,-1), 1, colors.black),
-                ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('TOPPADDING', (0,0), (-1,-1), 5),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-            ]))
+            # Row 2: show payment-only for Tax Invoice since customer moved to Row 1 left column
+            if is_tax:
+                row2 = Table([[pay_col]], colWidths=[535])
+                row2.setStyle(TableStyle([
+                    ('BOX', (0,0), (-1,-1), 1, colors.black),
+                    ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                    ('TOPPADDING', (0,0), (-1,-1), 5),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+                ]))
+            else:
+                row2 = Table([[cust_left_elements, pay_col]], colWidths=[350, 185])
+                row2.setStyle(TableStyle([
+                    ('BOX', (0,0), (-1,-1), 1, colors.black),
+                    ('LINEBEFORE', (1,0), (1,-1), 1, colors.black),
+                    ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                    ('TOPPADDING', (0,0), (-1,-1), 5),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+                ]))
             local_elements.append(row2)
             table_data = [[
                 Paragraph("รายการ<br/>Description", styles['Table_Header']),
@@ -2041,7 +2053,9 @@ def generate_invoice_pdf(request):
             raise e
         buffer.seek(0)
         return HttpResponse(buffer, content_type='application/pdf')
-    row1 = Table([[left_info_elements, right_info]], colWidths=[330, 205])
+    # For Tax Invoice, replace left_info with customer block; otherwise keep org info
+    row1_left = cust_left_elements if is_tax else left_info_elements
+    row1 = Table([[row1_left, right_info]], colWidths=[330, 205])
     row1.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1, colors.black),
         ('LINEBEFORE', (1,0), (1,0), 1, colors.black),
@@ -2053,27 +2067,6 @@ def generate_invoice_pdf(request):
     elements.append(row1)
 
     # --- Row 2: Customer & Payment ---
-    cust_tax = customer.get('taxId', '')
-    cust_branch = customer.get('branch', '')
-    cust_name = customer.get('name', '') or customer.get('company', '')
-    cust_addr = customer.get('address', '') or customer.get('billingAddress1', '')
-    cust_tel = customer.get('telephone', '')
-    cust_fax = customer.get('fax', '')
-    
-    cust_col = [
-        Paragraph(f"<b>{cust_branch or 'สำนักงานใหญ่'}</b>   <b>เลขประจำตัวผู้เสียภาษี</b> {cust_tax}", styles['Normal_Content']),
-        Paragraph("<b>ลูกค้า (customer)</b>", styles['Normal_Bold']),
-        Paragraph(f"<b>ชื่อ</b> {cust_name}", styles['Normal_Content']),
-        Paragraph(f"<b>ที่อยู่</b> {cust_addr}", styles['Normal_Content']),
-    ]
-    if cust_tel or cust_fax:
-        cust_col.append(
-            Paragraph(
-                f"<b>Tel</b> {cust_tel or '-'}    <b>Fax</b> {cust_fax or '-'}",
-                styles['Normal_Content']
-            )
-        )
-
     pay_col = [
         Paragraph("ประเภทการจ่ายเงิน (Payment Type)", styles['Normal_Small']),
         Paragraph(details.get('paymentType', '-'), styles['Normal_Content']),
@@ -2085,14 +2078,24 @@ def generate_invoice_pdf(request):
         Paragraph(details.get('poNo', '-'), styles['Normal_Content'])
     ]
 
-    row2 = Table([[cust_col, pay_col]], colWidths=[350, 185])
-    row2.setStyle(TableStyle([
-        ('BOX', (0,0), (-1,-1), 1, colors.black),
-        ('LINEBEFORE', (1,0), (1,-1), 1, colors.black),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('TOPPADDING', (0,0), (-1,-1), 5),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-    ]))
+    # Row 2: payment-only for Tax Invoice since customer moved to Row 1
+    if is_tax:
+        row2 = Table([[pay_col]], colWidths=[535])
+        row2.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ]))
+    else:
+        row2 = Table([[cust_left_elements, pay_col]], colWidths=[350, 185])
+        row2.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ('LINEBEFORE', (1,0), (1,-1), 1, colors.black),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ]))
     elements.append(row2)
 
     # --- Row 3: Items Table ---
@@ -2103,6 +2106,7 @@ def generate_invoice_pdf(request):
             Paragraph("ราคาขายไม่รวมภาษี<br/>Sales ex. Vat", styles['Table_Header']),
             Paragraph("จำนวน<br/>Qty", styles['Table_Header']),
             Paragraph("หน่วยนับ<br/>Unit", styles['Table_Header']),
+            Paragraph("ส่วนลด<br/>Discount", styles['Table_Header']),
             Paragraph("จำนวนเงิน<br/>Amount", styles['Table_Header'])
         ]]
     else:
@@ -2121,7 +2125,11 @@ def generate_invoice_pdf(request):
             price = float(str(item.get('price', 0)).replace(',', ''))
         except:
             qty, price = 0, 0
-        total = qty * price
+        try:
+            discount_val = float(str(item.get('discount', 0)).replace(',', ''))
+        except:
+            discount_val = 0
+        total = max(qty * price - discount_val, 0)
         # Base description without running number prefix
         base_desc = txt(item.get('description', ''))
         desc_text = base_desc
@@ -2135,6 +2143,7 @@ def generate_invoice_pdf(request):
                 Paragraph(f"{price:,.2f}", styles['Table_Data_Right']),
                 Paragraph(f"{qty:,.0f}", styles['Table_Data_Center']),
                 Paragraph(unit, styles['Table_Data_Center']),
+                Paragraph(f"{discount_val:,.2f}", styles['Table_Data_Right']),
                 Paragraph(f"{total:,.2f}", styles['Table_Data_Right'])
             ])
         else:
@@ -2176,12 +2185,12 @@ def generate_invoice_pdf(request):
     min_rows = 8 if is_tax else 10
     if len(items) < min_rows:
         for _ in range(min_rows - len(items)):
-            table_data.append(["", "", "", "", ""] if is_tax else ["", "", "", "", "", ""])
+            table_data.append(["", "", "", "", "", ""] if is_tax else ["", "", "", "", "", ""])
 
     # Widths
     if is_tax:
-        # Desc(240), Sales(100), Qty(40), Unit(50), Amount(105) -> Total 535
-        item_table = Table(table_data, colWidths=[240, 100, 40, 50, 105])
+        # Desc(210), Sales(85), Qty(40), Unit(50), Discount(50), Amount(100) -> Total 535
+        item_table = Table(table_data, colWidths=[210, 85, 40, 50, 50, 100])
     else:
         # No(30), Desc(220), Qty(40), Unit(50), Price(90), Amount(105)
         item_table = Table(table_data, colWidths=[30, 220, 40, 50, 90, 105])

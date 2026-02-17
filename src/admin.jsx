@@ -972,8 +972,8 @@ function TaxInvoiceList({ list, refreshData }) {
     const apiItems = itemsToDelete.filter(item => item.sourceKey === 'api')
     for (const item of apiItems) {
       try {
-        // Try both new and old API endpoints
-        const res = await fetch(`${API_BASE_URL}/api/tax-invoices/${item.id}/`, { method: 'DELETE' })
+        // Use underscore per Django router; keep legacy fallback for older data
+        const res = await fetch(`${API_BASE_URL}/api/tax_invoices/${item.id}/`, { method: 'DELETE' })
         if (!res.ok) {
           await fetch(`${API_BASE_URL}/api/receipts/${item.id}/`, { method: 'DELETE' })
         }
@@ -1463,25 +1463,38 @@ function AdminPage() {
     try {
       const token = localStorage.getItem("authToken")
       const headers = token ? { "Authorization": `Token ${token}` } : {}
-      const response = await fetch(`${API_BASE_URL}/api/tax-invoices/`, { headers })
+      // Use underscore per Django router: /api/tax_invoices/
+      const response = await fetch(`${API_BASE_URL}/api/tax_invoices/`, { headers })
       if (response.ok) {
         const apiReceipts = await response.json()
-        return apiReceipts.map(rc => ({
-          id: rc.id,
-          sourceKey: 'api',
-          sourceIndex: rc.id,
-          details: {
-            ...rc.details,
-            number: rc.number,
-            date: rc.details?.date || rc.created_at,
-            currency: rc.details?.currency || 'THB',
-          },
-          customerName: rc.customer?.company || rc.customer?.company_name || rc.customer?.name || 'Unknown',
-          items: rc.items || [],
-          totals: {
-            total: rc.totals?.total || 0
+        return apiReceipts.map(rc => {
+          // TaxInvoice fields differ from Invoice; map correctly and compute totals
+          const items = Array.isArray(rc.items) ? rc.items : []
+          const parseNum = (v) => parseFloat(String(v || 0).replace(/,/g, '')) || 0
+          const subtotal = items.reduce((sum, it) => {
+            const line = parseNum(it.qty) * parseNum(it.price) - parseNum(it.discount)
+            return sum + (line < 0 ? 0 : line)
+          }, 0)
+          const grandTotal = subtotal * 1.07
+          const customerName =
+            rc.customer_details?.company_name ||
+            rc.customer_details?.company ||
+            rc.customer_details?.name ||
+            "Unknown"
+          return {
+            id: rc.tax_invoice_id,
+            sourceKey: 'api',
+            sourceIndex: rc.tax_invoice_id,
+            details: {
+              number: rc.tax_invoice_code,
+              date: rc.issued_date || rc.created_at,
+              currency: 'THB',
+            },
+            customerName,
+            items,
+            totals: { total: grandTotal }
           }
-        }))
+        })
       }
     } catch (e) {
       console.error("Failed to fetch tax invoices from API", e)

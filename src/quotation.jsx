@@ -108,18 +108,13 @@ function useQuotationState() {
   const [systemChildren, setSystemChildren] = React.useState({})
 
   React.useEffect(() => {
+    // Previously we populated customerOptions from Deals (customer_name only),
+    // which caused the Quotation combobox to emit labels without IDs and hydration failed.
+    // We keep loading deals if needed elsewhere, but do NOT override customerOptions here.
     fetch(`${API_BASE_URL}/api/deals/`)
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) {
-          const unique = {}
-          data.forEach(d => {
-            if (d.customer_name && !unique[d.customer_name]) {
-              unique[d.customer_name] = d
-            }
-          })
-          setCustomerOptions(Object.values(unique))
-        }
+        // No-op for customerOptions; rely on /api/customers/ for canonical options with IDs
       })
       .catch(err => console.error("Error loading deals for customers", err))
   }, [])
@@ -131,26 +126,13 @@ function useQuotationState() {
       .then(data => {
         if (Array.isArray(data)) {
           setCustomerRecords(data)
-          // Merge real Customer table entries into the options list used by the combobox.
-          // Map to the same shape as Deal-derived options so matching logic continues to work.
-          const mapped = data.map(c => ({
-            customer_name: c.company_name || "",
-            tax_id: c.tax_id || "",
-            address: c.address || "",
-            phone: c.phone || "",
-            contact: c.attn || "",
-            email: c.email || ""
-          }))
-          // Merge unique by customer_name
-          setCustomerOptions(prev => {
-            const byName = {}
-            ;[...prev, ...mapped].forEach(entry => {
-              const name = String(entry.customer_name || "").trim()
-              if (!name) return
-              if (!byName[name]) byName[name] = entry
-            })
-            return Object.values(byName)
-          })
+          // Build combobox options using ID-based selection:
+          // label = company_name (shown), value = id (used for hydration)
+          setCustomerOptions(
+            data
+              .filter(c => (c.company_name || "").trim().length > 0)
+              .map(c => ({ label: c.company_name, value: c.id }))
+          )
         } else {
           setCustomerRecords([])
         }
@@ -1035,54 +1017,91 @@ function QuotationPage() {
                 <CustomerCombobox
                   value={q.customer.company}
                   options={q.customerOptions}
+                  // Typing handler:
+                  // - Updates visible company text
+                  // - Do NOT hydrate on type to avoid race conditions. Hydration happens in onSelect via fetch-by-ID.
                   onChange={(val) => {
-                    const match = q.customerOptions.find(c => c.customer_name === val)
-                    // Also try to hydrate from real Customer table (includes CC fields)
-                    const cust = customerRecords.find(c => String(c.company_name).trim() === String(val).trim())
-                    if (match || cust) {
-                      const nextTop = {
-                        company: val,
-                        taxId: (match?.tax_id ?? cust?.tax_id ?? q.customer.taxId),
-                        address: (match?.address ?? cust?.address ?? q.customer.address),
-                        telephone: (match?.phone ?? cust?.phone ?? q.customer.telephone),
-                        fax: (cust?.cus_fax ?? q.customer.fax),
-                        attn: (match?.contact ?? cust?.attn ?? q.customer.attn),
-                        div: (cust?.attn_division ?? q.customer.div),
-                        mobile: (cust?.attn_mobile ?? q.customer.mobile),
-                        email: (cust?.email ?? match?.email ?? q.customer.email)
-                      }
-                      // Parse CSV values from Customer and initialize responsibles[]
-                      const splitCSV = (s) => String(s || "").split(',').map(t => t.trim()).filter(Boolean)
-                      const attnCSV = splitCSV(cust?.attn)
-                      const attnDivCSV = splitCSV(cust?.attn_division)
-                      const attnMobileCSV = splitCSV(cust?.attn_mobile)
-                      const attnEmailCSV = splitCSV(cust?.email) // single or CSV
-                      const ccCSV = splitCSV(cust?.cc)
-                      const ccDivCSV = splitCSV(cust?.cc_division)
-                      const ccMobileCSV = splitCSV(cust?.cc_mobile)
-                      const ccEmailCSV = splitCSV(cust?.cc_email)
-                      const maxLen = Math.max(attnCSV.length, attnDivCSV.length, attnMobileCSV.length, attnEmailCSV.length, ccCSV.length, ccDivCSV.length, ccMobileCSV.length, ccEmailCSV.length)
-                      const responsibles = []
-                      for (let i = 0; i < Math.max(1, maxLen); i++) {
-                        responsibles.push({
-                          attn: attnCSV[i] || nextTop.attn || "",
-                          attnDiv: attnDivCSV[i] || nextTop.div || "",
-                          attnMobile: attnMobileCSV[i] || nextTop.mobile || "",
-                          attnEmail: attnEmailCSV[i] || nextTop.email || "",
-                          cc: ccCSV[i] || "",
-                          ccDiv: ccDivCSV[i] || "",
-                          ccMobile: ccMobileCSV[i] || "",
-                          ccEmail: ccEmailCSV[i] || ""
-                        })
-                      }
-                      q.setCustomer({ 
-                        ...q.customer,
-                        ...nextTop,
-                        responsibles
+                    const text = String(val || "")
+                    q.setCustomer(prev => ({ ...prev, company: text }))
+                  }}
+                  // On dropdown selection, fetch by Customer ID and hydrate. This avoids race conditions.
+                  onSelect={(payload) => {
+                    const option = typeof payload === 'object' && payload !== null 
+                      ? payload 
+                      : { label: String(payload || ""), value: payload }
+                    console.log("Quotation:onSelect option =", option)
+                    if (option?.value == null || option.value === "") return
+                    fetch(`${API_BASE_URL}/api/customers/${option.value}/`)
+                      .then(res => res.ok ? res.json() : null)
+                      .then(c => {
+                        console.log("Quotation:customer fetched =", c)
+                        if (!c) return
+                        const nextTop = {
+                          company: option.label || c.company_name || "",
+                          taxId: c.tax_id || "",
+                          address: c.address || "",
+                          telephone: c.phone || "",
+                          fax: c.cus_fax || "",
+                          attn: c.attn || "",
+                          div: c.attn_division || "",
+                          mobile: c.attn_mobile || "",
+                          email: c.email || ""
+                        }
+                        const splitCSV = (s) => String(s || "").split(",").map(t => t.trim()).filter(Boolean)
+                        const attnCSV = splitCSV(c.attn)
+                        const attnDivCSV = splitCSV(c.attn_division)
+                        const attnMobileCSV = splitCSV(c.attn_mobile)
+                        const attnEmailCSV = splitCSV(c.email)
+                        const ccCSV = splitCSV(c.cc)
+                        const ccDivCSV = splitCSV(c.cc_division)
+                        const ccMobileCSV = splitCSV(c.cc_mobile)
+                        const ccEmailCSV = splitCSV(c.cc_email)
+                        const maxLen = Math.max(attnCSV.length, attnDivCSV.length, attnMobileCSV.length, attnEmailCSV.length, ccCSV.length, ccDivCSV.length, ccMobileCSV.length, ccEmailCSV.length)
+                        const responsibles = []
+                        for (let i = 0; i < Math.max(1, maxLen); i++) {
+                          responsibles.push({
+                            attn: attnCSV[i] || nextTop.attn || "",
+                            attnDiv: attnDivCSV[i] || nextTop.div || "",
+                            attnMobile: attnMobileCSV[i] || nextTop.mobile || "",
+                            attnEmail: attnEmailCSV[i] || nextTop.email || "",
+                            cc: ccCSV[i] || "",
+                            ccDiv: ccDivCSV[i] || "",
+                            ccMobile: ccMobileCSV[i] || "",
+                            ccEmail: ccEmailCSV[i] || ""
+                          })
+                        }
+                        // If some key fields are empty in Customer, fallback to the latest Deal for this customer
+                        const needsFallback =
+                          !nextTop.taxId || !nextTop.address || !nextTop.telephone || !nextTop.fax || !nextTop.attn || !nextTop.email
+                        if (needsFallback) {
+                          fetch(`${API_BASE_URL}/api/deals/`)
+                            .then(r => r.ok ? r.json() : [])
+                            .then(deals => {
+                              const latest = Array.isArray(deals)
+                                ? deals.filter(d => String(d.customer) === String(c.id)).sort((a, b) => (b.id || 0) - (a.id || 0))[0]
+                                : null
+                              const fallback = latest ? {
+                                taxId: nextTop.taxId || latest.tax_id || "",
+                                address: nextTop.address || latest.address || "",
+                                telephone: nextTop.telephone || latest.phone || "",
+                                fax: nextTop.fax || "",
+                                attn: nextTop.attn || latest.contact || "",
+                                email: nextTop.email || latest.email || ""
+                              } : {}
+                              const mergedTop = { ...nextTop, ...fallback }
+                              q.setCustomer(prev => ({ ...prev, ...mergedTop, responsibles }))
+                            })
+                            .catch(() => {
+                              q.setCustomer(prev => ({ ...prev, ...nextTop, responsibles }))
+                            })
+                        } else {
+                          q.setCustomer(prev => ({ ...prev, ...nextTop, responsibles }))
+                        }
                       })
-                    } else {
-                      q.setCustomer({ ...q.customer, company: val })
-                    }
+                      .catch(err => {
+                        console.error("Quotation: failed to fetch customer by ID", err)
+                        q.setCustomer(prev => ({ ...prev, company: option.label || prev.company }))
+                      })
                   }}
                 />
               </div>
@@ -1211,8 +1230,9 @@ function QuotationPage() {
                  </tr>
                </thead>
                <tbody className="divide-y divide-gray-100">
-                 {q.items.map((item, i) => (
-                   <>
+                {q.items.map((item, i) => (
+                  // Wrap rows for each item in a keyed Fragment to satisfy React list key requirements
+                  <React.Fragment key={`item-block-${i}`}>
                    <tr key={`item-${i}`} className="hover:bg-gray-50 transition border-b border-gray-100">
                      <td className="p-3 text-center text-sm text-gray-700">
                        {i + 1}
@@ -1406,7 +1426,7 @@ function QuotationPage() {
                       </tr>
                     ))
                   })()}
-                   </>
+                  </React.Fragment>
                  ))}
                </tbody>
              </table>
