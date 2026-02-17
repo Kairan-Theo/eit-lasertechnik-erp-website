@@ -1597,18 +1597,15 @@ def generate_invoice_pdf(request):
     def label(text): return f"<font name='{font_name_eng}'>{text}</font>"
 
     # --- Header Image ---
-    # Prioritize checking 'eit' ID for reliable organization lookup
+    # Prioritize checking 'eit' ID for organization name, but always use static header logos
     eit_id = details.get('eit')
     organization = None
-    header_image_path = None
     
     if eit_id:
         try:
             from .models import EIT
             eit_obj = EIT.objects.get(pk=eit_id)
             organization = eit_obj.organization_name
-            if eit_obj.header_image:
-                header_image_path = eit_obj.header_image.path
         except Exception:
             pass
 
@@ -1628,13 +1625,21 @@ def generate_invoice_pdf(request):
     if not PUBLIC_DIR: PUBLIC_DIR, DIST_DIR = os.path.join(BASE_DIR, 'public'), os.path.join(BASE_DIR, 'dist')
 
     candidates = []
-    if header_image_path:
-        candidates.append((header_image_path, 530, 80))
-        
-    if is_einstein:
-        candidates.extend([(os.path.join(PUBLIC_DIR, 'Einstein header.png'), 530, 80), (os.path.join(DIST_DIR, 'Einstein header.png'), 530, 80)])
+    if is_tax_invoice_flag:
+        candidates.extend([
+            (os.path.join(PUBLIC_DIR, 'EIT header.png'), 530, 80),
+            (os.path.join(DIST_DIR, 'EIT header.png'), 530, 80),
+        ])
+    elif is_einstein:
+        candidates.extend([
+            (os.path.join(PUBLIC_DIR, 'Einstein header.png'), 530, 80),
+            (os.path.join(DIST_DIR, 'Einstein header.png'), 530, 80),
+        ])
     else:
-        candidates.extend([(os.path.join(PUBLIC_DIR, 'EIT header.png'), 530, 80), (os.path.join(DIST_DIR, 'EIT header.png'), 530, 80)])
+        candidates.extend([
+            (os.path.join(PUBLIC_DIR, 'EIT header.png'), 530, 80),
+            (os.path.join(DIST_DIR, 'EIT header.png'), 530, 80),
+        ])
     
     found_image = None
     for path, w, h in candidates:
@@ -1840,14 +1845,24 @@ def generate_invoice_pdf(request):
             ]))
             local_elements.append(row1)
             cust_tax = customer.get('taxId', '')
+            cust_branch = customer.get('branch', '')
             cust_name = customer.get('name', '') or customer.get('company', '')
             cust_addr = customer.get('address', '') or customer.get('billingAddress1', '')
+            cust_tel = customer.get('telephone', '')
+            cust_fax = customer.get('fax', '')
             cust_col = [
-                Paragraph(f"<b>สำนักงานใหญ่</b>   <b>เลขประจำตัวผู้เสียภาษี</b> {cust_tax}", styles['Normal_Content']),
+                Paragraph(f"<b>{cust_branch or 'สำนักงานใหญ่'}</b>   <b>เลขประจำตัวผู้เสียภาษี</b> {cust_tax}", styles['Normal_Content']),
                 Paragraph("<b>ลูกค้า (customer)</b>", styles['Normal_Bold']),
                 Paragraph(f"<b>ชื่อ</b> {cust_name}", styles['Normal_Content']),
-                Paragraph(f"<b>ที่อยู่</b> {cust_addr}", styles['Normal_Content'])
+                Paragraph(f"<b>ที่อยู่</b> {cust_addr}", styles['Normal_Content']),
             ]
+            if cust_tel or cust_fax:
+                cust_col.append(
+                    Paragraph(
+                        f"<b>Tel</b> {cust_tel or '-'}    <b>Fax</b> {cust_fax or '-'}",
+                        styles['Normal_Content']
+                    )
+                )
             pay_col = [
                 Paragraph("ประเภทการจ่ายเงิน (Payment Type)", styles['Normal_Small']),
                 Paragraph(details.get('paymentType', '-'), styles['Normal_Content']),
@@ -2025,15 +2040,25 @@ def generate_invoice_pdf(request):
 
     # --- Row 2: Customer & Payment ---
     cust_tax = customer.get('taxId', '')
+    cust_branch = customer.get('branch', '')
     cust_name = customer.get('name', '') or customer.get('company', '')
     cust_addr = customer.get('address', '') or customer.get('billingAddress1', '')
+    cust_tel = customer.get('telephone', '')
+    cust_fax = customer.get('fax', '')
     
     cust_col = [
-        Paragraph(f"<b>สำนักงานใหญ่</b>   <b>เลขประจำตัวผู้เสียภาษี</b> {cust_tax}", styles['Normal_Content']),
+        Paragraph(f"<b>{cust_branch or 'สำนักงานใหญ่'}</b>   <b>เลขประจำตัวผู้เสียภาษี</b> {cust_tax}", styles['Normal_Content']),
         Paragraph("<b>ลูกค้า (customer)</b>", styles['Normal_Bold']),
         Paragraph(f"<b>ชื่อ</b> {cust_name}", styles['Normal_Content']),
-        Paragraph(f"<b>ที่อยู่</b> {cust_addr}", styles['Normal_Content'])
+        Paragraph(f"<b>ที่อยู่</b> {cust_addr}", styles['Normal_Content']),
     ]
+    if cust_tel or cust_fax:
+        cust_col.append(
+            Paragraph(
+                f"<b>Tel</b> {cust_tel or '-'}    <b>Fax</b> {cust_fax or '-'}",
+                styles['Normal_Content']
+            )
+        )
 
     pay_col = [
         Paragraph("ประเภทการจ่ายเงิน (Payment Type)", styles['Normal_Small']),

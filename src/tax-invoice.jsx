@@ -142,6 +142,7 @@ function useTaxInvoiceState() {
     branch: "",
     address: "",
     telephone: "",
+    fax: "",
     attn: "",
     email: ""
   })
@@ -153,12 +154,12 @@ function useTaxInvoiceState() {
     dueDate: "",
     poNo: "",
     eit: null,
-    salesPerson: "",
-    onBehalfOf: "",
-    eitAddress: "",
-    eitTelephone: "",
-    eitFax: "",
-    eitMobile: "",
+    salesPerson: "EIT LASERTECHNIK CO.,LTD",
+    onBehalfOf: "EIT LASERTECHNIK CO.,LTD",
+    eitAddress: "1/120 ซอยรามคําแหง 184 แขวงมีนบุรี เขตมีนบุรี กรุงเทพมหานคร 10510",
+    eitTelephone: "02-052-9544",
+    eitFax: "02-052 9544",
+    eitMobile: "000-000-0000",
     notes: "",
     currency: "THB"
   })
@@ -172,6 +173,24 @@ function useTaxInvoiceState() {
     fetch(`${API_BASE_URL}/api/customers/`).then(r=>r.json()).then(d=>Array.isArray(d)?setCustomerOptions(d):setCustomerOptions([])).catch(()=>setCustomerOptions([]))
     fetch(`${API_BASE_URL}/api/purchase-orders/numbers/`).then(r=>r.json()).then(d=>Array.isArray(d)?setPoOptions(d):setPoOptions([])).catch(()=>setPoOptions([]))
   }, [])
+
+  React.useEffect(() => {
+    if (!details.eit && Array.isArray(eitOptions) && eitOptions.length) {
+      const defaultEit = eitOptions.find(opt => !String(opt.organization_name || "").toUpperCase().includes("EINSTEIN")) || eitOptions[0]
+      if (defaultEit) {
+        setDetails(prev => ({
+          ...prev,
+          eit: defaultEit.id,
+          salesPerson: defaultEit.organization_name,
+          onBehalfOf: defaultEit.organization_name,
+          eitAddress: defaultEit.address || "",
+          eitTelephone: defaultEit.eit_telephone || "",
+          eitFax: defaultEit.eit_fax || "",
+          eitMobile: defaultEit.eit_mobile || ""
+        }))
+      }
+    }
+  }, [details.eit, eitOptions])
 
   // Set default Tax Invoice number if empty
   React.useEffect(() => {
