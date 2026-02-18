@@ -587,6 +587,8 @@ def generate_quotation_pdf(request):
                     # We'll span across Price, Qty, and Total (columns 4..6) after the table is created.
                     img_obj_spec = ""
                     img_data = r.get('image_data') or item.get('spec_image_data')
+                    img_src = r.get('image') or item.get('image')
+                    # Support base64 DataURL sent from UI
                     if img_data and str(img_data).startswith('data:image'):
                         try:
                             header, b64 = str(img_data).split(',', 1)
@@ -599,6 +601,43 @@ def generate_quotation_pdf(request):
                             img_obj_spec.hAlign = 'CENTER'
                         except Exception as e:
                             print(f"Error decoding spec row image: {e}")
+                    # Also support images saved in DB (ImageField) referenced by URL or relative path
+                    elif img_src:
+                        try:
+                            w = int(r.get('image_width') or item.get('spec_image_width') or 64)
+                            h = int(r.get('image_height') or item.get('spec_image_height') or 64)
+                            src = str(img_src)
+                            bio = None
+                            path_candidate = None
+                            if src.startswith('http'):
+                                try:
+                                    import requests
+                                    resp = requests.get(src, timeout=5)
+                                    if resp.status_code == 200:
+                                        bio = io.BytesIO(resp.content)
+                                except Exception as e:
+                                    print(f"Error fetching image via HTTP: {e}")
+                            # If not loaded via HTTP, resolve local media path
+                            if bio is None:
+                                # Normalize to MEDIA_ROOT
+                                try:
+                                    if '/media/' in src:
+                                        sub = src.split('/media/', 1)[1]
+                                        path_candidate = os.path.join(settings.MEDIA_ROOT, sub)
+                                    elif src.startswith('media/'):
+                                        path_candidate = os.path.join(settings.MEDIA_ROOT, src.split('media/', 1)[1])
+                                    else:
+                                        path_candidate = os.path.join(settings.MEDIA_ROOT, src)
+                                except Exception:
+                                    path_candidate = None
+                            if bio is not None:
+                                img_obj_spec = Image(bio, width=w, height=h)
+                                img_obj_spec.hAlign = 'CENTER'
+                            elif path_candidate and os.path.exists(os.path.normpath(path_candidate)):
+                                img_obj_spec = Image(os.path.normpath(path_candidate), width=w, height=h)
+                                img_obj_spec.hAlign = 'CENTER'
+                        except Exception as e:
+                            print(f"Error loading spec image from path/url: {e}")
                     # Spec row: show subnumber in ITEM, bullets in DESCRIPTION, and image across PRICE/QTY/TOTAL if present
                     table_data.append([
                         Paragraph(f"{i+1}.{idx+1}", styles['Table_Data_Center']),
@@ -810,12 +849,23 @@ def generate_quotation_pdf_with_cover(request):
     except Exception:
         cover_only_flag = None
     # Resolve cover PDF path under MEDIA_ROOT
+    # Support multiple historical locations and filenames for the cover PDF
     cover_candidates = [
         os.path.join(settings.MEDIA_ROOT, "template.pdf"),
         os.path.join(settings.MEDIA_ROOT, "ใบปะหน้า.pdf"),
         os.path.join(settings.MEDIA_ROOT, "cover.pdf"),
+        os.path.join(BASE_DIR, 'media', "ใบปะหน้า.pdf"),
+        os.path.join(BASE_DIR, 'media', "cover.pdf"),
+        os.path.join(BASE_DIR, 'media', "template.pdf"),
+        os.path.join(CRM_DIR, 'media', "ใบปะหน้า.pdf"),
+        os.path.join(CRM_DIR, 'media', "cover.pdf"),
+        os.path.join(CRM_DIR, 'media', "template.pdf"),
+        os.path.join(os.path.dirname(BASE_DIR), 'backend', 'media', "ใบปะหน้า.pdf"),
+        os.path.join(os.path.dirname(BASE_DIR), 'backend', 'media', "cover.pdf"),
+        os.path.join(os.path.dirname(BASE_DIR), 'backend', 'media', "template.pdf"),
         r'd:\EIT_ERT_s\eit-lasertechnik-erp-website\backend\media\template.pdf',
         r'd:\EIT_ERT_s\eit-lasertechnik-erp-website\backend\media\ใบปะหน้า.pdf',
+        r'd:\EIT_ERT_s\eit-lasertechnik-erp-website\backend\media\cover.pdf',
     ]
     cover_path = None
     for p in cover_candidates:

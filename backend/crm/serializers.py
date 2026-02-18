@@ -325,6 +325,23 @@ class QuotationSerializer(serializers.ModelSerializer):
         model = Quotation
         fields = '__all__'
 
+    def to_internal_value(self, data):
+        # Accept JSON string for 'items' when sent as FormData fallback
+        if 'items' in data and isinstance(data.get('items'), str):
+            import json
+            try:
+                # Make a mutable copy when data is QueryDict
+                if hasattr(data, 'dict'):
+                    data = data.dict()
+                elif hasattr(data, 'copy'):
+                    data = data.copy()
+                parsed = json.loads(data.get('items') or '[]')
+                if isinstance(parsed, list):
+                    data['items'] = parsed
+            except:
+                # Ignore parse errors and let normal validation handle missing items
+                pass
+        return super().to_internal_value(data)
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
         customer_name = validated_data.pop('customer_name', None)
@@ -379,6 +396,66 @@ class QuotationSerializer(serializers.ModelSerializer):
                 eit = EIT.objects.create(organization_name=eit_name)
             validated_data['eit'] = eit
             
+        # Reconstruct items from multipart FormData keys like items[0][field]
+        # Comment: Always attempt nested reconstruction and use it if explicit items list was not provided.
+        if 'request' in self.context:
+            import re
+            req = self.context['request']
+            qd = req.data
+            files = getattr(req, 'FILES', None)
+            index_map = {}
+            pattern = re.compile(r'^items\[(\d+)\]\[(\w+)\]$')
+            for key in qd.keys():
+                m = pattern.match(key)
+                if not m:
+                    continue
+                idx = int(m.group(1))
+                field = m.group(2)
+                index_map.setdefault(idx, {})
+                index_map[idx][field] = qd.get(key)
+            if files:
+                for fkey in files.keys():
+                    m = pattern.match(fkey)
+                    if not m:
+                        continue
+                    idx = int(m.group(1))
+                    field = m.group(2)
+                    index_map.setdefault(idx, {})
+                    index_map[idx][field] = files.get(fkey)
+            nested_items = [index_map[i] for i in sorted(index_map.keys())]
+            if not items_data and nested_items:
+                items_data = nested_items
+            # Merge uploaded images from nested map into existing items_data if present
+            if items_data and index_map:
+                for idx, nested in index_map.items():
+                    if 'image' in nested and nested['image']:
+                        try:
+                            items_data[idx]['image'] = nested['image']
+                        except Exception:
+                            # If list shorter, append placeholders up to idx
+                            while len(items_data) <= idx:
+                                items_data.append({})
+                            items_data[idx]['image'] = nested['image']
+
+        # Auto-generate unique qo_code when missing or duplicate to prevent accidental overwrite of original quotation
+        from datetime import datetime
+        import re
+        year = datetime.now().year
+        code = validated_data.get('qo_code') or ''
+        if not code or Quotation.objects.filter(qo_code=code).exists():
+            pattern = re.compile(rf'^EIT QUO {year}-(\d{{4}})$')
+            existing = Quotation.objects.filter(qo_code__startswith=f'EIT QUO {year}-').values_list('qo_code', flat=True)
+            max_n = 0
+            for s in existing:
+                try:
+                    m = pattern.match(str(s or ''))
+                    if m:
+                        n = int(m.group(1))
+                        if n > max_n:
+                            max_n = n
+                except Exception:
+                    pass
+            validated_data['qo_code'] = f"EIT QUO {year}-{str(max_n + 1).zfill(4)}"
         quotation = Quotation.objects.create(**validated_data)
         
         for item in items_data:
@@ -390,14 +467,31 @@ class QuotationSerializer(serializers.ModelSerializer):
                 qty = 1
                 total = 0
             
+            # Normalize fields to avoid blank rows when some keys are missing
+            desc = str(item.get('description', '') or '').strip()
+            spec = str(item.get('specification', '') or '').strip()
+            model = str(item.get('model', '') or '').strip()
+            item_title = str(item.get('item', '') or '').strip()
+            # If this is a base row (has qty>0 or item/model provided), derive title from description
+            base_row = (item_title or model or qty > 0)
+            if base_row and not item_title and desc:
+                item_title = (desc.split('\n', 1)[0])[:255]
+            # Do not merge specification into description; keep them separate
+            # For specification-only rows (qty=0 and blank item/model), store text in 'specification' field only
+            if not base_row:
+                if not spec and desc:
+                    spec = desc
+                desc = ""
+            
             QuotationItem.objects.create(
                 quotation=quotation,
-                quo_item=str(item.get('item', '')),
-                quo_model=str(item.get('model', '')),
-                quo_description=str(item.get('description', '')),
+                quo_item=item_title,
+                quo_model=model,
+                quo_description=desc,
+                specification=spec,
                 quantity=int(qty),
                 quo_total=total,
-                image=item.get('image')  # Handle image field
+                image=item.get('image')  # UploadedFile handled by ImageField
             )
             
         return quotation
@@ -459,8 +553,47 @@ class QuotationSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         
-        # Handle items: Delete old and create new
-        if items_data is not None:
+        # Reconstruct items from multipart FormData for updates (always attempt; use if explicit items absent)
+        if 'request' in self.context:
+            import re
+            req = self.context['request']
+            qd = req.data
+            files = getattr(req, 'FILES', None)
+            index_map = {}
+            pattern = re.compile(r'^items\[(\d+)\]\[(\w+)\]$')
+            for key in qd.keys():
+                m = pattern.match(key)
+                if not m:
+                    continue
+                idx = int(m.group(1))
+                field = m.group(2)
+                index_map.setdefault(idx, {})
+                index_map[idx][field] = qd.get(key)
+            if files:
+                for fkey in files.keys():
+                    m = pattern.match(fkey)
+                    if not m:
+                        continue
+                    idx = int(m.group(1))
+                    field = m.group(2)
+                    index_map.setdefault(idx, {})
+                    index_map[idx][field] = files.get(fkey)
+            nested_items = [index_map[i] for i in sorted(index_map.keys())]
+            if not items_data and nested_items:
+                items_data = nested_items
+            # Merge uploaded images from nested map into existing items_data if present
+            if items_data and index_map:
+                for idx, nested in index_map.items():
+                    if 'image' in nested and nested['image']:
+                        try:
+                            items_data[idx]['image'] = nested['image']
+                        except Exception:
+                            while len(items_data) <= idx:
+                                items_data.append({})
+                            items_data[idx]['image'] = nested['image']
+
+        # Handle items: only replace when payload contains items; otherwise keep existing
+        if items_data:
             instance.quotation_items.all().delete()
             for item in items_data:
                 try:
@@ -471,14 +604,29 @@ class QuotationSerializer(serializers.ModelSerializer):
                     qty = 1
                     total = 0
                 
+                # Normalize fields to avoid blank rows when some keys are missing
+                desc = str(item.get('description', '') or '').strip()
+                spec = str(item.get('specification', '') or '').strip()
+                model = str(item.get('model', '') or '').strip()
+                item_title = str(item.get('item', '') or '').strip()
+                base_row = (item_title or model or qty > 0)
+                if base_row and not item_title and desc:
+                    item_title = (desc.split('\n', 1)[0])[:255]
+                # Do not merge specification into description; keep them separate
+                if not base_row:
+                    if not spec and desc:
+                        spec = desc
+                    desc = ""
+                
                 QuotationItem.objects.create(
                     quotation=instance,
-                    quo_item=str(item.get('item', '')),
-                    quo_model=str(item.get('model', '')),
-                    quo_description=str(item.get('description', '')),
+                    quo_item=item_title,
+                    quo_model=model,
+                    quo_description=desc,
+                    specification=spec,
                     quantity=int(qty),
                     quo_total=total,
-                    image=item.get('image')  # Handle image field
+                    image=item.get('image')  # UploadedFile handled by ImageField
                 )
         
         return instance

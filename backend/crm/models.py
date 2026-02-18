@@ -78,6 +78,8 @@ class QuotationItem(models.Model):
     quo_item = models.CharField(max_length=255, blank=True)
     quo_model = models.CharField(max_length=255, blank=True)
     quo_description = models.TextField(blank=True)
+    # Store detailed technical specification text separately from description
+    specification = models.TextField(blank=True)
     quantity = models.IntegerField(default=1)
     quo_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     image = models.ImageField(upload_to='quotation_items/', null=True, blank=True)

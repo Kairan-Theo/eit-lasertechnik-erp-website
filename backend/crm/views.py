@@ -303,6 +303,8 @@ class QuotationViewSet(viewsets.ModelViewSet):
     serializer_class = QuotationSerializer
     authentication_classes = []
     permission_classes = [AllowAny]
+    # Enable multipart/form-data for image upload and nested item fields from FormData
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
 class BillingNoteViewSet(viewsets.ModelViewSet):
     queryset = BillingNote.objects.all().order_by('-bn_created_date')
