@@ -54,6 +54,8 @@ class Quotation(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
     eit = models.ForeignKey(EIT, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
     created_date = models.DateField(default=timezone.localdate)
+    # File name to use when downloading/merging PDFs
+    file_name = models.CharField(max_length=255, blank=True)
     
     trade_terms = models.CharField(max_length=255, blank=True)
     validity = models.CharField(max_length=255, blank=True)

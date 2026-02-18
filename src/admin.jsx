@@ -414,6 +414,8 @@ function QuotationList({ list, refreshData }) {
                 />
               </th>
               <th className="p-3 text-left w-16">Index</th>
+              {/* Comment: New File Name column placed between Index and Quotation Number */}
+              <th className="p-3 text-left">File Name</th>
               <th className="p-3 text-left">Quotation Number</th>
               <th className="p-3 text-left">Customer</th>
               <th className="p-3 text-left">Date</th>
@@ -435,6 +437,8 @@ function QuotationList({ list, refreshData }) {
                     />
                   </td>
                   <td className="p-3 text-gray-500">{i + 1}</td>
+                  {/* Comment: Show stored file_name from API or derived UI value */}
+                  <td className="p-3">{q.details?.fileName || q.file_name || "-"}</td>
                   <td className="p-3 font-medium">
                     <a href={`/quotation.html?key=${encodeURIComponent(q.sourceKey)}&index=${q.sourceIndex}`} className="text-[#2D4485] hover:underline">
                       {q.details?.number}
@@ -450,7 +454,8 @@ function QuotationList({ list, refreshData }) {
               )
             })}
             {list.length === 0 && (
-              <tr><td colSpan={5} className="p-8 text-center text-gray-500">No quotations found</td></tr>
+              // Comment: Update colspan to match non-checkbox columns (Index + File Name + Quotation Number + Customer + Date + Item + Grand Total = 7)
+              <tr><td colSpan={7} className="p-8 text-center text-gray-500">No quotations found</td></tr>
             )}
           </tbody>
         </table>
@@ -1402,6 +1407,8 @@ function AdminPage() {
             number: q.qo_code,
             date: q.created_date,
             currency: q.currency || 'THB', 
+            // Comment: map Quotation.file_name from API to details.fileName for UI use
+            fileName: q.file_name || ""
           },
           customerName: q.customer_details?.company_name || 'Unknown',
           items: q.quotation_items || [],
