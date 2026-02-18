@@ -835,7 +835,21 @@ def generate_quotation_pdf(request):
     doc.build(elements)
     
     buffer.seek(0)
-    return HttpResponse(buffer, content_type='application/pdf')
+    # Comment: Use user-provided file name from details.fileName if present
+    try:
+        desired_name = details.get('fileName')
+        # Sanitize: ensure .pdf extension and strip problematic characters
+        if isinstance(desired_name, str) and desired_name.strip():
+            name = desired_name.strip()
+            if not name.lower().endswith('.pdf'):
+                name = f"{name}.pdf"
+        else:
+            name = "quotation.pdf"
+    except Exception:
+        name = "quotation.pdf"
+    resp = HttpResponse(buffer, content_type='application/pdf')
+    resp['Content-Disposition'] = f'attachment; filename="{name}"'
+    return resp
 
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
@@ -878,13 +892,29 @@ def generate_quotation_pdf_with_cover(request):
             continue
     print("MEDIA_ROOT:", settings.MEDIA_ROOT)
     print("Found cover path:", cover_path)
+    # Comment: Determine desired output filename from request details.fileName
+    try:
+        incoming = request.data if hasattr(request, "data") else {}
+    except Exception:
+        incoming = {}
+    try:
+        details = incoming.get("details", {}) or {}
+        desired_name = details.get("fileName")
+        if isinstance(desired_name, str) and desired_name.strip():
+            file_name_cover = desired_name.strip()
+            if not file_name_cover.lower().endswith(".pdf"):
+                file_name_cover += ".pdf"
+        else:
+            file_name_cover = "quotation_with_cover.pdf"
+    except Exception:
+        file_name_cover = "quotation_with_cover.pdf"
     if cover_only_flag:
         if cover_path:
             try:
                 with open(cover_path, "rb") as f:
                     bytes_cover = f.read()
                 resp = HttpResponse(bytes_cover, content_type='application/pdf')
-                resp['Content-Disposition'] = 'attachment; filename="cover_only.pdf"'
+                resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
                 return resp
             except Exception as e:
                 print(f"[COVER_ONLY ERROR] {e}")
@@ -931,12 +961,12 @@ def generate_quotation_pdf_with_cover(request):
     # If cover file missing, return the base quotation PDF
     if not cover_path:
         resp = HttpResponse(main_bytes, content_type='application/pdf')
-        resp['Content-Disposition'] = 'attachment; filename="quotation.pdf"'
+        resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
         return resp
     # If no merge library available, return the base quotation to avoid corrupt output
     if PdfMerger is None and (PdfReader is None or PdfWriter is None):
         resp = HttpResponse(main_bytes, content_type='application/pdf')
-        resp['Content-Disposition'] = 'attachment; filename="quotation.pdf"'
+        resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
         return resp
     try:
         # Prefer PdfMerger when available (handles page order cleanly)
@@ -981,13 +1011,13 @@ def generate_quotation_pdf_with_cover(request):
                 f.write(merged_bytes)
             fh = open(merged_path, "rb")
             resp = FileResponse(fh, content_type='application/pdf')
-            resp['Content-Disposition'] = 'attachment; filename="quotation_with_cover.pdf"'
+            resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
             resp['Content-Length'] = str(len(merged_bytes))
             return resp
         except Exception as e:
             print(f"[FILE RESPONSE FALLBACK ERROR] {e}")
             resp = HttpResponse(merged_bytes, content_type='application/pdf')
-            resp['Content-Disposition'] = 'attachment; filename="quotation_with_cover.pdf"'
+            resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
             resp['Content-Length'] = str(len(merged_bytes))
             return resp
     except Exception as e:
@@ -1019,13 +1049,13 @@ def generate_quotation_pdf_with_cover(request):
                     f.write(merged_bytes)
                 fh = open(merged_path, "rb")
                 resp = FileResponse(fh, content_type='application/pdf')
-                resp['Content-Disposition'] = 'attachment; filename="quotation_with_cover.pdf"'
+                resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
                 resp['Content-Length'] = str(len(merged_bytes))
                 return resp
             except Exception as e:
                 print(f"[FILE RESPONSE FALLBACK ERROR (TEMP)] {e}")
                 resp = HttpResponse(merged_bytes, content_type='application/pdf')
-                resp['Content-Disposition'] = 'attachment; filename="quotation_with_cover.pdf"'
+                resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
                 resp['Content-Length'] = str(len(merged_bytes))
                 return resp
         finally:
@@ -1044,7 +1074,7 @@ def generate_quotation_pdf_with_cover(request):
             pass
         # Final fallback: return the base quotation PDF bytes
         resp = HttpResponse(main_bytes, content_type='application/pdf')
-        resp['Content-Disposition'] = 'attachment; filename="quotation.pdf"'
+        resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
         return resp
 @api_view(['POST'])
 @permission_classes([AllowAny])

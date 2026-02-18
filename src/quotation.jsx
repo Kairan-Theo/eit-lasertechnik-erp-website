@@ -91,6 +91,12 @@ function useQuotationState() {
   const [details, setDetails] = React.useState({
     number: getNextQuotationNumber(),
     date: new Date().toISOString().slice(0, 10),
+    // File name used for PDF download; default derives from quotation number
+    fileName: (() => {
+      const base = getNextQuotationNumber()
+      // Comment: sanitize to a simple, safe filename without spaces
+      return `${String(base).replace(/\s+/g, "_")}.pdf`
+    })(),
     validUntil: "",
     currency: "THB",
     deliveryTerms: "Ex-Works",
@@ -501,6 +507,8 @@ function useQuotationState() {
             setDetails({
               number: data.qo_code || "",
               date: data.created_date || new Date().toISOString().slice(0, 10),
+              // Comment: hydrate custom file name from API Quotation.file_name
+              fileName: (data.file_name && String(data.file_name).trim()) ? data.file_name : `${String(data.qo_code || 'quotation').replace(/\s+/g, '_')}.pdf`,
               validUntil: "",
               currency: "THB",
               deliveryTerms: "Ex-Works",
@@ -975,14 +983,41 @@ function QuotationPage() {
         {/* Codes Box */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-400 p-6 space-y-8 mb-8">
            <h2 className="text-xl font-bold text-[#2D4485]">Codes</h2>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           {/* Comment: Add "File name" input beside Date; switch to 3 columns on md screens */}
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Quotation Number</label>
-               <input value={q.details.number} onChange={(e) => q.setDetails({ ...q.details, number: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Quotation number" />
+               <input 
+                 value={q.details.number} 
+                 onChange={(e) => {
+                   const num = e.target.value
+                   // Comment: keep file name aligned with number when user edits (only if current fileName matches previous pattern)
+                   const current = String(q.details.fileName || "")
+                   const isDerived = current.toLowerCase().startsWith(String(q.details.number || "").replace(/\s+/g, "_").toLowerCase())
+                   const nextFile = `${String(num || "quotation").replace(/\s+/g, "_")}.pdf`
+                   q.setDetails({ 
+                     ...q.details, 
+                     number: num, 
+                     fileName: isDerived ? nextFile : q.details.fileName 
+                   })
+                 }} 
+                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
+                 placeholder="Quotation number" 
+               />
              </div>
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                <DateField value={q.details.date} onChange={(val) => q.setDetails({ ...q.details, date: val })} />
+             </div>
+             <div>
+               {/* Comment: New input to customize the downloaded PDF file name */}
+               <label className="block text-sm font-medium text-gray-700 mb-1">File name</label>
+               <input 
+                 value={q.details.fileName || ""} 
+                 onChange={(e) => q.setDetails({ ...q.details, fileName: e.target.value })} 
+                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" 
+                 placeholder="quotation.pdf" 
+               />
              </div>
           </div>
         </div>
@@ -1281,8 +1316,9 @@ function QuotationPage() {
                 {q.items.map((item, i) => (
                   // Wrap rows for each item in a keyed Fragment to satisfy React list key requirements
                   <React.Fragment key={`item-block-${i}`}>
-                   <tr key={`item-${i}`} className="hover:bg-gray-50 transition border-b border-gray-100">
-                     <td className="p-3 text-center text-sm text-gray-700">
+                   {/* Parent item row: make text bold to visually declare hierarchy */}
+                   <tr key={`item-${i}`} className="hover:bg-gray-50 transition border-b border-gray-100 font-semibold">
+                     <td className="p-3 text-center text-sm text-gray-900">
                        {i + 1}
                      </td>
                      {item.type === 'specific' ? (
@@ -1349,17 +1385,25 @@ function QuotationPage() {
                     const specRows = Array.isArray(item.specRows) ? item.specRows : legacyRows
                     const rowsToRender = specRows.length > 0 ? specRows : (item.specEdit ? [{ lines: [], image: null, edit: true }] : [])
                     return rowsToRender.map((sr, sIndex) => (
-                      <tr key={`item-${i}-spec-${sIndex}`} className="hover:bg-gray-50 transition border-b border-gray-100">
-                        <td className="p-3 text-center text-sm text-gray-700">{`${i + 1}.${sIndex + 1}`}</td>
+                      // Child UI row: visually nested under its parent item
+                      // Comment: Use a badge in ITEM column and a shaded, indented container to indicate parent-child relation
+                      <tr key={`item-${i}-spec-${sIndex}`} className="transition border-b border-gray-100 bg-white">
+                        <td className="p-3 text-center text-xs">
+                          {/* Child badge: smaller number to show 1.1, 1.2, ... */}
+                          <span className="inline-flex items-center justify-center px-2 py-1 rounded-full bg-[#E9EDFF] text-[#2D4485] font-semibold">
+                            {`${i + 1}.${sIndex + 1}`}
+                          </span>
+                        </td>
                         <td className="p-3" colSpan={5}>
-                          {/* Full-width spec box with side actions */}
-                          <div className="flex items-start gap-4">
+                          {/* Child container: indented box with left connector to the parent */}
+                          {/* Comment: border-left acts as a connector; background differentiates child from parent row */}
+                          <div className="flex items-start gap-4 pl-4 border-l-4 border-[#CBD3FF] rounded-lg bg-[#F7F9FF]">
                             {/* Left: specification content/editor */}
                             <div className="flex-1">
                               {!sr.edit ? (
-                                // Read-only spec box; allow double-click to enter edit mode
+                                // Read-only child spec box; allow double-click to enter edit mode
                                 <div
-                                  className="text-sm text-gray-800 rounded-lg border border-gray-300 p-3"
+                                  className="text-sm text-gray-800 rounded-md border border-gray-300 p-3 bg-white"
                                   onDoubleClick={() => q.setSpecEdit(i, true, sIndex)}
                                   title="Double-click to edit specification"
                                 >
@@ -1374,7 +1418,7 @@ function QuotationPage() {
                                   )}
                                 </div>
                               ) : (
-                                // Auto-resizing textarea: remove vertical resize, grow with content
+                                // Auto-resizing textarea inside child container
                                 <textarea
                                   value={sr.lines.join("\n")}
                                   ref={(el) => { specTextareasRef.current[`${i}-${sIndex}`] = el }}
@@ -1383,7 +1427,7 @@ function QuotationPage() {
                                     e.target.style.height = `${e.target.scrollHeight}px`
                                     q.updateSpecLines(i, e.target.value, sIndex)
                                   }}
-                                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-[#2D4485] outline-none min-h-[160px] resize-none overflow-hidden"
+                                  className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm focus:border-[#2D4485] outline-none min-h-[160px] resize-none overflow-hidden"
                                   placeholder="Edit specifications (one per line)"
                                   style={{ height: "auto" }}
                                 />
@@ -1618,6 +1662,8 @@ function QuotationPage() {
                           const fd = new FormData()
                           // Top-level fields
                           fd.append("qo_code", qo_code)
+                          // Comment: persist file_name to Quotation.file_name column
+                          fd.append("file_name", q.details.fileName || "quotation.pdf")
                           fd.append("created_date", q.details.date || "")
                           fd.append("customer_name", q.customer.company || "Unknown")
                           fd.append("customer_tax_id", q.customer.taxId || "")
@@ -1730,6 +1776,8 @@ function QuotationPage() {
 
                           const fd = new FormData()
                           fd.append("qo_code", q.details.number || "")
+                          // Comment: persist file_name to Quotation.file_name column
+                          fd.append("file_name", q.details.fileName || "quotation.pdf")
                           fd.append("created_date", q.details.date || "")
                           fd.append("customer_name", q.customer.company || "Unknown")
                           fd.append("customer_tax_id", q.customer.taxId || "")
