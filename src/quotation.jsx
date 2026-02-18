@@ -12,6 +12,25 @@ import { CustomerCombobox } from "./components/customer-combobox.jsx"
 import { Combobox } from "./components/combobox.jsx"
 import { DateField } from "./components/ui/date-field"
 
+// Resolve image URL robustly across sources:
+// - DataURL: return as-is for immediate preview (client-side)
+// - Absolute URL: return unchanged
+// - Relative DB path: prefix with /media and API_BASE_URL
+const resolveImageUrl = (src) => {
+  if (!src || typeof src !== "string") return null
+  if (src.startsWith("data:image")) return src
+  if (/^https?:\/\//.test(src)) return src
+  let path = src
+  if (path.startsWith("/media/")) {
+    // already correct
+  } else if (path.startsWith("media/")) {
+    path = `/${path}`
+  } else {
+    path = `/media/${path.replace(/^\/+/, "")}`
+  }
+  return `${API_BASE_URL}${path}`
+}
+
 import "./index.css"
 
 
@@ -501,23 +520,28 @@ function useQuotationState() {
             })
             const apiItems = data.quotation_items || data.items || data.products || []
             if (apiItems.length > 0) {
-              setItems(apiItems.map(i => {
-                const rawQty = i.quantity !== undefined ? i.quantity : i.qty
-                const qty = rawQty !== undefined ? rawQty : 1
-                const total = parseFloat(i.quo_total || i.total || 0)
-                
-                // Identify specific description items: empty item/model and 0 quantity
-                const isSpecific = (!i.quo_item && !i.quo_model && qty === 0);
-
-                return {
-                  type: isSpecific ? 'specific' : undefined,
+              // Build item rows and seed specification from 'specification' field; attach image from item.image
+              const out = []
+              apiItems.forEach((i) => {
+                const rawQty = (i.quantity !== undefined ? i.quantity : i.qty)
+                const qtyNum = (() => {
+                  const n = parseFloat(String(rawQty ?? "").replace(/,/g, ""))
+                  return isNaN(n) ? 1 : n
+                })()
+                const total = parseFloat(String(i.quo_total || i.total || 0).replace(/,/g, ""))
+                const baseSpec = String(i.specification || "").replace(/\r/g, "").split("\n").filter(Boolean)
+                // Build a displayable image URL from DB path/url/data
+                const imgUrl = resolveImageUrl(i.image)
+                out.push({
                   item: i.quo_item || i.item || "",
                   model: i.quo_model || i.model || "",
                   description: i.quo_description || i.description || "",
-                  qty: qty,
-                  price: qty > 0 ? total / qty : 0
-                }
-              }))
+                  qty: qtyNum > 0 ? qtyNum : 1,
+                  price: qtyNum > 0 ? (total / qtyNum) : 0,
+                  specRows: baseSpec.length ? [{ lines: baseSpec, image: imgUrl, edit: false, imageWidth: 64, imageHeight: 64 }] : []
+                })
+              })
+              setItems(out)
             }
           })
           .catch(err => console.error("Error loading from API", err))
@@ -605,7 +629,13 @@ function QuotationPage() {
           qty: parseNumber(i.qty),
           price: parseNumber(i.price),
           // Include specification rows for PDF (supports multiple spec rows)
-          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
+            lines: r.lines || [],
+            image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null,
+            image: (typeof r.image === 'string') ? r.image : null,
+            image_width: r.imageWidth || 64,
+            image_height: r.imageHeight || 64
+          })) : [],
           // Legacy fields kept for backward compatibility
           spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
           spec_image_data: i.specImage || null
@@ -691,7 +721,13 @@ function QuotationPage() {
           ...i,
           qty: parseNumber(i.qty),
           price: parseNumber(i.price),
-          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
+            lines: r.lines || [],
+            image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null,
+            image: (typeof r.image === 'string') ? r.image : null,
+            image_width: r.imageWidth || 64,
+            image_height: r.imageHeight || 64
+          })) : [],
           spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
           spec_image_data: i.specImage || null
         })),
@@ -751,7 +787,13 @@ function QuotationPage() {
           ...i,
           qty: parseNumber(i.qty),
           price: parseNumber(i.price),
-          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
+            lines: r.lines || [],
+            image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null,
+            image: (typeof r.image === 'string') ? r.image : null,
+            image_width: r.imageWidth || 64,
+            image_height: r.imageHeight || 64
+          })) : [],
           spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
           spec_image_data: i.specImage || null
         })),
@@ -809,7 +851,13 @@ function QuotationPage() {
           ...i,
           qty: parseNumber(i.qty),
           price: parseNumber(i.price),
-          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
+            lines: r.lines || [],
+            image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null,
+            image: (typeof r.image === 'string') ? r.image : null,
+            image_width: r.imageWidth || 64,
+            image_height: r.imageHeight || 64
+          })) : [],
           spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
           spec_image_data: i.specImage || null
         })),
@@ -1387,7 +1435,14 @@ function QuotationPage() {
                                       alt="Specification"
                                       style={{ width: `${sr.imageWidth || 64}px`, height: `${sr.imageHeight || 64}px` }}
                                       className="object-cover rounded border border-gray-300 cursor-pointer"
-                                      onClick={() => setPreviewSrc(sr.image)}
+                                      onError={(e) => {
+                                        // If the image fails (e.g., missing /media prefix), try to resolve and retry
+                                        const fixed = resolveImageUrl(sr.image)
+                                        if (fixed && e.currentTarget.src !== fixed) {
+                                          e.currentTarget.src = fixed
+                                        }
+                                      }}
+                                      onClick={() => setPreviewSrc(resolveImageUrl(sr.image) || sr.image)}
                                     />
                                     {/* Image size slider: adjust width/height uniformly */}
                                     <div className="flex items-center gap-2">
@@ -1527,30 +1582,12 @@ function QuotationPage() {
                     onClick={() => {
                       const handleSaveAsNew = async () => {
                         try {
-                          const company = q.customer.company || "Unknown"
-                          const targetKey = `history:${company}`
-                          let data = { customer: q.customer, quotations: [], invoices: [], billingNotes: [] }
-                          try {
-                            const existing = localStorage.getItem(targetKey)
-                            if (existing) {
-                              const parsed = JSON.parse(existing)
-                              if (parsed) data = { ...data, ...parsed }
-                            }
-                          } catch (e) { console.error("Error parsing localStorage", e) }
-                          if (!Array.isArray(data.quotations)) data.quotations = []
-                          if (!data.customer || !data.customer.company) data.customer = q.customer
-                          const newQuotation = {
-                            id: Date.now(),
-                            savedAt: new Date().toISOString(),
-                            number: q.details.number,
-                            details: q.details,
-                            items: q.items,
-                            total: q.total,
-                            totals: { total: q.total },
-                            customerName: company
-                          }
-                          data.quotations.push(newQuotation)
-                          localStorage.setItem(targetKey, JSON.stringify(data))
+                          // Build a unique new quotation code derived from current number
+                          // Comment: Always derive a fresh number to avoid overwriting existing records
+                          const baseCode = q.details.number || `QUO-${Date.now()}`
+                          const qo_code = `${baseCode}-COPY-${Date.now()}`
+
+                          // Flatten responsible persons into CSV strings for serializer
                           const list = Array.isArray(q.customer.responsibles) ? q.customer.responsibles : []
                           const attnList = list.map(r => (r.attn || "").trim()).filter(Boolean)
                           const attnDivList = list.map(r => (r.attnDiv || "").trim()).filter(Boolean)
@@ -1560,66 +1597,107 @@ function QuotationPage() {
                           const ccDivList = list.map(r => (r.ccDiv || "").trim()).filter(Boolean)
                           const ccMobileList = list.map(r => (r.ccMobile || "").trim()).filter(Boolean)
                           const ccEmailList = list.map(r => (r.ccEmail || "").trim()).filter(Boolean)
-                          let qo_code = q.details.number || `QUO-${Date.now()}`
-                          if (q.sourceKey === 'api') {
-                            qo_code = `${qo_code}-COPY-${Date.now()}`
+
+                          // Convert data URL to Blob for file upload
+                          // Comment: DRF expects UploadedFile for ImageField, not base64 in JSON
+                          const dataUrlToBlob = (dataUrl) => {
+                            try {
+                              const [meta, content] = String(dataUrl || "").split(",")
+                              const mimeMatch = meta.match(/data:(.*?);base64/)
+                              const mime = mimeMatch ? mimeMatch[1] : "application/octet-stream"
+                              const bin = atob(content || "")
+                              const bytes = new Uint8Array(bin.length)
+                              for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+                              return new Blob([bytes], { type: mime })
+                            } catch {
+                              return null
+                            }
                           }
-                          const backendPayload = {
-                            qo_code,
-                            created_date: q.details.date,
-                            customer_name: q.customer.company || "Unknown",
-                            customer_tax_id: q.customer.taxId || "",
-                            customer_address: q.customer.address || "",
-                            customer_email: q.customer.email || "",
-                            customer_phone: q.customer.telephone || "",
-                            customer_fax: q.customer.fax || "",
-                            cus_respon_attn: attnList.join(','),
-                            cus_respon_div: attnDivList.join(','),
-                            cus_respon_mobile: attnMobileList.join(','),
-                            cus_respon_cc: ccList.join(','),
-                            cus_respon_cc_div: ccDivList.join(','),
-                            cus_respon_cc_mobile: ccMobileList.join(','),
-                            cus_respon_cc_email: ccEmailList.join(','),
-                            eit: q.details.eit,
-                            eit_name: q.details.salesPerson || "",
-                            eit_address: q.details.eitAddress || "",
-                            eit_mobile: q.details.eitMobile || "",
-                            eit_phone: q.details.eitTelephone || "",
-                            eit_fax: q.details.eitFax || "",
-                            trade_terms: q.details.tradeTerms || "",
-                            validity: q.details.validity || "",
-                            delivery: q.details.delivery || "",
-                            payment_terms: q.details.paymentTerms || "",
-                            shipment_location: q.details.shipmentLocation || "",
-                            invoice_date: (q.details.invoiceDate && q.details.invoiceDate !== "SAME AS DELIVERY DATE") ? q.details.invoiceDate : null,
-                            remark: q.details.remark || "",
-                            items: q.items.map(item => ({
+
+                          // Prepare multipart form data for nested items + image files
+                          const fd = new FormData()
+                          // Top-level fields
+                          fd.append("qo_code", qo_code)
+                          fd.append("created_date", q.details.date || "")
+                          fd.append("customer_name", q.customer.company || "Unknown")
+                          fd.append("customer_tax_id", q.customer.taxId || "")
+                          fd.append("customer_address", q.customer.address || "")
+                          fd.append("customer_email", q.customer.email || "")
+                          fd.append("customer_phone", q.customer.telephone || "")
+                          fd.append("customer_fax", q.customer.fax || "")
+                          fd.append("cus_respon_attn", attnList.join(","))
+                          fd.append("cus_respon_div", attnDivList.join(","))
+                          fd.append("cus_respon_mobile", attnMobileList.join(","))
+                          fd.append("cus_respon_cc", ccList.join(","))
+                          fd.append("cus_respon_cc_div", ccDivList.join(","))
+                          fd.append("cus_respon_cc_mobile", ccMobileList.join(","))
+                          fd.append("cus_respon_cc_email", ccEmailList.join(","))
+                          if (q.details.eit) fd.append("eit", String(q.details.eit))
+                          fd.append("eit_name", q.details.salesPerson || "")
+                          fd.append("eit_address", q.details.eitAddress || "")
+                          fd.append("eit_mobile", q.details.eitMobile || "")
+                          fd.append("eit_phone", q.details.eitTelephone || "")
+                          fd.append("eit_fax", q.details.eitFax || "")
+                          fd.append("trade_terms", q.details.tradeTerms || "")
+                          fd.append("validity", q.details.validity || "")
+                          fd.append("delivery", q.details.delivery || "")
+                          fd.append("payment_terms", q.details.paymentTerms || "")
+                          fd.append("shipment_location", q.details.shipmentLocation || "")
+                          const invDate = (q.details.invoiceDate && q.details.invoiceDate !== "SAME AS DELIVERY DATE") ? q.details.invoiceDate : ""
+                          if (/^\\d{4}-\\d{2}-\\d{2}$/.test(invDate)) fd.append("invoice_date", invDate)
+                          fd.append("remark", q.details.remark || "")
+
+                          // Items: persist main items and each spec row as separate items (qty=0)
+                          // Comment: Storing specs as separate rows ensures the UI can reconstruct specRows after reload.
+                          let idxNew = 0
+                          const jsonItemsForFallback = []
+                          q.items.forEach((item) => {
+                            // Main item
+                            fd.append(`items[${idxNew}][item]`, item.item || "")
+                            fd.append(`items[${idxNew}][model]`, item.model || "")
+                            fd.append(`items[${idxNew}][description]`, item.description || "")
+                            // Persist combined specification text on the main item for reporting
+                            const specText = (Array.isArray(item.specRows) ? item.specRows : [])
+                              .map(sr => Array.isArray(sr.lines) ? sr.lines.join("\\n") : "")
+                              .filter(Boolean)
+                              .join("\\n")
+                            fd.append(`items[${idxNew}][specification]`, specText)
+                            fd.append(`items[${idxNew}][qty]`, String(item.qty || 1))
+                            fd.append(`items[${idxNew}][price]`, String(item.price || 0))
+                            // Attach first specification image to the base item (if any)
+                            const firstImageRow = (Array.isArray(item.specRows) ? item.specRows : []).find(sr => sr.image)
+                            if (firstImageRow && firstImageRow.image) {
+                              const blob = dataUrlToBlob(firstImageRow.image)
+                              if (blob) {
+                                const file = new File([blob], `spec_${idxNew}.png`, { type: blob.type || "image/png" })
+                                fd.append(`items[${idxNew}][image]`, file)
+                              }
+                            }
+                            jsonItemsForFallback.push({
                               item: item.item || "",
                               model: item.model || "",
                               description: item.description || "",
-                              qty: item.qty || 1,
-                              price: item.price || 0
-                            }))
-                          }
-                          if (backendPayload.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(backendPayload.invoice_date)) {
-                            backendPayload.invoice_date = null
-                          }
-                          let response = await fetch(`${API_BASE_URL}/api/quotations/`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(backendPayload)
+                              specification: specText,
+                              qty: String(item.qty || 1),
+                              price: String(item.price || 0)
+                            })
+                            idxNew++
+                          })
+                          // Add JSON fallback to ensure backend always receives items list
+                          fd.append("items", JSON.stringify(jsonItemsForFallback))
+
+                          // Send multipart request (do not set Content-Type manually)
+                          const headers = {}
+                          const token = localStorage.getItem("authToken")
+                          if (token) headers["Authorization"] = `Token ${token}`
+                          const response = await fetch(`${API_BASE_URL}/api/quotations/`, {
+                            method: "POST",
+                            headers,
+                            body: fd
                           })
                           if (!response.ok) {
-                            backendPayload.qo_code = `${q.details.number || 'QUO'}-COPY-${Date.now()}`
-                            const retry = await fetch(`${API_BASE_URL}/api/quotations/`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(backendPayload)
-                            })
-                            if (!retry.ok) {
-                              const err2 = await retry.text()
-                              throw new Error("Failed to save new quotation: " + err2)
-                            }
+                            const err = await response.text()
+                            throw new Error("Failed to save new quotation: " + err)
                           }
                           alert("Saved as new quotation!")
                           setOpenCreateConfirm(false)
@@ -1639,60 +1717,7 @@ function QuotationPage() {
                     onClick={() => {
                       const handleSave = async () => {
                         try {
-                          const company = q.customer.company || "Unknown"
-                          const targetKey = `history:${company}`
-                          
-                          if (q.sourceKey && q.sourceKey !== targetKey && q.sourceIndex !== null) {
-                              try {
-                                  const oldDataStr = localStorage.getItem(q.sourceKey)
-                                  if (oldDataStr) {
-                                      const oldData = JSON.parse(oldDataStr)
-                                      if (oldData && Array.isArray(oldData.quotations)) {
-                                          oldData.quotations.splice(q.sourceIndex, 1)
-                                          localStorage.setItem(q.sourceKey, JSON.stringify(oldData))
-                                      }
-                                  }
-                              } catch(e) { console.error("Error removing old record", e) }
-                          }
- 
-                          let data = { customer: q.customer, quotations: [], invoices: [], billingNotes: [] }
-                          try {
-                            const existing = localStorage.getItem(targetKey)
-                            if (existing) {
-                              const parsed = JSON.parse(existing)
-                              if (parsed) data = { ...data, ...parsed }
-                            }
-                          } catch (e) { console.error("Error parsing localStorage", e) }
- 
-                          if (!Array.isArray(data.quotations)) data.quotations = []
-                          if (!data.customer || !data.customer.company) data.customer = q.customer
- 
-                          const newQuotation = {
-                            id: Date.now(),
-                            savedAt: new Date().toISOString(),
-                            number: q.details.number,
-                            details: q.details,
-                            items: q.items,
-                            total: q.total,
-                            totals: { total: q.total },
-                            customerName: company
-                          }
- 
-                          let updateIndex = -1
-                          if (q.sourceKey === targetKey && q.sourceIndex !== null) {
-                               updateIndex = q.sourceIndex
-                          } else {
-                               updateIndex = data.quotations.findIndex(x => x.number === q.details.number)
-                          }
- 
-                          if (updateIndex >= 0 && updateIndex < data.quotations.length) {
-                            data.quotations[updateIndex] = newQuotation
-                          } else {
-                            data.quotations.push(newQuotation)
-                          }
- 
-                          localStorage.setItem(targetKey, JSON.stringify(data))
-                          
+                          // Prepare multipart form-data and persist specification rows as separate items (qty=0)
                           const list = Array.isArray(q.customer.responsibles) ? q.customer.responsibles : []
                           const attnList = list.map(r => (r.attn || "").trim()).filter(Boolean)
                           const attnDivList = list.map(r => (r.attnDiv || "").trim()).filter(Boolean)
@@ -1702,66 +1727,106 @@ function QuotationPage() {
                           const ccDivList = list.map(r => (r.ccDiv || "").trim()).filter(Boolean)
                           const ccMobileList = list.map(r => (r.ccMobile || "").trim()).filter(Boolean)
                           const ccEmailList = list.map(r => (r.ccEmail || "").trim()).filter(Boolean)
-                          const backendPayload = {
-                              qo_code: q.details.number,
-                              created_date: q.details.date,
-                              customer_name: q.customer.company || "Unknown",
-                              customer_tax_id: q.customer.taxId || "",
-                              customer_address: q.customer.address || "",
-                              customer_email: q.customer.email || "",
-                              customer_phone: q.customer.telephone || "",
-                              customer_fax: q.customer.fax || "",
-                              cus_respon_attn: attnList.join(','),
-                              cus_respon_div: attnDivList.join(','),
-                              cus_respon_mobile: attnMobileList.join(','),
-                              cus_respon_cc: ccList.join(','),
-                              cus_respon_cc_div: ccDivList.join(','),
-                              cus_respon_cc_mobile: ccMobileList.join(','),
-                              cus_respon_cc_email: ccEmailList.join(','),
-                              eit: q.details.eit,
-                              eit_name: q.details.salesPerson || "",
-                              eit_address: q.details.eitAddress || "",
-                              eit_mobile: q.details.eitMobile || "",
-                              eit_phone: q.details.eitTelephone || "",
-                              eit_fax: q.details.eitFax || "",
-                              trade_terms: q.details.tradeTerms || "",
-                              validity: q.details.validity || "",
-                              delivery: q.details.delivery || "",
-                              payment_terms: q.details.paymentTerms || "",
-                              shipment_location: q.details.shipmentLocation || "",
-                              invoice_date: (q.details.invoiceDate && q.details.invoiceDate !== "SAME AS DELIVERY DATE") ? q.details.invoiceDate : null,
-                              remark: q.details.remark || "",
-                              items: q.items.map(item => ({
-                                  item: item.item || "",
-                                  model: item.model || "",
-                                  description: item.description || "",
-                                  qty: item.qty || 1,
-                                  price: item.price || 0
-                              }))
+
+                          const fd = new FormData()
+                          fd.append("qo_code", q.details.number || "")
+                          fd.append("created_date", q.details.date || "")
+                          fd.append("customer_name", q.customer.company || "Unknown")
+                          fd.append("customer_tax_id", q.customer.taxId || "")
+                          fd.append("customer_address", q.customer.address || "")
+                          fd.append("customer_email", q.customer.email || "")
+                          fd.append("customer_phone", q.customer.telephone || "")
+                          fd.append("customer_fax", q.customer.fax || "")
+                          fd.append("cus_respon_attn", attnList.join(","))
+                          fd.append("cus_respon_div", attnDivList.join(","))
+                          fd.append("cus_respon_mobile", attnMobileList.join(","))
+                          fd.append("cus_respon_cc", ccList.join(","))
+                          fd.append("cus_respon_cc_div", ccDivList.join(","))
+                          fd.append("cus_respon_cc_mobile", ccMobileList.join(","))
+                          fd.append("cus_respon_cc_email", ccEmailList.join(","))
+                          if (q.details.eit) fd.append("eit", String(q.details.eit))
+                          fd.append("eit_name", q.details.salesPerson || "")
+                          fd.append("eit_address", q.details.eitAddress || "")
+                          fd.append("eit_mobile", q.details.eitMobile || "")
+                          fd.append("eit_phone", q.details.eitTelephone || "")
+                          fd.append("eit_fax", q.details.eitFax || "")
+                          fd.append("trade_terms", q.details.tradeTerms || "")
+                          fd.append("validity", q.details.validity || "")
+                          fd.append("delivery", q.details.delivery || "")
+                          fd.append("payment_terms", q.details.paymentTerms || "")
+                          fd.append("shipment_location", q.details.shipmentLocation || "")
+                          const invDate = (q.details.invoiceDate && q.details.invoiceDate !== "SAME AS DELIVERY DATE") ? q.details.invoiceDate : ""
+                          if (/^\\d{4}-\\d{2}-\\d{2}$/.test(invDate)) fd.append("invoice_date", invDate)
+                          fd.append("remark", q.details.remark || "")
+
+                          // Helper to turn data URL into Blob for upload
+                          const dataUrlToBlob = (dataUrl) => {
+                            try {
+                              const [meta, content] = String(dataUrl || "").split(",")
+                              const mimeMatch = meta.match(/data:(.*?);base64/)
+                              const mime = mimeMatch ? mimeMatch[1] : "application/octet-stream"
+                              const bin = atob(content || "")
+                              const bytes = new Uint8Array(bin.length)
+                              for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+                              return new Blob([bytes], { type: mime })
+                            } catch {
+                              return null
+                            }
                           }
-                          
-                          if (backendPayload.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(backendPayload.invoice_date)) {
-                               backendPayload.invoice_date = null
-                          }
- 
-                          let url = `${API_BASE_URL}/api/quotations/`
-                          let method = 'POST'
-                          
-                          if (q.sourceKey === 'api' && q.sourceIndex) {
-                              url = `${API_BASE_URL}/api/quotations/${q.sourceIndex}/`
-                              method = 'PUT'
-                          }
- 
-                          const response = await fetch(url, {
-                              method: method,
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(backendPayload)
+
+                          // Flatten items and their spec rows into sequential index entries
+                          let idx = 0
+                          const jsonItemsForFallback2 = []
+                          q.items.forEach((item) => {
+                            // Main item
+                            fd.append(`items[${idx}][item]`, item.item || "")
+                            fd.append(`items[${idx}][model]`, item.model || "")
+                            fd.append(`items[${idx}][description]`, item.description || "")
+                            // Persist combined specification text for the main item (reporting)
+                            const specTextMain = (Array.isArray(item.specRows) ? item.specRows : [])
+                              .map(sr => Array.isArray(sr.lines) ? sr.lines.join("\\n") : "")
+                              .filter(Boolean)
+                              .join("\\n")
+                            fd.append(`items[${idx}][specification]`, specTextMain)
+                            fd.append(`items[${idx}][qty]`, String(item.qty || 1))
+                            fd.append(`items[${idx}][price]`, String(item.price || 0))
+                            // Attach first specification image to the base item (if any)
+                            const firstImageRow2 = (Array.isArray(item.specRows) ? item.specRows : []).find(sr => sr.image)
+                            if (firstImageRow2 && firstImageRow2.image) {
+                              const blob = dataUrlToBlob(firstImageRow2.image)
+                              if (blob) {
+                                const file = new File([blob], `spec_${idx}.png`, { type: blob.type || "image/png" })
+                                fd.append(`items[${idx}][image]`, file)
+                              }
+                            }
+                            jsonItemsForFallback2.push({
+                              item: item.item || "",
+                              model: item.model || "",
+                              description: item.description || "",
+                              specification: specTextMain,
+                              qty: String(item.qty || 1),
+                              price: String(item.price || 0)
+                            })
+                            idx++
                           })
- 
+
+                          // Choose URL/method
+                          let url = `${API_BASE_URL}/api/quotations/`
+                          let method = "POST"
+                          if (q.sourceKey === "api" && q.sourceIndex) {
+                            url = `${API_BASE_URL}/api/quotations/${q.sourceIndex}/`
+                            method = "PUT"
+                          }
+                          const headers = {}
+                          const token = localStorage.getItem("authToken")
+                          if (token) headers["Authorization"] = `Token ${token}`
+                          // Add JSON fallback 'items' list to ensure backend always has items even if nested parsing fails
+                          fd.append("items", JSON.stringify(jsonItemsForFallback2))
+                          const response = await fetch(url, { method, headers, body: fd })
                           if (!response.ok) {
-                              const errText = await response.text()
-                              console.error("Backend save error:", errText)
-                              throw new Error("Failed to save to database: " + errText)
+                            const errText = await response.text()
+                            console.error("Backend save error:", errText)
+                            throw new Error("Failed to save to database: " + errText)
                           }
                           
                           alert("Quotation saved successfully!")
