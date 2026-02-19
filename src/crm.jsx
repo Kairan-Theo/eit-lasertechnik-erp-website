@@ -429,7 +429,7 @@ function CRMPage() {
   const [highlightedDealKey, setHighlightedDealKey] = React.useState(null)
 
   const handleSearchResultClick = (deal) => {
-    const key = `${deal.stageIndex}-${deal.cardIndex}-${deal.id}`
+    const key = `${deal.stageIndex}-${deal.id}`
     setHighlightedDealKey(key)
     const cardId = `deal-card-${key}`
     requestAnimationFrame(() => {
@@ -1705,14 +1705,14 @@ function CRMPage() {
                   <div className="flex-1 overflow-y-auto p-3">
                     {/* Cleaned up sortedDeals.map JSX so each deal returns one card and braces are balanced */}
                     {sortedDeals.map((d, cardIndex) => {
-                      const cardKey = `${stageIndex}-${cardIndex}-${d.id}`
+                      const cardKey = `${stageIndex}-${d.id}`
                       const isHighlighted = highlightedDealKey === cardKey
                       return (
                         <div
                           key={d.id}
                           id={`deal-card-${cardKey}`}
                           className={`bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card ${
-                            isHighlighted ? "ring-2 ring-[#2D4485] ring-offset-2" : ""
+                            isHighlighted ? "ring-2 ring-offset-2 ring-[#2D4485]" : ""
                           }`}
                           draggable
                           onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
@@ -1780,18 +1780,6 @@ function CRMPage() {
                                       <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                                     </svg>
                                     {d.salesperson || d.salespersonName}
-                                  </span>
-                                )}
-                                {d.contact && (
-                                  <span 
-                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-[11px] text-slate-700 border border-slate-200 max-w-[140px]"
-                                    title={`Contact person: ${d.contact}`}
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
-                                      <path d="M2 5a2 2 0 012-2h1.5a2 2 0 011.6.8L8.4 5H16a2 2 0 012 2v6.5a2.5 2.5 0 01-2.5 2.5H5a3 3 0 01-3-3V5z" />
-                                      <path d="M6 7.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
-                                    </svg>
-                                    <span className="truncate">{d.contact}</span>
                                   </span>
                                 )}
                               </div>
