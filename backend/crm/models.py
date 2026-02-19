@@ -50,12 +50,33 @@ class EIT(models.Model):
 # Removed Lead Model
 
 class Quotation(models.Model):
-    qo_code = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    # Comment: Allow duplicate quotation numbers; uniqueness is enforced on file_name instead
+    qo_code = models.CharField(max_length=100, null=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
     eit = models.ForeignKey(EIT, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotations')
     created_date = models.DateField(default=timezone.localdate)
-    # File name to use when downloading/merging PDFs
-    file_name = models.CharField(max_length=255, blank=True)
+    # File name to use when downloading/merging PDFs (must be unique across quotations)
+    file_name = models.CharField(max_length=255, blank=True, unique=True)
+    # Comment: Snapshot customer details per quotation to keep copies independent from master Customer
+    customer_tax_id = models.CharField(max_length=255, blank=True)
+    customer_address = models.CharField(max_length=500, blank=True)
+    customer_email = models.CharField(max_length=255, blank=True)
+    customer_phone = models.CharField(max_length=255, blank=True)
+    customer_fax = models.CharField(max_length=255, blank=True)
+    # Comment: Snapshot responsible persons (CSV strings)
+    cus_respon_attn = models.CharField(max_length=1000, blank=True)
+    cus_respon_div = models.CharField(max_length=1000, blank=True)
+    cus_respon_mobile = models.CharField(max_length=1000, blank=True)
+    cus_respon_cc = models.CharField(max_length=1000, blank=True)
+    cus_respon_cc_div = models.CharField(max_length=1000, blank=True)
+    cus_respon_cc_mobile = models.CharField(max_length=1000, blank=True)
+    cus_respon_cc_email = models.CharField(max_length=1000, blank=True)
+    # Comment: Snapshot EIT details per quotation (optional)
+    eit_name = models.CharField(max_length=255, blank=True)
+    eit_address = models.CharField(max_length=500, blank=True)
+    eit_mobile = models.CharField(max_length=255, blank=True)
+    eit_phone = models.CharField(max_length=255, blank=True)
+    eit_fax = models.CharField(max_length=255, blank=True)
     
     trade_terms = models.CharField(max_length=255, blank=True)
     validity = models.CharField(max_length=255, blank=True)

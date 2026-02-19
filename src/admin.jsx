@@ -6,6 +6,7 @@ import {
   Receipt, 
   ShoppingCart, 
   Search, 
+  X,
   Plus, 
   Download,
   Trash2,
@@ -106,9 +107,8 @@ const getAllData = () => {
     return Object.values(unique)
   }
 
-  // Deduplicate all lists
+  // Deduplicate lists except quotations; allow duplicate quotation numbers to appear as separate rows
   data.invoices = deduplicate(data.invoices)
-  data.quotations = deduplicate(data.quotations)
   data.billingNotes = deduplicate(data.billingNotes)
   data.taxInvoices = deduplicate(data.taxInvoices)
 
@@ -320,12 +320,16 @@ function Dashboard({ data }) {
 function QuotationList({ list, refreshData }) {
   const [selectedRows, setSelectedRows] = React.useState([])
   const [openDeleteConfirm, setOpenDeleteConfirm] = React.useState(false)
+  // Comment: Search query for filtering quotations by file name
+  const [searchQuery, setSearchQuery] = React.useState("")
 
   const getUid = (q) => `${q.sourceKey}-${q.sourceIndex}`
 
   const handleSelectAll = (e) => {
+    // Comment: Select only currently visible (filtered) rows
+    const visible = visibleList
     if (e.target.checked) {
-      setSelectedRows(list.map(getUid))
+      setSelectedRows(visible.map(getUid))
     } else {
       setSelectedRows([])
     }
@@ -378,6 +382,13 @@ function QuotationList({ list, refreshData }) {
     setOpenDeleteConfirm(false)
   }
 
+  // Comment: Filter list using file name (case-insensitive); fallback to q.file_name
+  const visibleList = (list || []).filter(q => {
+    const name = (q.details?.fileName || q.file_name || "").toLowerCase()
+    const s = (searchQuery || "").toLowerCase().trim()
+    return s === "" ? true : name.includes(s)
+  })
+
   return (
     <div className="bg-white rounded-xl border shadow-sm p-6 relative">
       <div className="flex justify-between items-center mb-6">
@@ -396,10 +407,35 @@ function QuotationList({ list, refreshData }) {
             </button>
           )}
         </div>
-        <a href="/quotation.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
-          <Plus className="w-4 h-4" />
-          New Quotation
-        </a>
+        <div className="flex items-center gap-3">
+          {/* Comment: Rounded pill search bar with leading icon; matches provided UI reference */}
+          <div className="relative">
+            {/* Comment: Left search icon positioned absolutely inside the input */}
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by File Name"
+              aria-label="Search quotations by file name"
+              // Comment: Use a blue border and pill shape; add right padding for clear button space
+              className="pl-9 pr-9 py-2 border-2 border-[#2D4485] rounded-full text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2D4485]/30 placeholder:text-gray-400"
+            />
+            {/* Comment: Right-side clear button inside the input for quick reset */}
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <a href="/quotation.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+            <Plus className="w-4 h-4" />
+            New Quotation
+          </a>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
@@ -409,7 +445,7 @@ function QuotationList({ list, refreshData }) {
                 <input 
                   type="checkbox" 
                   className="rounded border-gray-300 text-[#2D4485] focus:ring-[#2D4485]/20 h-4 w-4"
-                  checked={list.length > 0 && selectedRows.length === list.length}
+                  checked={visibleList.length > 0 && selectedRows.length === visibleList.length}
                   onChange={handleSelectAll}
                 />
               </th>
@@ -424,7 +460,7 @@ function QuotationList({ list, refreshData }) {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {list.map((q, i) => {
+            {visibleList.map((q, i) => {
               const uid = getUid(q)
               return (
                 <tr key={uid} className={`hover:bg-gray-50 ${selectedRows.includes(uid) ? 'bg-blue-50' : ''}`}>
@@ -453,7 +489,7 @@ function QuotationList({ list, refreshData }) {
                 </tr>
               )
             })}
-            {list.length === 0 && (
+            {visibleList.length === 0 && (
               // Comment: Update colspan to match non-checkbox columns (Index + File Name + Quotation Number + Customer + Date + Item + Grand Total = 7)
               <tr><td colSpan={7} className="p-8 text-center text-gray-500">No quotations found</td></tr>
             )}

@@ -1,4 +1,8 @@
 from rest_framework import serializers
+# Comment: File handling utilities for copying existing image paths during "Save as New"
+from django.conf import settings
+from django.core.files.base import File, ContentFile
+import os, uuid
 from django.contrib.auth.models import User
 from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, Receipt, TaxInvoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
 
@@ -308,29 +312,29 @@ class QuotationSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     items = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
     
-    # Write-only fields for backward compatibility/payload handling
-    cus_respon_attn = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    cus_respon_div = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    cus_respon_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    # CC fields (mapped into Customer.cc* columns). These are write-only to avoid schema noise in the Quotation response.
-    cus_respon_cc = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    cus_respon_cc_div = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    cus_respon_cc_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    cus_respon_cc_email = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    # Snapshot responsible persons (CSV strings) — expose for READ and WRITE so frontend can fetch edited values
+    cus_respon_attn = serializers.CharField(required=False, allow_blank=True)
+    cus_respon_div = serializers.CharField(required=False, allow_blank=True)
+    cus_respon_mobile = serializers.CharField(required=False, allow_blank=True)
+    # CC fields (mapped into Customer.cc* columns). Expose for READ and WRITE for per-quotation snapshots.
+    cus_respon_cc = serializers.CharField(required=False, allow_blank=True)
+    cus_respon_cc_div = serializers.CharField(required=False, allow_blank=True)
+    cus_respon_cc_mobile = serializers.CharField(required=False, allow_blank=True)
+    cus_respon_cc_email = serializers.CharField(required=False, allow_blank=True)
     
-    # Customer extra fields
-    customer_tax_id = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    customer_address = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    customer_email = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    customer_phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    customer_fax = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    # Snapshot customer fields — expose for READ and WRITE so the UI always fetches from the quotation row
+    customer_tax_id = serializers.CharField(required=False, allow_blank=True)
+    customer_address = serializers.CharField(required=False, allow_blank=True)
+    customer_email = serializers.CharField(required=False, allow_blank=True)
+    customer_phone = serializers.CharField(required=False, allow_blank=True)
+    customer_fax = serializers.CharField(required=False, allow_blank=True)
 
-    # EIT extra fields (legacy support, but ignored for update)
-    eit_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    eit_address = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    eit_mobile = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    eit_phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    eit_fax = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    # Snapshot EIT fields — expose for READ and WRITE for per-quotation snapshots
+    eit_name = serializers.CharField(required=False, allow_blank=True)
+    eit_address = serializers.CharField(required=False, allow_blank=True)
+    eit_mobile = serializers.CharField(required=False, allow_blank=True)
+    eit_phone = serializers.CharField(required=False, allow_blank=True)
+    eit_fax = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Quotation
@@ -358,46 +362,11 @@ class QuotationSerializer(serializers.ModelSerializer):
         customer_name = validated_data.pop('customer_name', None)
         eit_name = validated_data.pop('eit_name', None)
         
-        # Extract customer details (CSV supported: "user1,user2")
-        attn = validated_data.pop('cus_respon_attn', '')
-        div = validated_data.pop('cus_respon_div', '')
-        mobile = validated_data.pop('cus_respon_mobile', '')
-        # Extract CC details to persist into Customer (CSV supported)
-        cc = validated_data.pop('cus_respon_cc', '')
-        cc_div = validated_data.pop('cus_respon_cc_div', '')
-        cc_mobile = validated_data.pop('cus_respon_cc_mobile', '')
-        cc_email = validated_data.pop('cus_respon_cc_email', '')
-        
-        tax_id = validated_data.pop('customer_tax_id', '')
-        address = validated_data.pop('customer_address', '')
-        email = validated_data.pop('customer_email', '')
-        phone = validated_data.pop('customer_phone', '')
-        fax = validated_data.pop('customer_fax', '')
-
-        # Extract EIT details (and ignore them to prevent overwriting)
-        validated_data.pop('eit_address', '')
-        validated_data.pop('eit_mobile', '')
-        validated_data.pop('eit_phone', '')
-        validated_data.pop('eit_fax', '')
+        # Comment: Keep snapshot fields in validated_data so they are stored on the Quotation row
         
         if customer_name:
+            # Comment: Link to Customer but DO NOT mutate shared Customer fields to keep quotations independent
             customer, created = Customer.objects.get_or_create(company_name=customer_name)
-            # Update customer details if provided
-            if attn: customer.attn = attn  # CSV string
-            if div: customer.attn_division = div  # CSV string
-            if mobile: customer.attn_mobile = mobile  # CSV string
-            if cc: customer.cc = cc  # CSV string
-            if cc_div: customer.cc_division = cc_div  # CSV string
-            if cc_mobile: customer.cc_mobile = cc_mobile  # CSV string
-            if cc_email: customer.cc_email = cc_email  # CSV string
-            
-            if tax_id: customer.tax_id = tax_id
-            if address: customer.address = address
-            if email: customer.email = email
-            if phone: customer.phone = phone
-            if fax: customer.cus_fax = fax
-            
-            customer.save()
             validated_data['customer'] = customer
         
         # If eit (ID) is not provided but eit_name is, try to find it
@@ -448,25 +417,10 @@ class QuotationSerializer(serializers.ModelSerializer):
                                 items_data.append({})
                             items_data[idx]['image'] = nested['image']
 
-        # Auto-generate unique qo_code when missing or duplicate to prevent accidental overwrite of original quotation
-        from datetime import datetime
-        import re
-        year = datetime.now().year
-        code = validated_data.get('qo_code') or ''
-        if not code or Quotation.objects.filter(qo_code=code).exists():
-            pattern = re.compile(rf'^EIT QUO {year}-(\d{{4}})$')
-            existing = Quotation.objects.filter(qo_code__startswith=f'EIT QUO {year}-').values_list('qo_code', flat=True)
-            max_n = 0
-            for s in existing:
-                try:
-                    m = pattern.match(str(s or ''))
-                    if m:
-                        n = int(m.group(1))
-                        if n > max_n:
-                            max_n = n
-                except Exception:
-                    pass
-            validated_data['qo_code'] = f"EIT QUO {year}-{str(max_n + 1).zfill(4)}"
+        # Comment: Allow duplicate qo_code; enforce unique file_name instead
+        fname = validated_data.get('file_name')
+        if fname and Quotation.objects.filter(file_name=fname).exists():
+            raise serializers.ValidationError({'file_name': 'File name must be unique'})
         quotation = Quotation.objects.create(**validated_data)
         
         for item in items_data:
@@ -477,7 +431,7 @@ class QuotationSerializer(serializers.ModelSerializer):
             except:
                 qty = 1
                 total = 0
-            
+            # Comment: Create QuotationItem object first; attach image using ImageField.save for correct storage
             # Normalize fields to avoid blank rows when some keys are missing
             desc = str(item.get('description', '') or '').strip()
             spec = str(item.get('specification', '') or '').strip()
@@ -493,8 +447,8 @@ class QuotationSerializer(serializers.ModelSerializer):
                 if not spec and desc:
                     spec = desc
                 desc = ""
-            
-            QuotationItem.objects.create(
+            # Comment: Instantiate without image; attach image via ImageField.save to avoid path mismatches
+            item_obj = QuotationItem(
                 quotation=quotation,
                 quo_item=item_title,
                 quo_model=model,
@@ -502,8 +456,58 @@ class QuotationSerializer(serializers.ModelSerializer):
                 specification=spec,
                 quantity=int(qty),
                 quo_total=total,
-                image=item.get('image')  # UploadedFile handled by ImageField
             )
+            # Comment: Handle image input: Uploaded file or existing path to copy
+            img_input = item.get('image')
+            try:
+                if hasattr(img_input, 'read'):
+                    # Comment: UploadedFile provided — save via ImageField.save to ensure a physical file is written
+                    try:
+                        name_hint = getattr(img_input, 'name', '') or 'upload.png'
+                        ext = os.path.splitext(name_hint)[1] or '.png'
+                        new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                        # Ensure file pointer at start before saving
+                        try:
+                            img_input.seek(0)
+                        except Exception:
+                            pass
+                        item_obj.image.save(new_name, img_input, save=False)
+                    except Exception:
+                        pass
+                elif isinstance(img_input, str) and img_input.strip():
+                    # Comment: Copy existing media file into a new unique file for the duplicated row
+                    src = img_input.strip().replace('\\', '/')
+                    if '/media/' in src:
+                        sub = src.split('/media/', 1)[1]
+                        abs_path = os.path.join(settings.MEDIA_ROOT, sub)
+                    elif src.startswith('media/'):
+                        abs_path = os.path.join(settings.MEDIA_ROOT, src.split('media/', 1)[1])
+                    else:
+                        abs_path = os.path.join(settings.MEDIA_ROOT, src)
+                    abs_path = os.path.normpath(abs_path)
+                    if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                        # Comment: Ensure the source file has content; skip zero-byte files
+                        try:
+                            if os.path.getsize(abs_path) > 0:
+                                ext = os.path.splitext(abs_path)[1] or '.png'
+                                new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                                with open(abs_path, 'rb') as fsrc:
+                                    data = fsrc.read()
+                                    if data:
+                                        item_obj.image.save(new_name, ContentFile(data), save=False)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            item_obj.save()
+            # Comment: Final guard — if image field was set but the physical file is missing or empty, clear it to avoid broken previews
+            try:
+                if item_obj.image and hasattr(item_obj.image, 'path'):
+                    ipath = item_obj.image.path
+                    if (not os.path.exists(ipath)) or (os.path.getsize(ipath) == 0):
+                        item_obj.image.delete(save=True)
+            except Exception:
+                pass
             
         return quotation
 
@@ -512,45 +516,11 @@ class QuotationSerializer(serializers.ModelSerializer):
         customer_name = validated_data.pop('customer_name', None)
         eit_name = validated_data.pop('eit_name', None)
         
-        # Extract customer details (CSV supported)
-        attn = validated_data.pop('cus_respon_attn', '')
-        div = validated_data.pop('cus_respon_div', '')
-        mobile = validated_data.pop('cus_respon_mobile', '')
-        # Extract CC details to persist into Customer (CSV supported)
-        cc = validated_data.pop('cus_respon_cc', '')
-        cc_div = validated_data.pop('cus_respon_cc_div', '')
-        cc_mobile = validated_data.pop('cus_respon_cc_mobile', '')
-        cc_email = validated_data.pop('cus_respon_cc_email', '')
-        
-        tax_id = validated_data.pop('customer_tax_id', '')
-        address = validated_data.pop('customer_address', '')
-        email = validated_data.pop('customer_email', '')
-        phone = validated_data.pop('customer_phone', '')
-        fax = validated_data.pop('customer_fax', '')
-        
-        # Extract EIT details (and ignore them to prevent overwriting)
-        validated_data.pop('eit_address', '')
-        validated_data.pop('eit_mobile', '')
-        validated_data.pop('eit_phone', '')
-        validated_data.pop('eit_fax', '')
+        # Comment: Keep snapshot fields in validated_data so they are stored on the Quotation row
 
         if customer_name:
+            # Comment: Only re-link Customer; do NOT update shared Customer fields to avoid cross-updates
             customer, _ = Customer.objects.get_or_create(company_name=customer_name)
-            if attn: customer.attn = attn
-            if div: customer.attn_division = div
-            if mobile: customer.attn_mobile = mobile
-            if cc: customer.cc = cc
-            if cc_div: customer.cc_division = cc_div
-            if cc_mobile: customer.cc_mobile = cc_mobile
-            if cc_email: customer.cc_email = cc_email
-            
-            if tax_id: customer.tax_id = tax_id
-            if address: customer.address = address
-            if email: customer.email = email
-            if phone: customer.phone = phone
-            if fax: customer.cus_fax = fax
-            
-            customer.save()
             instance.customer = customer
 
         if not validated_data.get('eit') and eit_name:
@@ -559,6 +529,10 @@ class QuotationSerializer(serializers.ModelSerializer):
                 eit = EIT.objects.create(organization_name=eit_name)
             instance.eit = eit
             
+        # Comment: Validate file_name uniqueness on update (excluding current instance)
+        new_fname = validated_data.get('file_name')
+        if new_fname and Quotation.objects.filter(file_name=new_fname).exclude(pk=instance.pk).exists():
+            raise serializers.ValidationError({'file_name': 'File name must be unique'})
         # Update instance fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -629,7 +603,35 @@ class QuotationSerializer(serializers.ModelSerializer):
                         spec = desc
                     desc = ""
                 
-                QuotationItem.objects.create(
+                # Comment: Handle image field for update — support UploadedFile and string path copy
+                img_input = item.get('image')
+                img_file = None
+                try:
+                    if hasattr(img_input, 'read'):
+                        img_file = img_input
+                    elif isinstance(img_input, str) and img_input.strip():
+                        src = img_input.strip().replace('\\', '/')
+                        if '/media/' in src:
+                            sub = src.split('/media/', 1)[1]
+                            abs_path = os.path.join(settings.MEDIA_ROOT, sub)
+                        elif src.startswith('media/'):
+                            abs_path = os.path.join(settings.MEDIA_ROOT, src.split('media/', 1)[1])
+                        else:
+                            abs_path = os.path.join(settings.MEDIA_ROOT, src)
+                        abs_path = os.path.normpath(abs_path)
+                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                            base, ext = os.path.splitext(os.path.basename(abs_path))
+                            new_name = f"quotation_items/{base}_COPY_{uuid.uuid4().hex}{ext or '.png'}"
+                            with open(abs_path, 'rb') as fsrc:
+                                saved_path = default_storage.save(new_name, File(fsrc))
+                                abs_saved = os.path.join(settings.MEDIA_ROOT, saved_path.replace('media/', '').replace('\\', '/'))
+                                if os.path.exists(abs_saved):
+                                    img_file = File(open(abs_saved, 'rb'))
+                except Exception:
+                    img_file = None
+                
+                # Comment: Instantiate update row without image; attach image via ImageField.save
+                item_obj = QuotationItem(
                     quotation=instance,
                     quo_item=item_title,
                     quo_model=model,
@@ -637,8 +639,50 @@ class QuotationSerializer(serializers.ModelSerializer):
                     specification=spec,
                     quantity=int(qty),
                     quo_total=total,
-                    image=item.get('image')  # UploadedFile handled by ImageField
                 )
+                img_input = item.get('image')
+                try:
+                    if hasattr(img_input, 'read'):
+                        # Comment: UploadedFile — save via ImageField.save with a generated unique name
+                        try:
+                            name_hint = getattr(img_input, 'name', '') or 'upload.png'
+                            ext = os.path.splitext(name_hint)[1] or '.png'
+                            new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                            try:
+                                img_input.seek(0)
+                            except Exception:
+                                pass
+                            item_obj.image.save(new_name, img_input, save=False)
+                        except Exception:
+                            pass
+                    elif isinstance(img_input, str) and img_input.strip():
+                        src = img_input.strip().replace('\\', '/')
+                        if '/media/' in src:
+                            sub = src.split('/media/', 1)[1]
+                            abs_path = os.path.join(settings.MEDIA_ROOT, sub)
+                        elif src.startswith('media/'):
+                            abs_path = os.path.join(settings.MEDIA_ROOT, src.split('media/', 1)[1])
+                        else:
+                            abs_path = os.path.join(settings.MEDIA_ROOT, src)
+                        abs_path = os.path.normpath(abs_path)
+                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                            ext = os.path.splitext(abs_path)[1] or '.png'
+                            new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                            with open(abs_path, 'rb') as fsrc:
+                                data = fsrc.read()
+                                if data:
+                                    item_obj.image.save(new_name, ContentFile(data), save=False)
+                except Exception:
+                    pass
+                item_obj.save()
+                # Comment: Final guard on update as well — clear broken references
+                try:
+                    if item_obj.image and hasattr(item_obj.image, 'path'):
+                        ipath = item_obj.image.path
+                        if (not os.path.exists(ipath)) or (os.path.getsize(ipath) == 0):
+                            item_obj.image.delete(save=True)
+                except Exception:
+                    pass
         
         return instance
 

@@ -631,11 +631,30 @@ def generate_quotation_pdf(request):
                                 except Exception:
                                     path_candidate = None
                             if bio is not None:
+                                # Comment: Using in-memory bytes
                                 img_obj_spec = Image(bio, width=w, height=h)
                                 img_obj_spec.hAlign = 'CENTER'
-                            elif path_candidate and os.path.exists(os.path.normpath(path_candidate)):
-                                img_obj_spec = Image(os.path.normpath(path_candidate), width=w, height=h)
-                                img_obj_spec.hAlign = 'CENTER'
+                            elif path_candidate:
+                                full = os.path.normpath(path_candidate)
+                                if os.path.exists(full) and os.path.isfile(full):
+                                    try:
+                                        # Comment: Verify image bytes via Pillow before passing to reportlab
+                                        from PIL import Image as PILImage
+                                        with open(full, 'rb') as f:
+                                            data = f.read()
+                                        b = io.BytesIO(data)
+                                        try:
+                                            pil = PILImage.open(b)
+                                            pil.verify()  # Raises if corrupted/unsupported
+                                        except Exception as e_verify:
+                                            print(f"Spec image verify failed: {e_verify} ({full})")
+                                            b = None
+                                        if b is not None:
+                                            b.seek(0)
+                                            img_obj_spec = Image(b, width=w, height=h)
+                                            img_obj_spec.hAlign = 'CENTER'
+                                    except Exception as e_load:
+                                        print(f"Spec image load failed: {e_load} ({full})")
                         except Exception as e:
                             print(f"Error loading spec image from path/url: {e}")
                     # Spec row: show subnumber in ITEM, bullets in DESCRIPTION, and image across PRICE/QTY/TOTAL if present
@@ -831,8 +850,24 @@ def generate_quotation_pdf(request):
     # If it still pushes to new page, we might need to reduce margins or spacing above
     elements.append(KeepTogether(sig_table))
 
-    # Build PDF
-    doc.build(elements)
+    # Build PDF with safety fallback to avoid 500 errors
+    try:
+        doc.build(elements)
+    except Exception as e:
+        print(f"[PDF BUILD ERROR] {e}")
+        # Comment: Build a valid single-page PDF using canvas to avoid invalid minimal header-only bytes
+        try:
+            from reportlab.pdfgen import canvas
+            buffer = io.BytesIO()
+            c = canvas.Canvas(buffer, pagesize=A4)
+            c.setFont(font_name or "Helvetica", 12)
+            c.drawString(72, 800, "Quotation PDF could not be generated due to an internal error.")
+            c.drawString(72, 780, f"Error: {str(e)[:120]}")
+            c.showPage()
+            c.save()
+        except Exception as e2:
+            # Comment: Last resort minimal valid bytes if canvas fails unexpectedly
+            buffer = io.BytesIO(b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF")
     
     buffer.seek(0)
     # Comment: Use user-provided file name from details.fileName if present
@@ -862,7 +897,31 @@ def generate_quotation_pdf_with_cover(request):
         cover_only_flag = request.query_params.get('cover_only') if hasattr(request, 'query_params') else request.GET.get('cover_only')
     except Exception:
         cover_only_flag = None
-    # Resolve cover PDF path under MEDIA_ROOT
+    # Resolve cover PDF, allowing client-provided URL or base64 data first
+    cover_bytes = None
+    try:
+        incoming = request.data if hasattr(request, "data") else {}
+    except Exception:
+        incoming = {}
+    try:
+        cover_pdf_data = incoming.get("cover_pdf_data")
+        cover_pdf_url = incoming.get("cover_pdf_url")
+        if isinstance(cover_pdf_data, str) and cover_pdf_data.startswith("data:application/pdf;base64,"):
+            try:
+                cover_bytes = base64.b64decode(cover_pdf_data.split(",", 1)[1])
+            except Exception as e:
+                print(f"[COVER DATA DECODE ERROR] {e}")
+        if cover_bytes is None and isinstance(cover_pdf_url, str) and cover_pdf_url.startswith("http"):
+            try:
+                import requests
+                r = requests.get(cover_pdf_url, timeout=10)
+                if r.status_code == 200 and r.content:
+                    cover_bytes = r.content
+            except Exception as e:
+                print(f"[COVER URL FETCH ERROR] {e}")
+    except Exception as e:
+        print(f"[COVER READ ERROR] {e}")
+    # Resolve cover PDF path under MEDIA_ROOT if not provided by client
     # Support multiple historical locations and filenames for the cover PDF
     cover_candidates = [
         os.path.join(settings.MEDIA_ROOT, "template.pdf"),
@@ -882,14 +941,15 @@ def generate_quotation_pdf_with_cover(request):
         r'd:\EIT_ERT_s\eit-lasertechnik-erp-website\backend\media\cover.pdf',
     ]
     cover_path = None
-    for p in cover_candidates:
-        try:
-            norm = os.path.normpath(p)
-            if os.path.exists(norm):
-                cover_path = norm
-                break
-        except Exception:
-            continue
+    if cover_bytes is None:
+        for p in cover_candidates:
+            try:
+                norm = os.path.normpath(p)
+                if os.path.exists(norm):
+                    cover_path = norm
+                    break
+            except Exception:
+                continue
     print("MEDIA_ROOT:", settings.MEDIA_ROOT)
     print("Found cover path:", cover_path)
     # Comment: Determine desired output filename from request details.fileName
@@ -909,17 +969,34 @@ def generate_quotation_pdf_with_cover(request):
     except Exception:
         file_name_cover = "quotation_with_cover.pdf"
     if cover_only_flag:
-        if cover_path:
-            try:
+        try:
+            bytes_cover = None
+            if cover_bytes:
+                bytes_cover = cover_bytes
+            elif cover_path:
                 with open(cover_path, "rb") as f:
                     bytes_cover = f.read()
+            if bytes_cover:
                 resp = HttpResponse(bytes_cover, content_type='application/pdf')
                 resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
                 return resp
-            except Exception as e:
-                print(f"[COVER_ONLY ERROR] {e}")
-        # Fallback: if cover not found or error, return a small empty PDF response
-        return HttpResponse(b"%PDF-1.4\n%%EOF", content_type='application/pdf')
+        except Exception as e:
+            print(f"[COVER_ONLY ERROR] {e}")
+        # Comment: Fallback — serve a valid single-page PDF generated via canvas to avoid viewer errors
+        try:
+            from reportlab.pdfgen import canvas
+            buf = io.BytesIO()
+            c = canvas.Canvas(buf, pagesize=A4)
+            c.setFont(font_name or "Helvetica", 12)
+            c.drawString(72, 800, "Cover PDF not available.")
+            c.showPage()
+            c.save()
+            buf.seek(0)
+            resp = HttpResponse(buf, content_type='application/pdf')
+        except Exception as e2:
+            resp = HttpResponse(b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF", content_type='application/pdf')
+        resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
+        return resp
     # Prefer receiving base PDF via request (base64) to avoid any internal HTTP calls.
     main_bytes = None
     try:
@@ -953,13 +1030,23 @@ def generate_quotation_pdf_with_cover(request):
     print("Merge lib:", MERGE_LIB)
     print("Main bytes length:", len(main_bytes) if main_bytes else "None")
     if not main_bytes:
-        # If we cannot obtain bytes, return a simple fallback: the unmerged quotation via HTTP if available
+        # Comment: If base PDF could not be obtained, reply with a valid single-page PDF to avoid viewer errors
         try:
-            return HttpResponse(r.content, content_type='application/pdf')
-        except Exception:
-            return HttpResponse(b"%PDF-1.4\n%%EOF", content_type='application/pdf')
+            from reportlab.pdfgen import canvas
+            buf = io.BytesIO()
+            c = canvas.Canvas(buf, pagesize=A4)
+            c.setFont(font_name or "Helvetica", 12)
+            c.drawString(72, 800, "Quotation PDF not available.")
+            c.showPage()
+            c.save()
+            buf.seek(0)
+            resp = HttpResponse(buf, content_type='application/pdf')
+        except Exception as e2:
+            resp = HttpResponse(b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF", content_type='application/pdf')
+        resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
+        return resp
     # If cover file missing, return the base quotation PDF
-    if not cover_path:
+    if not cover_path and not cover_bytes:
         resp = HttpResponse(main_bytes, content_type='application/pdf')
         resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
         return resp
@@ -970,8 +1057,9 @@ def generate_quotation_pdf_with_cover(request):
         return resp
     try:
         # Prefer PdfMerger when available (handles page order cleanly)
-        with open(cover_path, "rb") as cf:
-            cover_bytes = cf.read()
+        if cover_bytes is None and cover_path:
+            with open(cover_path, "rb") as cf:
+                cover_bytes = cf.read()
         if PdfMerger:
             merger = PdfMerger()
             merger.append(io.BytesIO(cover_bytes))   # Cover first
@@ -1021,57 +1109,52 @@ def generate_quotation_pdf_with_cover(request):
             resp['Content-Length'] = str(len(merged_bytes))
             return resp
     except Exception as e:
-        # Fallback: write to temp file paths and try merging by file names
+        # Comment: Fallback — try a simpler merge route and guard when cover_path is missing
         print(f"[MERGE IN-MEMORY FAILED] {e}")
-        temp_main_path = os.path.join(settings.MEDIA_ROOT, "quotation_export_temp.pdf")
+        cover_file = None
         try:
-            # Write main PDF bytes to temp file
-            with open(temp_main_path, "wb") as f:
-                f.write(main_bytes)
-            # Fallback: use Reader/Writer
-            cover_file = open(cover_path, 'rb')
-            cover_reader = PdfReader(cover_file)
-            main_reader = PdfReader(temp_main_path)
+            # Comment: If we have no cover bytes and no cover path, return base PDF to avoid 500
+            if cover_bytes is None and not cover_path:
+                resp = HttpResponse(main_bytes, content_type='application/pdf')
+                resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
+                return resp
+            # Comment: Initialize readers using available sources
+            if cover_bytes:
+                cover_reader = PdfReader(io.BytesIO(cover_bytes))
+            else:
+                cover_file = open(cover_path, 'rb')
+                cover_reader = PdfReader(cover_file)
+            main_reader = PdfReader(io.BytesIO(main_bytes))
             writer = PdfWriter()
-            for pg in cover_reader.pages:
+            for pg in getattr(cover_reader, "pages", []):
                 writer.add_page(pg)
-            for pg in main_reader.pages:
+            for pg in getattr(main_reader, "pages", []):
                 writer.add_page(pg)
             out = io.BytesIO()
             writer.write(out)
             out.seek(0)
-            cover_file.close()
             merged_bytes = out.getvalue()
-            print(f"[MERGED BYTES LENGTH (TEMP)] {len(merged_bytes)}")
-            merged_path = os.path.join(settings.MEDIA_ROOT, "quotation_with_cover_latest.pdf")
-            try:
-                with open(merged_path, "wb") as f:
-                    f.write(merged_bytes)
-                fh = open(merged_path, "rb")
-                resp = FileResponse(fh, content_type='application/pdf')
-                resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
-                resp['Content-Length'] = str(len(merged_bytes))
-                return resp
-            except Exception as e:
-                print(f"[FILE RESPONSE FALLBACK ERROR (TEMP)] {e}")
-                resp = HttpResponse(merged_bytes, content_type='application/pdf')
-                resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
-                resp['Content-Length'] = str(len(merged_bytes))
-                return resp
+            print(f"[MERGED BYTES LENGTH (FALLBACK)] {len(merged_bytes)}")
+            resp = HttpResponse(merged_bytes, content_type='application/pdf')
+            resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
+            resp['Content-Length'] = str(len(merged_bytes))
+            return resp
+        except Exception as e2:
+            print(f"[FALLBACK MERGE ERROR] {e2}")
+            # Final fallback: return the base quotation PDF bytes
+            resp = HttpResponse(main_bytes, content_type='application/pdf')
+            resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
+            return resp
         finally:
-            # Clean up temp file if it exists
             try:
-                if os.path.exists(temp_main_path):
-                    os.remove(temp_main_path)
+                if cover_file:
+                    cover_file.close()
             except Exception:
                 pass
     except Exception as e:
         # Fallback to main PDF if merge fails
         print(f"[PDF MERGE ERROR] {e}")
-        try:
-            cover_file.close()
-        except Exception:
-            pass
+        # Comment: Ensure we do not attempt to close undefined cover_file in this scope
         # Final fallback: return the base quotation PDF bytes
         resp = HttpResponse(main_bytes, content_type='application/pdf')
         resp['Content-Disposition'] = f'attachment; filename="{file_name_cover}"'
