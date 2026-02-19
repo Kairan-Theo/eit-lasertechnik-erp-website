@@ -63,6 +63,8 @@ class Quotation(models.Model):
     customer_email = models.CharField(max_length=255, blank=True)
     customer_phone = models.CharField(max_length=255, blank=True)
     customer_fax = models.CharField(max_length=255, blank=True)
+    # Comment: Snapshot customer branch per quotation to keep copies independent from master Customer
+    customer_branch = models.CharField(max_length=255, blank=True)
     # Comment: Snapshot responsible persons (CSV strings)
     cus_respon_attn = models.CharField(max_length=1000, blank=True)
     cus_respon_div = models.CharField(max_length=1000, blank=True)
@@ -129,6 +131,8 @@ class BillingNote(models.Model):
     bn_payee_date = models.DateField(null=True, blank=True)
     bn_behalf_of = models.CharField(max_length=255, blank=True)
     bn_name_biller = models.CharField(max_length=255, blank=True)
+    # Comment: Store branch text per Billing Note row (document-specific)
+    bn_branch = models.CharField(max_length=255, blank=True)
     
     items = models.JSONField(default=list, blank=True)
 

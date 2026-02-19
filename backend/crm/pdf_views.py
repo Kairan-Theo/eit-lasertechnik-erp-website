@@ -1987,8 +1987,19 @@ def generate_invoice_pdf(request):
     left_info_elements.append(tax_table)
 
     if is_tax and not is_einstein:
-        copy_lines = ["สำเนา / Copy", "ใบกำกับภาษี/ใบส่งสินค้า", "TAX INVOICE/DELIVERY ORDER", "เอกสารออกเป็นชุด", "ไม่ใช่ใบกำกับภาษี"]
-        variants = [copy_lines, copy_lines, copy_lines, copy_lines, copy_lines]
+        # Comment: For Tax Invoice, generate 5 pages with distinct header text per page.
+        # Page 1: Tax Invoice Original
+        # Page 2–3: Tax Invoice Copy (with extra note "ไม่ใช่ใบกำกับภาษี")
+        # Page 4: Receipt Original (thai+english) with "เอกสารออกเป็นชุด" and "ไม่ใช่ใบกำกับภาษี"
+        # Page 5: Receipt Copy (thai+english) with "เอกสารออกเป็นชุด" and "ไม่ใช่ใบกำกับภาษี"
+        first_lines = ["ต้นฉบับ/ Original", "ใบกำกับภาษี/ใบส่งสินค้า", "TAX INVOICE/DELIVERY ORDER", "เอกสารออกเป็นชุด"]
+        copy_lines = ["สำเนา / Copy", "ใบกำกับภาษี/ใบส่งสินค้า", "TAX INVOICE/DELIVERY ORDER", "เอกสารออกเป็นชุด"]
+        # Comment: Append non-tax note only to 2nd and 3rd pages
+        copy_lines_with_note = copy_lines + ["ไม่ใช่ใบกำกับภาษี"]
+        # Comment: Define Receipt (Original/Copy) header lines for pages 4 and 5 respectively
+        receipt_original_lines = ["ต้นฉบับ ใบเสร็จรับเงิน", "Receipt (Original)", "เอกสารออกเป็นชุด", "ไม่ใช่ใบกำกับภาษี"]
+        receipt_copy_lines = ["สำเนา ใบเสร็จรับเงิน", "Receipt (Copy)", "เอกสารออกเป็นชุด", "ไม่ใช่ใบกำกับภาษี"]
+        variants = [first_lines, copy_lines_with_note, copy_lines_with_note, receipt_original_lines, receipt_copy_lines]
         all_elements = []
         for idx, header_lines in enumerate(variants):
             local_elements = []
