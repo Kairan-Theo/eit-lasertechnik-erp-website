@@ -388,9 +388,13 @@ export function QuotationTemplate({ data }) {
                                 <strong style={{display: 'block', marginBottom: '4px'}}>{item.item}</strong>
                                 <div style={{whiteSpace: 'pre-wrap'}}>{item.description}</div>
                             </div>
-                            {item.image && (
+                                {item.image && (
                                 <img 
-                                    src={item.image.startsWith('http') ? item.image : `${API_BASE_URL}/media/${item.image.replace(/^\/?media\/?/, '')}`} 
+                                    // Comment: Normalize backslashes and ensure /media prefix for server-hosted images
+                                    src={(item.image || "").startsWith('http')
+                                        ? item.image
+                                        : `${API_BASE_URL}/media/${String(item.image || "").replace(/\\/g, '/').replace(/^\/?media\/?/, '')}`
+                                    } 
                                     alt="Item" 
                                     className="desc-image" 
                                 />

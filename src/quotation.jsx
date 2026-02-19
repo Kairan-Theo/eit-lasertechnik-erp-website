@@ -18,6 +18,8 @@ import { DateField } from "./components/ui/date-field"
 // - Relative DB path: prefix with /media and API_BASE_URL
 const resolveImageUrl = (src) => {
   if (!src || typeof src !== "string") return null
+  // Comment: Normalize Windows backslashes to forward slashes for browser URLs
+  src = src.replace(/\\/g, "/")
   if (src.startsWith("data:image")) return src
   if (/^https?:\/\//.test(src)) return src
   let path = src
@@ -464,8 +466,10 @@ function useQuotationState() {
           })
           .then(data => {
             // Map API data to state
+            // Comment: Prefer Quotation snapshot fields if present (they capture per-quotation edits made via "Save as New"),
+            // and fall back to Customer table details when snapshot fields are missing.
             const cust = data.customer_details || {}
-            const top = {
+            const topFromCustomer = {
               company: cust.company_name || "",
               taxId: cust.tax_id || "",
               address: cust.address || "",
@@ -476,15 +480,35 @@ function useQuotationState() {
               mobile: cust.attn_mobile || "",
               email: cust.email || ""
             }
+            const topFromSnapshot = {
+              company: data.customer_name || "",
+              taxId: data.customer_tax_id || "",
+              address: data.customer_address || "",
+              telephone: data.customer_phone || "",
+              fax: data.customer_fax || "",
+              email: data.customer_email || ""
+            }
+            const top = { ...topFromCustomer, ...Object.fromEntries(Object.entries(topFromSnapshot).filter(([_, v]) => String(v || "").trim() !== "")) }
+            // Build responsibles list: prefer snapshot CSVs from quotation row; otherwise derive from Customer
             const splitCSV = (s) => String(s || "").split(',').map(t => t.trim()).filter(Boolean)
-            const attnCSV = splitCSV(cust.attn)
-            const attnDivCSV = splitCSV(cust.attn_division)
-            const attnMobileCSV = splitCSV(cust.attn_mobile)
-            const attnEmailCSV = splitCSV(cust.email)
-            const ccCSV = splitCSV(cust.cc)
-            const ccDivCSV = splitCSV(cust.cc_division)
-            const ccMobileCSV = splitCSV(cust.cc_mobile)
-            const ccEmailCSV = splitCSV(cust.cc_email)
+            const attnCSV_snap = splitCSV(data.cus_respon_attn)
+            const attnDivCSV_snap = splitCSV(data.cus_respon_div)
+            const attnMobileCSV_snap = splitCSV(data.cus_respon_mobile)
+            const attnEmailCSV_snap = splitCSV(data.customer_email) // snapshot email applied to Attn when not separate
+            const ccCSV_snap = splitCSV(data.cus_respon_cc)
+            const ccDivCSV_snap = splitCSV(data.cus_respon_cc_div)
+            const ccMobileCSV_snap = splitCSV(data.cus_respon_cc_mobile)
+            const ccEmailCSV_snap = splitCSV(data.cus_respon_cc_email)
+            const snapshotCount = Math.max(attnCSV_snap.length, attnDivCSV_snap.length, attnMobileCSV_snap.length, attnEmailCSV_snap.length, ccCSV_snap.length, ccDivCSV_snap.length, ccMobileCSV_snap.length, ccEmailCSV_snap.length)
+            const useSnapshot = snapshotCount > 0
+            const attnCSV = useSnapshot ? attnCSV_snap : splitCSV(cust.attn)
+            const attnDivCSV = useSnapshot ? attnDivCSV_snap : splitCSV(cust.attn_division)
+            const attnMobileCSV = useSnapshot ? attnMobileCSV_snap : splitCSV(cust.attn_mobile)
+            const attnEmailCSV = useSnapshot ? attnEmailCSV_snap : splitCSV(cust.email)
+            const ccCSV = useSnapshot ? ccCSV_snap : splitCSV(cust.cc)
+            const ccDivCSV = useSnapshot ? ccDivCSV_snap : splitCSV(cust.cc_division)
+            const ccMobileCSV = useSnapshot ? ccMobileCSV_snap : splitCSV(cust.cc_mobile)
+            const ccEmailCSV = useSnapshot ? ccEmailCSV_snap : splitCSV(cust.cc_email)
             const maxLen = Math.max(attnCSV.length, attnDivCSV.length, attnMobileCSV.length, attnEmailCSV.length, ccCSV.length, ccDivCSV.length, ccMobileCSV.length, ccEmailCSV.length)
             const respList = []
             for (let i = 0; i < Math.max(1, maxLen); i++) {
@@ -512,12 +536,13 @@ function useQuotationState() {
               validUntil: "",
               currency: "THB",
               deliveryTerms: "Ex-Works",
-              salesPerson: data.eit_details?.organization_name || "",
-              eit: data.eit_details?.id || null,
-              eitMobile: data.eit_details?.eit_mobile || "",
-              eitTelephone: data.eit_details?.eit_telephone || "",
-              eitFax: data.eit_details?.eit_fax || "",
-              eitAddress: data.eit_details?.address || "",
+              // Comment: Prefer EIT snapshot fields from quotation row; fallback to EIT relation details
+              salesPerson: data.eit_name || data.eit_details?.organization_name || "",
+              eit: data.eit || data.eit_details?.id || null,
+              eitMobile: data.eit_mobile || data.eit_details?.eit_mobile || "",
+              eitTelephone: data.eit_phone || data.eit_details?.eit_telephone || "",
+              eitFax: data.eit_fax || data.eit_details?.eit_fax || "",
+              eitAddress: data.eit_address || data.eit_details?.address || "",
               tradeTerms: data.trade_terms || "",
               validity: data.validity || "",
               delivery: data.delivery || "",
@@ -528,27 +553,66 @@ function useQuotationState() {
             })
             const apiItems = data.quotation_items || data.items || data.products || []
             if (apiItems.length > 0) {
-              // Build item rows and seed specification from 'specification' field; attach image from item.image
+              // Comment: Reconstruct parent item rows and attach subsequent spec-only rows as separate child boxes (1.1, 1.2, ...)
               const out = []
-              apiItems.forEach((i) => {
+              let currentParent = null
+              for (let idx = 0; idx < apiItems.length; idx++) {
+                const i = apiItems[idx]
                 const rawQty = (i.quantity !== undefined ? i.quantity : i.qty)
                 const qtyNum = (() => {
                   const n = parseFloat(String(rawQty ?? "").replace(/,/g, ""))
-                  return isNaN(n) ? 1 : n
+                  return isNaN(n) ? 0 : n
                 })()
                 const total = parseFloat(String(i.quo_total || i.total || 0).replace(/,/g, ""))
-                const baseSpec = String(i.specification || "").replace(/\r/g, "").split("\n").filter(Boolean)
-                // Build a displayable image URL from DB path/url/data
-                const imgUrl = resolveImageUrl(i.image)
-                out.push({
-                  item: i.quo_item || i.item || "",
-                  model: i.quo_model || i.model || "",
-                  description: i.quo_description || i.description || "",
-                  qty: qtyNum > 0 ? qtyNum : 1,
-                  price: qtyNum > 0 ? (total / qtyNum) : 0,
-                  specRows: baseSpec.length ? [{ lines: baseSpec, image: imgUrl, edit: false, imageWidth: 64, imageHeight: 64 }] : []
-                })
-              })
+                // Comment: Read specification text and uploaded image; handle ImageField objects or string paths
+                const baseSpecLines = String(i.specification || "")
+                  .replace(/\r/g, "")
+                  .split("\n")
+                  .map(s => s.trim())
+                  .filter(Boolean)
+                // Comment: Robust image URL resolution for Save-as-New rows:
+                // - If image is a DRF ImageField, prefer .url then .path
+                // - If it's a string path, normalize and resolve to API /media URL
+                const rawImg = (typeof i.image === 'string') ? i.image : (i.image?.url || i.image?.path || "")
+                const imgUrl = resolveImageUrl(rawImg)
+                const hasBaseFields = Boolean((i.quo_item || i.item || i.quo_model || i.model || i.quo_description || i.description))
+                const isParentRow = hasBaseFields || qtyNum > 0
+                if (isParentRow) {
+                  // Start a new parent item row
+                  const itemRow = {
+                    item: i.quo_item || i.item || "",
+                    model: i.quo_model || i.model || "",
+                    description: i.quo_description || i.description || "",
+                    qty: qtyNum > 0 ? qtyNum : 1,
+                    price: qtyNum > 0 ? (total / Math.max(qtyNum, 1)) : parseFloat(String(i.price || 0).replace(/,/g, "")) || 0,
+                    specRows: []
+                  }
+                  // Comment: Attach specification text and/or image to child spec rows for consistent UI rendering
+                  if (baseSpecLines.length || imgUrl) {
+                    itemRow.specRows.push({ lines: baseSpecLines, image: imgUrl, edit: false, imageWidth: 64, imageHeight: 64 })
+                  }
+                  // Comment: Also map the first spec image to description preview for the template (optional)
+                  if (imgUrl) itemRow.image = imgUrl
+                  out.push(itemRow)
+                  currentParent = itemRow
+                } else {
+                  // Comment: Append as a separate specification child row.
+                  // If API returns spec-only rows before any parent, create a stub parent to avoid dropping the spec/image.
+                  if (!currentParent) {
+                    const stub = {
+                      item: "",
+                      model: "",
+                      description: "",
+                      qty: 1,
+                      price: 0,
+                      specRows: []
+                    }
+                    out.push(stub)
+                    currentParent = stub
+                  }
+                  currentParent.specRows.push({ lines: baseSpecLines, image: imgUrl, edit: false, imageWidth: 64, imageHeight: 64 })
+                }
+              }
               setItems(out)
             }
           })
@@ -628,19 +692,30 @@ function QuotationPage() {
 
   const handlePrintPdf = async () => {
     try {
+      // Generate base quotation PDF (without cover). We will open Print Preview first, then download.
+      // Comment: Normalize image paths for backend (always send media-relative, e.g., quotation_items/uuid.png)
+      const toBackendMediaPath = (src) => {
+        const s = String(src || "")
+        const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+        if (s.startsWith(api) && s.includes("/media/")) {
+          return s.split("/media/")[1]
+        }
+        if (s.includes("/media/")) return s.split("/media/")[1]
+        if (s.startsWith("media/")) return s.slice("media/".length)
+        return s
+      }
+      // Comment: Build payload with normalized image paths
       const payload = {
         details: q.details,
         customer: q.customer,
         items: q.items.map(i => ({
           ...i,
-          // Send numeric values for calculations in PDF
           qty: parseNumber(i.qty),
           price: parseNumber(i.price),
-          // Include specification rows for PDF (supports multiple spec rows)
           spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
             lines: r.lines || [],
             image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null,
-            image: (typeof r.image === 'string') ? r.image : null,
+            image: (typeof r.image === 'string') ? toBackendMediaPath(r.image) : null,
             image_width: r.imageWidth || 64,
             image_height: r.imageHeight || 64
           })) : [],
@@ -650,34 +725,111 @@ function QuotationPage() {
         })),
         totals: { total: q.total }
       }
-      // Generate base quotation PDF (without cover). We will open Print Preview first, then download.
       const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-      if (!response.ok) throw new Error('Failed to generate PDF')
+      // Comment: Read blob even when status is not OK; backend may still respond with a valid PDF fallback
       const blob = await response.blob()
+      const ct = response.headers.get('Content-Type') || ''
+      if (!response.ok && !ct.includes('pdf')) {
+        // Comment: Non-PDF error response; trigger fallback path below
+        throw new Error('Failed to generate PDF')
+      }
+      // Comment: Validate blob data to avoid opening broken viewer tabs
+      const buf = await blob.arrayBuffer()
+      const bytes = new Uint8Array(buf)
+      const header = String.fromCharCode(...bytes.slice(0, 4))
+      if (!header.includes('%PDF') || blob.size < 100) {
+        // Comment: Re-generate PDF without any images to bypass broken image references
+        const payloadNoImages = {
+          details: q.details,
+          customer: q.customer,
+          items: q.items.map(i => ({
+            ...i,
+            qty: parseNumber(i.qty),
+            price: parseNumber(i.price),
+            spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
+              lines: r.lines || [],
+              image_data: null,
+              image: null,
+              image_width: r.imageWidth || 64,
+              image_height: r.imageHeight || 64
+            })) : [],
+            spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
+            spec_image_data: null
+          })),
+          totals: { total: q.total }
+        }
+        const resp2 = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadNoImages)
+        })
+        const blob2 = await resp2.blob()
+        const buf2 = await blob2.arrayBuffer()
+        const bytes2 = new Uint8Array(buf2)
+        const header2 = String.fromCharCode(...bytes2.slice(0, 4))
+        if (!resp2.ok || !header2.includes('%PDF') || blob2.size < 100) {
+          throw new Error('Base PDF invalid after image removal')
+        }
+        // Comment: Use the second PDF blob if valid
+        const url2 = window.URL.createObjectURL(blob2)
+        const win2 = window.open(url2, '_blank')
+        if (!win2) {
+          const iframe2 = document.createElement('iframe')
+          iframe2.style.display = 'none'
+          iframe2.src = url2
+          document.body.appendChild(iframe2)
+          setTimeout(() => {
+            iframe2.contentWindow.focus()
+            iframe2.contentWindow.print()
+          }, 500)
+          setTimeout(() => {
+            document.body.removeChild(iframe2)
+            window.URL.revokeObjectURL(url2)
+          }, 60000)
+        } else {
+          setTimeout(() => window.URL.revokeObjectURL(url2), 60000)
+        }
+        return
+      }
+      // Comment: Prefer opening a new tab for reliability; fall back to hidden iframe print if blocked
       const url = window.URL.createObjectURL(blob)
-      
-      const iframe = document.createElement('iframe')
-      iframe.style.display = 'none'
-      iframe.src = url
-      document.body.appendChild(iframe)
-      
-      setTimeout(() => {
-        iframe.contentWindow.focus()
-        iframe.contentWindow.print()
-      }, 500)
-
-      setTimeout(() => {
-        document.body.removeChild(iframe)
-        window.URL.revokeObjectURL(url)
-      }, 60000)
+      const win = window.open(url, '_blank')
+      if (!win) {
+        // Comment: Popup blocked; create a hidden iframe and call print()
+        const iframe = document.createElement('iframe')
+        iframe.style.display = 'none'
+        iframe.src = url
+        document.body.appendChild(iframe)
+        setTimeout(() => {
+          iframe.contentWindow.focus()
+          iframe.contentWindow.print()
+        }, 500)
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          window.URL.revokeObjectURL(url)
+        }, 60000)
+      } else {
+        // Comment: New tab opened successfully; schedule object URL cleanup
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+      }
     } catch (error) {
       // Fallback to legacy endpoint without cover if merge fails
       console.error("Error generating PDF with cover:", error)
       try {
+        const toBackendMediaPath = (src) => {
+          const s = String(src || "")
+          const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+          if (s.startsWith(api) && s.includes("/media/")) {
+            return s.split("/media/")[1]
+          }
+          if (s.includes("/media/")) return s.split("/media/")[1]
+          if (s.startsWith("media/")) return s.slice("media/".length)
+          return s
+        }
         const payload = {
           details: q.details,
           customer: q.customer,
@@ -685,19 +837,23 @@ function QuotationPage() {
             ...i,
             qty: parseNumber(i.qty),
             price: parseNumber(i.price),
-            spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+              spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null, image: (typeof r.image === 'string') ? toBackendMediaPath(r.image) : null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
             spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
             spec_image_data: i.specImage || null
           })),
           totals: { total: q.total }
         }
-        const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
+      const response = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         })
-        if (!response.ok) throw new Error('Failed to generate PDF')
-        const blob = await response.blob()
+      // Comment: Read blob even on non-OK; backend may return a minimal PDF fallback
+      const blob = await response.blob()
+      if (!response.ok) {
+        const ct = response.headers.get('Content-Type') || ''
+        if (!ct.includes('pdf')) throw new Error('Failed to generate PDF')
+      }
         const url = window.URL.createObjectURL(blob)
         const iframe = document.createElement('iframe')
         iframe.style.display = 'none'
@@ -722,6 +878,17 @@ function QuotationPage() {
   const handlePrintPdfWithCover = async () => {
     try {
       // Step 1: Generate base quotation PDF first (ensures backend doesn't call itself internally)
+      const toBackendMediaPath = (src) => {
+        const s = String(src || "")
+        const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+        // Extract path after /media/ if present
+        if (s.startsWith(api) && s.includes("/media/")) {
+          return s.split("/media/")[1]
+        }
+        if (s.includes("/media/")) return s.split("/media/")[1]
+        if (s.startsWith("media/")) return s.slice("media/".length)
+        return s
+      }
       const basePayload = {
         details: q.details,
         customer: q.customer,
@@ -732,7 +899,7 @@ function QuotationPage() {
           spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
             lines: r.lines || [],
             image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null,
-            image: (typeof r.image === 'string') ? r.image : null,
+            image: (typeof r.image === 'string') ? toBackendMediaPath(r.image) : null,
             image_width: r.imageWidth || 64,
             image_height: r.imageHeight || 64
           })) : [],
@@ -758,24 +925,44 @@ function QuotationPage() {
       const mergeRes = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf-with-cover/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base_pdf: `data:application/pdf;base64,${base64Pdf}` })
+        // Comment: Include details so backend can set output filename from details.fileName
+        // Provide cover_pdf_url for robust cover resolution even if local path search fails
+        body: JSON.stringify({ base_pdf: `data:application/pdf;base64,${base64Pdf}`, details: q.details, cover_pdf_url: `${API_BASE_URL}/media/cover.pdf` })
       })
-      if (!mergeRes.ok) throw new Error('Failed to merge cover with quotation')
+      // Comment: Even if status is not OK, try to read the blob; backend may return a minimal PDF fallback.
       const blob = await mergeRes.blob()
+      if (!mergeRes.ok) {
+        // Comment: If content-type is not PDF, fallback to plain quotation download.
+        const ct = mergeRes.headers.get('Content-Type') || ''
+        if (!ct.includes('pdf')) throw new Error('Failed to merge cover with quotation')
+      }
+      // Comment: Validate blob content quickly: check size and leading '%PDF' magic
+      const arr = await blob.arrayBuffer()
+      const bytes2 = new Uint8Array(arr)
+      const header = String.fromCharCode(...bytes2.slice(0, 4))
+      if (!header.includes('%PDF') || blob.size < 100) {
+        // Comment: Invalid or tiny PDF; fall back to base download (no cover)
+        throw new Error('Merged PDF invalid')
+      }
+      // Comment: Prefer opening a new tab for reliability; fall back to hidden iframe if blocked
       const url = window.URL.createObjectURL(blob)
-      // Open Print Preview using hidden iframe so user sees preview first
-      const iframe = document.createElement('iframe')
-      iframe.style.display = 'none'
-      iframe.src = url
-      document.body.appendChild(iframe)
-      setTimeout(() => {
-        iframe.contentWindow.focus()
-        iframe.contentWindow.print()
-      }, 500)
-      setTimeout(() => {
-        document.body.removeChild(iframe)
-        window.URL.revokeObjectURL(url)
-      }, 60000)
+      const win = window.open(url, '_blank')
+      if (!win) {
+        const iframe = document.createElement('iframe')
+        iframe.style.display = 'none'
+        iframe.src = url
+        document.body.appendChild(iframe)
+        setTimeout(() => {
+          iframe.contentWindow.focus()
+          iframe.contentWindow.print()
+        }, 500)
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          window.URL.revokeObjectURL(url)
+        }, 60000)
+      } else {
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+      }
     } catch (error) {
       // Fallback to standard download if anything fails (network, backend merge, etc.)
       console.error("Error generating PDF with cover:", error)
@@ -788,6 +975,16 @@ function QuotationPage() {
   const handlePreviewPdfWithCover = async () => {
     try {
       // Generate base PDF first
+      const toBackendMediaPath = (src) => {
+        const s = String(src || "")
+        const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+        if (s.startsWith(api) && s.includes("/media/")) {
+          return s.split("/media/")[1]
+        }
+        if (s.includes("/media/")) return s.split("/media/")[1]
+        if (s.startsWith("media/")) return s.slice("media/".length)
+        return s
+      }
       const basePayload = {
         details: q.details,
         customer: q.customer,
@@ -798,7 +995,7 @@ function QuotationPage() {
           spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
             lines: r.lines || [],
             image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null,
-            image: (typeof r.image === 'string') ? r.image : null,
+            image: (typeof r.image === 'string') ? toBackendMediaPath(r.image) : null,
             image_width: r.imageWidth || 64,
             image_height: r.imageHeight || 64
           })) : [],
@@ -824,10 +1021,22 @@ function QuotationPage() {
       const mergeRes = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf-with-cover/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base_pdf: `data:application/pdf;base64,${base64Pdf}` })
+        // Comment: Include details for filename selection on backend and cover URL fallback
+        body: JSON.stringify({ base_pdf: `data:application/pdf;base64,${base64Pdf}`, details: q.details, cover_pdf_url: `${API_BASE_URL}/media/cover.pdf` })
       })
-      if (!mergeRes.ok) throw new Error('Failed to merge cover with quotation')
+      // Comment: Attempt to preview even if status not OK (backend may respond with fallback PDF).
       const blob = await mergeRes.blob()
+      if (!mergeRes.ok) {
+        const ct = mergeRes.headers.get('Content-Type') || ''
+        if (!ct.includes('pdf')) throw new Error('Failed to merge cover with quotation')
+      }
+      // Comment: Validate blob header and size to avoid "Failed to load PDF" viewer error
+      const arr = await blob.arrayBuffer()
+      const bytes2 = new Uint8Array(arr)
+      const header = String.fromCharCode(...bytes2.slice(0, 4))
+      if (!header.includes('%PDF') || blob.size < 100) {
+        throw new Error('Merged PDF invalid')
+      }
       const url = window.URL.createObjectURL(blob)
       // Open in new tab to use Chrome's PDF viewer and print UI
       const win = window.open(url, '_blank')
@@ -852,6 +1061,17 @@ function QuotationPage() {
   const handlePrintPreviewPdf = async () => {
     try {
       // Build the payload identical to the download path so content matches
+      // Comment: Normalize image paths for backend (always media-relative)
+      const toBackendMediaPath = (src) => {
+        const s = String(src || "")
+        const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+        if (s.startsWith(api) && s.includes("/media/")) {
+          return s.split("/media/")[1]
+        }
+        if (s.includes("/media/")) return s.split("/media/")[1]
+        if (s.startsWith("media/")) return s.slice("media/".length)
+        return s
+      }
       const payload = {
         details: q.details,
         customer: q.customer,
@@ -862,7 +1082,7 @@ function QuotationPage() {
           spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
             lines: r.lines || [],
             image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null,
-            image: (typeof r.image === 'string') ? r.image : null,
+            image: (typeof r.image === 'string') ? toBackendMediaPath(r.image) : null,
             image_width: r.imageWidth || 64,
             image_height: r.imageHeight || 64
           })) : [],
@@ -876,9 +1096,52 @@ function QuotationPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-      if (!response.ok) throw new Error('Failed to generate PDF')
+      // Comment: Accept non-OK if backend returns a PDF fallback
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
+      const ct = response.headers.get('Content-Type') || ''
+      if (!response.ok && !ct.includes('pdf')) {
+        throw new Error('Failed to generate PDF')
+      }
+      // Comment: Validate blob; if invalid, retry without any images
+      const buf = await blob.arrayBuffer()
+      const bytes = new Uint8Array(buf)
+      const header = String.fromCharCode(...bytes.slice(0, 4))
+      let finalBlob = blob
+      if (!header.includes('%PDF') || blob.size < 100) {
+        const payloadNoImages = {
+          details: q.details,
+          customer: q.customer,
+          items: q.items.map(i => ({
+            ...i,
+            qty: parseNumber(i.qty),
+            price: parseNumber(i.price),
+            spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
+              lines: r.lines || [],
+              image_data: null,
+              image: null,
+              image_width: r.imageWidth || 64,
+              image_height: r.imageHeight || 64
+            })) : [],
+            spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
+            spec_image_data: null
+          })),
+          totals: { total: q.total }
+        }
+        const resp2 = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadNoImages)
+        })
+        const blob2 = await resp2.blob()
+        const buf2 = await blob2.arrayBuffer()
+        const bytes2 = new Uint8Array(buf2)
+        const header2 = String.fromCharCode(...bytes2.slice(0, 4))
+        if (!resp2.ok || !header2.includes('%PDF') || blob2.size < 100) {
+          throw new Error('Failed to generate valid PDF for preview')
+        }
+        finalBlob = blob2
+      }
+      const url = window.URL.createObjectURL(finalBlob)
       // Use a hidden iframe and call print() to open the Print Preview dialog
       const iframe = document.createElement('iframe')
       iframe.style.display = 'none'
@@ -905,6 +1168,16 @@ function QuotationPage() {
   const handlePrintPreviewPdfWithCover = async () => {
     try {
       // Step 1: Generate base quotation PDF first
+      const toBackendMediaPath = (src) => {
+        const s = String(src || "")
+        const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+        if (s.startsWith(api) && s.includes("/media/")) {
+          return s.split("/media/")[1]
+        }
+        if (s.includes("/media/")) return s.split("/media/")[1]
+        if (s.startsWith("media/")) return s.slice("media/".length)
+        return s
+      }
       const basePayload = {
         details: q.details,
         customer: q.customer,
@@ -912,7 +1185,13 @@ function QuotationPage() {
           ...i,
           qty: parseNumber(i.qty),
           price: parseNumber(i.price),
-          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({ lines: r.lines || [], image_data: r.image || null, image_width: r.imageWidth || 64, image_height: r.imageHeight || 64 })) : [],
+          spec_rows: Array.isArray(i.specRows) ? i.specRows.map(r => ({
+            lines: r.lines || [],
+            image_data: (typeof r.image === 'string' && r.image.startsWith('data:image')) ? r.image : null,
+            image: (typeof r.image === 'string') ? toBackendMediaPath(r.image) : null,
+            image_width: r.imageWidth || 64,
+            image_height: r.imageHeight || 64
+          })) : [],
           spec_lines: Array.isArray(i.specLines) ? i.specLines : [],
           spec_image_data: i.specImage || null
         })),
@@ -935,10 +1214,20 @@ function QuotationPage() {
       const mergeRes = await fetch(`${API_BASE_URL}/api/generate-quotation-pdf-with-cover/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base_pdf: `data:application/pdf;base64,${base64Pdf}` })
+        body: JSON.stringify({ base_pdf: `data:application/pdf;base64,${base64Pdf}`, details: q.details, cover_pdf_url: `${API_BASE_URL}/media/cover.pdf` })
       })
-      if (!mergeRes.ok) throw new Error('Failed to merge cover with quotation')
+      // Comment: Accept non-OK if backend returns a PDF fallback; validate blob
       const blob = await mergeRes.blob()
+      const ct = mergeRes.headers.get('Content-Type') || ''
+      if (!mergeRes.ok && !ct.includes('pdf')) throw new Error('Failed to merge cover with quotation')
+      const arr = await blob.arrayBuffer()
+      const bytes2 = new Uint8Array(arr)
+      const header = String.fromCharCode(...bytes2.slice(0, 4))
+      if (!header.includes('%PDF') || blob.size < 100) {
+        // Fallback: show base print preview (without cover)
+        await handlePrintPreviewPdf()
+        return
+      }
       const url = window.URL.createObjectURL(blob)
       // Hidden iframe + print() opens the browser Print Preview dialog
       const iframe = document.createElement('iframe')
@@ -1475,7 +1764,8 @@ function QuotationPage() {
                                 {sr.image && (
                                   <>
                                     <img
-                                      src={sr.image}
+                                      // Comment: Resolve URL to support data URLs, HTTP URLs, and /media paths
+                                      src={resolveImageUrl(sr.image) || sr.image}
                                       alt="Specification"
                                       style={{ width: `${sr.imageWidth || 64}px`, height: `${sr.imageHeight || 64}px` }}
                                       className="object-cover rounded border border-gray-300 cursor-pointer"
@@ -1657,13 +1947,53 @@ function QuotationPage() {
                               return null
                             }
                           }
+                          // Comment: Fetch remote /media or HTTP image URLs and wrap as a File for upload (Save Changes)
+                          const fetchUrlToFile2 = async (src, nameHint) => {
+                            try {
+                              const url = resolveImageUrl(src) || src
+                              if (!/^https?:\/\//.test(url)) return null
+                              const resp = await fetch(url, { mode: "cors" })
+                              if (!resp.ok) return null
+                              const blob = await resp.blob()
+                              const ct = blob.type || "image/png"
+                              const ext = ct.includes("jpeg") ? "jpg" : (ct.split("/")[1] || "png")
+                              const fname = (nameHint || "spec_image") + "." + ext
+                              return new File([blob], fname, { type: ct })
+                            } catch {
+                              return null
+                            }
+                          }
+                          // Comment: Fetch remote /media or HTTP image URLs and wrap as a File for upload
+                          const fetchUrlToFile = async (src, nameHint) => {
+                            try {
+                              const url = resolveImageUrl(src) || src
+                              // Only fetch http(s) or same-origin /media resources
+                              if (!/^https?:\/\//.test(url)) return null
+                              const resp = await fetch(url, { mode: "cors" })
+                              if (!resp.ok) return null
+                              const blob = await resp.blob()
+                              const ct = blob.type || "image/png"
+                              const ext = ct.includes("jpeg") ? "jpg" : (ct.split("/")[1] || "png")
+                              const fname = (nameHint || "spec_image") + "." + ext
+                              return new File([blob], fname, { type: ct })
+                            } catch {
+                              return null
+                            }
+                          }
 
                           // Prepare multipart form data for nested items + image files
                           const fd = new FormData()
                           // Top-level fields
                           fd.append("qo_code", qo_code)
-                          // Comment: persist file_name to Quotation.file_name column
-                          fd.append("file_name", q.details.fileName || "quotation.pdf")
+                          // Comment: Ensure new copy has a unique file name; append COPY+timestamp
+                          {
+                            const baseFile = String(q.details.fileName || "quotation.pdf")
+                            const parts = baseFile.split(".")
+                            const ext = parts.length > 1 ? parts.pop() : "pdf"
+                            const stem = parts.join(".") || "quotation"
+                            const uniqueFile = `${stem}-COPY-${Date.now()}.${ext}`
+                            fd.append("file_name", uniqueFile)
+                          }
                           fd.append("created_date", q.details.date || "")
                           fd.append("customer_name", q.customer.company || "Unknown")
                           fd.append("customer_tax_id", q.customer.taxId || "")
@@ -1697,38 +2027,74 @@ function QuotationPage() {
                           // Comment: Storing specs as separate rows ensures the UI can reconstruct specRows after reload.
                           let idxNew = 0
                           const jsonItemsForFallback = []
-                          q.items.forEach((item) => {
+                          for (const item of q.items) {
                             // Main item
                             fd.append(`items[${idxNew}][item]`, item.item || "")
                             fd.append(`items[${idxNew}][model]`, item.model || "")
                             fd.append(`items[${idxNew}][description]`, item.description || "")
-                            // Persist combined specification text on the main item for reporting
-                            const specText = (Array.isArray(item.specRows) ? item.specRows : [])
-                              .map(sr => Array.isArray(sr.lines) ? sr.lines.join("\\n") : "")
-                              .filter(Boolean)
-                              .join("\\n")
-                            fd.append(`items[${idxNew}][specification]`, specText)
+                            // Comment: Store only the first spec row on the parent if present; others become separate rows
+                            const specRowsArr = Array.isArray(item.specRows) ? item.specRows : []
+                            const firstSpec = specRowsArr[0]
+                            const firstSpecText = firstSpec && Array.isArray(firstSpec.lines) ? firstSpec.lines.join("\\n") : ""
+                            fd.append(`items[${idxNew}][specification]`, firstSpecText)
                             fd.append(`items[${idxNew}][qty]`, String(item.qty || 1))
                             fd.append(`items[${idxNew}][price]`, String(item.price || 0))
                             // Attach first specification image to the base item (if any)
-                            const firstImageRow = (Array.isArray(item.specRows) ? item.specRows : []).find(sr => sr.image)
+                            const firstImageRow = firstSpec && firstSpec.image ? firstSpec : null
                             if (firstImageRow && firstImageRow.image) {
                               const blob = dataUrlToBlob(firstImageRow.image)
                               if (blob) {
                                 const file = new File([blob], `spec_${idxNew}.png`, { type: blob.type || "image/png" })
                                 fd.append(`items[${idxNew}][image]`, file)
+                              } else if (typeof firstImageRow.image === "string") {
+                                // Comment: If spec image is a server URL, fetch and attach to persist physical file
+                                const fileFromUrl = await fetchUrlToFile(firstImageRow.image, `spec_${idxNew}`)
+                                if (fileFromUrl) {
+                                  fd.append(`items[${idxNew}][image]`, fileFromUrl)
+                                }
                               }
                             }
                             jsonItemsForFallback.push({
                               item: item.item || "",
                               model: item.model || "",
                               description: item.description || "",
-                              specification: specText,
+                              specification: firstSpecText,
                               qty: String(item.qty || 1),
                               price: String(item.price || 0)
                             })
                             idxNew++
-                          })
+                            // Comment: Persist remaining specification rows as separate items (qty=0, no item/model)
+                            for (let s = 1; s < specRowsArr.length; s++) {
+                              const sr = specRowsArr[s]
+                              const text = Array.isArray(sr.lines) ? sr.lines.join("\\n") : ""
+                              fd.append(`items[${idxNew}][specification]`, text)
+                              fd.append(`items[${idxNew}][qty]`, "0")
+                              fd.append(`items[${idxNew}][price]`, "0")
+                              // Upload image if present
+                              if (sr.image) {
+                                const blob2 = dataUrlToBlob(sr.image)
+                                if (blob2) {
+                                  const file2 = new File([blob2], `spec_${idxNew}.png`, { type: blob2.type || "image/png" })
+                                  fd.append(`items[${idxNew}][image]`, file2)
+                                } else if (typeof sr.image === "string") {
+                                  // Comment: Fetch remote image to ensure physical copy is saved for the new row
+                                  const fileFromUrl2 = await fetchUrlToFile(sr.image, `spec_${idxNew}`)
+                                  if (fileFromUrl2) {
+                                    fd.append(`items[${idxNew}][image]`, fileFromUrl2)
+                                  }
+                                }
+                              }
+                              jsonItemsForFallback.push({
+                                item: "",
+                                model: "",
+                                description: "",
+                                specification: text,
+                                qty: "0",
+                                price: "0"
+                              })
+                              idxNew++
+                            }
+                          }
                           // Add JSON fallback to ensure backend always receives items list
                           fd.append("items", JSON.stringify(jsonItemsForFallback))
 
@@ -1825,38 +2191,73 @@ function QuotationPage() {
                           // Flatten items and their spec rows into sequential index entries
                           let idx = 0
                           const jsonItemsForFallback2 = []
-                          q.items.forEach((item) => {
+                          for (const item of q.items) {
                             // Main item
                             fd.append(`items[${idx}][item]`, item.item || "")
                             fd.append(`items[${idx}][model]`, item.model || "")
                             fd.append(`items[${idx}][description]`, item.description || "")
                             // Persist combined specification text for the main item (reporting)
-                            const specTextMain = (Array.isArray(item.specRows) ? item.specRows : [])
-                              .map(sr => Array.isArray(sr.lines) ? sr.lines.join("\\n") : "")
-                              .filter(Boolean)
-                              .join("\\n")
-                            fd.append(`items[${idx}][specification]`, specTextMain)
+                            const specRowsMain = Array.isArray(item.specRows) ? item.specRows : []
+                            const firstSpecMain = specRowsMain[0]
+                            const firstTextMain = firstSpecMain && Array.isArray(firstSpecMain.lines) ? firstSpecMain.lines.join("\\n") : ""
+                            fd.append(`items[${idx}][specification]`, firstTextMain)
                             fd.append(`items[${idx}][qty]`, String(item.qty || 1))
                             fd.append(`items[${idx}][price]`, String(item.price || 0))
                             // Attach first specification image to the base item (if any)
-                            const firstImageRow2 = (Array.isArray(item.specRows) ? item.specRows : []).find(sr => sr.image)
+                            const firstImageRow2 = firstSpecMain && firstSpecMain.image ? firstSpecMain : null
                             if (firstImageRow2 && firstImageRow2.image) {
                               const blob = dataUrlToBlob(firstImageRow2.image)
                               if (blob) {
                                 const file = new File([blob], `spec_${idx}.png`, { type: blob.type || "image/png" })
                                 fd.append(`items[${idx}][image]`, file)
+                              } else if (typeof firstImageRow2.image === "string") {
+                                // Comment: Fetch server image URL so update persists a physical file
+                                const fileFromUrl = await fetchUrlToFile2(firstImageRow2.image, `spec_${idx}`)
+                                if (fileFromUrl) {
+                                  fd.append(`items[${idx}][image]`, fileFromUrl)
+                                }
                               }
                             }
                             jsonItemsForFallback2.push({
                               item: item.item || "",
                               model: item.model || "",
                               description: item.description || "",
-                              specification: specTextMain,
+                              specification: firstTextMain,
                               qty: String(item.qty || 1),
                               price: String(item.price || 0)
                             })
                             idx++
-                          })
+                            // Comment: Persist remaining spec rows as separate items (qty=0)
+                            for (let s = 1; s < specRowsMain.length; s++) {
+                              const sr = specRowsMain[s]
+                              const text = Array.isArray(sr.lines) ? sr.lines.join("\\n") : ""
+                              fd.append(`items[${idx}][specification]`, text)
+                              fd.append(`items[${idx}][qty]`, "0")
+                              fd.append(`items[${idx}][price]`, "0")
+                              if (sr.image) {
+                                const blob3 = dataUrlToBlob(sr.image)
+                                if (blob3) {
+                                  const file3 = new File([blob3], `spec_${idx}.png`, { type: blob3.type || "image/png" })
+                                  fd.append(`items[${idx}][image]`, file3)
+                                } else if (typeof sr.image === "string") {
+                                  // Comment: Fetch server image URL for remaining spec rows too
+                                  const fileFromUrl3 = await fetchUrlToFile2(sr.image, `spec_${idx}`)
+                                  if (fileFromUrl3) {
+                                    fd.append(`items[${idx}][image]`, fileFromUrl3)
+                                  }
+                                }
+                              }
+                              jsonItemsForFallback2.push({
+                                item: "",
+                                model: "",
+                                description: "",
+                                specification: text,
+                                qty: "0",
+                                price: "0"
+                              })
+                              idx++
+                            }
+                          }
 
                           // Choose URL/method
                           let url = `${API_BASE_URL}/api/quotations/`
@@ -1896,7 +2297,7 @@ function QuotationPage() {
                     className="px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] whitespace-nowrap text-center"
                     onClick={() => {
                       setOpenCreateConfirm(false)
-                      handlePrintPdf()
+                  handlePrintPreviewPdf()
                     }}
                   >
                     Download Form
@@ -1905,7 +2306,7 @@ function QuotationPage() {
                     className="px-4 py-2 rounded-md text-[#2D4485] underline underline-offset-2 hover:text-[#3D56A6] min-w-[220px] whitespace-nowrap text-center"
                     onClick={() => {
                       setOpenCreateConfirm(false)
-                      handlePrintPdfWithCover()
+                  handlePrintPreviewPdfWithCover()
                     }}
                   >
                     Download Form with cover photo
