@@ -10,6 +10,12 @@ from django.utils import timezone
 from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, Receipt, TaxInvoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
 from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, ReceiptSerializer, TaxInvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer, PDMachineSerializer, PDSystemSerializer, PDWireSerializer, PDSparepartSerializer, PDServiceSerializer, PDSystemChildproductSerializer, PMProjectSerializer, PMTaskSerializer
 import json
+import os
+import uuid
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+import mimetypes
+from decimal import Decimal
 
 class ProjectManagementViewSet(viewsets.ModelViewSet):
     queryset = ProjectManagement.objects.all().order_by('-created_at')
@@ -311,6 +317,160 @@ class QuotationViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     # Enable multipart/form-data for image upload and nested item fields from FormData
     parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    @action(detail=True, methods=['post'], url_path='duplicate')
+    def duplicate(self, request, pk=None):
+        orig = self.get_object()
+        base_name = (orig.file_name or "quotation").rsplit('.', 1)[0]
+        ext = ""
+        if orig.file_name and '.' in orig.file_name:
+            ext = '.' + orig.file_name.rsplit('.', 1)[1]
+        new_file_name = f"{base_name}_COPY_{uuid.uuid4().hex[:8]}{ext or '.pdf'}"
+        new_q = Quotation(
+            qo_code=orig.qo_code,
+            customer=orig.customer,
+            eit=orig.eit,
+            created_date=timezone.localdate(),
+            file_name=new_file_name,
+            customer_tax_id=orig.customer_tax_id,
+            customer_address=orig.customer_address,
+            customer_email=orig.customer_email,
+            customer_phone=orig.customer_phone,
+            customer_fax=orig.customer_fax,
+            cus_respon_attn=orig.cus_respon_attn,
+            cus_respon_div=orig.cus_respon_div,
+            cus_respon_mobile=orig.cus_respon_mobile,
+            cus_respon_cc=orig.cus_respon_cc,
+            cus_respon_cc_div=orig.cus_respon_cc_div,
+            cus_respon_cc_mobile=orig.cus_respon_cc_mobile,
+            cus_respon_cc_email=orig.cus_respon_cc_email,
+        )
+        new_q.trade_terms = getattr(orig, 'trade_terms', '')
+        new_q.validity = getattr(orig, 'validity', '')
+        new_q.delivery = getattr(orig, 'delivery', '')
+        new_q.payment_terms = getattr(orig, 'payment_terms', '')
+        new_q.shipment_location = getattr(orig, 'shipment_location', '')
+        new_q.invoice_date = getattr(orig, 'invoice_date', None)
+        new_q.remark = getattr(orig, 'remark', '')
+        new_q.save()
+
+        # Comment: Copy quotation items in original order; collect new items for optional overrides
+        new_items = []
+        # Comment: Preserve original creation order so index-based overrides from the UI align correctly
+        for qi in orig.quotation_items.all().order_by('id'):
+            new_item = qi.__class__(
+                quotation=new_q,
+                quo_item=qi.quo_item,
+                quo_model=qi.quo_model,
+                quo_description=qi.quo_description,
+                specification=qi.specification,
+                quantity=qi.quantity,
+                quo_total=qi.quo_total,
+            )
+            try:
+                if qi.image and hasattr(qi.image, 'path') and os.path.exists(qi.image.path):
+                    src_path = qi.image.path
+                    if os.path.getsize(src_path) > 0:
+                        ext_i = os.path.splitext(src_path)[1] or '.png'
+                        new_name = f"quotation_items/{uuid.uuid4().hex}{ext_i}"
+                        with open(src_path, 'rb') as fsrc:
+                            data = fsrc.read()
+                            if data:
+                                new_item.image.save(new_name, ContentFile(data), save=False)
+            except Exception:
+                pass
+            new_item.save()
+            new_items.append(new_item)
+
+        # Comment: Optional override — apply text/qty/price changes provided in request body to the new copy
+        try:
+            overrides = request.data.get('items')
+            if isinstance(overrides, str):
+                try:
+                    overrides = json.loads(overrides)
+                except Exception:
+                    overrides = None
+            if isinstance(overrides, list) and overrides:
+                # Comment: Build map from original item id to index to align overrides by row_id
+                orig_items = list(orig.quotation_items.all().order_by('id'))
+                id_to_index = {oi.id: idx for idx, oi in enumerate(orig_items)}
+                for i, ov in enumerate(overrides):
+                    # Comment: Prefer target by original row_id; fallback to index alignment
+                    idx_target = None
+                    try:
+                        rid = ov.get('row_id')
+                        if rid in id_to_index:
+                            idx_target = id_to_index[rid]
+                    except Exception:
+                        idx_target = None
+                    if idx_target is None:
+                        idx_target = i if i < len(new_items) else None
+                    if idx_target is None or idx_target >= len(new_items):
+                        continue
+                    it = new_items[idx_target]
+                    try:
+                        item_title = str(ov.get('item') or it.quo_item or '')
+                        model = str(ov.get('model') or it.quo_model or '')
+                        desc = str(ov.get('description') or it.quo_description or '')
+                        spec = str(ov.get('specification') or it.specification or '')
+                        qty_val = ov.get('qty')
+                        price_val = ov.get('price')
+                        # Comment: Parse qty/price safely and recompute quo_total
+                        try:
+                            qty = int(float(qty_val)) if qty_val is not None else it.quantity
+                        except Exception:
+                            qty = it.quantity
+                        # Comment: Derive original unit price from total/qty as fallback when price not provided
+                        try:
+                            orig_unit = float(new_items[i].quo_total or 0) / max(int(new_items[i].quantity or 1), 1)
+                        except Exception:
+                            orig_unit = 0.0
+                        try:
+                            price_float = float(str(price_val).replace(',', '')) if price_val is not None else orig_unit
+                        except Exception:
+                            price_float = orig_unit
+                        total = Decimal(str(qty * price_float))
+                        it.quo_item = item_title
+                        it.quo_model = model
+                        it.quo_description = desc
+                        it.specification = spec
+                        it.quantity = qty
+                        it.quo_total = total
+                        it.save()
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        # Comment: Optional top-level overrides (e.g., details fields). Apply only to new copy.
+        try:
+            top_remark = request.data.get('remark')
+            if isinstance(top_remark, str):
+                new_q.remark = top_remark
+        except Exception:
+            pass
+        try:
+            # Comment: Apply detail overrides when provided from the UI state
+            fields_map = {
+                'trade_terms': request.data.get('trade_terms'),
+                'validity': request.data.get('validity'),
+                'delivery': request.data.get('delivery'),
+                'payment_terms': request.data.get('payment_terms'),
+                'shipment_location': request.data.get('shipment_location'),
+                'invoice_date': request.data.get('invoice_date'),
+            }
+            updated_fields = []
+            for fname, fval in fields_map.items():
+                if fval is not None:
+                    setattr(new_q, fname, fval)
+                    updated_fields.append(fname)
+            if updated_fields:
+                new_q.save(update_fields=updated_fields)
+        except Exception:
+            pass
+
+        ser = self.get_serializer(new_q)
+        return Response(ser.data, status=status.HTTP_201_CREATED)
 
 class BillingNoteViewSet(viewsets.ModelViewSet):
     queryset = BillingNote.objects.all().order_by('-bn_created_date')

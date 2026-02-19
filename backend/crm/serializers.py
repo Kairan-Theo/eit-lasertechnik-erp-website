@@ -2,6 +2,9 @@ from rest_framework import serializers
 # Comment: File handling utilities for copying existing image paths during "Save as New"
 from django.conf import settings
 from django.core.files.base import File, ContentFile
+from django.core.files.storage import default_storage
+import urllib.request
+import mimetypes
 import os, uuid
 from django.contrib.auth.models import User
 from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, Receipt, TaxInvoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
@@ -359,6 +362,16 @@ class QuotationSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
+        # Comment: If the frontend provides a source_quotation_id, copy QuotationItem rows from that parent
+        source_quotation_id = validated_data.pop('source_quotation_id', None)
+        # Comment: DRF drops unknown fields; fallback to raw request payload for source_quotation_id
+        if not source_quotation_id and 'request' in self.context:
+            try:
+                raw_id = self.context['request'].data.get('source_quotation_id')
+                if raw_id:
+                    source_quotation_id = int(str(raw_id))
+            except Exception:
+                source_quotation_id = None
         customer_name = validated_data.pop('customer_name', None)
         eit_name = validated_data.pop('eit_name', None)
         
@@ -405,7 +418,7 @@ class QuotationSerializer(serializers.ModelSerializer):
             nested_items = [index_map[i] for i in sorted(index_map.keys())]
             if not items_data and nested_items:
                 items_data = nested_items
-            # Merge uploaded images from nested map into existing items_data if present
+            # Merge uploaded images and image_path hints from nested map into existing items_data if present
             if items_data and index_map:
                 for idx, nested in index_map.items():
                     if 'image' in nested and nested['image']:
@@ -416,12 +429,54 @@ class QuotationSerializer(serializers.ModelSerializer):
                             while len(items_data) <= idx:
                                 items_data.append({})
                             items_data[idx]['image'] = nested['image']
+                    if 'image_path' in nested and nested['image_path']:
+                        try:
+                            items_data[idx]['image_path'] = nested['image_path']
+                        except Exception:
+                            while len(items_data) <= idx:
+                                items_data.append({})
+                            items_data[idx]['image_path'] = nested['image_path']
 
         # Comment: Allow duplicate qo_code; enforce unique file_name instead
         fname = validated_data.get('file_name')
         if fname and Quotation.objects.filter(file_name=fname).exists():
             raise serializers.ValidationError({'file_name': 'File name must be unique'})
         quotation = Quotation.objects.create(**validated_data)
+        
+        # Comment: If a parent quotation ID is provided, copy its QuotationItem rows and images
+        if source_quotation_id:
+            try:
+                parent = Quotation.objects.filter(pk=source_quotation_id).first()
+            except Exception:
+                parent = None
+            if parent:
+                # Comment: Preserve original ordering to keep row alignment consistent
+                for qi in parent.quotation_items.all().order_by('id'):
+                    item_obj = QuotationItem(
+                        quotation=quotation,
+                        quo_item=qi.quo_item,
+                        quo_model=qi.quo_model,
+                        quo_description=qi.quo_description,
+                        specification=qi.specification,
+                        quantity=qi.quantity,
+                        quo_total=qi.quo_total,
+                    )
+                    # Comment: Copy physical image file when present by reading from MEDIA_ROOT path
+                    try:
+                        if qi.image and hasattr(qi.image, 'path'):
+                            src_path = qi.image.path
+                            if os.path.exists(src_path) and os.path.getsize(src_path) > 0:
+                                ext = os.path.splitext(src_path)[1] or '.png'
+                                new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                                with open(src_path, 'rb') as fsrc:
+                                    data = fsrc.read()
+                                    if data:
+                                        item_obj.image.save(new_name, ContentFile(data), save=False)
+                    except Exception:
+                        pass
+                    item_obj.save()
+            # Comment: When copying from parent, skip processing items_data to avoid duplicate rows
+            return quotation
         
         for item in items_data:
             try:
@@ -459,6 +514,8 @@ class QuotationSerializer(serializers.ModelSerializer):
             )
             # Comment: Handle image input: Uploaded file or existing path to copy
             img_input = item.get('image')
+            img_path_hint = (item.get('image_path') or '').strip()
+            assigned_image = False
             try:
                 if hasattr(img_input, 'read'):
                     # Comment: UploadedFile provided — save via ImageField.save to ensure a physical file is written
@@ -472,31 +529,83 @@ class QuotationSerializer(serializers.ModelSerializer):
                         except Exception:
                             pass
                         item_obj.image.save(new_name, img_input, save=False)
+                        assigned_image = True
                     except Exception:
                         pass
-                elif isinstance(img_input, str) and img_input.strip():
-                    # Comment: Copy existing media file into a new unique file for the duplicated row
-                    src = img_input.strip().replace('\\', '/')
-                    if '/media/' in src:
-                        sub = src.split('/media/', 1)[1]
-                        abs_path = os.path.join(settings.MEDIA_ROOT, sub)
-                    elif src.startswith('media/'):
-                        abs_path = os.path.join(settings.MEDIA_ROOT, src.split('media/', 1)[1])
-                    else:
+                else:
+                    # Comment: Prefer local media copy via image_path hint to avoid unreliable HTTP self-fetch
+                    if (not assigned_image) and img_path_hint:
+                        src = img_path_hint.replace('\\', '/')
+                        if src.startswith('/'):
+                            src = src[1:]
                         abs_path = os.path.join(settings.MEDIA_ROOT, src)
-                    abs_path = os.path.normpath(abs_path)
-                    if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                        # Comment: Ensure the source file has content; skip zero-byte files
-                        try:
-                            if os.path.getsize(abs_path) > 0:
-                                ext = os.path.splitext(abs_path)[1] or '.png'
-                                new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
-                                with open(abs_path, 'rb') as fsrc:
-                                    data = fsrc.read()
+                        abs_path = os.path.normpath(abs_path)
+                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                            try:
+                                if os.path.getsize(abs_path) > 0:
+                                    ext = os.path.splitext(abs_path)[1] or '.png'
+                                    new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                                    with open(abs_path, 'rb') as fsrc:
+                                        data = fsrc.read()
+                                        if data:
+                                            item_obj.image.save(new_name, ContentFile(data), save=False)
+                                            assigned_image = True
+                            except Exception:
+                                pass
+                    # Comment: If image_path not provided, handle string 'image' input (HTTP or media path)
+                    if (not assigned_image) and isinstance(img_input, str) and img_input.strip():
+                        src = img_input.strip().replace('\\', '/')
+                        # Comment: If HTTP URL points to our /media/, prefer local filesystem copy to avoid unreliable self-fetch
+                        if (src.startswith('http://') or src.startswith('https://')) and ('/media/' in src):
+                            try:
+                                sub = src.split('/media/', 1)[1]
+                                abs_path = os.path.join(settings.MEDIA_ROOT, sub)
+                                abs_path = os.path.normpath(abs_path)
+                                if os.path.exists(abs_path) and os.path.isfile(abs_path) and os.path.getsize(abs_path) > 0:
+                                    ext = os.path.splitext(abs_path)[1] or '.png'
+                                    new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                                    with open(abs_path, 'rb') as fsrc:
+                                        data = fsrc.read()
+                                        if data:
+                                            item_obj.image.save(new_name, ContentFile(data), save=False)
+                                            assigned_image = True
+                            except Exception:
+                                pass
+                        elif src.startswith('http://') or src.startswith('https://'):
+                            # Comment: Download remote image only when not under /media/
+                            try:
+                                with urllib.request.urlopen(src) as resp:
+                                    data = resp.read()
                                     if data:
+                                        ct = resp.headers.get('Content-Type', '') or 'image/png'
+                                        ext = mimetypes.guess_extension(ct.split(';')[0].strip()) or '.png'
+                                        new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
                                         item_obj.image.save(new_name, ContentFile(data), save=False)
-                        except Exception:
-                            pass
+                                        assigned_image = True
+                            except Exception:
+                                pass
+                        else:
+                            # Comment: Copy from MEDIA_ROOT using string path contained in 'image'
+                            if '/media/' in src:
+                                sub = src.split('/media/', 1)[1]
+                                abs_path = os.path.join(settings.MEDIA_ROOT, sub)
+                            elif src.startswith('media/'):
+                                abs_path = os.path.join(settings.MEDIA_ROOT, src.split('media/', 1)[1])
+                            else:
+                                abs_path = os.path.join(settings.MEDIA_ROOT, src)
+                            abs_path = os.path.normpath(abs_path)
+                            if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                                try:
+                                    if os.path.getsize(abs_path) > 0:
+                                        ext = os.path.splitext(abs_path)[1] or '.png'
+                                        new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                                        with open(abs_path, 'rb') as fsrc:
+                                            data = fsrc.read()
+                                            if data:
+                                                item_obj.image.save(new_name, ContentFile(data), save=False)
+                                                assigned_image = True
+                                except Exception:
+                                    pass
             except Exception:
                 pass
             item_obj.save()
@@ -641,6 +750,8 @@ class QuotationSerializer(serializers.ModelSerializer):
                     quo_total=total,
                 )
                 img_input = item.get('image')
+                img_path_hint = (item.get('image_path') or '').strip()
+                assigned_image = False
                 try:
                     if hasattr(img_input, 'read'):
                         # Comment: UploadedFile — save via ImageField.save with a generated unique name
@@ -653,6 +764,7 @@ class QuotationSerializer(serializers.ModelSerializer):
                             except Exception:
                                 pass
                             item_obj.image.save(new_name, img_input, save=False)
+                            assigned_image = True
                         except Exception:
                             pass
                     elif isinstance(img_input, str) and img_input.strip():
@@ -672,6 +784,26 @@ class QuotationSerializer(serializers.ModelSerializer):
                                 data = fsrc.read()
                                 if data:
                                     item_obj.image.save(new_name, ContentFile(data), save=False)
+                                    assigned_image = True
+                    # Comment: Final fallback — copy using explicit image_path when previous steps did not assign
+                    if (not assigned_image) and img_path_hint:
+                        src = img_path_hint.replace('\\', '/')
+                        if src.startswith('/'):
+                            src = src[1:]
+                        abs_path = os.path.join(settings.MEDIA_ROOT, src)
+                        abs_path = os.path.normpath(abs_path)
+                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                            try:
+                                if os.path.getsize(abs_path) > 0:
+                                    ext = os.path.splitext(abs_path)[1] or '.png'
+                                    new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                                    with open(abs_path, 'rb') as fsrc:
+                                        data = fsrc.read()
+                                        if data:
+                                            item_obj.image.save(new_name, ContentFile(data), save=False)
+                                            assigned_image = True
+                            except Exception:
+                                pass
                 except Exception:
                     pass
                 item_obj.save()

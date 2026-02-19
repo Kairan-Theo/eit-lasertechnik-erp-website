@@ -68,6 +68,8 @@ function useBillingNoteState() {
     company: "",
     // Add taxId to support Tax Number input beside Company Name
     taxId: "",
+    // Add Branch input box in billing note 
+    branch: "",
     address: "",
     telephone: "",
     fax: "",
@@ -418,6 +420,8 @@ function BillingNotePage() {
           .then(data => {
              q.setCustomer({
                company: data.customer_details?.company_name || data.customer_name || "",
+                   // Comment: Hydrate branch from API payload
+                   branch: data.bn_branch || "",
                address: data.customer_details?.address || data.cus_address || "",
                telephone: data.customer_details?.phone || data.cus_phone || "",
                fax: data.customer_details?.cus_fax || data.cus_fax || "",
@@ -551,6 +555,8 @@ function BillingNotePage() {
         bn_payee_date: q.details.chequeDate || null,
         bn_behalf_of: q.details.onBehalfOf,
         bn_name_biller: q.details.depositor,
+          // Comment: Persist customer branch text to BillingNote.bn_branch
+          bn_branch: q.customer.branch,
         
         customer_name: q.customer.company,
         cus_address: q.customer.address,
@@ -710,7 +716,7 @@ function BillingNotePage() {
           <h3 className="text-base font-bold text-gray-900 pt-2">Customer Company</h3>
 
           {/* Company Name */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
                <CustomerCombobox
@@ -747,6 +753,15 @@ function BillingNotePage() {
                  onChange={(e) => q.setCustomer({ ...q.customer, taxId: e.target.value })}
                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                  placeholder="Tax Number"
+               />
+             </div>
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+               <input
+                 value={q.customer.branch}
+                 onChange={(e) => q.setCustomer({ ...q.customer, branch: e.target.value })}
+                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                 placeholder="Branch"
                />
              </div>
           </div>

@@ -47,6 +47,8 @@ function useQuotationState() {
   const [customer, setCustomer] = React.useState({
     company: "",
     taxId: "",
+    // Comment: Customer branch text for per-quotation snapshot and UI input
+    branch: "",
     address: "",
     telephone: "",
     fax: "",
@@ -483,6 +485,8 @@ function useQuotationState() {
             const topFromSnapshot = {
               company: data.customer_name || "",
               taxId: data.customer_tax_id || "",
+              // Comment: Map Quotation.customer_branch snapshot to UI state
+              branch: data.customer_branch || "",
               address: data.customer_address || "",
               telephone: data.customer_phone || "",
               fax: data.customer_fax || "",
@@ -1383,7 +1387,7 @@ function QuotationPage() {
           <h3 className="text-base font-bold text-gray-900 pt-2">Customer Company</h3>
 
           {/* Company Name (50% width) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
                 <CustomerCombobox
@@ -1477,10 +1481,14 @@ function QuotationPage() {
                   }}
                 />
               </div>
-             <div>
+            <div>
                <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
                <input value={q.customer.taxId} onChange={(e) => q.setCustomer({ ...q.customer, taxId: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Tax ID" />
              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+              <input value={q.customer.branch} onChange={(e) => q.setCustomer({ ...q.customer, branch: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Branch" />
+            </div>
           </div>
 
           {/* Telephone / Fax / Address */}
@@ -1916,6 +1924,10 @@ function QuotationPage() {
                     onClick={() => {
                       const handleSaveAsNew = async () => {
                         try {
+                          // Comment: Recover previous behavior — always create new quotation from current UI state via multipart FormData
+                          const headers = {}
+                          const token = localStorage.getItem("authToken")
+                          if (token) headers["Authorization"] = `Token ${token}`
                           // Build a unique new quotation code derived from current number
                           // Comment: Always derive a fresh number to avoid overwriting existing records
                           const baseCode = q.details.number || `QUO-${Date.now()}`
@@ -1963,12 +1975,13 @@ function QuotationPage() {
                               return null
                             }
                           }
-                          // Comment: Fetch remote /media or HTTP image URLs and wrap as a File for upload
+                          // Comment: Fetch blob: or HTTP image URLs and wrap as a File for upload
                           const fetchUrlToFile = async (src, nameHint) => {
                             try {
-                              const url = resolveImageUrl(src) || src
-                              // Only fetch http(s) or same-origin /media resources
-                              if (!/^https?:\/\//.test(url)) return null
+                              const raw = String(src || "")
+                              const url = resolveImageUrl(raw) || raw
+                              // Comment: Support blob: URLs from <input type="file"> and absolute http(s). Avoid fetching /media to keep payload small.
+                              if (!/^https?:\/\//.test(url) && !/^blob:/.test(url)) return null
                               const resp = await fetch(url, { mode: "cors" })
                               if (!resp.ok) return null
                               const blob = await resp.blob()
@@ -1985,6 +1998,10 @@ function QuotationPage() {
                           const fd = new FormData()
                           // Top-level fields
                           fd.append("qo_code", qo_code)
+                          // Comment: Provide source_quotation_id so backend can copy QuotationItem rows from parent
+                          if (q.sourceKey === "api" && q.sourceIndex) {
+                            fd.append("source_quotation_id", String(q.sourceIndex))
+                          }
                           // Comment: Ensure new copy has a unique file name; append COPY+timestamp
                           {
                             const baseFile = String(q.details.fileName || "quotation.pdf")
@@ -2001,6 +2018,8 @@ function QuotationPage() {
                           fd.append("customer_email", q.customer.email || "")
                           fd.append("customer_phone", q.customer.telephone || "")
                           fd.append("customer_fax", q.customer.fax || "")
+                          // Comment: Persist branch text to Quotation.customer_branch
+                          fd.append("customer_branch", q.customer.branch || "")
                           fd.append("cus_respon_attn", attnList.join(","))
                           fd.append("cus_respon_div", attnDivList.join(","))
                           fd.append("cus_respon_mobile", attnMobileList.join(","))
@@ -2025,6 +2044,17 @@ function QuotationPage() {
 
                           // Items: persist main items and each spec row as separate items (qty=0)
                           // Comment: Storing specs as separate rows ensures the UI can reconstruct specRows after reload.
+                          // Comment: Provide image_path as a reliable backend copy hint when no file can be uploaded
+                          const toBackendMediaPath = (src) => {
+                            const s = String(src || "")
+                            const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+                            if (s.startsWith(api) && s.includes("/media/")) {
+                              return s.split("/media/")[1]
+                            }
+                            if (s.includes("/media/")) return s.split("/media/")[1]
+                            if (s.startsWith("media/")) return s.slice("media/".length)
+                            return s
+                          }
                           let idxNew = 0
                           const jsonItemsForFallback = []
                           for (const item of q.items) {
@@ -2047,10 +2077,33 @@ function QuotationPage() {
                                 const file = new File([blob], `spec_${idxNew}.png`, { type: blob.type || "image/png" })
                                 fd.append(`items[${idxNew}][image]`, file)
                               } else if (typeof firstImageRow.image === "string") {
-                                // Comment: If spec image is a server URL, fetch and attach to persist physical file
-                                const fileFromUrl = await fetchUrlToFile(firstImageRow.image, `spec_${idxNew}`)
-                                if (fileFromUrl) {
-                                  fd.append(`items[${idxNew}][image]`, fileFromUrl)
+                                // Comment: If UI holds a blob: URL, fetch and upload as file; otherwise send path hint and original URL string
+                                const s = String(firstImageRow.image)
+                                const f = await fetchUrlToFile(s, `spec_${idxNew}`)
+                                if (f) {
+                                  fd.append(`items[${idxNew}][image]`, f)
+                                } else {
+                                  // Comment: Avoid re-uploading server /media or http(s) images; send path hint and original URL string
+                                  fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(s))
+                                  fd.append(`items[${idxNew}][image]`, s)
+                                }
+                              }
+                            }
+                            // Comment: Fallback — if no spec image, but the parent item has image, persist that
+                            if ((!firstImageRow || !firstImageRow.image) && item.image) {
+                              const blobParent = dataUrlToBlob(item.image)
+                              if (blobParent) {
+                                const fileP = new File([blobParent], `item_${idxNew}.png`, { type: blobParent.type || "image/png" })
+                                fd.append(`items[${idxNew}][image]`, fileP)
+                              } else if (typeof item.image === "string") {
+                                // Comment: If blob: string, fetch and upload; else send path hint + original URL
+                                const s = String(item.image)
+                                const f = await fetchUrlToFile(s, `item_${idxNew}`)
+                                if (f) {
+                                  fd.append(`items[${idxNew}][image]`, f)
+                                } else {
+                                  fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(s))
+                                  fd.append(`items[${idxNew}][image]`, s)
                                 }
                               }
                             }
@@ -2060,7 +2113,10 @@ function QuotationPage() {
                               description: item.description || "",
                               specification: firstSpecText,
                               qty: String(item.qty || 1),
-                              price: String(item.price || 0)
+                              price: String(item.price || 0),
+                              image_path: (firstImageRow && typeof firstImageRow.image === "string")
+                                ? toBackendMediaPath(firstImageRow.image)
+                                : (typeof item.image === "string" ? toBackendMediaPath(item.image) : "")
                             })
                             idxNew++
                             // Comment: Persist remaining specification rows as separate items (qty=0, no item/model)
@@ -2077,10 +2133,14 @@ function QuotationPage() {
                                   const file2 = new File([blob2], `spec_${idxNew}.png`, { type: blob2.type || "image/png" })
                                   fd.append(`items[${idxNew}][image]`, file2)
                                 } else if (typeof sr.image === "string") {
-                                  // Comment: Fetch remote image to ensure physical copy is saved for the new row
-                                  const fileFromUrl2 = await fetchUrlToFile(sr.image, `spec_${idxNew}`)
-                                  if (fileFromUrl2) {
-                                    fd.append(`items[${idxNew}][image]`, fileFromUrl2)
+                                  // Comment: If blob: string, fetch and upload; else send image_path + original URL string
+                                  const s = String(sr.image)
+                                  const f = await fetchUrlToFile(s, `spec_${idxNew}`)
+                                  if (f) {
+                                    fd.append(`items[${idxNew}][image]`, f)
+                                  } else {
+                                    fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(s))
+                                    fd.append(`items[${idxNew}][image]`, s)
                                   }
                                 }
                               }
@@ -2090,18 +2150,20 @@ function QuotationPage() {
                                 description: "",
                                 specification: text,
                                 qty: "0",
-                                price: "0"
+                                price: "0",
+                                image_path: (typeof sr.image === "string") ? toBackendMediaPath(sr.image) : ""
                               })
                               idxNew++
                             }
                           }
-                          // Add JSON fallback to ensure backend always receives items list
-                          fd.append("items", JSON.stringify(jsonItemsForFallback))
+                          // Comment: Append JSON fallback 'items' alongside nested FormData keys.
+                          // The serializer merges nested uploads (files/image_path) into this list,
+                          // ensuring specifications and images from the original quotation are preserved robustly.
+                          try {
+                            fd.append("items", JSON.stringify(jsonItemsForFallback))
+                          } catch {}
 
                           // Send multipart request (do not set Content-Type manually)
-                          const headers = {}
-                          const token = localStorage.getItem("authToken")
-                          if (token) headers["Authorization"] = `Token ${token}`
                           const response = await fetch(`${API_BASE_URL}/api/quotations/`, {
                             method: "POST",
                             headers,
@@ -2142,6 +2204,10 @@ function QuotationPage() {
 
                           const fd = new FormData()
                           fd.append("qo_code", q.details.number || "")
+                          // Comment: Provide source_quotation_id so backend can copy QuotationItem rows from parent
+                          if (q.sourceKey === "api" && q.sourceIndex) {
+                            fd.append("source_quotation_id", String(q.sourceIndex))
+                          }
                           // Comment: persist file_name to Quotation.file_name column
                           fd.append("file_name", q.details.fileName || "quotation.pdf")
                           fd.append("created_date", q.details.date || "")
@@ -2151,6 +2217,8 @@ function QuotationPage() {
                           fd.append("customer_email", q.customer.email || "")
                           fd.append("customer_phone", q.customer.telephone || "")
                           fd.append("customer_fax", q.customer.fax || "")
+                          // Comment: Persist branch text to Quotation.customer_branch
+                          fd.append("customer_branch", q.customer.branch || "")
                           fd.append("cus_respon_attn", attnList.join(","))
                           fd.append("cus_respon_div", attnDivList.join(","))
                           fd.append("cus_respon_mobile", attnMobileList.join(","))
@@ -2191,6 +2259,16 @@ function QuotationPage() {
                           // Flatten items and their spec rows into sequential index entries
                           let idx = 0
                           const jsonItemsForFallback2 = []
+                          const toBackendMediaPath2 = (src) => {
+                            const s = String(src || "")
+                            const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+                            if (s.startsWith(api) && s.includes("/media/")) {
+                              return s.split("/media/")[1]
+                            }
+                            if (s.includes("/media/")) return s.split("/media/")[1]
+                            if (s.startsWith("media/")) return s.slice("media/".length)
+                            return s
+                          }
                           for (const item of q.items) {
                             // Main item
                             fd.append(`items[${idx}][item]`, item.item || "")
@@ -2211,11 +2289,21 @@ function QuotationPage() {
                                 const file = new File([blob], `spec_${idx}.png`, { type: blob.type || "image/png" })
                                 fd.append(`items[${idx}][image]`, file)
                               } else if (typeof firstImageRow2.image === "string") {
-                                // Comment: Fetch server image URL so update persists a physical file
-                                const fileFromUrl = await fetchUrlToFile2(firstImageRow2.image, `spec_${idx}`)
-                                if (fileFromUrl) {
-                                  fd.append(`items[${idx}][image]`, fileFromUrl)
-                                }
+                                // Comment: Avoid re-uploading server images; send image_path and original URL string
+                                fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(firstImageRow2.image))
+                                fd.append(`items[${idx}][image]`, String(firstImageRow2.image))
+                              }
+                            }
+                            // Comment: Fallback — if no spec image, but the parent item has image, persist that for update as well
+                            if ((!firstImageRow2 || !firstImageRow2.image) && item.image) {
+                              const blobParent2 = dataUrlToBlob(item.image)
+                              if (blobParent2) {
+                                const fileP2 = new File([blobParent2], `item_${idx}.png`, { type: blobParent2.type || "image/png" })
+                                fd.append(`items[${idx}][image]`, fileP2)
+                              } else if (typeof item.image === "string") {
+                                // Comment: Send image_path and original URL string for backend fetch fallback
+                                fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(item.image))
+                                fd.append(`items[${idx}][image]`, String(item.image))
                               }
                             }
                             jsonItemsForFallback2.push({
@@ -2224,7 +2312,10 @@ function QuotationPage() {
                               description: item.description || "",
                               specification: firstTextMain,
                               qty: String(item.qty || 1),
-                              price: String(item.price || 0)
+                              price: String(item.price || 0),
+                              image_path: (firstImageRow2 && typeof firstImageRow2.image === "string")
+                                ? toBackendMediaPath2(firstImageRow2.image)
+                                : (typeof item.image === "string" ? toBackendMediaPath2(item.image) : "")
                             })
                             idx++
                             // Comment: Persist remaining spec rows as separate items (qty=0)
@@ -2240,11 +2331,9 @@ function QuotationPage() {
                                   const file3 = new File([blob3], `spec_${idx}.png`, { type: blob3.type || "image/png" })
                                   fd.append(`items[${idx}][image]`, file3)
                                 } else if (typeof sr.image === "string") {
-                                  // Comment: Fetch server image URL for remaining spec rows too
-                                  const fileFromUrl3 = await fetchUrlToFile2(sr.image, `spec_${idx}`)
-                                  if (fileFromUrl3) {
-                                    fd.append(`items[${idx}][image]`, fileFromUrl3)
-                                  }
+                                  // Comment: Reduce request size — send image_path and original URL string
+                                  fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(sr.image))
+                                  fd.append(`items[${idx}][image]`, String(sr.image))
                                 }
                               }
                               jsonItemsForFallback2.push({
@@ -2253,7 +2342,8 @@ function QuotationPage() {
                                 description: "",
                                 specification: text,
                                 qty: "0",
-                                price: "0"
+                                price: "0",
+                                image_path: (typeof sr.image === "string") ? toBackendMediaPath2(sr.image) : ""
                               })
                               idx++
                             }
@@ -2269,8 +2359,11 @@ function QuotationPage() {
                           const headers = {}
                           const token = localStorage.getItem("authToken")
                           if (token) headers["Authorization"] = `Token ${token}`
-                          // Add JSON fallback 'items' list to ensure backend always has items even if nested parsing fails
-                          fd.append("items", JSON.stringify(jsonItemsForFallback2))
+                          // Comment: Append JSON fallback 'items' on update as well.
+                          // Backend merges nested uploads into this list to guarantee item/spec/image persistence.
+                          try {
+                            fd.append("items", JSON.stringify(jsonItemsForFallback2))
+                          } catch {}
                           const response = await fetch(url, { method, headers, body: fd })
                           if (!response.ok) {
                             const errText = await response.text()
