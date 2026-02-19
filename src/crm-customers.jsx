@@ -9,6 +9,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const [newDeal, setNewDeal] = useState({
     company: "",
+    branch: "",
     contact: "",
     opportunity: "",
     email: "",
@@ -25,6 +26,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   const [extraContacts, setExtraContacts] = useState([])
   const [stages, setStages] = useState([])
   const [isSaving, setIsSaving] = useState(false)
+  const [editingDealInfo, setEditingDealInfo] = useState(null)
 
   const filteredDeals = deals.filter(deal => {
     const term = searchTerm.toLowerCase()
@@ -59,17 +61,20 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   }, [showNewCustomerForm, stages.length])
 
   const handleCreateCustomer = async () => {
+    const isEditing = !!editingDealInfo
     if (!newDeal.company || !newDeal.company.trim()) {
       alert("Please enter a company name")
       return
     }
     let stageName = "New"
-    try {
-      stageName = stages[newDeal.stageIndex]?.name || stages[0]?.name || "New"
-    } catch {}
-    const dealData = {
+    if (!isEditing) {
+      try {
+        stageName = stages[newDeal.stageIndex]?.name || stages[0]?.name || "New"
+      } catch {}
+    }
+
+    const baseData = {
       title: newDeal.opportunity || newDeal.company || "Untitled",
-      customer: null,
       amount: Number(newDeal.amount) || 0,
       currency: newDeal.currency || "฿",
       po_number: newDeal.poNumber || "",
@@ -80,10 +85,29 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       address: newDeal.address || "",
       tax_id: newDeal.taxId || "",
       extra_contacts: extraContacts,
+      salesperson: newDeal.salesperson || "",
+    }
+
+    let url = `${API_BASE_URL}/api/deals/`
+    let method = "POST"
+    let payload = {
+      ...baseData,
+      customer: null,
       notes: "",
       stage: stageName,
       write_customer_name: newDeal.company || "",
-      salesperson: newDeal.salesperson || "",
+    }
+
+    if (isEditing && editingDealInfo) {
+      url = `${API_BASE_URL}/api/deals/${editingDealInfo.id}/`
+      method = "PATCH"
+      payload = {
+        ...baseData,
+        customer_name: newDeal.company || "",
+      }
+      if (editingDealInfo.stageName) {
+        payload.stage = editingDealInfo.stageName
+      }
     }
     setIsSaving(true)
     try {
@@ -92,15 +116,16 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Token ${token}` } : {}),
       }
-      const res = await fetch(`${API_BASE_URL}/api/deals/`, {
-        method: "POST",
+      const res = await fetch(url, {
+        method,
         headers,
-        body: JSON.stringify(dealData),
+        body: JSON.stringify(payload),
       })
       if (res.ok) {
         setShowNewCustomerForm(false)
         setNewDeal({
           company: "",
+          branch: "",
           contact: "",
           opportunity: "",
           email: "",
@@ -115,7 +140,8 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
           salesperson: "",
         })
         setExtraContacts([])
-        alert("Customer added. Refresh CRM to see it in the list.")
+        setEditingDealInfo(null)
+        alert(isEditing ? "Customer updated. Refresh CRM to see changes." : "Customer added. Refresh CRM to see it in the list.")
       } else {
         const errorText = await res.text()
         console.error("Failed to create customer:", errorText)
@@ -155,6 +181,28 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       }
   }
 
+  const handleEditRow = (deal) => {
+    setNewDeal({
+      company: deal.customer || deal.company || "",
+      branch: deal.branch || "",
+      contact: deal.contact || "",
+      opportunity: deal.title || "",
+      email: deal.email || "",
+      phone: deal.phone || "",
+      address: deal.address || "",
+      taxId: deal.taxId || deal.tax_id || "",
+      poNumber: deal.poNumber || deal.po_number || "",
+      amount: deal.amount || 0,
+      currency: deal.currency || "฿",
+      priority: deal.priority || "none",
+      stageIndex: 0,
+      salesperson: deal.salesperson || deal.salespersonName || "",
+    })
+    setExtraContacts(deal.extraContacts || deal.extra_contacts || [])
+    setEditingDealInfo({ id: deal.id, stageName: deal.stageName })
+    setShowNewCustomerForm(true)
+  }
+
   const columns = [
     { id: 'index', label: 'Index', width: 'w-16' },
     { id: 'company', label: 'Company Name' },
@@ -162,6 +210,10 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
     { id: 'phone', label: 'Phone' },
     { id: 'address', label: 'Address', defaultClass: 'max-w-xs truncate' },
     { id: 'contact', label: 'Contact Person' },
+    { id: 'contactEmail', label: 'Contact Email' },
+    { id: 'contactMobile', label: 'Contact Mobile' },
+    { id: 'contactPosition', label: 'Position' },
+    { id: 'contactDivision', label: 'Division' },
     { id: 'taxId', label: 'Tax ID', defaultClass: 'font-mono text-sm' },
     { id: 'poNumber', label: 'PO Number' },
     { id: 'title', label: 'Opportunity Name', defaultClass: 'font-medium' },
@@ -183,6 +235,26 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
     switch (col.id) {
       case 'index': return <span className="font-medium text-gray-800">{index + 1}</span>;
       case 'company': return <span className="font-medium text-gray-800">{deal.customer || deal.company || "-"}</span>;
+      case 'contactEmail': {
+        const extras = deal.extraContacts || deal.extra_contacts || []
+        const primary = extras[0] || {}
+        return primary.email || "-"
+      }
+      case 'contactMobile': {
+        const extras = deal.extraContacts || deal.extra_contacts || []
+        const primary = extras[0] || {}
+        return primary.mobile || "-"
+      }
+      case 'contactPosition': {
+        const extras = deal.extraContacts || deal.extra_contacts || []
+        const primary = extras[0] || {}
+        return primary.position || "-"
+      }
+      case 'contactDivision': {
+        const extras = deal.extraContacts || deal.extra_contacts || []
+        const primary = extras[0] || {}
+        return primary.division || "-"
+      }
       case 'salesperson': 
         const name = deal.salesperson || deal.salespersonName;
         return name ? (
@@ -198,7 +270,25 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       case 'address': return deal.address || "-";
       case 'email': return deal.email || "-";
       case 'phone': return deal.phone || "-";
-      case 'contact': return deal.contact || "-";
+      case 'contact': {
+        const extras = deal.extraContacts || deal.extra_contacts || []
+        const names = []
+        if (deal.contact) names.push(deal.contact)
+        extras.forEach(c => {
+          if (c && c.name) names.push(c.name)
+        })
+        if (names.length === 0) return "-"
+        if (names.length <= 3) return names.join(", ")
+        const firstLine = names.slice(0, 3).join(", ")
+        const restLine = names.slice(3).join(", ")
+        return (
+          <span>
+            {firstLine}
+            <br />
+            {restLine}
+          </span>
+        )
+      }
       case 'taxId': return deal.taxId || "-";
       case 'poNumber': return deal.poNumber || "-";
       case 'title': return deal.title || "-";
@@ -345,7 +435,15 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filteredDeals.map((deal, index) => (
-              <tr key={deal.id || index} className={`transition border-b border-gray-100 ${selectedRows.includes(deal.id) ? 'bg-blue-200 hover:bg-blue-300' : 'hover:bg-gray-50'}`}>
+              <tr 
+                key={deal.id || index} 
+                className={`transition border-b border-gray-100 ${selectedRows.includes(deal.id) ? 'bg-blue-200 hover:bg-blue-300' : 'hover:bg-gray-50'}`}
+                onClick={(e) => {
+                  const tag = e.target.tagName
+                  if (tag === "INPUT" || tag === "BUTTON" || tag === "SVG" || tag === "PATH") return
+                  handleEditRow(deal)
+                }}
+              >
                 <td className="p-4">
                   <input
                     type="checkbox"
@@ -388,11 +486,14 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-auto max-h-[90vh] overflow-hidden flex flex-col mt-16">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
-              <h2 className="text-lg font-bold text-slate-800">Add Customer</h2>
+              <h2 className="text-lg font-bold text-slate-800">{editingDealInfo ? "Edit Customer" : "Add Customer"}</h2>
               <button
                 type="button"
                 className="text-slate-400 hover:text-slate-600"
-                onClick={() => setShowNewCustomerForm(false)}
+                onClick={() => {
+                  setShowNewCustomerForm(false)
+                  setEditingDealInfo(null)
+                }}
               >
                 ✕
               </button>
@@ -408,6 +509,15 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
                       onChange={(e) => setNewDeal({ ...newDeal, company: e.target.value })}
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                       placeholder="Company name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Branch</label>
+                    <input
+                      value={newDeal.branch}
+                      onChange={(e) => setNewDeal({ ...newDeal, branch: e.target.value })}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                      placeholder="Branch name"
                     />
                   </div>
                   <div>
@@ -685,7 +795,10 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
               <button
                 type="button"
                 className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-medium text-sm"
-                onClick={() => setShowNewCustomerForm(false)}
+                onClick={() => {
+                  setShowNewCustomerForm(false)
+                  setEditingDealInfo(null)
+                }}
               >
                 Cancel
               </button>
@@ -695,7 +808,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
                 onClick={handleCreateCustomer}
                 disabled={isSaving}
               >
-                {isSaving ? "Saving..." : "Create Customer"}
+                {isSaving ? "Saving..." : editingDealInfo ? "Save Changes" : "Create Customer"}
               </button>
             </div>
           </div>
