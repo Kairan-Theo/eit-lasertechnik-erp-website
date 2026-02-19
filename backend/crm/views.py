@@ -293,6 +293,12 @@ class DealViewSet(viewsets.ModelViewSet):
                 to_stage=updated_instance.stage
             )
 
+    def perform_destroy(self, instance):
+        customer = instance.customer
+        super().perform_destroy(instance)
+        if customer and not Deal.objects.filter(customer=customer).exists():
+            customer.delete()
+
 class EITViewSet(viewsets.ModelViewSet):
     queryset = EIT.objects.all()
     serializer_class = EITSerializer

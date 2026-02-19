@@ -240,6 +240,7 @@ function CRMPage() {
             id: d.id,
             title: d.title,
             customer: d.customer_name || "",
+            customerId: d.customer || null,
             amount: Number(d.amount),
             currency: d.currency,
             priority: d.priority,
@@ -1533,6 +1534,22 @@ function CRMPage() {
         return
     }
 
+    const customerIdsToDelete = []
+    stages.forEach(stage => {
+      stage.deals.forEach(d => {
+        if (!idsToDelete.includes(d.id)) return
+        if (!d.customerId) return
+        const already = customerIdsToDelete.includes(d.customerId)
+        if (already) return
+        const usedElsewhere = stages.some(s =>
+          s.deals.some(other => other.customerId === d.customerId && !idsToDelete.includes(other.id))
+        )
+        if (!usedElsewhere) {
+          customerIdsToDelete.push(d.customerId)
+        }
+      })
+    })
+
     // Optimistic update
     setStages((prev) => prev.map((stage) => ({
       ...stage,
@@ -1554,6 +1571,17 @@ function CRMPage() {
         } catch (err) {
           console.error("Failed to delete deal", dealId, err)
         }
+    }
+
+    for (const customerId of customerIdsToDelete) {
+      try {
+        await fetch(`${API_BASE}/customers/${customerId}/`, {
+          method: "DELETE",
+          headers
+        })
+      } catch (err) {
+        console.error("Failed to delete customer", customerId, err)
+      }
     }
   }
 
