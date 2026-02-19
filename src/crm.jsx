@@ -1740,7 +1740,7 @@ function CRMPage() {
                           key={d.id}
                           id={`deal-card-${cardKey}`}
                           className={`bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card ${
-                            isHighlighted ? "ring-2 ring-offset-2 ring-[#2D4485]" : ""
+                            isHighlighted ? "ring-2 ring-offset-2 ring-yellow-400" : ""
                           }`}
                           draggable
                           onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
