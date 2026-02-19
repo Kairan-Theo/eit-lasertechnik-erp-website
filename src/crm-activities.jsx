@@ -142,7 +142,7 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
       "bg-green-50 text-green-700 border-l-4 border-green-300",
       "bg-purple-50 text-purple-700 border-l-4 border-purple-300",
       "bg-pink-50 text-pink-700 border-l-4 border-pink-300",
-      "bg-yellow-50 text-yellow-700 border-l-4 border-yellow-300",
+      "bg-red-50 text-red-700 border-l-4 border-red-300",
     ]
     // Simple hash to keep color consistent for same activity
     const hash = (activity.id || 0) + (activity.activityName?.length || 0)
