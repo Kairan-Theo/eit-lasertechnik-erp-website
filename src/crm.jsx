@@ -3,7 +3,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import Navigation from "./components/navigation.jsx"
 import { LanguageProvider } from "./components/language-context"
-import { Mail, Trash2, FileText, Undo, Redo, ChevronDown, Paperclip, Link as LinkIcon, Type, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Indent, Baseline, X, Check } from "lucide-react"
+import { Mail, Trash, Trash2, FileText, Undo, Redo, ChevronDown, Paperclip, Link as LinkIcon, Type, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Indent, Baseline, X, Check } from "lucide-react"
 import "./index.css"
 import { API_BASE_URL } from "./config"
 import CRMCustomers from "./crm-customers.jsx"
@@ -248,6 +248,7 @@ function CRMPage() {
             phone: d.phone,
             address: d.address,
             taxId: d.tax_id,
+            extraContacts: d.extra_contacts || [],
             notes: d.notes,
             createdAt: d.created_at,
             expectedClose: d.expected_close,
@@ -284,8 +285,47 @@ function CRMPage() {
   const [openPriority, setOpenPriority] = React.useState(null) // { stageIndex, cardIndex }
   const priorityClass = (p) => (p==='high' ? 'bg-red-100 text-red-700' : p==='medium' ? 'bg-orange-100 text-orange-700' : p==='low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
   const priorityLabel = (p) => (p && p!=='none' ? p.charAt(0).toUpperCase()+p.slice(1) : 'Set Priority')
+  // Extracted note preview logic into a helper to keep JSX simple and readable
+  // - Returns "Today"/"Yesterday"/date based on latest valid note header
+  // - Falls back to "Notes" when there is no meaningful content
+  const getNotePreviewLabel = (notes) => {
+    if (!notes) return "Notes";
+    const fragments = notes.split("\n\n──────────────────────────\n");
+    let hasNonEmptyContent = false;
+    let validDateMatch = null;
+    fragments.forEach(fragment => {
+      const dateMatch = fragment.match(/^\[(\d{1,2}\/\d{1,2}\/\d{4}.*?)\]\s*/);
+      let contentWithoutDate = dateMatch ? fragment.replace(/^\[(\d{1,2}\/\d{1,2}\/\d{4}.*?)\]\s*/, "") : fragment;
+      const attachmentRegex = /[\r\n]*(<<Attachment:([^:]+):([^:]+):(.+?)>>)/g;
+      const cleanContent = contentWithoutDate.replace(attachmentRegex, "").trim();
+      const hasAttachments = contentWithoutDate.match(attachmentRegex);
+      if (cleanContent.length > 0 || (hasAttachments && hasAttachments.length > 0)) {
+        hasNonEmptyContent = true;
+        if (dateMatch && !validDateMatch) {
+          validDateMatch = dateMatch;
+        }
+      }
+    });
+    if (!hasNonEmptyContent) return "Notes";
+    if (validDateMatch) {
+      const datePart = validDateMatch[1].split(',')[0].trim();
+      if (!datePart) return "Notes";
+      const [day, month, year] = datePart.split('/').map(Number);
+      if (!day || !month || !year) return datePart;
+      const noteDate = new Date(year, month - 1, day);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (noteDate.getTime() === today.getTime()) return "Today";
+      if (noteDate.getTime() === yesterday.getTime()) return "Yesterday";
+      return datePart;
+    }
+    return "Notes";
+  }
   const defaultNewDeal = {
     company: "",
+    branch: "",
     contact: "",
     opportunity: "",
     email: "",
@@ -317,6 +357,7 @@ function CRMPage() {
   const [emailSuccess, setEmailSuccess] = React.useState(false)
   const [sortBy, setSortBy] = React.useState(null) // 'createdAt' | 'lastActivity' | 'expectedClose'
   const [sortAsc, setSortAsc] = React.useState(false)
+  const [searchTerm, setSearchTerm] = React.useState("")
   const [showCompanySuggestions, setShowCompanySuggestions] = React.useState(false)
   const [openEmail, setOpenEmail] = React.useState(null) // { stageIndex, cardIndex, to }
   const [emailSubject, setEmailSubject] = React.useState("")
@@ -330,6 +371,9 @@ function CRMPage() {
 
   const [openEdit, setOpenEdit] = React.useState(null) // { stageIndex, cardIndex }
   const [editingDeal, setEditingDeal] = React.useState(defaultNewDeal)
+  const [extraContacts, setExtraContacts] = React.useState([])
+  const [editExtraContacts, setEditExtraContacts] = React.useState([])
+  const [detailExtraContacts, setDetailExtraContacts] = React.useState([])
   const [isSending, setIsSending] = React.useState(false)
   const [emailConfig, setEmailConfig] = React.useState(() => {
     try {
@@ -353,6 +397,48 @@ function CRMPage() {
   const [tooltipPos, setTooltipPos] = React.useState({ top: 0, left: 0 })
 
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
+
+  const flatDeals = React.useMemo(
+    () =>
+      stages.flatMap((stage, stageIndex) =>
+        stage.deals.map((d, cardIndex) => ({
+          id: d.id,
+          title: d.title,
+          customer: d.customer,
+          stageName: stage.name,
+          stageIndex,
+          cardIndex,
+          pipelineNumber: stageIndex + 1,
+        })),
+      ),
+    [stages],
+  )
+
+  const searchResults = React.useMemo(() => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return []
+    return flatDeals
+      .filter((deal) => {
+        const customer = String(deal.customer || "").toLowerCase()
+        const title = String(deal.title || "").toLowerCase()
+        return customer.includes(q) || title.includes(q)
+      })
+      .slice(0, 20)
+  }, [flatDeals, searchTerm])
+
+  const [highlightedDealKey, setHighlightedDealKey] = React.useState(null)
+
+  const handleSearchResultClick = (deal) => {
+    const key = `${deal.stageIndex}-${deal.cardIndex}-${deal.id}`
+    setHighlightedDealKey(key)
+    const cardId = `deal-card-${key}`
+    requestAnimationFrame(() => {
+      const el = document.getElementById(cardId)
+      if (el && el.scrollIntoView) {
+        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" })
+      }
+    })
+  }
 
   const saveEmailConfig = (cfg) => {
     setEmailConfig(cfg)
@@ -850,6 +936,7 @@ function CRMPage() {
 
   const openDealDetail = (stageIndex, cardIndex) => {
     const d = stages[stageIndex].deals[cardIndex]
+    setDetailExtraContacts(d.extraContacts || d.extra_contacts || [])
     setDetailDeal({
         company: d.customer || d.customer_name || "",
         contact: d.contact || "",
@@ -922,6 +1009,7 @@ function CRMPage() {
           address: detailDeal.address, 
           taxId: detailDeal.taxId,
           poNumber: detailDeal.poNumber,
+          extraContacts: detailExtraContacts,
           notes: cleanedNotes,
           salesperson: detailDeal.salesperson,
           salespersonName: detailDeal.salesperson
@@ -951,6 +1039,7 @@ function CRMPage() {
             po_number: detailDeal.poNumber,
             notes: cleanedNotes,
             stage: stageName,
+            extra_contacts: detailExtraContacts,
             salesperson: detailDeal.salesperson
         }
 
@@ -1320,6 +1409,7 @@ function CRMPage() {
         stageIndex: stageIndex,
         salesperson: d.salesperson || "",
     })
+    setEditExtraContacts(d.extraContacts || d.extra_contacts || [])
     setOpenEdit({ stageIndex, cardIndex })
   }
   const saveEditCard = async () => {
@@ -1341,6 +1431,7 @@ function CRMPage() {
         address: editingDeal.address || "",
         taxId: editingDeal.taxId || "",
         poNumber: editingDeal.poNumber || "",
+        extraContacts: editExtraContacts,
         salesperson: editingDeal.salesperson || "",
     }
 
@@ -1391,6 +1482,7 @@ function CRMPage() {
             address: updatedFields.address,
             tax_id: updatedFields.taxId,
             po_number: updatedFields.poNumber,
+            extra_contacts: editExtraContacts,
             stage: stageName,
             salesperson: updatedFields.salesperson
         }
@@ -1495,7 +1587,59 @@ function CRMPage() {
             </div>
           </div>
           {activeTab === "Deals" && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-end">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search company or opportunity..."
+                  className="pl-10 pr-10 py-2 border border-slate-300 rounded-lg text-sm w-72 focus:outline-none focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] transition-all"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                    title="Clear Search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
+                {searchTerm && (
+                  <div className="absolute left-0 right-0 mt-2 bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl shadow-xl z-20 max-h-56 overflow-y-auto py-1">
+                    {searchResults.map((deal) => (
+                      <button
+                        type="button"
+                        key={`${deal.id}-${deal.stageIndex}-${deal.cardIndex}`}
+                        className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center justify-between gap-3 mx-1 rounded-lg"
+                        onClick={() => handleSearchResultClick(deal)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate font-medium text-slate-800">
+                            {deal.customer || "-"}
+                          </div>
+                          <div className="truncate text-xs text-slate-400">
+                            {deal.title}
+                          </div>
+                        </div>
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#2D4485]/8 text-[11px] font-semibold text-[#2D4485] border border-[#2D4485]/30 flex-shrink-0">
+                          {deal.pipelineNumber}
+                        </span>
+                      </button>
+                    ))}
+                    {searchResults.length === 0 && (
+                      <div className="px-3 py-2 text-xs text-slate-400 text-center">
+                        No matching deals
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <button 
                 onClick={() => { setNewDeal(defaultNewDeal); setShowNewForm(true); }}
                 className="px-5 py-2 text-sm font-medium text-white bg-[#2D4485] rounded-lg hover:bg-[#3D56A6] shadow-md transition-all hover:shadow-lg transform hover:-translate-y-0.5"
@@ -1559,212 +1703,194 @@ function CRMPage() {
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-3">
-                    {sortedDeals.map((d, cardIndex) => (
-                      <div
-                        key={d.id}
-                        className="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card"
-                        draggable
-                        onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
-                      >
-                        <div className="mb-2 flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0 flex flex-col items-start gap-1.5">
-                            <span 
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors max-w-full"
-                              onClick={(e) => { e.stopPropagation(); openDealDetail(stageIndex, cardIndex); }}
-                              title="View company details"
-                            >
-                              <span className="truncate text-xs leading-tight">{d.customer || d.customer_name || d.contact || d.email || d.title}</span>
-                            </span>
+                    {/* Cleaned up sortedDeals.map JSX so each deal returns one card and braces are balanced */}
+                    {sortedDeals.map((d, cardIndex) => {
+                      const cardKey = `${stageIndex}-${cardIndex}-${d.id}`
+                      const isHighlighted = highlightedDealKey === cardKey
+                      return (
+                        <div
+                          key={d.id}
+                          id={`deal-card-${cardKey}`}
+                          className={`bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-4 mb-3 hover:shadow-md hover:ring-[#2D4485]/30 transition-all cursor-grab relative group/card ${
+                            isHighlighted ? "ring-2 ring-[#2D4485] ring-offset-2" : ""
+                          }`}
+                          draggable
+                          onDragStart={(e) => onCardDragStart(stageIndex, cardIndex, e)}
+                        >
+                          <div className="mb-2 flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0 flex flex-col items-start gap-1.5">
+                              <span 
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#2D4485] text-sm font-semibold border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors max-w-full"
+                                onClick={(e) => { e.stopPropagation(); openDealDetail(stageIndex, cardIndex); }}
+                                title="View company details"
+                              >
+                                <span className="truncate text-xs leading-tight">{d.customer || d.customer_name || d.contact || d.email || d.title}</span>
+                              </span>
 
 
-                            {/* PO Number display removed */}
+                              {/* PO Number display removed */}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-blue-100 bg-blue-50 text-[#2D4485] hover:bg-blue-100 transition-colors"
+                                onClick={(e) => { e.stopPropagation(); openEmailModal(stageIndex, cardIndex); }}
+                                title="Send email"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                                  <rect width="20" height="16" x="2" y="4" rx="2" />
+                                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                                </svg>
+                              </button>
+                              <button
+                                className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-red-100 bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                                onClick={(e) => { e.stopPropagation(); deleteCard(stageIndex, cardIndex); }}
+                                title="Delete deal"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                                  <path d="M3 6h18" />
+                                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                  <line x1="10" x2="10" y1="11" y2="17" />
+                                  <line x1="14" x2="14" y1="11" y2="17" />
+                                </svg>
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-blue-100 bg-blue-50 text-[#2D4485] hover:bg-blue-100 transition-colors"
-                              onClick={(e) => { e.stopPropagation(); openEmailModal(stageIndex, cardIndex); }}
-                              title="Send email"
+                          <div className="flex justify-between items-start gap-2 mb-3">
+                            <h4 
+                              className="font-semibold text-slate-800 text-sm leading-snug"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                                <rect width="20" height="16" x="2" y="4" rx="2" />
-                                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                              </svg>
-                            </button>
-                            <button
-                              className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-red-100 bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
-                              onClick={(e) => { e.stopPropagation(); deleteCard(stageIndex, cardIndex); }}
-                              title="Delete deal"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                                <path d="M3 6h18" />
-                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                                <line x1="10" x2="10" y1="11" y2="17" />
-                                <line x1="14" x2="14" y1="11" y2="17" />
-                              </svg>
-                            </button>
+                              {d.title}
+                            </h4>
                           </div>
-                        </div>
-                      <div className="flex justify-between items-start gap-2 mb-3">
-                         <h4 
-                           className="font-semibold text-slate-800 text-sm leading-snug"
-                         >
-                           {d.title}
-                         </h4>
-                       </div>
-                      
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-slate-900 font-bold text-sm">
-                            <span className="text-xs font-normal text-slate-400">{d.currency}</span>
-                            {d.amount.toLocaleString()}
-                          </div>
-                          {(d.salesperson || d.salespersonName) && (
-                            <span 
-                              className="text-xs text-slate-600 font-medium px-1 flex items-center gap-1.5"
-                              title={`Salesperson: ${d.salesperson || d.salespersonName}`}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                              </svg>
-                              {d.salesperson || d.salespersonName}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
-                        <div className="flex items-center gap-2 relative">
-                           <div 
-                             className={`inline-flex items-center gap-1 px-2.5 h-6 rounded-full text-[11px] text-white font-bold shadow-sm ${d.priority === 'high' ? 'bg-red-500 ring-2 ring-red-100' : d.priority === 'medium' ? 'bg-orange-400 ring-2 ring-orange-100' : d.priority === 'low' ? 'bg-[#2D4485] ring-2 ring-blue-100' : 'bg-slate-400 ring-2 ring-slate-200'} cursor-pointer hover:scale-110 transition-transform`}
-                             onClick={(e) => {
-                                e.stopPropagation();
-                                const open = openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex
-                                setOpenPriority(open ? null : { stageIndex, cardIndex })
-                             }}
-                             title={`Priority: ${priorityLabel(d.priority)}`}
-                           >
-                              {priorityLabel(d.priority)}
-                           </div>
-                           {openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex && (
-                              <div className="absolute left-0 bottom-8 bg-white border border-slate-200 rounded-lg shadow-xl z-20 w-32 py-1">
-                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "low"); setOpenPriority(null); }}>Low</button>
-                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "medium"); setOpenPriority(null); }}>Medium</button>
-                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "high"); setOpenPriority(null); }}>High</button>
-                                <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "none"); setOpenPriority(null); }}>None</button>
+                          
+                          <div className="space-y-2 mb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 text-slate-900 font-bold text-sm">
+                                <span className="text-xs font-normal text-slate-400">{d.currency}</span>
+                                {d.amount.toLocaleString()}
                               </div>
-                           )}
+                              <div className="flex flex-col items-end gap-1">
+                                {(d.salesperson || d.salespersonName) && (
+                                  <span 
+                                    className="text-xs text-slate-600 font-medium px-1 flex items-center gap-1.5"
+                                    title={`Salesperson: ${d.salesperson || d.salespersonName}`}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                    </svg>
+                                    {d.salesperson || d.salespersonName}
+                                  </span>
+                                )}
+                                {d.contact && (
+                                  <span 
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-[11px] text-slate-700 border border-slate-200 max-w-[140px]"
+                                    title={`Contact person: ${d.contact}`}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                                      <path d="M2 5a2 2 0 012-2h1.5a2 2 0 011.6.8L8.4 5H16a2 2 0 012 2v6.5a2.5 2.5 0 01-2.5 2.5H5a3 3 0 01-3-3V5z" />
+                                      <path d="M6 7.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
+                                    </svg>
+                                    <span className="truncate">{d.contact}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
 
-                           <div 
-                             className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded px-1.5 py-0.5 transition-colors"
-                             onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenActivity(
-                                  openActivity && openActivity.stageIndex===stageIndex && openActivity.cardIndex===cardIndex ? null : { stageIndex, cardIndex }
-                                )
-                             }}
-                             title={(() => {
-                                const item = nextSchedule(d)
-                                if (!item) return "No upcoming activity"
-                                const txt = formatActivityPreviewText(item.text || "Activity")
-                                const dt = item.dueAt ? new Date(item.dueAt).toLocaleString() : ""
-                                return dt ? `${txt} — ${dt}` : txt
-                             })()}
-                           >
-                             {(() => {
-                                const item = nextSchedule(d)
-                                return item ? (
-                                   <>
-                                     <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                     <span className="text-[10px] text-slate-500 font-medium truncate max-w-[80px]">{formatActivityPreviewText(item.text || "Activity")}</span>
-                                   </>
-                                ) : (
-                                   <>
-                                     <svg className="w-3.5 h-3.5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                   </>
-                                )
-                             })()}
-                           </div>
+                          <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
+                            <div className="flex items-center gap-2 relative">
+                              {/* Made the Next Activity chip more prominent: pill style, border, shadow, stronger text */}
+                              <div 
+                                className={`inline-flex items-center gap-1 px-2.5 h-6 rounded-full text-[11px] text-white font-bold shadow-sm ${d.priority === 'high' ? 'bg-red-500 ring-2 ring-red-100' : d.priority === 'medium' ? 'bg-orange-400 ring-2 ring-orange-100' : d.priority === 'low' ? 'bg-[#2D4485] ring-2 ring-blue-100' : 'bg-slate-400 ring-2 ring-slate-200'} cursor-pointer hover:scale-110 transition-transform`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const open = openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex
+                                  setOpenPriority(open ? null : { stageIndex, cardIndex })
+                                }}
+                                title={`Priority: ${priorityLabel(d.priority)}`}
+                              >
+                                {priorityLabel(d.priority)}
+                              </div>
+                              {openPriority && openPriority.stageIndex===stageIndex && openPriority.cardIndex===cardIndex && (
+                                <div className="absolute left-0 bottom-8 bg-white border border-slate-200 rounded-lg shadow-xl z-20 w-32 py-1">
+                                  <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "low"); setOpenPriority(null); }}>Low</button>
+                                  <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "medium"); setOpenPriority(null); }}>Medium</button>
+                                  <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "high"); setOpenPriority(null); }}>High</button>
+                                  <button className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); setCardPriority(stageIndex, cardIndex, "none"); setOpenPriority(null); }}>None</button>
+                                </div>
+                              )}
+
+                              <div 
+                                className="flex items-center gap-1.5 cursor-pointer rounded-full px-2 py-0.5 border border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenActivity(
+                                    openActivity && openActivity.stageIndex===stageIndex && openActivity.cardIndex===cardIndex ? null : { stageIndex, cardIndex }
+                                  )
+                                }}
+                                title={(() => {
+                                  const item = nextSchedule(d)
+                                  if (!item) return "No upcoming activity"
+                                  const txt = formatActivityPreviewText(item.text || "Activity")
+                                  const dt = item.dueAt ? new Date(item.dueAt).toLocaleString() : ""
+                                  return dt ? `${txt} — ${dt}` : txt
+                                })()}
+                              >
+                                {(() => {
+                                  const item = nextSchedule(d)
+                                  return item ? (
+                                    <>
+                                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                      <span className="text-xs text-slate-700 font-semibold truncate max-w-[100px]">{formatActivityPreviewText(item.text || "Activity")}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg className="w-3.5 h-3.5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </>
+                                  )
+                                })()}
+                              </div>
+                            </div>
+                            
+                            {/* Made the Notes chip more noticeable and tied to getNotePreviewLabel(d.notes) */}
+                            <div 
+                              className={`flex items-center gap-1.5 max-w-[140px] cursor-pointer group/note px-2 py-0.5 rounded-full border text-[11px] ${
+                                d.notes ? "bg-[#2D4485]/5 border-[#2D4485]/40" : "bg-slate-50 border-slate-200"
+                              }`}
+                              onClick={(e) => { e.stopPropagation(); openDealNote(stageIndex, cardIndex); }}
+                              title={d.notes || "Add note"}
+                            >
+                              <FileText className={`w-3.5 h-3.5 shrink-0 transition-colors ${d.notes ? "text-[#2D4485]" : "text-slate-400 group-hover/note:text-[#2D4485]"}`} />
+                              <span className={`truncate transition-colors ${d.notes ? "text-[#2D4485] font-semibold" : "text-slate-500 group-hover/note:text-[#2D4485]"}`}>
+                                {getNotePreviewLabel(d.notes)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        
-                        <div 
-                           className="flex items-center gap-1.5 max-w-[120px] cursor-pointer group/note"
-                           onClick={(e) => { e.stopPropagation(); openDealNote(stageIndex, cardIndex); }}
-                           title={d.notes || "Add note"}
-                         >
-                           <FileText className={`w-3.5 h-3.5 shrink-0 transition-colors ${d.notes ? "text-[#2D4485]" : "text-slate-300 group-hover/note:text-[#2D4485]"}`} />
-                           <span className={`text-[11px] truncate transition-colors ${d.notes ? "text-[#2D4485] font-medium" : "text-slate-400 group-hover/note:text-[#2D4485]"}`}>
-                             {(() => {
-            if (!d.notes) return "Notes";
-            
-            // Check content and find last valid date
-            const fragments = d.notes.split("\n\n──────────────────────────\n");
-            let hasNonEmptyContent = false;
-            let validDateMatch = null;
-            
-            fragments.forEach(fragment => {
-                const dateMatch = fragment.match(/^\[(\d{1,2}\/\d{1,2}\/\d{4}.*?)\]\s*/);
-                let contentWithoutDate = dateMatch ? fragment.replace(/^\[(\d{1,2}\/\d{1,2}\/\d{4}.*?)\]\s*/, "") : fragment;
-                
-                const attachmentRegex = /[\r\n]*(<<Attachment:([^:]+):([^:]+):(.+?)>>)/g;
-                const cleanContent = contentWithoutDate.replace(attachmentRegex, "").trim();
-                const hasAttachments = contentWithoutDate.match(attachmentRegex);
-                
-                if (cleanContent.length > 0 || (hasAttachments && hasAttachments.length > 0)) {
-                    hasNonEmptyContent = true;
-                    if (dateMatch && !validDateMatch) {
-                        validDateMatch = dateMatch;
-                    }
-                }
-            });
-            
-            if (!hasNonEmptyContent) return "Notes";
+                      )
+                    })}
 
-            if (validDateMatch) {
-              const datePart = validDateMatch[1].split(',')[0].trim();
-              if (!datePart) return "Notes";
-              
-              const [day, month, year] = datePart.split('/').map(Number);
-              if (!day || !month || !year) return datePart; // Fallback if parsing fails
-
-              const noteDate = new Date(year, month - 1, day);
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const yesterday = new Date(today);
-              yesterday.setDate(yesterday.getDate() - 1);
-              
-              if (noteDate.getTime() === today.getTime()) return "Today";
-              if (noteDate.getTime() === yesterday.getTime()) return "Yesterday";
-              return datePart;
-            }
-            return "Notes";
-          })()}
-                           </span>
-                         </div>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  <button 
-                    onClick={() => {
-                        setNewDeal({...defaultNewDeal, stageIndex: stageIndex});
+                    <button 
+                      onClick={() => {
+                        setNewDeal({ ...defaultNewDeal, stageIndex: stageIndex });
                         setShowNewForm(true);
-                    }}
-                    className="w-full py-2.5 mt-2 text-sm font-medium text-slate-500 hover:text-[#2D4485] hover:bg-slate-200/50 rounded-lg border border-transparent hover:border-slate-200 transition-all flex items-center justify-center gap-2"
-                  >
-                    <span className="text-lg leading-none">+</span> New deal
-                  </button>
-                </div>
+                      }}
+                      className="w-full py-2.5 mt-2 text-sm font-medium text-slate-500 hover:text-[#2D4485] hover:bg-slate-200/50 rounded-lg border border-transparent hover:border-slate-200 transition-all flex items-center justify-center gap-2"
+                    >
+                      <span className="text-lg leading-none">+</span> New deal
+                    </button>
+                  </div>
 
-                {/* Column Footer */}
-                <div className="p-3 border-t border-slate-200/60 bg-slate-50/50 rounded-b-2xl">
-                  <div className="flex flex-col items-center justify-center text-center">
-                    <div className="text-sm text-slate-700 font-semibold">Total: {total.toLocaleString()} ฿</div>
+                  {/* Column Footer */}
+                  <div className="p-3 border-t border-slate-200/60 bg-slate-50/50 rounded-b-2xl">
+                    <div className="flex flex-col items-center justify-center text-center">
+                      <div className="text-sm text-slate-700 font-semibold">Total: {total.toLocaleString()} ฿</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
           
           <div className="w-80 shrink-0 p-4">
              <button 
@@ -2081,12 +2207,22 @@ function CRMPage() {
                               placeholder="Deal opportunity name"
                             />
                           </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Branch</label>
+                            <input 
+                              value={newDeal.branch || ""} 
+                              onChange={(e)=>setNewDeal({...newDeal, branch:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Branch (e.g. Head Office / Branch 1)"
+                            />
+                          </div>
                         </div>
                       </div>
 
                       <div>
                         <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="rounded-2xl border border-[#2D4485]/40 bg-white shadow-md px-5 py-4 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
                             <input 
@@ -2122,6 +2258,92 @@ function CRMPage() {
                               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
                               placeholder="Contact person"
                             />
+                          </div>
+                          {editExtraContacts.map((c, index) => {
+                            const update = (field, value) => {
+                              const next = [...editExtraContacts]
+                              next[index] = { ...next[index], [field]: value }
+                              setEditExtraContacts(next)
+                            }
+                            const remove = () => {
+                              const next = editExtraContacts.filter((_, i) => i !== index)
+                              setEditExtraContacts(next)
+                            }
+                            return (
+                              <div
+                                key={index}
+                                className="sm:col-span-2 mt-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3 space-y-3"
+                              >
+                                <div className="flex items-center justify-between text-sm font-semibold text-[#2D4485]">
+                                  <span>Additional contact {index + 1}</span>
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center p-1 text-red-600 hover:text-red-800"
+                                    onClick={remove}
+                                    title="Delete contact"
+                                  >
+                                    <Trash className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
+                                    <input
+                                      value={c.name || ""}
+                                      onChange={(e) => update("name", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Contact person name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                                    <input
+                                      value={c.email || ""}
+                                      onChange={(e) => update("email", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Email address"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Mobile</label>
+                                    <input
+                                      value={c.mobile || ""}
+                                      onChange={(e) => update("mobile", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Mobile number"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Position</label>
+                                    <input
+                                      value={c.position || ""}
+                                      onChange={(e) => update("position", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Position"
+                                    />
+                                  </div>
+                                  <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Division</label>
+                                    <input
+                                      value={c.division || ""}
+                                      onChange={(e) => update("division", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Division"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                          </div>
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              className="inline-flex items-center px-3 py-1.5 rounded-full border border-[#2D4485]/50 text-xs font-semibold text-[#2D4485] bg-white hover:bg-[#2D4485]/5 transition-colors"
+                              onClick={() => setEditExtraContacts([...editExtraContacts, {}])}
+                            >
+                              + Add more contact person
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -2304,47 +2526,143 @@ function CRMPage() {
                               placeholder="Deal opportunity name"
                             />
                           </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Branch</label>
+                            <input 
+                              value={detailDeal.branch || ""} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, branch:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Branch (e.g. Head Office / Branch 1)"
+                            />
+                          </div>
                         </div>
                       </div>
 
                       <div>
                         <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
-                            <input 
-                              value={detailDeal.email} 
-                              onChange={(e)=>setDetailDeal({...detailDeal, email:e.target.value})} 
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                              placeholder="Email address"
-                            />
+                        <div className="rounded-2xl border border-[#2D4485]/40 bg-white shadow-md px-5 py-4 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                              <input 
+                                value={detailDeal.email} 
+                                onChange={(e)=>setDetailDeal({...detailDeal, email:e.target.value})} 
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                                placeholder="Email address"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+                              <input 
+                                value={detailDeal.phone} 
+                                onChange={(e)=>setDetailDeal({...detailDeal, phone:e.target.value})} 
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                                placeholder="Phone number"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
+                              <input 
+                                value={detailDeal.address} 
+                                onChange={(e)=>setDetailDeal({...detailDeal, address:e.target.value})} 
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                                placeholder="Company address"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
+                              <input 
+                                value={detailDeal.contact} 
+                                onChange={(e)=>setDetailDeal({...detailDeal, contact:e.target.value})} 
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                                placeholder="Contact person"
+                              />
+                            </div>
+                            {detailExtraContacts.map((c, index) => {
+                              const update = (field, value) => {
+                                const next = [...detailExtraContacts]
+                                next[index] = { ...next[index], [field]: value }
+                                setDetailExtraContacts(next)
+                              }
+                              const remove = () => {
+                                const next = detailExtraContacts.filter((_, i) => i !== index)
+                                setDetailExtraContacts(next)
+                              }
+                              return (
+                                <div
+                                  key={index}
+                                  className="sm:col-span-2 mt-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3 space-y-3"
+                                >
+                                  <div className="flex items-center justify-between text-sm font-semibold text-[#2D4485]">
+                                    <span>Additional contact {index + 1}</span>
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center justify-center p-1 text-red-600 hover:text-red-800"
+                                      onClick={remove}
+                                      title="Delete contact"
+                                    >
+                                      <Trash className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
+                                      <input
+                                        value={c.name || ""}
+                                        onChange={(e) => update("name", e.target.value)}
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                        placeholder="Contact person name"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                                      <input
+                                        value={c.email || ""}
+                                        onChange={(e) => update("email", e.target.value)}
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                        placeholder="Email address"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-slate-500 mb-1">Mobile</label>
+                                      <input
+                                        value={c.mobile || ""}
+                                        onChange={(e) => update("mobile", e.target.value)}
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                        placeholder="Mobile number"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-slate-500 mb-1">Position</label>
+                                      <input
+                                        value={c.position || ""}
+                                        onChange={(e) => update("position", e.target.value)}
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                        placeholder="Position"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <label className="block text-xs font-medium text-slate-500 mb-1">Division</label>
+                                      <input
+                                        value={c.division || ""}
+                                        onChange={(e) => update("division", e.target.value)}
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                        placeholder="Division"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
-                            <input 
-                              value={detailDeal.phone} 
-                              onChange={(e)=>setDetailDeal({...detailDeal, phone:e.target.value})} 
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                              placeholder="Phone number"
-                            />
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
-                            <input 
-                              value={detailDeal.address} 
-                              onChange={(e)=>setDetailDeal({...detailDeal, address:e.target.value})} 
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                              placeholder="Company address"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
-                            <input 
-                              value={detailDeal.contact} 
-                              onChange={(e)=>setDetailDeal({...detailDeal, contact:e.target.value})} 
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                              placeholder="Contact person"
-                            />
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              className="inline-flex items-center px-3 py-1.5 rounded-full border border-[#2D4485]/50 text-xs font-semibold text-[#2D4485] bg-white hover:bg-[#2D4485]/5 transition-colors"
+                              onClick={() => setDetailExtraContacts([...detailExtraContacts, {}])}
+                            >
+                              + Add more contact person
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -2794,12 +3112,31 @@ function CRMPage() {
                               placeholder="Deal opportunity name"
                             />
                           </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Branch</label>
+                            <input 
+                              value={newDeal.branch || ""} 
+                              onChange={(e)=>setNewDeal({...newDeal, branch:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Branch (e.g. Head Office / Branch 1)"
+                            />
+                          </div>
                         </div>
                       </div>
 
                       <div>
-                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact Person</div>
+                        <div className="rounded-2xl border border-[#2D4485]/40 bg-white shadow-md px-5 py-4 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
+                            <input 
+                              value={newDeal.contact} 
+                              onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Contact person name"
+                            />
+                          </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
                             <input 
@@ -2810,31 +3147,113 @@ function CRMPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Mobile</label>
                             <input 
                               value={newDeal.phone} 
                               onChange={(e)=>setNewDeal({...newDeal, phone:e.target.value})} 
                               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                              placeholder="Phone number"
-                            />
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
-                            <input 
-                              value={newDeal.address} 
-                              onChange={(e)=>setNewDeal({...newDeal, address:e.target.value})} 
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                              placeholder="Company address"
+                              placeholder="Mobile number"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Position</label>
                             <input 
-                              value={newDeal.contact} 
-                              onChange={(e)=>setNewDeal({...newDeal, contact:e.target.value})} 
                               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                              placeholder="Contact person"
+                              placeholder="Position"
                             />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Division</label>
+                            <input 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Division"
+                            />
+                          </div>
+                          {extraContacts.map((c, index) => {
+                            const update = (field, value) => {
+                              const next = [...extraContacts]
+                              next[index] = { ...next[index], [field]: value }
+                              setExtraContacts(next)
+                            }
+                            const remove = () => {
+                              const next = extraContacts.filter((_, i) => i !== index)
+                              setExtraContacts(next)
+                            }
+                            return (
+                              <div
+                                key={index}
+                                className="sm:col-span-2 mt-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3 space-y-3"
+                              >
+                                <div className="flex items-center justify-between text-sm font-semibold text-[#2D4485]">
+                                  <span>Additional contact {index + 1}</span>
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center p-1 text-red-600 hover:text-red-800"
+                                    onClick={remove}
+                                    title="Delete contact"
+                                  >
+                                    <Trash className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
+                                    <input
+                                      value={c.name || ""}
+                                      onChange={(e) => update("name", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Contact person name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                                    <input
+                                      value={c.email || ""}
+                                      onChange={(e) => update("email", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Email address"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Mobile</label>
+                                    <input
+                                      value={c.mobile || ""}
+                                      onChange={(e) => update("mobile", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Mobile number"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Position</label>
+                                    <input
+                                      value={c.position || ""}
+                                      onChange={(e) => update("position", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Position"
+                                    />
+                                  </div>
+                                  <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Division</label>
+                                    <input
+                                      value={c.division || ""}
+                                      onChange={(e) => update("division", e.target.value)}
+                                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                                      placeholder="Division"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                          </div>
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              className="inline-flex items-center px-3 py-1.5 rounded-full border border-[#2D4485]/50 text-xs font-semibold text-[#2D4485] bg-white hover:bg-[#2D4485]/5 transition-colors"
+                              onClick={() => setExtraContacts([...extraContacts, {}])}
+                            >
+                              + Add more contact person
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -2956,6 +3375,7 @@ function CRMPage() {
                           phone: newDeal.phone || "",
                           address: newDeal.address || "",
                           tax_id: newDeal.taxId || "",
+                          extra_contacts: extraContacts,
                           notes: "",
                           stage: stageName,
                           write_customer_name: newDeal.company || "",
@@ -2981,6 +3401,7 @@ function CRMPage() {
                             await fetchDeals()
                             setShowNewForm(false)
                             setNewDeal(defaultNewDeal)
+                            setExtraContacts([])
                             try {
                               const sname = String(stageName).toLowerCase()
                               const isClosedWon = sname.includes("close") && sname.includes("won")

@@ -198,6 +198,7 @@ class Deal(models.Model):
     phone = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
     tax_id = models.CharField(max_length=50, blank=True)
+    extra_contacts = models.JSONField(default=list, blank=True)
     items = models.JSONField(default=list, blank=True)
     notes = models.TextField(blank=True)
     stage = models.CharField(max_length=50, default="New")

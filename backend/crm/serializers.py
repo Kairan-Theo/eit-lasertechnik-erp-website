@@ -236,6 +236,7 @@ class DealSerializer(serializers.ModelSerializer):
             'phone',
             'address',
             'tax_id',
+            'extra_contacts',
             'items',
             'notes',
             'stage',
@@ -250,7 +251,7 @@ class DealSerializer(serializers.ModelSerializer):
         return obj.customer.company_name if obj.customer else ""
 
     def to_internal_value(self, data):
-        # Handle JSON strings in FormData (e.g. for items)
+        # Handle JSON strings in FormData (e.g. for items / extra_contacts)
         if 'items' in data and isinstance(data['items'], str):
             import json
             try:
@@ -261,6 +262,16 @@ class DealSerializer(serializers.ModelSerializer):
                     data = data.copy()
                 
                 data['items'] = json.loads(data['items'])
+            except:
+                pass
+        if 'extra_contacts' in data and isinstance(data['extra_contacts'], str):
+            import json
+            try:
+                if hasattr(data, 'dict'):
+                    data = data.dict()
+                elif hasattr(data, 'copy'):
+                    data = data.copy()
+                data['extra_contacts'] = json.loads(data['extra_contacts'])
             except:
                 pass
         return super().to_internal_value(data)
