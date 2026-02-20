@@ -256,6 +256,7 @@ function CRMPage() {
             poNumber: d.po_number || "",
             salesperson: d.salesperson || "",
             salespersonName: d.salesperson_name || "",
+            branch: d.branch || "",
             activitySchedules: (d.activity_schedules || []).map(s => ({
               id: s.id,
               startAt: s.start_at ? s.start_at.slice(0, 16) : "",
@@ -940,6 +941,7 @@ function CRMPage() {
     setDetailExtraContacts(d.extraContacts || d.extra_contacts || [])
     setDetailDeal({
         company: d.customer || d.customer_name || "",
+        branch: d.branch || "",
         contact: d.contact || "",
         opportunity: d.title || "",
         email: d.email || "",
@@ -1000,6 +1002,7 @@ function CRMPage() {
           ...d, 
           customer: detailDeal.company,
           customer_name: detailDeal.company,
+          branch: detailDeal.branch,
           title: detailDeal.opportunity,
           amount: detailDeal.amount,
           currency: detailDeal.currency,
@@ -1029,6 +1032,7 @@ function CRMPage() {
         const apiBody = {
             title: detailDeal.opportunity,
             customer_name: detailDeal.company,
+            branch: detailDeal.branch,
             amount: detailDeal.amount,
             currency: detailDeal.currency,
             priority: detailDeal.priority,

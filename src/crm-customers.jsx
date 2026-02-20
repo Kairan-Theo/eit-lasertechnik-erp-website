@@ -86,6 +86,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       tax_id: newDeal.taxId || "",
       extra_contacts: extraContacts,
       salesperson: newDeal.salesperson || "",
+      branch: newDeal.branch || "",
     }
 
     let url = `${API_BASE_URL}/api/deals/`
