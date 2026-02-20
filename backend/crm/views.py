@@ -12,6 +12,7 @@ from .serializers import DealSerializer, UserSerializer, ActivityScheduleSeriali
 import json
 import os
 import uuid
+import random
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 import mimetypes
@@ -751,26 +752,22 @@ def check_tracking_status(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup(request):
-    data = request.data
-    # Use email as username if username not provided
+    data = request.data.copy()
     if 'email' in data and 'username' not in data:
         data['username'] = data['email']
     
     serializer = UserSerializer(data=data)
     if serializer.is_valid():
         user = serializer.save()
+        user.is_active = False
+        user.save(update_fields=['is_active'])
         print(f"DEBUG_SIGNUP: Created user {user.email} (ID: {user.id})")
-        token, created = Token.objects.get_or_create(user=user)
-        # Ensure profile exists (signal should handle it, but safe check)
         if not hasattr(user, 'profile'):
-            # Default to no access for new signups
             UserProfile.objects.create(user=user, allowed_apps="")
         else:
-            # Explicitly set to empty if created by signal but we want to ensure no access
             user.profile.allowed_apps = ""
             user.profile.save()
 
-        # Create PermissionControl record
         try:
             if not hasattr(user, 'permission_control'):
                 PermissionControl.objects.create(
@@ -783,19 +780,73 @@ def signup(request):
         except Exception as e:
             print(f"Error creating PermissionControl: {e}")
 
-        # Create notification for admins
         print(f"DEBUG_SIGNUP: Creating notification for {user.email}")
         Notification.objects.create(
             message=f"New user registered: {user.email} ({user.first_name or 'No Name'})",
             type="user_registration"
         )
-            
+        code = f"{random.randint(100000, 999999)}"
+        email = user.email
+        subject = "Your verification code"
+        body = f"Your verification code is {code}"
+        try:
+            msg = MIMEMultipart()
+            msg["From"] = "eit@eitlaser.com"
+            msg["To"] = email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(body, "plain", _charset="utf-8"))
+            server = smtplib.SMTP("smtp.gmail.com", 587)
+            server.starttls()
+            server.login("eit@eitlaser.com", "grsc gthh jnuy ixtc")
+            server.sendmail("eit@eitlaser.com", email, msg.as_string())
+            server.quit()
+            Notification.objects.create(
+                message=f"EMAIL_VERIFICATION:{email}:{code}",
+                type="signup"
+            )
+        except Exception as e:
+            print(f"Error sending verification email: {e}")
         return Response({
-            'token': token.key,
-            'user_id': user.pk,
+            'verification_required': True,
             'email': user.email
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_email(request):
+    email = (request.data.get('email') or "").strip().lower()
+    code = (request.data.get('code') or "").strip()
+    if not email or not code:
+        return Response({'error': 'Email and code are required'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response({'error': 'Invalid email'}, status=status.HTTP_400_BAD_REQUEST)
+    notif = Notification.objects.filter(
+        type='signup',
+        message__startswith=f"EMAIL_VERIFICATION:{email}:"
+    ).order_by('-created_at').first()
+    if not notif:
+        return Response({'error': 'No verification code found'}, status=status.HTTP_400_BAD_REQUEST)
+    parts = notif.message.rsplit(':', 1)
+    if len(parts) != 2:
+        return Response({'error': 'Invalid verification record'}, status=status.HTTP_400_BAD_REQUEST)
+    stored_code = parts[1]
+    if stored_code != code:
+        return Response({'error': 'Invalid code'}, status=status.HTTP_400_BAD_REQUEST)
+    if timezone.now() - notif.created_at > timedelta(minutes=15):
+        return Response({'error': 'Code expired'}, status=status.HTTP_400_BAD_REQUEST)
+    user.is_active = True
+    user.save(update_fields=['is_active'])
+    token, created = Token.objects.get_or_create(user=user)
+    return Response({
+        'verified': True,
+        'token': token.key,
+        'user_id': user.pk,
+        'email': user.email
+    })
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
