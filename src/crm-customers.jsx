@@ -206,6 +206,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   const columns = [
     { id: 'index', label: 'Index', width: 'w-16' },
     { id: 'company', label: 'Company Name' },
+    { id: 'branch', label: 'Branch' },
     { id: 'email', label: 'Email' },
     { id: 'phone', label: 'Phone' },
     { id: 'address', label: 'Address', defaultClass: 'max-w-xs truncate' },
@@ -235,15 +236,16 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
     switch (col.id) {
       case 'index': return <span className="font-medium text-gray-800">{index + 1}</span>;
       case 'company': return <span className="font-medium text-gray-800">{deal.customer || deal.company || "-"}</span>;
+      case 'branch': return deal.branch || "-";
       case 'contactEmail': {
         const extras = deal.extraContacts || deal.extra_contacts || []
         const primary = extras[0] || {}
-        return primary.email || "-"
+        return primary.email || deal.email || "-"
       }
       case 'contactMobile': {
         const extras = deal.extraContacts || deal.extra_contacts || []
         const primary = extras[0] || {}
-        return primary.mobile || "-"
+        return primary.mobile || deal.phone || "-"
       }
       case 'contactPosition': {
         const extras = deal.extraContacts || deal.extra_contacts || []
