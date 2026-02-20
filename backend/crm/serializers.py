@@ -9,6 +9,79 @@ import os, uuid
 from django.contrib.auth.models import User
 from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, Receipt, TaxInvoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
 
+def _next_sequence(model_cls, field_name: str, pad: int = 4, allow_duplicate: bool = False) -> str:
+    # Comment: Auto-increment generator — finds the maximum numeric value among existing codes and returns next
+    # Supports editable codes: generation occurs only when the client does not provide a value
+    try:
+        vals = list(model_cls.objects.values_list(field_name, flat=True))
+        max_num = 0
+        for v in vals:
+            if not v:
+                continue
+            s = str(v)
+            # Extract trailing digits; if none, skip
+            import re
+            m = re.search(r'(\d+)$', s)
+            if m:
+                try:
+                    num = int(m.group(1))
+                    if num > max_num:
+                        max_num = num
+                except Exception:
+                    pass
+        next_num = max_num + 1
+        code = str(next_num).zfill(pad)
+        if not allow_duplicate:
+            # Ensure uniqueness by incrementing until unused
+            while model_cls.objects.filter(**{field_name: code}).exists():
+                next_num += 1
+                code = str(next_num).zfill(pad)
+        return code
+    except Exception:
+        # Fallback to timestamp-based code when query fails
+        return str(int(uuid.uuid4().hex[:pad], 16)).zfill(pad)
+
+def _next_item_code_for_quotation(quotation, pad: int = 4) -> str:
+    # Comment: Generate a unique numeric item code within a quotation by scanning existing quo_item values
+    try:
+        max_num = 0
+        for it in quotation.quotation_items.all():
+            s = str(it.quo_item or "")
+            import re
+            m = re.fullmatch(r'\d+', s)
+            if m:
+                try:
+                    num = int(s)
+                    if num > max_num:
+                        max_num = num
+                except Exception:
+                    pass
+        nxt = max_num + 1
+        return str(nxt).zfill(pad)
+    except Exception:
+        # Comment: Fallback to UUID-derived integer if query fails
+        return str(int(uuid.uuid4().hex[:pad], 16)).zfill(pad)
+
+def _next_base_item_number(quotation) -> str:
+    # Comment: Generate next base integer code (no padding) for quo_item; ignores dotted spec rows like "1.2"
+    try:
+        max_num = 0
+        for it in quotation.quotation_items.all():
+            s = str(it.quo_item or "")
+            import re
+            m = re.fullmatch(r'\d+', s)
+            if m:
+                try:
+                    num = int(s)
+                    if num > max_num:
+                        max_num = num
+                except Exception:
+                    pass
+        return str(max_num + 1)
+    except Exception:
+        # Comment: Safe fallback based on UUID fragment when DB scan fails
+        return str(int(uuid.uuid4().hex[:4], 16))
+
 class SubProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubProject
@@ -119,6 +192,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def create(self, validated_data):
+        # Comment: Auto-generate invoice number when not provided; keep editable when client sends a value
+        num = (validated_data.get('number') or '').strip()
+        if not num:
+            validated_data['number'] = _next_sequence(Invoice, 'number', pad=4, allow_duplicate=False)
         # Ignore EIT details in payload; they are derived/display-only
         validated_data.pop('eit_address', '')
         validated_data.pop('eit_mobile', '')
@@ -133,6 +210,13 @@ class InvoiceSerializer(serializers.ModelSerializer):
                 eit = EIT.objects.create(organization_name=eit_name)
             validated_data['eit'] = eit
         return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        # Comment: Allow editable number but enforce uniqueness (excluding current instance)
+        new_num = (validated_data.get('number') or '').strip()
+        if new_num and Invoice.objects.filter(number=new_num).exclude(pk=instance.pk).exists():
+            raise serializers.ValidationError({'number': 'Invoice number must be unique'})
+        return super().update(instance, validated_data)
 
     def update(self, instance, validated_data):
         # Ignore EIT details in payload; they are derived/display-only
@@ -151,9 +235,43 @@ class InvoiceSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 class QuotationItemSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
     class Meta:
         model = QuotationItem
         fields = '__all__'
+    def get_image_url(self, obj):
+        try:
+            from django.conf import settings
+            import os
+            req = self.context.get('request')
+            name = str(getattr(obj.image, 'name', '') or '')
+            if not name:
+                return None
+            n1 = name.replace('quotation_items/quotation_items/', 'quotation_items/')
+            p1 = os.path.join(settings.MEDIA_ROOT, n1.lstrip('/'))
+            if os.path.exists(p1):
+                chosen = n1
+            else:
+                base = os.path.basename(n1)
+                n2 = f"quotation_items/quotation_items/{base}"
+                p2 = os.path.join(settings.MEDIA_ROOT, n2)
+                if os.path.exists(p2):
+                    chosen = n2
+                else:
+                    return None
+            url_path = (settings.MEDIA_URL or '/media/') + chosen.lstrip('/')
+            if req:
+                return req.build_absolute_uri(url_path)
+            return url_path
+        except Exception:
+            return None
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        try:
+            data['image_url'] = self.get_image_url(obj)
+        except Exception:
+            data['image_url'] = None
+        return data
 
 class EmailAttachmentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -372,6 +490,10 @@ class QuotationSerializer(serializers.ModelSerializer):
                     source_quotation_id = int(str(raw_id))
             except Exception:
                 source_quotation_id = None
+        # Comment: Auto-generate qo_code when not provided; duplicates allowed for quotations
+        qo = (validated_data.get('qo_code') or '').strip()
+        if not qo:
+            validated_data['qo_code'] = _next_sequence(Quotation, 'qo_code', pad=4, allow_duplicate=True)
         customer_name = validated_data.pop('customer_name', None)
         eit_name = validated_data.pop('eit_name', None)
         
@@ -467,7 +589,8 @@ class QuotationSerializer(serializers.ModelSerializer):
                             src_path = qi.image.path
                             if os.path.exists(src_path) and os.path.getsize(src_path) > 0:
                                 ext = os.path.splitext(src_path)[1] or '.png'
-                                new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
+                                # Comment: ImageField already prefixes upload_to; use filename only
+                                new_name = f"{uuid.uuid4().hex}{ext}"
                                 with open(src_path, 'rb') as fsrc:
                                     data = fsrc.read()
                                     if data:
@@ -478,6 +601,9 @@ class QuotationSerializer(serializers.ModelSerializer):
             # Comment: When copying from parent, skip processing items_data to avoid duplicate rows
             return quotation
         
+        # Comment: Assign hierarchical quo_item codes: base rows get "1","2",... and spec-only rows get "1.1","1.2",...
+        parent_code = None
+        spec_seq = 1
         for item in items_data:
             try:
                 qty = float(item.get('qty', 1))
@@ -492,10 +618,21 @@ class QuotationSerializer(serializers.ModelSerializer):
             spec = str(item.get('specification', '') or '').strip()
             model = str(item.get('model', '') or '').strip()
             item_title = str(item.get('item', '') or '').strip()
-            # If this is a base row (has qty>0 or item/model provided), derive title from description
+            # Comment: Determine if this is a base item row (has item/model or qty>0) or a spec-only row
             base_row = (item_title or model or qty > 0)
-            if base_row and not item_title and desc:
-                item_title = (desc.split('\n', 1)[0])[:255]
+            # Comment: Generate hierarchical code
+            if base_row:
+                # Comment: New parent row — assign next base number without padding (e.g., "1","2")
+                item_title = _next_base_item_number(quotation)
+                parent_code = item_title
+                spec_seq = 1
+            else:
+                # Comment: Spec-only row — attach under current parent using dotted sequence (e.g., "1.1","1.2")
+                if not parent_code:
+                    parent_code = _next_base_item_number(quotation)
+                    spec_seq = 1
+                item_title = f"{parent_code}.{spec_seq}"
+                spec_seq += 1
             # Do not merge specification into description; keep them separate
             # For specification-only rows (qty=0 and blank item/model), store text in 'specification' field only
             if not base_row:
@@ -512,111 +649,46 @@ class QuotationSerializer(serializers.ModelSerializer):
                 quantity=int(qty),
                 quo_total=total,
             )
-            # Comment: Handle image input: Uploaded file or existing path to copy
+            # Comment: Handle image input minimally — store uploaded files or copy from image_path
             img_input = item.get('image')
             img_path_hint = (item.get('image_path') or '').strip()
-            assigned_image = False
             try:
                 if hasattr(img_input, 'read'):
-                    # Comment: UploadedFile provided — save via ImageField.save to ensure a physical file is written
+                    # Save uploaded file directly with a unique name (filename only)
+                    name_hint = getattr(img_input, 'name', '') or 'upload.png'
+                    ext = os.path.splitext(name_hint)[1] or '.png'
+                    new_name = f"{uuid.uuid4().hex}{ext}"
                     try:
-                        name_hint = getattr(img_input, 'name', '') or 'upload.png'
-                        ext = os.path.splitext(name_hint)[1] or '.png'
-                        new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
-                        # Ensure file pointer at start before saving
-                        try:
-                            img_input.seek(0)
-                        except Exception:
-                            pass
-                        item_obj.image.save(new_name, img_input, save=False)
-                        assigned_image = True
+                        img_input.seek(0)
                     except Exception:
                         pass
-                else:
-                    # Comment: Prefer local media copy via image_path hint to avoid unreliable HTTP self-fetch
-                    if (not assigned_image) and img_path_hint:
-                        src = img_path_hint.replace('\\', '/')
-                        if src.startswith('/'):
-                            src = src[1:]
-                        abs_path = os.path.join(settings.MEDIA_ROOT, src)
+                    item_obj.image.save(new_name, img_input, save=False)
+                elif img_path_hint:
+                    # Copy from MEDIA_ROOT when image_path is provided; avoid overwriting if unchanged
+                    src = img_path_hint.replace('\\', '/').strip()
+                    if src.startswith('/'):
+                        src = src[1:]
+                    if src.startswith('media/'):
+                        src = src.split('media/', 1)[1]
+                    src = src.replace('quotation_items/quotation_items/', 'quotation_items/')
+                    current_name = str(getattr(item_obj.image, 'name', '') or '')
+                    normalized_current = current_name.replace('\\', '/').lstrip('/')
+                    normalized_src = src.replace('\\', '/').lstrip('/')
+                    if normalized_src and normalized_current and normalized_src == normalized_current:
+                        pass
+                    else:
+                        abs_path = os.path.join(settings.MEDIA_ROOT, normalized_src)
                         abs_path = os.path.normpath(abs_path)
                         if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                            try:
-                                if os.path.getsize(abs_path) > 0:
-                                    ext = os.path.splitext(abs_path)[1] or '.png'
-                                    new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
-                                    with open(abs_path, 'rb') as fsrc:
-                                        data = fsrc.read()
-                                        if data:
-                                            item_obj.image.save(new_name, ContentFile(data), save=False)
-                                            assigned_image = True
-                            except Exception:
-                                pass
-                    # Comment: If image_path not provided, handle string 'image' input (HTTP or media path)
-                    if (not assigned_image) and isinstance(img_input, str) and img_input.strip():
-                        src = img_input.strip().replace('\\', '/')
-                        # Comment: If HTTP URL points to our /media/, prefer local filesystem copy to avoid unreliable self-fetch
-                        if (src.startswith('http://') or src.startswith('https://')) and ('/media/' in src):
-                            try:
-                                sub = src.split('/media/', 1)[1]
-                                abs_path = os.path.join(settings.MEDIA_ROOT, sub)
-                                abs_path = os.path.normpath(abs_path)
-                                if os.path.exists(abs_path) and os.path.isfile(abs_path) and os.path.getsize(abs_path) > 0:
-                                    ext = os.path.splitext(abs_path)[1] or '.png'
-                                    new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
-                                    with open(abs_path, 'rb') as fsrc:
-                                        data = fsrc.read()
-                                        if data:
-                                            item_obj.image.save(new_name, ContentFile(data), save=False)
-                                            assigned_image = True
-                            except Exception:
-                                pass
-                        elif src.startswith('http://') or src.startswith('https://'):
-                            # Comment: Download remote image only when not under /media/
-                            try:
-                                with urllib.request.urlopen(src) as resp:
-                                    data = resp.read()
-                                    if data:
-                                        ct = resp.headers.get('Content-Type', '') or 'image/png'
-                                        ext = mimetypes.guess_extension(ct.split(';')[0].strip()) or '.png'
-                                        new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
-                                        item_obj.image.save(new_name, ContentFile(data), save=False)
-                                        assigned_image = True
-                            except Exception:
-                                pass
-                        else:
-                            # Comment: Copy from MEDIA_ROOT using string path contained in 'image'
-                            if '/media/' in src:
-                                sub = src.split('/media/', 1)[1]
-                                abs_path = os.path.join(settings.MEDIA_ROOT, sub)
-                            elif src.startswith('media/'):
-                                abs_path = os.path.join(settings.MEDIA_ROOT, src.split('media/', 1)[1])
-                            else:
-                                abs_path = os.path.join(settings.MEDIA_ROOT, src)
-                            abs_path = os.path.normpath(abs_path)
-                            if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                                try:
-                                    if os.path.getsize(abs_path) > 0:
-                                        ext = os.path.splitext(abs_path)[1] or '.png'
-                                        new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
-                                        with open(abs_path, 'rb') as fsrc:
-                                            data = fsrc.read()
-                                            if data:
-                                                item_obj.image.save(new_name, ContentFile(data), save=False)
-                                                assigned_image = True
-                                except Exception:
-                                    pass
+                            ext = os.path.splitext(abs_path)[1] or '.png'
+                            new_name = f"{uuid.uuid4().hex}{ext}"
+                            with open(abs_path, 'rb') as fsrc:
+                                data = fsrc.read()
+                                if data:
+                                    item_obj.image.save(new_name, ContentFile(data), save=False)
             except Exception:
                 pass
             item_obj.save()
-            # Comment: Final guard — if image field was set but the physical file is missing or empty, clear it to avoid broken previews
-            try:
-                if item_obj.image and hasattr(item_obj.image, 'path'):
-                    ipath = item_obj.image.path
-                    if (not os.path.exists(ipath)) or (os.path.getsize(ipath) == 0):
-                        item_obj.image.delete(save=True)
-            except Exception:
-                pass
             
         return quotation
 
@@ -642,6 +714,7 @@ class QuotationSerializer(serializers.ModelSerializer):
         new_fname = validated_data.get('file_name')
         if new_fname and Quotation.objects.filter(file_name=new_fname).exclude(pk=instance.pk).exists():
             raise serializers.ValidationError({'file_name': 'File name must be unique'})
+        # Comment: Allow editable qo_code; duplicates are allowed, so no uniqueness validation here
         # Update instance fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -686,10 +759,16 @@ class QuotationSerializer(serializers.ModelSerializer):
                                 items_data.append({})
                             items_data[idx]['image'] = nested['image']
 
-        # Handle items: only replace when payload contains items; otherwise keep existing
+        # Handle items: upsert rows and preserve existing images when not provided
         if items_data:
-            instance.quotation_items.all().delete()
-            for item in items_data:
+            # Comment: Fetch existing items ordered by ID to align updates by index when row_id is not provided
+            existing_items = list(instance.quotation_items.all().order_by('id'))
+            existing_by_id = {qi.id: qi for qi in existing_items}
+            updated_items = []
+            # Comment: Track current parent base code and spec sequence for dotted numbering on new spec rows
+            parent_code = None
+            spec_seq = 1
+            for idx, item in enumerate(items_data):
                 try:
                     qty = float(item.get('qty', 1))
                     price = float(str(item.get('price', 0)).replace(',', ''))
@@ -706,115 +785,114 @@ class QuotationSerializer(serializers.ModelSerializer):
                 base_row = (item_title or model or qty > 0)
                 if base_row and not item_title and desc:
                     item_title = (desc.split('\n', 1)[0])[:255]
-                # Do not merge specification into description; keep them separate
+                # Comment: For spec-only rows, store text in 'specification' only
                 if not base_row:
                     if not spec and desc:
                         spec = desc
                     desc = ""
                 
-                # Comment: Handle image field for update — support UploadedFile and string path copy
-                img_input = item.get('image')
-                img_file = None
+                # Comment: Determine target row — prefer matching by explicit id/row_id sent from UI
+                target = None
                 try:
-                    if hasattr(img_input, 'read'):
-                        img_file = img_input
-                    elif isinstance(img_input, str) and img_input.strip():
-                        src = img_input.strip().replace('\\', '/')
-                        if '/media/' in src:
-                            sub = src.split('/media/', 1)[1]
-                            abs_path = os.path.join(settings.MEDIA_ROOT, sub)
-                        elif src.startswith('media/'):
-                            abs_path = os.path.join(settings.MEDIA_ROOT, src.split('media/', 1)[1])
-                        else:
-                            abs_path = os.path.join(settings.MEDIA_ROOT, src)
-                        abs_path = os.path.normpath(abs_path)
-                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                            base, ext = os.path.splitext(os.path.basename(abs_path))
-                            new_name = f"quotation_items/{base}_COPY_{uuid.uuid4().hex}{ext or '.png'}"
-                            with open(abs_path, 'rb') as fsrc:
-                                saved_path = default_storage.save(new_name, File(fsrc))
-                                abs_saved = os.path.join(settings.MEDIA_ROOT, saved_path.replace('media/', '').replace('\\', '/'))
-                                if os.path.exists(abs_saved):
-                                    img_file = File(open(abs_saved, 'rb'))
+                    rid = item.get('row_id')
+                    if rid is not None:
+                        rid_int = int(str(rid))
+                        target = existing_by_id.get(rid_int)
                 except Exception:
-                    img_file = None
+                    target = None
+                if not target:
+                    try:
+                        iid = item.get('id')
+                        if iid is not None:
+                            iid_int = int(str(iid))
+                            target = existing_by_id.get(iid_int)
+                    except Exception:
+                        target = None
+                # Comment: Fallback by index only when no explicit id/row_id is provided
+                if not target:
+                    target = existing_items[idx] if idx < len(existing_items) else None
+                # Comment: Create a new row only when this payload represents a new item (no id/row_id and index beyond existing)
+                if not target:
+                    target = QuotationItem(quotation=instance)
                 
-                # Comment: Instantiate update row without image; attach image via ImageField.save
-                item_obj = QuotationItem(
-                    quotation=instance,
-                    quo_item=item_title,
-                    quo_model=model,
-                    quo_description=desc,
-                    specification=spec,
-                    quantity=int(qty),
-                    quo_total=total,
-                )
+                # Comment: Assign non-image fields
+                # Comment: Assign hierarchical quo_item:
+                # - Preserve existing code if present
+                # - Otherwise set base rows to next base number and spec-only rows to dotted sequence under current parent
+                existing_code = str(target.quo_item or '').strip()
+                if existing_code:
+                    target.quo_item = existing_code
+                    # Comment: Update parent_code context when we encounter a base code (pure integer)
+                    try:
+                        import re
+                        if re.fullmatch(r'\d+', existing_code):
+                            parent_code = existing_code
+                            spec_seq = 1
+                        elif re.fullmatch(r'(\d+)\.(\d+)', existing_code):
+                            parent_code = existing_code.split('.')[0]
+                    except Exception:
+                        pass
+                else:
+                    # Comment: Decide base vs spec-only
+                    is_base = bool(item_title or model or qty > 0)
+                    if is_base:
+                        target.quo_item = _next_base_item_number(instance)
+                        parent_code = target.quo_item
+                        spec_seq = 1
+                    else:
+                        if not parent_code:
+                            parent_code = _next_base_item_number(instance)
+                            spec_seq = 1
+                        target.quo_item = f"{parent_code}.{spec_seq}"
+                        spec_seq += 1
+                target.quo_model = model
+                target.quo_description = desc
+                target.specification = spec
+                target.quantity = int(qty)
+                target.quo_total = total
+                
+                # Comment: Handle image minimally — only save uploaded files or copy via image_path; otherwise leave existing image
                 img_input = item.get('image')
                 img_path_hint = (item.get('image_path') or '').strip()
-                assigned_image = False
                 try:
                     if hasattr(img_input, 'read'):
-                        # Comment: UploadedFile — save via ImageField.save with a generated unique name
+                        name_hint = getattr(img_input, 'name', '') or 'upload.png'
+                        ext = os.path.splitext(name_hint)[1] or '.png'
+                        # Comment: Use filename only
+                        new_name = f"{uuid.uuid4().hex}{ext}"
                         try:
-                            name_hint = getattr(img_input, 'name', '') or 'upload.png'
-                            ext = os.path.splitext(name_hint)[1] or '.png'
-                            new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
-                            try:
-                                img_input.seek(0)
-                            except Exception:
-                                pass
-                            item_obj.image.save(new_name, img_input, save=False)
-                            assigned_image = True
+                            img_input.seek(0)
                         except Exception:
                             pass
-                    elif isinstance(img_input, str) and img_input.strip():
-                        src = img_input.strip().replace('\\', '/')
-                        if '/media/' in src:
-                            sub = src.split('/media/', 1)[1]
-                            abs_path = os.path.join(settings.MEDIA_ROOT, sub)
-                        elif src.startswith('media/'):
-                            abs_path = os.path.join(settings.MEDIA_ROOT, src.split('media/', 1)[1])
-                        else:
-                            abs_path = os.path.join(settings.MEDIA_ROOT, src)
-                        abs_path = os.path.normpath(abs_path)
-                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                            ext = os.path.splitext(abs_path)[1] or '.png'
-                            new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
-                            with open(abs_path, 'rb') as fsrc:
-                                data = fsrc.read()
-                                if data:
-                                    item_obj.image.save(new_name, ContentFile(data), save=False)
-                                    assigned_image = True
-                    # Comment: Final fallback — copy using explicit image_path when previous steps did not assign
-                    if (not assigned_image) and img_path_hint:
-                        src = img_path_hint.replace('\\', '/')
+                        target.image.save(new_name, img_input, save=False)
+                    elif img_path_hint:
+                        src = img_path_hint.replace('\\', '/').strip()
                         if src.startswith('/'):
                             src = src[1:]
-                        abs_path = os.path.join(settings.MEDIA_ROOT, src)
-                        abs_path = os.path.normpath(abs_path)
-                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                            try:
-                                if os.path.getsize(abs_path) > 0:
-                                    ext = os.path.splitext(abs_path)[1] or '.png'
-                                    new_name = f"quotation_items/{uuid.uuid4().hex}{ext}"
-                                    with open(abs_path, 'rb') as fsrc:
-                                        data = fsrc.read()
-                                        if data:
-                                            item_obj.image.save(new_name, ContentFile(data), save=False)
-                                            assigned_image = True
-                            except Exception:
-                                pass
+                        if src.startswith('media/'):
+                            src = src.split('media/', 1)[1]
+                        src = src.replace('quotation_items/quotation_items/', 'quotation_items/')
+                        current_name = str(getattr(target.image, 'name', '') or '')
+                        normalized_current = current_name.replace('\\', '/').lstrip('/')
+                        normalized_src = src.replace('\\', '/').lstrip('/')
+                        if normalized_src and normalized_current and normalized_src == normalized_current:
+                            pass
+                        else:
+                            abs_path = os.path.join(settings.MEDIA_ROOT, normalized_src)
+                            abs_path = os.path.normpath(abs_path)
+                            if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                                ext = os.path.splitext(abs_path)[1] or '.png'
+                                new_name = f"{uuid.uuid4().hex}{ext}"
+                                with open(abs_path, 'rb') as fsrc:
+                                    data = fsrc.read()
+                                    if data:
+                                        target.image.save(new_name, ContentFile(data), save=False)
                 except Exception:
                     pass
-                item_obj.save()
-                # Comment: Final guard on update as well — clear broken references
-                try:
-                    if item_obj.image and hasattr(item_obj.image, 'path'):
-                        ipath = item_obj.image.path
-                        if (not os.path.exists(ipath)) or (os.path.getsize(ipath) == 0):
-                            item_obj.image.delete(save=True)
-                except Exception:
-                    pass
+                
+                target.save()
+                updated_items.append(target)
+            # Comment: Do NOT delete trailing rows implicitly. Only remove rows when client explicitly sends a delete flag.
         
         return instance
 
@@ -846,6 +924,10 @@ class BillingNoteSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def create(self, validated_data):
+        # Comment: Auto-generate Billing Note code when not provided; must remain unique
+        bn = (validated_data.get('bn_code') or '').strip()
+        if not bn:
+            validated_data['bn_code'] = _next_sequence(BillingNote, 'bn_code', pad=4, allow_duplicate=False)
         customer_name = validated_data.pop('customer_name', None)
         eit_name = validated_data.pop('eit_name', None)
         
@@ -882,9 +964,12 @@ class BillingNoteSerializer(serializers.ModelSerializer):
             
         return super().create(validated_data)
 
+        # Comment: Allow editable BN code but enforce uniqueness (excluding current instance)
+        new_bn = (validated_data.get('bn_code') or '').strip()
+        if new_bn and BillingNote.objects.filter(bn_code=new_bn).exclude(pk=instance.pk).exists():
+            raise serializers.ValidationError({'bn_code': 'Billing Note code must be unique'})
     def update(self, instance, validated_data):
         customer_name = validated_data.pop('customer_name', None)
-        eit_name = validated_data.pop('eit_name', None)
         
         # Extract customer details
         cus_address = validated_data.pop('cus_address', '')
@@ -982,6 +1067,10 @@ class TaxInvoiceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def create(self, validated_data):
+        # Comment: Auto-generate Tax Invoice code when not provided; must remain unique
+        tic = (validated_data.get('tax_invoice_code') or '').strip()
+        if not tic:
+            validated_data['tax_invoice_code'] = _next_sequence(TaxInvoice, 'tax_invoice_code', pad=4, allow_duplicate=False)
         # Resolve customer by name if FK not provided
         customer_name = validated_data.pop('customer_name', None)
         if not validated_data.get('customer') and customer_name:
@@ -995,6 +1084,13 @@ class TaxInvoiceSerializer(serializers.ModelSerializer):
                 eit = EIT.objects.create(organization_name=eit_name)
             validated_data['eit'] = eit
         return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        # Comment: Allow editable Tax Invoice code but enforce uniqueness (excluding current instance)
+        new_code = (validated_data.get('tax_invoice_code') or '').strip()
+        if new_code and TaxInvoice.objects.filter(tax_invoice_code=new_code).exclude(pk=instance.pk).exists():
+            raise serializers.ValidationError({'tax_invoice_code': 'Tax Invoice code must be unique'})
+        return super().update(instance, validated_data)
 
     def update(self, instance, validated_data):
         # Resolve customer by name if FK not provided

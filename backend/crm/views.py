@@ -372,7 +372,8 @@ class QuotationViewSet(viewsets.ModelViewSet):
                     src_path = qi.image.path
                     if os.path.getsize(src_path) > 0:
                         ext_i = os.path.splitext(src_path)[1] or '.png'
-                        new_name = f"quotation_items/{uuid.uuid4().hex}{ext_i}"
+                        # Comment: ImageField upload_to already sets subdirectory; pass filename only
+                        new_name = f"{uuid.uuid4().hex}{ext_i}"
                         with open(src_path, 'rb') as fsrc:
                             data = fsrc.read()
                             if data:

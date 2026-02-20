@@ -18,19 +18,69 @@ import { DateField } from "./components/ui/date-field"
 // - Relative DB path: prefix with /media and API_BASE_URL
 const resolveImageUrl = (src) => {
   if (!src || typeof src !== "string") return null
-  // Comment: Normalize Windows backslashes to forward slashes for browser URLs
-  src = src.replace(/\\/g, "/")
+  src = src.trim().replace(/\\/g, "/")
   if (src.startsWith("data:image")) return src
   if (/^https?:\/\//.test(src)) return src
   let path = src
+  if (!path.startsWith("/") && /\/media\//.test(path)) {
+    path = path.split("/media/").slice(-1)[0]
+  }
+  path = path.replace(/(^|\/)quotation_items\/quotation_items\//, "$1quotation_items/")
   if (path.startsWith("/media/")) {
-    // already correct
+    // ok
   } else if (path.startsWith("media/")) {
     path = `/${path}`
   } else {
     path = `/media/${path.replace(/^\/+/, "")}`
   }
+  // Default: use API_BASE_URL + /media to ensure cross-origin loads in dev/prod
   return `${API_BASE_URL}${path}`
+}
+
+const resolveImageCandidates = (src) => {
+  const out = []
+  const primary = resolveImageUrl(src)
+  if (primary) out.push(primary)
+  const s = String(src || "").trim().replace(/\\/g, "/")
+  const isAbs = /^https?:\/\//.test(s)
+  const p = s.replace(/(^|\/)quotation_items\/quotation_items\//, "$1quotation_items/")
+  const mediaTail = /\/media\//.test(p) ? p.split("/media/").slice(-1)[0] : p.replace(/^\/+/, "")
+  if (!isAbs) {
+    const alt = `${API_BASE_URL}/media/${mediaTail.replace(/^\/+/, "")}`
+    if (!out.includes(alt)) out.push(alt)
+    const rel = `/media/${mediaTail.replace(/^\/+|^media\/+/g, "")}`
+    if (!out.includes(rel)) out.push(rel)
+    const dblRel = `/media/quotation_items/quotation_items/${mediaTail.split("/").pop()}`
+    const dblApi = `${API_BASE_URL}/media/quotation_items/quotation_items/${mediaTail.split("/").pop()}`
+    if (!out.includes(dblApi)) out.push(dblApi)
+    if (!out.includes(dblRel)) out.push(dblRel)
+  } else {
+    // Absolute input: add normalized single-folder and double-folder forms based on mediaTail only
+    const alt = `${API_BASE_URL}/media/${mediaTail.replace(/^\/+/, "")}`
+    if (!out.includes(alt)) out.push(alt)
+    const rel = `/media/${mediaTail.replace(/^\/+|^media\/+/g, "")}`
+    if (!out.includes(rel)) out.push(rel)
+    const dblRel = `/media/quotation_items/quotation_items/${mediaTail.split("/").pop()}`
+    const dblApi = `${API_BASE_URL}/media/quotation_items/quotation_items/${mediaTail.split("/").pop()}`
+    if (!out.includes(dblApi)) out.push(dblApi)
+    if (!out.includes(dblRel)) out.push(dblRel)
+  }
+  // Additional common dev ports fallback
+  try {
+    const proto = window.location.protocol === "https:" ? "https" : "http"
+    const host = window.location.hostname || "127.0.0.1"
+    const ports = [8000, 8001, 8002]
+    ports.forEach(port => {
+      const cand = `${proto}://${host}:${port}/media/${p.replace(/^\/+/, "")}`
+      if (!out.includes(cand)) out.push(cand)
+    })
+    // localhost variants
+    ports.forEach(port => {
+      const cand = `${proto}://localhost:${port}/media/${p.replace(/^\/+/, "")}`
+      if (!out.includes(cand)) out.push(cand)
+    })
+  } catch {}
+  return out
 }
 
 import "./index.css"
@@ -411,8 +461,8 @@ function useQuotationState() {
       if (idx !== rowIndex) return row
       const rows = Array.isArray(row.specRows) ? [...row.specRows] : []
       // Initialize image with a default adjustable size so the user can tweak it
-      if (!rows[specIndex]) rows[specIndex] = { lines: [], image: dataUrl || null, imageWidth: 64, imageHeight: 64, edit: true }
-      else rows[specIndex] = { ...rows[specIndex], image: dataUrl || null, imageWidth: rows[specIndex].imageWidth || 64, imageHeight: rows[specIndex].imageHeight || 64 }
+      if (!rows[specIndex]) rows[specIndex] = { lines: [], image: dataUrl || null, originalImage: rows[specIndex]?.originalImage || null, imageChanged: !!dataUrl, imageWidth: 64, imageHeight: 64, edit: true }
+      else rows[specIndex] = { ...rows[specIndex], image: dataUrl || null, imageChanged: !!dataUrl, imageWidth: rows[specIndex].imageWidth || 64, imageHeight: rows[specIndex].imageHeight || 64 }
       return { ...row, specRows: rows }
     }))
   }
@@ -577,8 +627,7 @@ function useQuotationState() {
                 // Comment: Robust image URL resolution for Save-as-New rows:
                 // - If image is a DRF ImageField, prefer .url then .path
                 // - If it's a string path, normalize and resolve to API /media URL
-                const rawImg = (typeof i.image === 'string') ? i.image : (i.image?.url || i.image?.path || "")
-                const imgUrl = resolveImageUrl(rawImg)
+                const rawImg = i.image_url || ""
                 const hasBaseFields = Boolean((i.quo_item || i.item || i.quo_model || i.model || i.quo_description || i.description))
                 const isParentRow = hasBaseFields || qtyNum > 0
                 if (isParentRow) {
@@ -589,14 +638,15 @@ function useQuotationState() {
                     description: i.quo_description || i.description || "",
                     qty: qtyNum > 0 ? qtyNum : 1,
                     price: qtyNum > 0 ? (total / Math.max(qtyNum, 1)) : parseFloat(String(i.price || 0).replace(/,/g, "")) || 0,
-                    specRows: []
+                    specRows: [],
+                    row_id: i.id
                   }
                   // Comment: Attach specification text and/or image to child spec rows for consistent UI rendering
-                  if (baseSpecLines.length || imgUrl) {
-                    itemRow.specRows.push({ lines: baseSpecLines, image: imgUrl, edit: false, imageWidth: 64, imageHeight: 64 })
+                  if (baseSpecLines.length || rawImg) {
+                    itemRow.specRows.push({ lines: baseSpecLines, image: rawImg, originalImage: rawImg, imageChanged: false, edit: false, imageWidth: 64, imageHeight: 64, row_id: i.id })
                   }
                   // Comment: Also map the first spec image to description preview for the template (optional)
-                  if (imgUrl) itemRow.image = imgUrl
+                  if (rawImg) itemRow.image = rawImg
                   out.push(itemRow)
                   currentParent = itemRow
                 } else {
@@ -614,7 +664,7 @@ function useQuotationState() {
                     out.push(stub)
                     currentParent = stub
                   }
-                  currentParent.specRows.push({ lines: baseSpecLines, image: imgUrl, edit: false, imageWidth: 64, imageHeight: 64 })
+                  currentParent.specRows.push({ lines: baseSpecLines, image: rawImg, originalImage: rawImg, imageChanged: false, edit: false, imageWidth: 64, imageHeight: 64, row_id: i.id })
                 }
               }
               setItems(out)
@@ -1772,20 +1822,44 @@ function QuotationPage() {
                                 {sr.image && (
                                   <>
                                     <img
-                                      // Comment: Resolve URL to support data URLs, HTTP URLs, and /media paths
                                       src={resolveImageUrl(sr.image) || sr.image}
                                       alt="Specification"
+                                      title={resolveImageUrl(sr.image) || sr.image}
                                       style={{ width: `${sr.imageWidth || 64}px`, height: `${sr.imageHeight || 64}px` }}
                                       className="object-cover rounded border border-gray-300 cursor-pointer"
+                                      data-cand-index="0"
                                       onError={(e) => {
-                                        // If the image fails (e.g., missing /media prefix), try to resolve and retry
-                                        const fixed = resolveImageUrl(sr.image)
-                                        if (fixed && e.currentTarget.src !== fixed) {
-                                          e.currentTarget.src = fixed
+                                        const cands = resolveImageCandidates(sr.image)
+                                        const cur = e.currentTarget.src
+                                        let next = null
+                                        const pos = cands.findIndex(u => u === cur)
+                                        if (pos >= 0 && pos + 1 < cands.length) {
+                                          next = cands[pos + 1]
+                                        } else if (pos < 0 && cands.length > 0) {
+                                          next = cands[0]
+                                        }
+                                        if (next && next !== cur) {
+                                          e.currentTarget.src = next
+                                        } else {
+                                          e.currentTarget.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9dQXxWcAAAAASUVORK5YII="
                                         }
                                       }}
-                                      onClick={() => setPreviewSrc(resolveImageUrl(sr.image) || sr.image)}
+                                      onClick={() => {
+                                        const cands = resolveImageCandidates(sr.image)
+                                        setPreviewSrc(cands[0] || resolveImageUrl(sr.image) || sr.image)
+                                      }}
                                     />
+                                    <div className="mt-1">
+                                      <a
+                                        href={resolveImageUrl(sr.image) || sr.image}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-[11px] text-gray-600 underline"
+                                        title="Open image in new tab"
+                                      >
+                                        Open image
+                                      </a>
+                                    </div>
                                     {/* Image size slider: adjust width/height uniformly */}
                                     <div className="flex items-center gap-2">
                                       <span className="text-xs text-gray-600">Size</span>
@@ -2062,15 +2136,15 @@ function QuotationPage() {
                             fd.append(`items[${idxNew}][item]`, item.item || "")
                             fd.append(`items[${idxNew}][model]`, item.model || "")
                             fd.append(`items[${idxNew}][description]`, item.description || "")
-                            // Comment: Store only the first spec row on the parent if present; others become separate rows
+                            // Comment: Store the entire specification block exactly as written (preserve formatting)
                             const specRowsArr = Array.isArray(item.specRows) ? item.specRows : []
-                            const firstSpec = specRowsArr[0]
-                            const firstSpecText = firstSpec && Array.isArray(firstSpec.lines) ? firstSpec.lines.join("\\n") : ""
-                            fd.append(`items[${idxNew}][specification]`, firstSpecText)
+                            const firstBlock = (specRowsArr[0] && Array.isArray(specRowsArr[0].lines)) ? specRowsArr[0].lines.join("\n") : ""
+                            fd.append(`items[${idxNew}][specification]`, firstBlock)
                             fd.append(`items[${idxNew}][qty]`, String(item.qty || 1))
                             fd.append(`items[${idxNew}][price]`, String(item.price || 0))
                             // Attach first specification image to the base item (if any)
-                            const firstImageRow = firstSpec && firstSpec.image ? firstSpec : null
+                            // Comment: Attach image for the item: prefer the item's own image, fallback to the first spec image
+                            const firstImageRow = specRowsArr[0] && specRowsArr[0].image ? specRowsArr[0] : null
                             if (firstImageRow && firstImageRow.image) {
                               const blob = dataUrlToBlob(firstImageRow.image)
                               if (blob) {
@@ -2085,7 +2159,7 @@ function QuotationPage() {
                                 } else {
                                   // Comment: Avoid re-uploading server /media or http(s) images; send path hint and original URL string
                                   fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(s))
-                                  fd.append(`items[${idxNew}][image]`, s)
+                                  // Comment: Do NOT append image as a plain string; backend only accepts files or valid media paths
                                 }
                               }
                             }
@@ -2103,7 +2177,7 @@ function QuotationPage() {
                                   fd.append(`items[${idxNew}][image]`, f)
                                 } else {
                                   fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(s))
-                                  fd.append(`items[${idxNew}][image]`, s)
+                                  // Comment: Do NOT append image as a plain string
                                 }
                               }
                             }
@@ -2111,7 +2185,7 @@ function QuotationPage() {
                               item: item.item || "",
                               model: item.model || "",
                               description: item.description || "",
-                              specification: firstSpecText,
+                              specification: firstBlock,
                               qty: String(item.qty || 1),
                               price: String(item.price || 0),
                               image_path: (firstImageRow && typeof firstImageRow.image === "string")
@@ -2119,36 +2193,30 @@ function QuotationPage() {
                                 : (typeof item.image === "string" ? toBackendMediaPath(item.image) : "")
                             })
                             idxNew++
-                            // Comment: Persist remaining specification rows as separate items (qty=0, no item/model)
-                            for (let s = 1; s < specRowsArr.length; s++) {
-                              const sr = specRowsArr[s]
-                              const text = Array.isArray(sr.lines) ? sr.lines.join("\\n") : ""
-                              fd.append(`items[${idxNew}][specification]`, text)
+                            // Append additional spec rows as separate items (qty=0)
+                            for (let sIdx = 1; sIdx < specRowsArr.length; sIdx++) {
+                              const sr = specRowsArr[sIdx] || {}
+                              const t = Array.isArray(sr.lines) ? sr.lines.join("\n") : ""
+                              fd.append(`items[${idxNew}][item]`, "")
+                              fd.append(`items[${idxNew}][model]`, "")
+                              fd.append(`items[${idxNew}][description]`, "")
+                              fd.append(`items[${idxNew}][specification]`, t)
                               fd.append(`items[${idxNew}][qty]`, "0")
                               fd.append(`items[${idxNew}][price]`, "0")
-                              // Upload image if present
                               if (sr.image) {
-                                const blob2 = dataUrlToBlob(sr.image)
-                                if (blob2) {
-                                  const file2 = new File([blob2], `spec_${idxNew}.png`, { type: blob2.type || "image/png" })
-                                  fd.append(`items[${idxNew}][image]`, file2)
+                                const blobSR = dataUrlToBlob(sr.image)
+                                if (blobSR) {
+                                  const fSR = new File([blobSR], `spec_${idxNew}.png`, { type: blobSR.type || "image/png" })
+                                  fd.append(`items[${idxNew}][image]`, fSR)
                                 } else if (typeof sr.image === "string") {
-                                  // Comment: If blob: string, fetch and upload; else send image_path + original URL string
-                                  const s = String(sr.image)
-                                  const f = await fetchUrlToFile(s, `spec_${idxNew}`)
-                                  if (f) {
-                                    fd.append(`items[${idxNew}][image]`, f)
-                                  } else {
-                                    fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(s))
-                                    fd.append(`items[${idxNew}][image]`, s)
-                                  }
+                                  fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(sr.image))
                                 }
                               }
                               jsonItemsForFallback.push({
                                 item: "",
                                 model: "",
                                 description: "",
-                                specification: text,
+                                specification: t,
                                 qty: "0",
                                 price: "0",
                                 image_path: (typeof sr.image === "string") ? toBackendMediaPath(sr.image) : ""
@@ -2271,19 +2339,39 @@ function QuotationPage() {
                           }
                           for (const item of q.items) {
                             // Main item
+                            // Comment: Include stable DB row id so backend updates in-place without recreating rows
+                            if (item && (item.row_id != null || item.id != null)) {
+                              const rid = (item.row_id != null) ? item.row_id : item.id
+                              fd.append(`items[${idx}][row_id]`, String(rid))
+                            }
                             fd.append(`items[${idx}][item]`, item.item || "")
                             fd.append(`items[${idx}][model]`, item.model || "")
                             fd.append(`items[${idx}][description]`, item.description || "")
-                            // Persist combined specification text for the main item (reporting)
+                            // Persist first spec row on main item; others as separate rows
                             const specRowsMain = Array.isArray(item.specRows) ? item.specRows : []
-                            const firstSpecMain = specRowsMain[0]
-                            const firstTextMain = firstSpecMain && Array.isArray(firstSpecMain.lines) ? firstSpecMain.lines.join("\\n") : ""
-                            fd.append(`items[${idx}][specification]`, firstTextMain)
+                            const blockMainLines = []
+                            for (const sr of specRowsMain) {
+                              const t = Array.isArray(sr?.lines) ? sr.lines.join("\n") : ""
+                              if (t) blockMainLines.push(t)
+                            }
+                            const firstBlockText = (specRowsMain[0] && Array.isArray(specRowsMain[0].lines)) ? specRowsMain[0].lines.join("\n") : ""
+                            fd.append(`items[${idx}][specification]`, firstBlockText)
                             fd.append(`items[${idx}][qty]`, String(item.qty || 1))
                             fd.append(`items[${idx}][price]`, String(item.price || 0))
                             // Attach first specification image to the base item (if any)
-                            const firstImageRow2 = firstSpecMain && firstSpecMain.image ? firstSpecMain : null
-                            if (firstImageRow2 && firstImageRow2.image) {
+                            const firstImageRow2 = specRowsMain[0] || null
+                            const origStr = firstImageRow2 && typeof firstImageRow2.originalImage === "string" ? firstImageRow2.originalImage : ""
+                            const curStr = firstImageRow2 && typeof firstImageRow2.image === "string" ? firstImageRow2.image : ""
+                            const normalizeMedia = (s) => {
+                              const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+                              const v = String(s || "")
+                              if (v.startsWith(api) && v.includes("/media/")) return v.split("/media/")[1]
+                              if (v.includes("/media/")) return v.split("/media/")[1]
+                              if (v.startsWith("media/")) return v.slice("media/".length)
+                              return v
+                            }
+                            const changed = !!(firstImageRow2 && firstImageRow2.imageChanged) || (normalizeMedia(curStr) && normalizeMedia(curStr) !== normalizeMedia(origStr))
+                            if (firstImageRow2 && firstImageRow2.image && changed) {
                               const blob = dataUrlToBlob(firstImageRow2.image)
                               if (blob) {
                                 const file = new File([blob], `spec_${idx}.png`, { type: blob.type || "image/png" })
@@ -2291,7 +2379,7 @@ function QuotationPage() {
                               } else if (typeof firstImageRow2.image === "string") {
                                 // Comment: Avoid re-uploading server images; send image_path and original URL string
                                 fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(firstImageRow2.image))
-                                fd.append(`items[${idx}][image]`, String(firstImageRow2.image))
+                                // Comment: Do NOT append plain string to image; backend uses image_path for server-side copy
                               }
                             }
                             // Comment: Fallback — if no spec image, but the parent item has image, persist that for update as well
@@ -2303,14 +2391,14 @@ function QuotationPage() {
                               } else if (typeof item.image === "string") {
                                 // Comment: Send image_path and original URL string for backend fetch fallback
                                 fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(item.image))
-                                fd.append(`items[${idx}][image]`, String(item.image))
+                                // Comment: Do NOT append plain string to image
                               }
                             }
                             jsonItemsForFallback2.push({
                               item: item.item || "",
                               model: item.model || "",
                               description: item.description || "",
-                              specification: firstTextMain,
+                              specification: firstBlockText,
                               qty: String(item.qty || 1),
                               price: String(item.price || 0),
                               image_path: (firstImageRow2 && typeof firstImageRow2.image === "string")
@@ -2318,22 +2406,27 @@ function QuotationPage() {
                                 : (typeof item.image === "string" ? toBackendMediaPath2(item.image) : "")
                             })
                             idx++
-                            // Comment: Persist remaining spec rows as separate items (qty=0)
-                            for (let s = 1; s < specRowsMain.length; s++) {
-                              const sr = specRowsMain[s]
-                              const text = Array.isArray(sr.lines) ? sr.lines.join("\\n") : ""
+                            // Append additional spec rows as separate items (qty=0)
+                            for (let sIdx = 1; sIdx < specRowsMain.length; sIdx++) {
+                              const sr = specRowsMain[sIdx] || {}
+                              const text = Array.isArray(sr.lines) ? sr.lines.join("\n") : ""
+                              // Preserve existing spec row id if known
+                              if (sr && (sr.row_id != null)) {
+                                fd.append(`items[${idx}][row_id]`, String(sr.row_id))
+                              }
+                              fd.append(`items[${idx}][item]`, "")
+                              fd.append(`items[${idx}][model]`, "")
+                              fd.append(`items[${idx}][description]`, "")
                               fd.append(`items[${idx}][specification]`, text)
                               fd.append(`items[${idx}][qty]`, "0")
                               fd.append(`items[${idx}][price]`, "0")
                               if (sr.image) {
-                                const blob3 = dataUrlToBlob(sr.image)
-                                if (blob3) {
-                                  const file3 = new File([blob3], `spec_${idx}.png`, { type: blob3.type || "image/png" })
-                                  fd.append(`items[${idx}][image]`, file3)
+                                const blobSR2 = dataUrlToBlob(sr.image)
+                                if (blobSR2) {
+                                  const fSR2 = new File([blobSR2], `spec_${idx}.png`, { type: blobSR2.type || "image/png" })
+                                  fd.append(`items[${idx}][image]`, fSR2)
                                 } else if (typeof sr.image === "string") {
-                                  // Comment: Reduce request size — send image_path and original URL string
                                   fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(sr.image))
-                                  fd.append(`items[${idx}][image]`, String(sr.image))
                                 }
                               }
                               jsonItemsForFallback2.push({
