@@ -607,66 +607,94 @@ function useQuotationState() {
             })
             const apiItems = data.quotation_items || data.items || data.products || []
             if (apiItems.length > 0) {
-              // Comment: Reconstruct parent item rows and attach subsequent spec-only rows as separate child boxes (1.1, 1.2, ...)
-              const out = []
-              let currentParent = null
+              // Comment: Build UI rows by grouping API items using quo_item codes to keep numbering aligned:
+              // - Parents: codes like "1","2",...
+              // - Children: codes like "1.1","1.2", attached under their parent "1"
+              const parentsByBase = {}
+              const orderBases = []
+              const childrenByBase = {}
+              // First pass: collect parents and their base specification/image
               for (let idx = 0; idx < apiItems.length; idx++) {
                 const i = apiItems[idx]
+                const code = String(i.quo_item || i.item || "").trim()
                 const rawQty = (i.quantity !== undefined ? i.quantity : i.qty)
                 const qtyNum = (() => {
                   const n = parseFloat(String(rawQty ?? "").replace(/,/g, ""))
                   return isNaN(n) ? 0 : n
                 })()
                 const total = parseFloat(String(i.quo_total || i.total || 0).replace(/,/g, ""))
-                // Comment: Read specification text and uploaded image; handle ImageField objects or string paths
                 const baseSpecLines = String(i.specification || "")
                   .replace(/\r/g, "")
                   .split("\n")
                   .map(s => s.trim())
                   .filter(Boolean)
-                // Comment: Robust image URL resolution for Save-as-New rows:
-                // - If image is a DRF ImageField, prefer .url then .path
-                // - If it's a string path, normalize and resolve to API /media URL
                 const rawImg = i.image_url || ""
-                const hasBaseFields = Boolean((i.quo_item || i.item || i.quo_model || i.model || i.quo_description || i.description))
-                const isParentRow = hasBaseFields || qtyNum > 0
-                if (isParentRow) {
-                  // Start a new parent item row
-                  const itemRow = {
-                    item: i.quo_item || i.item || "",
-                    model: i.quo_model || i.model || "",
-                    description: i.quo_description || i.description || "",
-                    qty: qtyNum > 0 ? qtyNum : 1,
-                    price: qtyNum > 0 ? (total / Math.max(qtyNum, 1)) : parseFloat(String(i.price || 0).replace(/,/g, "")) || 0,
-                    specRows: [],
-                    row_id: i.id
-                  }
-                  // Comment: Attach specification text and/or image to child spec rows for consistent UI rendering
-                  if (baseSpecLines.length || rawImg) {
-                    itemRow.specRows.push({ lines: baseSpecLines, image: rawImg, originalImage: rawImg, imageChanged: false, edit: false, imageWidth: 64, imageHeight: 64, row_id: i.id })
-                  }
-                  // Comment: Also map the first spec image to description preview for the template (optional)
-                  if (rawImg) itemRow.image = rawImg
-                  out.push(itemRow)
-                  currentParent = itemRow
-                } else {
-                  // Comment: Append as a separate specification child row.
-                  // If API returns spec-only rows before any parent, create a stub parent to avoid dropping the spec/image.
-                  if (!currentParent) {
-                    const stub = {
-                      item: "",
-                      model: "",
-                      description: "",
-                      qty: 1,
-                      price: 0,
-                      specRows: []
+                const dotted = code.match(/^(\d+)\.(\d+)$/)
+                const baseOnly = code.match(/^\d+$/)
+                if (baseOnly) {
+                  const base = baseOnly[0]
+                  if (!parentsByBase[base]) {
+                    parentsByBase[base] = {
+                      item: base,
+                      model: i.quo_model || i.model || "",
+                      description: i.quo_description || i.description || "",
+                      qty: qtyNum > 0 ? qtyNum : 1,
+                      price: qtyNum > 0 ? (total / Math.max(qtyNum, 1)) : parseFloat(String(i.price || 0).replace(/,/g, "")) || 0,
+                      specRows: [],
+                      row_id: i.id,
+                      image: rawImg || null
                     }
-                    out.push(stub)
-                    currentParent = stub
+                    orderBases.push(base)
+                  } else {
+                    // Merge fields if duplicate parent rows are returned
+                    const p = parentsByBase[base]
+                    if (!p.model && (i.quo_model || i.model)) p.model = i.quo_model || i.model
+                    if (!p.description && (i.quo_description || i.description)) p.description = i.quo_description || i.description
+                    if (!p.image && rawImg) p.image = rawImg
                   }
-                  currentParent.specRows.push({ lines: baseSpecLines, image: rawImg, originalImage: rawImg, imageChanged: false, edit: false, imageWidth: 64, imageHeight: 64, row_id: i.id })
+                  if (baseSpecLines.length || rawImg) {
+                    parentsByBase[base].specRows.push({ lines: baseSpecLines, image: rawImg, originalImage: rawImg, imageChanged: false, edit: false, imageWidth: 64, imageHeight: 64, row_id: i.id })
+                  }
+                } else if (dotted) {
+                  const base = dotted[1]
+                  if (!childrenByBase[base]) childrenByBase[base] = []
+                  childrenByBase[base].push({ lines: baseSpecLines, image: rawImg, originalImage: rawImg, imageChanged: false, edit: false, imageWidth: 64, imageHeight: 64, row_id: i.id })
+                } else {
+                  // Fallback: treat as base row when quo_item missing; rely on qty/model/description
+                  const hasBaseFields = Boolean((i.quo_model || i.model || i.quo_description || i.description))
+                  if (hasBaseFields || qtyNum > 0) {
+                    const base = String(orderBases.length + 1)
+                    parentsByBase[base] = {
+                      item: base,
+                      model: i.quo_model || i.model || "",
+                      description: i.quo_description || i.description || "",
+                      qty: qtyNum > 0 ? qtyNum : 1,
+                      price: qtyNum > 0 ? (total / Math.max(qtyNum, 1)) : parseFloat(String(i.price || 0).replace(/,/g, "")) || 0,
+                      specRows: [],
+                      row_id: i.id,
+                      image: rawImg || null
+                    }
+                    orderBases.push(base)
+                    if (baseSpecLines.length || rawImg) {
+                      parentsByBase[base].specRows.push({ lines: baseSpecLines, image: rawImg, originalImage: rawImg, imageChanged: false, edit: false, imageWidth: 64, imageHeight: 64, row_id: i.id })
+                    }
+                  } else {
+                    // Orphan spec rows without a recognizable code
+                    const base = orderBases.length ? orderBases[orderBases.length - 1] : "1"
+                    if (!childrenByBase[base]) childrenByBase[base] = []
+                    childrenByBase[base].push({ lines: baseSpecLines, image: rawImg, originalImage: rawImg, imageChanged: false, edit: false, imageWidth: 64, imageHeight: 64, row_id: i.id })
+                  }
                 }
               }
+              // Second pass: attach children under their correct parents by base code
+              const out = []
+              orderBases.sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).forEach(base => {
+                const parent = parentsByBase[base]
+                const children = childrenByBase[base] || []
+                // Comment: Ensure parent's own spec (1.1) renders before DB children (which become 1.2, 1.3, ...)
+                parent.specRows.push(...children)
+                out.push(parent)
+              })
               setItems(out)
             }
           })
@@ -2169,16 +2197,6 @@ function QuotationPage() {
                               if (blobParent) {
                                 const fileP = new File([blobParent], `item_${idxNew}.png`, { type: blobParent.type || "image/png" })
                                 fd.append(`items[${idxNew}][image]`, fileP)
-                              } else if (typeof item.image === "string") {
-                                // Comment: If blob: string, fetch and upload; else send path hint + original URL
-                                const s = String(item.image)
-                                const f = await fetchUrlToFile(s, `item_${idxNew}`)
-                                if (f) {
-                                  fd.append(`items[${idxNew}][image]`, f)
-                                } else {
-                                  fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(s))
-                                  // Comment: Do NOT append image as a plain string
-                                }
                               }
                             }
                             jsonItemsForFallback.push({
@@ -2208,8 +2226,6 @@ function QuotationPage() {
                                 if (blobSR) {
                                   const fSR = new File([blobSR], `spec_${idxNew}.png`, { type: blobSR.type || "image/png" })
                                   fd.append(`items[${idxNew}][image]`, fSR)
-                                } else if (typeof sr.image === "string") {
-                                  fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(sr.image))
                                 }
                               }
                               jsonItemsForFallback.push({
@@ -2379,21 +2395,20 @@ function QuotationPage() {
                               } else if (typeof firstImageRow2.image === "string") {
                                 // Comment: Avoid re-uploading server images; send image_path and original URL string
                                 fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(firstImageRow2.image))
+                                // Comment: Mark image_changed to instruct backend to actually replace the current file
+                                fd.append(`items[${idx}][image_changed]`, "1")
                                 // Comment: Do NOT append plain string to image; backend uses image_path for server-side copy
                               }
                             }
-                            // Comment: Fallback — if no spec image, but the parent item has image, persist that for update as well
+                            // Comment: Fallback — if no spec image, but the parent item has image, try uploading only when it's a data URL
                             if ((!firstImageRow2 || !firstImageRow2.image) && item.image) {
                               const blobParent2 = dataUrlToBlob(item.image)
                               if (blobParent2) {
                                 const fileP2 = new File([blobParent2], `item_${idx}.png`, { type: blobParent2.type || "image/png" })
                                 fd.append(`items[${idx}][image]`, fileP2)
-                              } else if (typeof item.image === "string") {
-                                // Comment: Send image_path and original URL string for backend fetch fallback
-                                fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(item.image))
-                                // Comment: Do NOT append plain string to image
                               }
                             }
+                            // Comment: JSON fallback: include image_path ONLY when the image actually changed to avoid re-copying on re-save
                             jsonItemsForFallback2.push({
                               item: item.item || "",
                               model: item.model || "",
@@ -2401,9 +2416,9 @@ function QuotationPage() {
                               specification: firstBlockText,
                               qty: String(item.qty || 1),
                               price: String(item.price || 0),
-                              image_path: (firstImageRow2 && typeof firstImageRow2.image === "string")
+                              image_path: (firstImageRow2 && typeof firstImageRow2.image === "string" && changed)
                                 ? toBackendMediaPath2(firstImageRow2.image)
-                                : (typeof item.image === "string" ? toBackendMediaPath2(item.image) : "")
+                                : ""
                             })
                             idx++
                             // Append additional spec rows as separate items (qty=0)
@@ -2422,13 +2437,28 @@ function QuotationPage() {
                               fd.append(`items[${idx}][price]`, "0")
                               if (sr.image) {
                                 const blobSR2 = dataUrlToBlob(sr.image)
-                                if (blobSR2) {
+                                if (blobSR2 && sr.imageChanged) {
                                   const fSR2 = new File([blobSR2], `spec_${idx}.png`, { type: blobSR2.type || "image/png" })
                                   fd.append(`items[${idx}][image]`, fSR2)
                                 } else if (typeof sr.image === "string") {
-                                  fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(sr.image))
+                                  // Comment: Only send image_path if the spec image changed relative to original
+                                  const norm = (s) => {
+                                    const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+                                    const v = String(s || "")
+                                    if (v.startsWith(api) && v.includes("/media/")) return v.split("/media/")[1]
+                                    if (v.includes("/media/")) return v.split("/media/")[1]
+                                    if (v.startsWith("media/")) return v.slice("media/".length)
+                                    return v
+                                  }
+                                  const changedSr = !!sr.imageChanged || (norm(sr.image) && norm(sr.image) !== norm(sr.originalImage || ""))
+                                  if (changedSr) {
+                                    fd.append(`items[${idx}][image_path]`, toBackendMediaPath2(sr.image))
+                                    // Comment: Mark image_changed so backend knows to replace the file
+                                    fd.append(`items[${idx}][image_changed]`, "1")
+                                  }
                                 }
                               }
+                              // Comment: JSON fallback for spec row: include image_path ONLY when changed
                               jsonItemsForFallback2.push({
                                 item: "",
                                 model: "",
@@ -2436,7 +2466,17 @@ function QuotationPage() {
                                 specification: text,
                                 qty: "0",
                                 price: "0",
-                                image_path: (typeof sr.image === "string") ? toBackendMediaPath2(sr.image) : ""
+                                image_path: (typeof sr.image === "string" && (sr.imageChanged || ((() => {
+                                  const norm = (s) => {
+                                    const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+                                    const v = String(s || "")
+                                    if (v.startsWith(api) && v.includes("/media/")) return v.split("/media/")[1]
+                                    if (v.includes("/media/")) return v.split("/media/")[1]
+                                    if (v.startsWith("media/")) return v.slice("media/".length)
+                                    return v
+                                  }
+                                  return norm(sr.image) && norm(sr.image) !== norm(sr.originalImage || "")
+                                })()))) ? toBackendMediaPath2(sr.image) : ""
                               })
                               idx++
                             }

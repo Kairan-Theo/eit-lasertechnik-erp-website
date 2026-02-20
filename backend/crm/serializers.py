@@ -548,24 +548,21 @@ class QuotationSerializer(serializers.ModelSerializer):
             nested_items = [index_map[i] for i in sorted(index_map.keys())]
             if not items_data and nested_items:
                 items_data = nested_items
-            # Merge uploaded images and image_path hints from nested map into existing items_data if present
+            # Merge nested FormData fields (including spec rows) into items_data when present
             if items_data and index_map:
                 for idx, nested in index_map.items():
+                    while len(items_data) <= idx:
+                        items_data.append({})
+                    # Comment: Merge core fields used to build QuotationItem rows
+                    for key in ['item', 'model', 'description', 'specification', 'qty', 'price']:
+                        if key in nested and nested[key] is not None:
+                            items_data[idx][key] = nested[key]
+                    # Comment: Merge image input
                     if 'image' in nested and nested['image']:
-                        try:
-                            items_data[idx]['image'] = nested['image']
-                        except Exception:
-                            # If list shorter, append placeholders up to idx
-                            while len(items_data) <= idx:
-                                items_data.append({})
-                            items_data[idx]['image'] = nested['image']
+                        items_data[idx]['image'] = nested['image']
+                    # Comment: Merge image_path hint
                     if 'image_path' in nested and nested['image_path']:
-                        try:
-                            items_data[idx]['image_path'] = nested['image_path']
-                        except Exception:
-                            while len(items_data) <= idx:
-                                items_data.append({})
-                            items_data[idx]['image_path'] = nested['image_path']
+                        items_data[idx]['image_path'] = nested['image_path']
 
         # Comment: Allow duplicate qo_code; enforce unique file_name instead
         fname = validated_data.get('file_name')
@@ -756,16 +753,20 @@ class QuotationSerializer(serializers.ModelSerializer):
             nested_items = [index_map[i] for i in sorted(index_map.keys())]
             if not items_data and nested_items:
                 items_data = nested_items
-            # Merge uploaded images from nested map into existing items_data if present
+            # Merge nested FormData fields into items_data to ensure spec rows are persisted on update
             if items_data and index_map:
                 for idx, nested in index_map.items():
+                    while len(items_data) <= idx:
+                        items_data.append({})
+                    # Comment: Merge primary fields
+                    for key in ['row_id', 'item', 'model', 'description', 'specification', 'qty', 'price', 'image_changed']:
+                        if key in nested and nested[key] is not None:
+                            items_data[idx][key] = nested[key]
+                    # Comment: Merge image and image_path
                     if 'image' in nested and nested['image']:
-                        try:
-                            items_data[idx]['image'] = nested['image']
-                        except Exception:
-                            while len(items_data) <= idx:
-                                items_data.append({})
-                            items_data[idx]['image'] = nested['image']
+                        items_data[idx]['image'] = nested['image']
+                    if 'image_path' in nested and nested['image_path']:
+                        items_data[idx]['image_path'] = nested['image_path']
 
         # Handle items: upsert rows and preserve existing images when not provided
         if items_data:
@@ -864,6 +865,12 @@ class QuotationSerializer(serializers.ModelSerializer):
                 img_path_hint = (item.get('image_path') or '').strip()
                 try:
                     if hasattr(img_input, 'read'):
+                        # Comment: Only accept uploaded file when image_changed is explicitly set or current image empty
+                        changed_flag = str(item.get('image_changed', '') or '').strip().lower() in ('1', 'true', 'yes')
+                        current_name = str(getattr(target.image, 'name', '') or '')
+                        if not changed_flag and current_name:
+                            # Comment: Skip replacing existing file when not marked as changed
+                            raise Exception("skip_upload_unless_changed")
                         name_hint = getattr(img_input, 'name', '') or 'upload.png'
                         ext = os.path.splitext(name_hint)[1] or '.png'
                         # Comment: Use filename only
@@ -874,6 +881,8 @@ class QuotationSerializer(serializers.ModelSerializer):
                             pass
                         target.image.save(new_name, img_input, save=False)
                     elif img_path_hint:
+                        # Comment: Only honor image_path when image has been explicitly marked as changed or current image is empty
+                        changed_flag = str(item.get('image_changed', '') or '').strip().lower() in ('1', 'true', 'yes')
                         src = img_path_hint.replace('\\', '/').strip()
                         if src.startswith('/'):
                             src = src[1:]
@@ -884,8 +893,10 @@ class QuotationSerializer(serializers.ModelSerializer):
                         normalized_current = current_name.replace('\\', '/').lstrip('/')
                         normalized_src = src.replace('\\', '/').lstrip('/')
                         if normalized_src and normalized_current and normalized_src == normalized_current:
+                            # Comment: Skip copy when paths match exactly
                             pass
-                        else:
+                        elif (not normalized_current) or changed_flag:
+                            # Comment: Only copy when there's no current image OR client indicates image actually changed
                             abs_path = os.path.join(settings.MEDIA_ROOT, normalized_src)
                             abs_path = os.path.normpath(abs_path)
                             if os.path.exists(abs_path) and os.path.isfile(abs_path):
@@ -895,6 +906,9 @@ class QuotationSerializer(serializers.ModelSerializer):
                                     data = fsrc.read()
                                     if data:
                                         target.image.save(new_name, ContentFile(data), save=False)
+                        else:
+                            # Comment: Ignore image_path on update when client did not mark image as changed
+                            pass
                 except Exception:
                     pass
                 
