@@ -152,8 +152,37 @@ function SignupPage() {
       const data = await response.json()
 
       if (response.ok) {
-        // User requirement: after sign up, it need to log iin again
-        alert("Account created successfully! Please log in.")
+        if (data && data.verification_required && data.email) {
+          alert("Account created successfully. A verification code was sent to your email.")
+          const code = window.prompt("Enter the verification code from your email to verify your account:")
+          if (code && code.trim()) {
+            try {
+              const verifyRes = await fetch(`${API_BASE_URL}/api/auth/verify-email/`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  email: data.email,
+                  code: code.trim(),
+                }),
+              })
+              const verifyData = await verifyRes.json()
+              if (verifyRes.ok && verifyData.verified) {
+                alert("Email verified successfully! Please log in.")
+              } else {
+                alert(verifyData.error || "Verification failed. You can try signing up again.")
+              }
+            } catch (err) {
+              console.error("Verification error:", err)
+              alert("Could not verify email. Please try again.")
+            }
+          } else {
+            alert("Verification code not entered. You can sign up again to receive a new code.")
+          }
+        } else {
+          alert("Account created successfully! Please log in.")
+        }
         window.location.href = "/login.html"
       } else {
         // Handle errors (e.g., username already exists)
