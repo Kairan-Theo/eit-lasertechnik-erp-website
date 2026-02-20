@@ -306,6 +306,14 @@ class DealSerializer(serializers.ModelSerializer):
             validated_data['title'] = 'Untitled Deal'
         return super().create(validated_data)
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        try:
+            data['branch'] = instance.customer.branch if instance.customer else ""
+        except Exception:
+            data['branch'] = ""
+        return data
+
 class QuotationSerializer(serializers.ModelSerializer):
     quotation_items = QuotationItemSerializer(many=True, read_only=True)
     customer_details = CustomerSerializer(source='customer', read_only=True)

@@ -250,6 +250,9 @@ class DealViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
+        branch_value = (data.get('branch') or '').strip()
+        if 'branch' in data:
+            data.pop('branch')
         
         # Ensure currency default
         if not (data.get('currency') or '').strip():
@@ -277,28 +280,40 @@ class DealViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         instance = serializer.save()
-        
+        if instance.customer and (branch_value or branch_value == ""):
+            instance.customer.branch = branch_value
+            instance.customer.save(update_fields=['branch'])
         Notification.objects.create(message=f"CRM: Created \"{instance.title}\"", type="crm_create")
         headers = {'Location': f"{request.build_absolute_uri('/api/deals/')}{instance.id}/"}
         return Response(self.get_serializer(instance).data, status=status.HTTP_201_CREATED, headers=headers)
 
 
-    def perform_update(self, serializer):
-        instance = serializer.instance
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        data = request.data.copy()
+        branch_value = (data.get('branch') or '').strip()
+        if 'branch' in data:
+            data.pop('branch')
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         old_stage = instance.stage
         updated_instance = serializer.save()
-        
+        if updated_instance.customer and (branch_value or branch_value == ""):
+            updated_instance.customer.branch = branch_value
+            updated_instance.customer.save(update_fields=['branch'])
         if old_stage != updated_instance.stage:
             Notification.objects.create(
                 message=f"CRM  {updated_instance.customer} ({old_stage} -> {updated_instance.stage})",
                 type="crm_move"
             )
-            # Log deal history
             DealHistory.objects.create(
                 deal=updated_instance,
                 from_stage=old_stage,
                 to_stage=updated_instance.stage
             )
+        return Response(serializer.data)
 
     def perform_destroy(self, instance):
         customer = instance.customer

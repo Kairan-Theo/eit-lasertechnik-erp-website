@@ -1,8 +1,24 @@
-from django.db import models
+from django.db import models, connection
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
+
+
+def ensure_customer_branch_column():
+    try:
+        if connection.vendor != 'sqlite':
+            return
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA table_info(crm_customer)")
+            cols = [row[1] for row in cursor.fetchall()]
+            if 'branch' not in cols:
+                cursor.execute("ALTER TABLE crm_customer ADD COLUMN branch varchar(255)")
+    except Exception:
+        pass
+
+
+ensure_customer_branch_column()
 
 class Customer(models.Model):
     company_name = models.CharField(max_length=255)
