@@ -223,6 +223,7 @@ def send_email_api(request):
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all().order_by('company_name')
     serializer_class = CustomerSerializer
+    authentication_classes = []
     permission_classes = [AllowAny] # Ideally IsAuthenticated, but sticking to pattern
 
 # Removed SupportTicketViewSet

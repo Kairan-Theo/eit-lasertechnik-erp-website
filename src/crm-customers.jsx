@@ -27,13 +27,17 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   const [stages, setStages] = useState([])
   const [isSaving, setIsSaving] = useState(false)
   const [editingDealInfo, setEditingDealInfo] = useState(null)
+  const [standaloneCustomers, setStandaloneCustomers] = useState([])
 
-  const filteredDeals = deals.filter(deal => {
+  const filteredDeals = React.useMemo(() => {
+    const allRows = [...deals, ...standaloneCustomers]
+    return allRows.filter(deal => {
     const term = searchTerm.toLowerCase()
     const company = (deal.customer || deal.company || "").toLowerCase()
     const salesperson = (deal.salesperson || deal.salespersonName || "").toLowerCase()
     return company.includes(term) || salesperson.includes(term)
-  })
+    })
+  }, [deals, standaloneCustomers, searchTerm])
 
   // Clear selection when search changes (optional, but safer to avoid deleting hidden items)
   // React.useEffect(() => setSelectedRows([]), [searchTerm]) 
@@ -43,6 +47,48 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   React.useEffect(() => {
       const currentIds = new Set(deals.map(d => d.id))
       setSelectedRows(prev => prev.filter(id => currentIds.has(id)))
+  }, [deals])
+
+  React.useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { Authorization: `Token ${token}` } : {}
+        const res = await fetch(`${API_BASE_URL}/api/customers/`, { headers })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!Array.isArray(data)) return
+        const dealCustomerIds = new Set(
+          deals
+            .map(d => d.customerId || d.customer)
+            .filter(id => id !== null && id !== undefined)
+        )
+        const transformed = data
+          .filter(c => !dealCustomerIds.has(c.id))
+          .map(c => ({
+            id: `customer-${c.id}`,
+            customer: c.company_name || "",
+            company: c.company_name || "",
+            customerId: c.id,
+            branch: c.branch || "",
+            email: c.email || "",
+            phone: c.phone || "",
+            address: c.address || "",
+            contact: c.attn || "",
+            taxId: c.tax_id || "",
+            poNumber: "",
+            amount: 0,
+            currency: "฿",
+            priority: "none",
+            stageName: "",
+            stageCount: "",
+            extraContacts: [],
+            isCustomerOnly: true,
+          }))
+        setStandaloneCustomers(transformed)
+      } catch {}
+    }
+    loadCustomers()
   }, [deals])
 
   React.useEffect(() => {
@@ -66,40 +112,54 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       alert("Please enter a company name")
       return
     }
-    let stageName = "New"
-    if (!isEditing) {
+
+    let url = ""
+    let method = "POST"
+    let payload = {}
+
+    if (isEditing && editingDealInfo && editingDealInfo.customerId) {
+      url = `${API_BASE_URL}/api/customers/${editingDealInfo.customerId}/`
+      method = "PATCH"
+      payload = {
+        company_name: newDeal.company || "",
+        branch: newDeal.branch || "",
+        address: newDeal.address || "",
+        email: newDeal.email || "",
+        phone: newDeal.phone || "",
+        tax_id: newDeal.taxId || "",
+      }
+    } else if (!isEditing) {
+      url = `${API_BASE_URL}/api/customers/`
+      method = "POST"
+      payload = {
+        company_name: newDeal.company || "",
+        branch: newDeal.branch || "",
+        address: newDeal.address || "",
+        email: newDeal.email || "",
+        phone: newDeal.phone || "",
+        tax_id: newDeal.taxId || "",
+      }
+    } else if (isEditing && editingDealInfo) {
+      // Fallback for legacy deals without linked customer id: keep old behaviour
+      let stageName = "New"
       try {
         stageName = stages[newDeal.stageIndex]?.name || stages[0]?.name || "New"
       } catch {}
-    }
-
-    const baseData = {
-      title: newDeal.opportunity || newDeal.company || "Untitled",
-      amount: Number(newDeal.amount) || 0,
-      currency: newDeal.currency || "฿",
-      po_number: newDeal.poNumber || "",
-      priority: newDeal.priority || "none",
-      contact: newDeal.contact || "",
-      email: newDeal.email || "",
-      phone: newDeal.phone || "",
-      address: newDeal.address || "",
-      tax_id: newDeal.taxId || "",
-      extra_contacts: extraContacts,
-      salesperson: newDeal.salesperson || "",
-      branch: newDeal.branch || "",
-    }
-
-    let url = `${API_BASE_URL}/api/deals/`
-    let method = "POST"
-    let payload = {
-      ...baseData,
-      customer: null,
-      notes: "",
-      stage: stageName,
-      write_customer_name: newDeal.company || "",
-    }
-
-    if (isEditing && editingDealInfo) {
+      const baseData = {
+        title: newDeal.opportunity || newDeal.company || "Untitled",
+        amount: Number(newDeal.amount) || 0,
+        currency: newDeal.currency || "฿",
+        po_number: newDeal.poNumber || "",
+        priority: newDeal.priority || "none",
+        contact: newDeal.contact || "",
+        email: newDeal.email || "",
+        phone: newDeal.phone || "",
+        address: newDeal.address || "",
+        tax_id: newDeal.taxId || "",
+        extra_contacts: extraContacts,
+        salesperson: newDeal.salesperson || "",
+        branch: newDeal.branch || "",
+      }
       url = `${API_BASE_URL}/api/deals/${editingDealInfo.id}/`
       method = "PATCH"
       payload = {
@@ -108,6 +168,8 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       }
       if (editingDealInfo.stageName) {
         payload.stage = editingDealInfo.stageName
+      } else {
+        payload.stage = stageName
       }
     }
     setIsSaving(true)
@@ -157,11 +219,11 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   }
   
   const handleSelectAll = (e) => {
-      if (e.target.checked) {
-          setSelectedRows(filteredDeals.map(d => d.id))
-      } else {
-          setSelectedRows([])
-      }
+    if (e.target.checked) {
+      setSelectedRows(filteredDeals.map(d => d.id))
+    } else {
+      setSelectedRows([])
+    }
   }
 
   const handleSelectRow = (id) => {
@@ -175,11 +237,14 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   }
 
   const handleDelete = () => {
-      if (onDeleteDeals && selectedRows.length > 0) {
-          onDeleteDeals(selectedRows)
-          // Don't clear selection here; wait for deletion to complete (deals prop update)
-          // or user to cancel (selection remains)
+    if (onDeleteDeals && selectedRows.length > 0) {
+      const idsToDelete = filteredDeals
+        .filter(d => selectedRows.includes(d.id) && !d.isCustomerOnly)
+        .map(d => d.id)
+      if (idsToDelete.length > 0) {
+        onDeleteDeals(idsToDelete)
       }
+    }
   }
 
   const handleEditRow = (deal) => {
@@ -200,7 +265,11 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       salesperson: deal.salesperson || deal.salespersonName || "",
     })
     setExtraContacts(deal.extraContacts || deal.extra_contacts || [])
-    setEditingDealInfo({ id: deal.id, stageName: deal.stageName })
+    setEditingDealInfo({ 
+      id: deal.id, 
+      stageName: deal.stageName, 
+      customerId: deal.customerId || deal.customer 
+    })
     setShowNewCustomerForm(true)
   }
 
@@ -354,9 +423,9 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
           </div>
           <div className="text-slate-500 font-medium text-sm">
             {searchTerm ? (
-              <span>Showing <span className="text-slate-900 font-bold">{filteredDeals.length}</span> of <span className="text-slate-900 font-bold">{deals.length}</span> customers</span>
+              <span>Showing <span className="text-slate-900 font-bold">{filteredDeals.length}</span> customers</span>
             ) : (
-              <span>Total: <span className="text-slate-900 font-bold">{deals.length}</span> customers</span>
+              <span>Total: <span className="text-slate-900 font-bold">{filteredDeals.length}</span> customers</span>
             )}
           </div>
         </div>

@@ -400,6 +400,38 @@ function CRMPage() {
 
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
 
+  const [crmCompanyOptions, setCrmCompanyOptions] = React.useState([])
+
+  React.useEffect(() => {
+    const loadCrmCompanies = async () => {
+      try {
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { Authorization: `Token ${token}` } : {}
+        const res = await fetch(`${API_BASE_URL}/api/customers/`, { headers })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!Array.isArray(data)) return
+        const mapped = data
+          .map(c => ({
+            name: c.company_name || "",
+            contact: c.attn || "",
+            email: c.email || "",
+            phone: c.phone || "",
+            address: c.address || "",
+            taxId: c.tax_id || "",
+          }))
+          .filter(c => c.name)
+        setCrmCompanyOptions(mapped)
+      } catch {}
+    }
+    loadCrmCompanies()
+  }, [])
+
+  const companyOptions = React.useMemo(
+    () => [...crmCompanyOptions, ...thaiCompanies],
+    [crmCompanyOptions],
+  )
+
   const flatDeals = React.useMemo(
     () =>
       stages.flatMap((stage, stageIndex) =>
@@ -2191,7 +2223,7 @@ function CRMPage() {
                               />
                               {showCompanySuggestions && editingDeal.company && (
                                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-                                  {thaiCompanies.filter(c => c.name.toLowerCase().includes(editingDeal.company.toLowerCase())).map((c, i) => (
+                                  {companyOptions.filter(c => c.name.toLowerCase().includes(editingDeal.company.toLowerCase())).map((c, i) => (
                                     <button
                                       key={i}
                                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
@@ -2204,7 +2236,7 @@ function CRMPage() {
                                       <div className="text-xs text-slate-500">Contact: {c.contact}</div>
                                     </button>
                                   ))}
-                                  {editingDeal.company && !thaiCompanies.some(c => c.name.toLowerCase() === editingDeal.company.toLowerCase()) && (
+                                  {editingDeal.company && !companyOptions.some(c => c.name.toLowerCase() === editingDeal.company.toLowerCase()) && (
                                     <button
                                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
                                       onClick={() => {
@@ -2510,7 +2542,7 @@ function CRMPage() {
                               />
                               {showCompanySuggestions && detailDeal.company && (
                                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-                                  {thaiCompanies.filter(c => c.name.toLowerCase().includes(detailDeal.company.toLowerCase())).map((c, i) => (
+                                  {companyOptions.filter(c => c.name.toLowerCase().includes(detailDeal.company.toLowerCase())).map((c, i) => (
                                     <button
                                       key={i}
                                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
@@ -2523,7 +2555,7 @@ function CRMPage() {
                                       <div className="text-xs text-slate-500">Contact: {c.contact}</div>
                                     </button>
                                   ))}
-                                  {detailDeal.company && !thaiCompanies.some(c => c.name.toLowerCase() === detailDeal.company.toLowerCase()) && (
+                                  {detailDeal.company && !companyOptions.some(c => c.name.toLowerCase() === detailDeal.company.toLowerCase()) && (
                                     <button
                                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
                                       onClick={() => {
@@ -3096,7 +3128,7 @@ function CRMPage() {
                               />
                               {showCompanySuggestions && newDeal.company && (
                                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-                                  {thaiCompanies.filter(c => c.name.toLowerCase().includes(newDeal.company.toLowerCase())).map((c, i) => (
+                                  {companyOptions.filter(c => c.name.toLowerCase().includes(newDeal.company.toLowerCase())).map((c, i) => (
                                     <button
                                       key={i}
                                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
@@ -3109,7 +3141,7 @@ function CRMPage() {
                                       <div className="text-xs text-slate-500">Contact: {c.contact}</div>
                                     </button>
                                   ))}
-                                  {newDeal.company && !thaiCompanies.some(c => c.name.toLowerCase() === newDeal.company.toLowerCase()) && (
+                                  {newDeal.company && !companyOptions.some(c => c.name.toLowerCase() === newDeal.company.toLowerCase()) && (
                                     <button
                                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-[#2D4485] font-medium"
                                       onClick={() => {
