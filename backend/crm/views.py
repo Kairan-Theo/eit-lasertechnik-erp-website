@@ -8,7 +8,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
 from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, Receipt, TaxInvoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
-from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, ReceiptSerializer, TaxInvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer, PDMachineSerializer, PDSystemSerializer, PDWireSerializer, PDSparepartSerializer, PDServiceSerializer, PDSystemChildproductSerializer, PMProjectSerializer, PMTaskSerializer
+from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, ReceiptSerializer, TaxInvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer, PDMachineSerializer, PDSystemSerializer, PDWireSerializer, PDSparepartSerializer, PDServiceSerializer, PDSystemChildproductSerializer, PMProjectSerializer, PMTaskSerializer, _next_quotation_code
 import json
 import os
 import uuid
@@ -334,6 +334,10 @@ class QuotationViewSet(viewsets.ModelViewSet):
     # Enable multipart/form-data for image upload and nested item fields from FormData
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
+    @action(detail=False, methods=['get'], url_path='next-code')
+    def next_code(self, request):
+        return Response({'qo_code': _next_quotation_code()})
+
     @action(detail=True, methods=['post'], url_path='duplicate')
     def duplicate(self, request, pk=None):
         orig = self.get_object()
@@ -343,7 +347,7 @@ class QuotationViewSet(viewsets.ModelViewSet):
             ext = '.' + orig.file_name.rsplit('.', 1)[1]
         new_file_name = f"{base_name}_COPY_{uuid.uuid4().hex[:8]}{ext or '.pdf'}"
         new_q = Quotation(
-            qo_code=orig.qo_code,
+            qo_code=_next_quotation_code(),
             customer=orig.customer,
             eit=orig.eit,
             created_date=timezone.localdate(),

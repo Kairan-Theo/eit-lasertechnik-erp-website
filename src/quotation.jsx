@@ -11,6 +11,17 @@ import { CustomerCombobox } from "./components/customer-combobox.jsx"
 // Import a typing+select combobox component to enhance description input
 import { Combobox } from "./components/combobox.jsx"
 import { DateField } from "./components/ui/date-field"
+// Comment: Bring in a consistent modal UI for errors based on reference design
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "./components/ui/alert-dialog"
 
 // Resolve image URL robustly across sources:
 // - DataURL: return as-is for immediate preview (client-side)
@@ -94,6 +105,9 @@ const parseNumber = (val) => {
 }
 
 function useQuotationState() {
+  // Comment: Determine edit mode synchronously from URL so initial number/fileName don’t auto-increment for existing quotations
+  const initialParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+  const initialIsEditing = initialParams.has('key') && initialParams.has('index')
   const [customer, setCustomer] = React.useState({
     company: "",
     taxId: "",
@@ -143,12 +157,14 @@ function useQuotationState() {
   }
 
   const [details, setDetails] = React.useState({
-    number: getNextQuotationNumber(),
+    // Comment: On edit, start with blank — will be hydrated from API; on create, prefill with next sequence
+    number: initialIsEditing ? "" : getNextQuotationNumber(),
     date: new Date().toISOString().slice(0, 10),
     // File name used for PDF download; default derives from quotation number
     fileName: (() => {
+      // Comment: For new quotations, derive filename from next number; for edits, use a generic until API sets real file_name
+      if (initialIsEditing) return "quotation.pdf"
       const base = getNextQuotationNumber()
-      // Comment: sanitize to a simple, safe filename without spaces
       return `${String(base).replace(/\s+/g, "_")}.pdf`
     })(),
     validUntil: "",
@@ -197,6 +213,66 @@ function useQuotationState() {
       })
       .catch(err => console.error("Error loading deals for customers", err))
   }, [])
+
+  // Comment: Ensure new quotation number increments by exactly 1 relative to the highest existing API/local number.
+  // Comment: Skip when editing an existing quotation so the loaded number remains unchanged.
+  React.useEffect(() => {
+    if (initialIsEditing) return
+    const currentYear = new Date().getFullYear()
+    const parseSeq = (s) => {
+      try {
+        const m = String(s || "").match(new RegExp(`^QUO ${currentYear}-(\\d{4})$`, 'i'))
+        return m ? parseInt(m[1], 10) : null
+      } catch { return null }
+    }
+    const toCode = (n) => `QUO ${currentYear}-${String(n).padStart(4, "0")}`
+    const updateFromApi = async () => {
+      try {
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { "Authorization": `Token ${token}` } : {}
+        const rNext = await fetch(`${API_BASE_URL}/api/quotations/next-code/`, { headers })
+        if (rNext.ok) {
+          const data = await rNext.json()
+          const code = String(data?.qo_code || "")
+          if (code) {
+            setDetails(prev => ({ ...prev, number: code }))
+            return
+          }
+        }
+        const seqCurrent = parseSeq(details.number) || 0
+        let maxSeqOther = 0
+        const res = await fetch(`${API_BASE_URL}/api/quotations/`, { headers })
+        if (res.ok) {
+          const apiQuos = await res.json()
+          if (Array.isArray(apiQuos)) {
+            for (const q of apiQuos) {
+              const seq = parseSeq(q.qo_code || q.details?.number)
+              if (Number.isFinite(seq) && seq !== seqCurrent && seq > maxSeqOther) maxSeqOther = seq
+            }
+          }
+        }
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.startsWith("history:")) {
+              const item = JSON.parse(localStorage.getItem(key))
+              if (item && Array.isArray(item.quotations)) {
+                for (const quo of item.quotations) {
+                  const seq = parseSeq(quo.number)
+                  if (Number.isFinite(seq) && seq !== seqCurrent && seq > maxSeqOther) maxSeqOther = seq
+                }
+              }
+            }
+          }
+        } catch {}
+        if (seqCurrent >= 1 && seqCurrent > maxSeqOther) {
+        } else if (maxSeqOther >= 1) {
+          setDetails(prev => ({ ...prev, number: toCode(maxSeqOther + 1) }))
+        }
+      } catch {}
+    }
+    updateFromApi()
+  }, [initialIsEditing])
 
   // Load canonical Customer records (with CC fields) so selection can hydrate Attn/CC automatically.
   React.useEffect(() => {
@@ -755,6 +831,48 @@ function QuotationPage() {
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
   // Full-size preview for uploaded specification image
   const [previewSrc, setPreviewSrc] = React.useState(null)
+  // Comment: Centralized error dialog state used for duplicate file_name and other save errors
+  const [errorOpen, setErrorOpen] = React.useState(false)
+  const [errorTitle, setErrorTitle] = React.useState("Error saving quotation")
+  const [errorMessage, setErrorMessage] = React.useState("")
+  // Comment: Helper to parse backend error payloads and display them in the dialog
+  const showErrorDialog = (payload, fallback) => {
+    try {
+      if (typeof payload === "string" && payload.trim().startsWith("{")) {
+        const obj = JSON.parse(payload)
+        if (obj && obj.file_name && Array.isArray(obj.file_name) && obj.file_name.length > 0) {
+          setErrorTitle("Duplicate File Name")
+          // Comment: Augment message with guidance for resolving duplicates
+          setErrorMessage(String(obj.file_name[0] || "quotation with this file name already exists."))
+          setErrorOpen(true)
+          return
+        }
+        // Comment: Display first error message if available
+        const firstKey = Object.keys(obj)[0]
+        if (firstKey) {
+          const val = obj[firstKey]
+          const msg = Array.isArray(val) ? val.join("\n") : JSON.stringify(val)
+          setErrorTitle("Validation Error")
+          setErrorMessage(`${firstKey}: ${msg}`)
+          setErrorOpen(true)
+          return
+        }
+      }
+      // Comment: If payload is already an object
+      if (payload && typeof payload === "object") {
+        if (payload.file_name && Array.isArray(payload.file_name) && payload.file_name.length > 0) {
+          setErrorTitle("Duplicate File Name")
+          // Comment: Augment message with guidance for resolving duplicates
+          setErrorMessage(String(payload.file_name[0] || "quotation with this file name already exists."))
+          setErrorOpen(true)
+          return
+        }
+      }
+    } catch {}
+    setErrorTitle("Error saving quotation")
+    setErrorMessage(String(fallback || "Unknown error"))
+    setErrorOpen(true)
+  }
   // Keep refs to each spec textarea so we can auto-size them to fit content.
   const specTextareasRef = React.useRef({})
 
@@ -2030,10 +2148,8 @@ function QuotationPage() {
                           const headers = {}
                           const token = localStorage.getItem("authToken")
                           if (token) headers["Authorization"] = `Token ${token}`
-                          // Build a unique new quotation code derived from current number
-                          // Comment: Always derive a fresh number to avoid overwriting existing records
-                          const baseCode = q.details.number || `QUO-${Date.now()}`
-                          const qo_code = `${baseCode}-COPY-${Date.now()}`
+                          // Comment: Do NOT modify qo_code for "Save as new"; backend generates the next number.
+                          // Sending a client-side COPY suffix is confusing and unnecessary.
 
                           // Flatten responsible persons into CSV strings for serializer
                           const list = Array.isArray(q.customer.responsibles) ? q.customer.responsibles : []
@@ -2082,7 +2198,12 @@ function QuotationPage() {
                             try {
                               const raw = String(src || "")
                               const url = resolveImageUrl(raw) || raw
-                              // Comment: Support blob: URLs from <input type="file"> and absolute http(s). Avoid fetching /media to keep payload small.
+                              // Comment: Do NOT re-upload server media images. If the URL points to our API_BASE_URL /media/,
+                              // return null so the caller sends image_path, preserving the original stored filename.
+                              const api = String(API_BASE_URL || "").replace(/\/+$/, "")
+                              const isSameOriginMedia = (url.startsWith(api) && url.includes("/media/")) || url.includes("/media/")
+                              if (isSameOriginMedia) return null
+                              // Comment: Only fetch external http(s) or blob: URLs (e.g., user-selected files)
                               if (!/^https?:\/\//.test(url) && !/^blob:/.test(url)) return null
                               const resp = await fetch(url, { mode: "cors" })
                               if (!resp.ok) return null
@@ -2099,19 +2220,15 @@ function QuotationPage() {
                           // Prepare multipart form data for nested items + image files
                           const fd = new FormData()
                           // Top-level fields
-                          fd.append("qo_code", qo_code)
-                          // Comment: Provide source_quotation_id so backend can copy QuotationItem rows from parent
-                          if (q.sourceKey === "api" && q.sourceIndex) {
-                            fd.append("source_quotation_id", String(q.sourceIndex))
-                          }
-                          // Comment: Ensure new copy has a unique file name; append COPY+timestamp
+                          // Comment: Omit qo_code; server will assign the next valid quotation number
+                          // Comment: Do NOT send source_quotation_id on Save As New.
+                          // We want to persist the current UI edits (specification changes) as new rows,
+                          // not copy the original DB rows from the parent.
+                          // Comment: Preserve the user's file name without adding COPY/timestamp.
+                          // If it collides, backend returns a duplicate error and the UI shows the modal guidance.
                           {
                             const baseFile = String(q.details.fileName || "quotation.pdf")
-                            const parts = baseFile.split(".")
-                            const ext = parts.length > 1 ? parts.pop() : "pdf"
-                            const stem = parts.join(".") || "quotation"
-                            const uniqueFile = `${stem}-COPY-${Date.now()}.${ext}`
-                            fd.append("file_name", uniqueFile)
+                            fd.append("file_name", baseFile)
                           }
                           fd.append("created_date", q.details.date || "")
                           fd.append("customer_name", q.customer.company || "Unknown")
@@ -2197,6 +2314,9 @@ function QuotationPage() {
                               if (blobParent) {
                                 const fileP = new File([blobParent], `item_${idxNew}.png`, { type: blobParent.type || "image/png" })
                                 fd.append(`items[${idxNew}][image]`, fileP)
+                              } else if (typeof item.image === "string") {
+                                // Comment: Avoid re-uploading server media path; send image_path so backend keeps original filename
+                                fd.append(`items[${idxNew}][image_path]`, toBackendMediaPath(item.image))
                               }
                             }
                             jsonItemsForFallback.push({
@@ -2254,15 +2374,23 @@ function QuotationPage() {
                             body: fd
                           })
                           if (!response.ok) {
-                            const err = await response.text()
-                            throw new Error("Failed to save new quotation: " + err)
+                            // Comment: Prefer JSON for structured Django error messages (e.g., duplicate file_name)
+                            const ct = response.headers.get("Content-Type") || ""
+                            if (ct.includes("application/json")) {
+                              const errJson = await response.json()
+                              showErrorDialog(errJson, "Failed to save new quotation")
+                            } else {
+                              const errText = await response.text()
+                              showErrorDialog(errText, "Failed to save new quotation")
+                            }
+                            return
                           }
-                          alert("Saved as new quotation!")
+                          // Comment: Success — proceed to admin listing
                           setOpenCreateConfirm(false)
                           window.location.href = "/admin.html"
                         } catch (error) {
                           console.error(error)
-                          alert("Error saving as new: " + error.message)
+                          showErrorDialog(error?.message || String(error), "Error saving as new")
                         }
                       }
                       handleSaveAsNew()
@@ -2418,7 +2546,9 @@ function QuotationPage() {
                               price: String(item.price || 0),
                               image_path: (firstImageRow2 && typeof firstImageRow2.image === "string" && changed)
                                 ? toBackendMediaPath2(firstImageRow2.image)
-                                : ""
+                                : "",
+                              // Comment: Preserve base row id for accurate update mapping
+                              row_id: (item && item.row_id != null) ? String(item.row_id) : undefined
                             })
                             idx++
                             // Append additional spec rows as separate items (qty=0)
@@ -2477,6 +2607,9 @@ function QuotationPage() {
                                   }
                                   return norm(sr.image) && norm(sr.image) !== norm(sr.originalImage || "")
                                 })()))) ? toBackendMediaPath2(sr.image) : ""
+                                ,
+                                // Comment: Preserve spec row id when updating existing rows; new rows omit row_id
+                                row_id: (sr && sr.row_id != null) ? String(sr.row_id) : undefined
                               })
                               idx++
                             }
@@ -2499,17 +2632,24 @@ function QuotationPage() {
                           } catch {}
                           const response = await fetch(url, { method, headers, body: fd })
                           if (!response.ok) {
-                            const errText = await response.text()
-                            console.error("Backend save error:", errText)
-                            throw new Error("Failed to save to database: " + errText)
+                            // Comment: On failure, parse JSON to detect duplicate file_name and show modal
+                            const ct = response.headers.get("Content-Type") || ""
+                            if (ct.includes("application/json")) {
+                              const errJson = await response.json()
+                              showErrorDialog(errJson, "Failed to save to database")
+                            } else {
+                              const errText = await response.text()
+                              console.error("Backend save error:", errText)
+                              showErrorDialog(errText, "Failed to save to database")
+                            }
+                            return
                           }
-                          
-                          alert("Quotation saved successfully!")
+                          // Comment: Success — close dialog and return to admin listing
                           setOpenCreateConfirm(false)
                           window.location.href = "/admin.html"
                         } catch (error) {
                           console.error(error)
-                          alert("Error saving quotation: " + error.message)
+                          showErrorDialog(error?.message || String(error), "Error saving quotation")
                         }
                       }
                       handleSave()
@@ -2571,6 +2711,27 @@ function QuotationPage() {
           </div>
         </div>
       )}
+      {/* Comment: Error dialog modeled after reference confirm modal; shows duplicate file_name and other errors */}
+      <AlertDialog open={errorOpen} onOpenChange={setErrorOpen}>
+        {/* Comment: Make dialog bigger with inline maxWidth and extra padding */}
+        <AlertDialogContent style={{ maxWidth: "720px" }} className="p-8">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{errorTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {/* Comment: Primary backend error message (e.g., duplicate file_name) */}
+              <div className="text-base">{errorMessage}</div>
+              {/* Comment: Friendly guidance to resolve duplicate file name */}
+              <div className="mt-4 text-sm text-muted-foreground">
+                Tip: Try creating another file name (e.g., add a suffix like “_v2” or use the generated quotation number).
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setErrorOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setErrorOpen(false)}>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       </div>
     </main>
   )
