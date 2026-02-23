@@ -101,20 +101,23 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
   }, [])
 
   React.useEffect(() => {
-    fetch(`${API_BASE_URL}/api/deals/`)
+    // Comment: Load canonical customers (not deals) to drive Company Name selection
+    fetch(`${API_BASE_URL}/api/customers/`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          const unique = {}
-          data.forEach(d => {
-            if (d.customer_name && !unique[d.customer_name]) {
-              unique[d.customer_name] = d
-            }
-          })
-          setCustomerOptions(Object.values(unique))
+          // Comment: Add label/value to support CustomerCombobox ID-based selection
+          const normalized = data.map(c => ({
+            ...c,
+            label: c.company_name || c.customer_name || "",
+            value: c.id
+          }))
+          setCustomerOptions(normalized)
+        } else {
+          setCustomerOptions([])
         }
       })
-      .catch(err => console.error("Error loading deals for customers", err))
+      .catch(err => console.error("Error loading customers", err))
   }, [])
 
   React.useEffect(() => {

@@ -1611,6 +1611,8 @@ function QuotationPage() {
                         const nextTop = {
                           company: option.label || c.company_name || "",
                           taxId: c.tax_id || "",
+                          // Comment: Hydrate Branch from Customer DB table
+                          branch: c.branch || "",
                           address: c.address || "",
                           telephone: c.phone || "",
                           fax: c.cus_fax || "",
@@ -1657,6 +1659,8 @@ function QuotationPage() {
                                 address: nextTop.address || latest.address || "",
                                 telephone: nextTop.telephone || latest.phone || "",
                                 fax: nextTop.fax || "",
+                                // Comment: Fallback Branch from latest Deal snapshot when Customer.branch is empty
+                                branch: nextTop.branch || latest.branch || "",
                                 attn: nextTop.attn || latest.contact || "",
                                 email: nextTop.email || latest.email || ""
                               } : {}
@@ -1706,14 +1710,13 @@ function QuotationPage() {
           <div className="flex items-center justify-between pt-2">
              <h3 className="text-base font-bold text-gray-900">Customer Responsible</h3>
              {/* Add Responsible (Attn + CC) */}
+             {/* Comment: Change to Add CC — additional entries are CC-only; Attn exists once */}
              <button onClick={q.addResponsible} className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-[#2D4485]/10 text-[#2D4485] hover:bg-[#2D4485]/15">
                <Plus className="w-4 h-4" />
-               <span className="text-sm font-medium">Add Attn + CC</span>
+               <span className="text-sm font-medium">Add CC</span>
              </button>
           </div>
-          {/* Render Responsibles in two rows per contact:
-              Row 1: Attn., Division, Mobile, Email
-              Row 2: CC., Division, Mobile, Email */}
+          {/* Comment: Render first block with Attn + CC; subsequent blocks CC-only (CC1, CC2, ...) */}
           {(() => {
             const contacts = Array.isArray(q.customer.responsibles) && q.customer.responsibles.length > 0
               ? q.customer.responsibles
@@ -1734,29 +1737,33 @@ function QuotationPage() {
                     Delete
                   </button>
                 </div>
-                {/* Attn row */}
+                {/* Comment: Show Attn row only for the first block */}
+                {idx === 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Attention(Attn.)</label>
+                      <input value={c.attn} onChange={(e) => q.updateResponsible(idx, 'attn', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Attention" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
+                      <input value={c.attnDiv || ""} onChange={(e) => q.updateResponsible(idx, 'attnDiv', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                      <input value={c.attnMobile || ""} onChange={(e) => q.updateResponsible(idx, 'attnMobile', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <input value={c.attnEmail || ""} onChange={(e) => q.updateResponsible(idx, 'attnEmail', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Email" />
+                    </div>
+                  </div>
+                )}
+                {/* CC row (for all blocks). Subsequent blocks labeled CC1, CC2, ... */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Attention(Attn.)</label>
-                    <input value={c.attn} onChange={(e) => q.updateResponsible(idx, 'attn', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Attention" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Division(Div.)</label>
-                    <input value={c.attnDiv || ""} onChange={(e) => q.updateResponsible(idx, 'attnDiv', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Division" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
-                    <input value={c.attnMobile || ""} onChange={(e) => q.updateResponsible(idx, 'attnMobile', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Mobile" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input value={c.attnEmail || ""} onChange={(e) => q.updateResponsible(idx, 'attnEmail', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Email" />
-                  </div>
-                </div>
-                {/* CC row */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">CC</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {idx === 0 ? "CC" : `CC ${idx}`}
+                    </label>
                     <input value={c.cc || ""} onChange={(e) => q.updateResponsible(idx, 'cc', e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="CC (optional)" />
                   </div>
                   <div>
