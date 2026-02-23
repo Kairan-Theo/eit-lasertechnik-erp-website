@@ -312,6 +312,48 @@ function Dashboard({ data }) {
             </table>
           </div>
         </div>
+
+        {/* Comment: New card to display recent Tax Invoices on the dashboard */}
+        <div className="bg-white rounded-xl border shadow-sm p-6">
+          <h3 className="font-semibold text-gray-900 mb-4">Recent Tax Invoices</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b">
+                  <th className="pb-2">Tax Invoice Number</th>
+                  <th className="pb-2">Customer</th>
+                  <th className="pb-2">Date</th>
+                  <th className="pb-2 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {data.taxInvoices.slice(0, 5).map((ti, i) => (
+                  <tr key={i}>
+                    <td className="py-3 font-medium">
+                      {ti.details?.number}
+                    </td>
+                    <td className="py-3">{ti.customerName || "-"}</td>
+                    <td className="py-3">{ti.details?.date}</td>
+                    <td className="py-3 text-right">
+                      {ti.details?.currency}{" "}
+                      {ti.totals?.total?.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </td>
+                  </tr>
+                ))}
+                {data.taxInvoices.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-center text-gray-500">
+                      No tax invoices found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   )
