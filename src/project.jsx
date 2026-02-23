@@ -1064,9 +1064,9 @@ export default function ProjectApp() {
     const host = window.location.hostname || "127.0.0.1"
     return Array.from(new Set([
       API_BASE_URL,
-      `${proto}://${host}:8002`,
-      `${proto}://${host}:8001`,
       `${proto}://${host}:8000`,
+      `${proto}://${host}:8001`,
+      `${proto}://${host}:8002`,
     ]))
   }, [])
 

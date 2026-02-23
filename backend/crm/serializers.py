@@ -339,9 +339,88 @@ class DealHistorySerializer(serializers.ModelSerializer):
         return ""
 
 class CustomerSerializer(serializers.ModelSerializer):
+    # Comment: Accept additional contacts from frontend; use them to build cc* fields
+    extra_contacts = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
     class Meta:
         model = Customer
         fields = '__all__'
+    
+    # Comment: Accept extra_contacts list as a fallback source for cc* fields
+    def to_internal_value(self, data):
+        if 'extra_contacts' in data and isinstance(data.get('extra_contacts'), str):
+            import json
+            try:
+                if hasattr(data, 'dict'):
+                    data = data.dict()
+                elif hasattr(data, 'copy'):
+                    data = data.copy()
+                parsed = json.loads(data.get('extra_contacts') or '[]')
+                if isinstance(parsed, list):
+                    data['extra_contacts'] = parsed
+            except:
+                pass
+        return super().to_internal_value(data)
+    
+    # Comment: Normalize CSV-like inputs and prevent duplication of primary attn in cc fields
+    def _norm_csv(self, s):
+        if s is None:
+            return ""
+        parts = [str(p).strip() for p in str(s).split(",")]
+        parts = [p for p in parts if p]
+        return ",".join(parts)
+    
+    # Comment: Derive cc* CSVs from extra_contacts when explicit cc* not provided
+    def _derive_cc_from_extras(self, validated_data):
+        extras = validated_data.pop('extra_contacts', None)
+        if not extras or not isinstance(extras, list):
+            return validated_data
+        names, divs, emails, mobiles, positions = [], [], [], [], []
+        for c in extras:
+            n = str(c.get('name', '')).strip()
+            e = str(c.get('email', '')).strip()
+            m = str(c.get('mobile', '')).strip()
+            names.append(n)
+            divs.append(str(c.get('division', '')).strip())
+            emails.append(e)
+            mobiles.append(m)
+            positions.append(str(c.get('position', '')).strip())
+        if 'cc' not in validated_data or not validated_data.get('cc'):
+            validated_data['cc'] = ",".join([p for p in names if p])
+        if 'cc_division' not in validated_data or not validated_data.get('cc_division'):
+            validated_data['cc_division'] = ",".join([p for p in divs if p])
+        if 'cc_email' not in validated_data or not validated_data.get('cc_email'):
+            validated_data['cc_email'] = ",".join([p for p in emails if p])
+        if 'cc_mobile' not in validated_data or not validated_data.get('cc_mobile'):
+            validated_data['cc_mobile'] = ",".join([p for p in mobiles if p])
+        if 'cc_position' not in validated_data or not validated_data.get('cc_position'):
+            validated_data['cc_position'] = ",".join([p for p in positions if p])
+        return validated_data
+    
+    def create(self, validated_data):
+        # Comment: Clean attn* scalar fields
+        for k in ['attn', 'attn_division', 'attn_email', 'attn_mobile', 'attn_position']:
+            if k in validated_data:
+                validated_data[k] = str(validated_data.get(k) or "").strip()
+        validated_data = self._derive_cc_from_extras(validated_data)
+        # Comment: Normalize cc* CSV fields
+        for k in ['cc', 'cc_division', 'cc_email', 'cc_mobile', 'cc_position']:
+            if k in validated_data:
+                validated_data[k] = self._norm_csv(validated_data.get(k))
+        # Comment: Do not modify cc values further; trust incoming cc_* or derived ones
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        # Comment: Clean attn* scalar fields
+        for k in ['attn', 'attn_division', 'attn_email', 'attn_mobile', 'attn_position']:
+            if k in validated_data:
+                validated_data[k] = str(validated_data.get(k) or "").strip()
+        validated_data = self._derive_cc_from_extras(validated_data)
+        # Comment: Normalize cc* CSV fields
+        for k in ['cc', 'cc_division', 'cc_email', 'cc_mobile', 'cc_position']:
+            if k in validated_data:
+                validated_data[k] = self._norm_csv(validated_data.get(k))
+        # Comment: Do not modify cc values further; trust incoming cc_* or derived ones
+        return super().update(instance, validated_data)
 
 # Removed SupportTicketSerializer
 

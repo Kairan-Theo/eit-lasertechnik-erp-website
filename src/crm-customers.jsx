@@ -1,16 +1,42 @@
 import React, { useState } from "react"
 import { API_BASE_URL } from "./config"
+const apiRequest = async (path, options = {}) => {
+  const proto = window.location.protocol === "https:" ? "https" : "http"
+  const host = window.location.hostname || "127.0.0.1"
+  const candidates = Array.from(new Set([
+    API_BASE_URL,
+    `${proto}://${host}:8000`,
+    `${proto}://${host}:8001`,
+    `${proto}://${host}:8002`,
+  ]))
+  let lastErr
+  for (const base of candidates) {
+    try {
+      const res = await fetch(`${base}${path}`, options)
+      return res
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  throw lastErr || new Error("All API endpoints unreachable")
+}
 import { Trash } from "lucide-react"
 
 export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   const [searchTerm, setSearchTerm] = useState("")
-  const [columnModes, setColumnModes] = useState({}) // { [key]: 'folded' | 'expanded' | undefined }
+  // Comment: Removed column fold/expand modes per request
   const [selectedRows, setSelectedRows] = useState([])
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const [newDeal, setNewDeal] = useState({
     company: "",
     branch: "",
     contact: "",
+    division: "",
+    // Comment: Track primary contact position for attn_position
+    position: "",
+    // Comment: Company-level email/phone kept separate from primary contact email/phone
+    companyEmail: "",
+    companyPhone: "",
     opportunity: "",
     email: "",
     phone: "",
@@ -54,7 +80,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       try {
         const token = localStorage.getItem("authToken")
         const headers = token ? { Authorization: `Token ${token}` } : {}
-        const res = await fetch(`${API_BASE_URL}/api/customers/`, { headers })
+        const res = await apiRequest(`/api/customers/`, { headers })
         if (!res.ok) return
         const data = await res.json()
         if (!Array.isArray(data)) return
@@ -71,10 +97,16 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
             company: c.company_name || "",
             customerId: c.id,
             branch: c.branch || "",
+            // Comment: Company-level email/phone displayed in table columns
             email: c.email || "",
             phone: c.phone || "",
             address: c.address || "",
+            // Comment: Primary contact (attn*) kept separate from additional contacts
             contact: c.attn || "",
+            attnEmail: c.attn_email || "",
+            attnMobile: c.attn_mobile || "",
+            attnDivision: c.attn_division || "",
+            attnPosition: c.attn_position || "",
             taxId: c.tax_id || "",
             poNumber: "",
             amount: 0,
@@ -82,7 +114,27 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
             priority: "none",
             stageName: "",
             stageCount: "",
-            extraContacts: [],
+            // Comment: Build additional contacts list from Customer cc* CSV columns
+            extraContacts: (() => {
+              const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
+              const names = splitCsv(c.cc)
+              const divs = splitCsv(c.cc_division)
+              const emails = splitCsv(c.cc_email)
+              const mobiles = splitCsv(c.cc_mobile)
+              const positions = splitCsv(c.cc_position)
+              const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
+              const persons = []
+              for (let i = 0; i < maxLen; i++) {
+                persons.push({
+                  name: names[i] || "",
+                  position: positions[i] || "-",
+                  division: divs[i] || "",
+                  email: emails[i] || "",
+                  mobile: mobiles[i] || "",
+                })
+              }
+              return persons
+            })(),
             isCustomerOnly: true,
           }))
         setStandaloneCustomers(transformed)
@@ -97,7 +149,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       try {
         const token = localStorage.getItem("authToken")
         const headers = token ? { Authorization: `Token ${token}` } : {}
-        const res = await fetch(`${API_BASE_URL}/api/stages/`, { headers })
+        const res = await apiRequest(`/api/stages/`, { headers })
         if (!res.ok) return
         const data = await res.json()
         setStages(Array.isArray(data) ? data : [])
@@ -117,27 +169,78 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
     let method = "POST"
     let payload = {}
 
+    // Comment: Build CSV from additional contacts for Customer cc* fields; exclude duplicates of primary attn
+    const normalize = (s) => String(s || "").trim().toLowerCase()
+    const primary = {
+      name: normalize(newDeal.contact),
+      email: normalize(newDeal.email),
+      mobile: normalize(newDeal.phone),
+      division: normalize(newDeal.division),
+      position: normalize(newDeal.position),
+    }
+    const nonEmptyExtras = extraContacts.filter(c => {
+      const n = normalize(c?.name)
+      const e = normalize(c?.email)
+      const m = normalize(c?.mobile)
+      return !!(n || e || m)
+    })
+    const ccNames = nonEmptyExtras.map(c => (c?.name || "").trim()).filter(Boolean).join(",")
+    const ccDivs = nonEmptyExtras.map(c => (c?.division || "").trim()).filter(Boolean).join(",")
+    const ccEmails = nonEmptyExtras.map(c => (c?.email || "").trim()).filter(Boolean).join(",")
+    const ccMobiles = nonEmptyExtras.map(c => (c?.mobile || "").trim()).filter(Boolean).join(",")
+    const ccPositions = nonEmptyExtras.map(c => (c?.position || "").trim()).filter(Boolean).join(",")
+
     if (isEditing && editingDealInfo && editingDealInfo.customerId) {
-      url = `${API_BASE_URL}/api/customers/${editingDealInfo.customerId}/`
+      url = `/api/customers/${editingDealInfo.customerId}/`
       method = "PATCH"
       payload = {
         company_name: newDeal.company || "",
         branch: newDeal.branch || "",
         address: newDeal.address || "",
-        email: newDeal.email || "",
-        phone: newDeal.phone || "",
+        // Comment: Store company-level contact info to Customer.email/phone
+        email: newDeal.companyEmail || "",
+        phone: newDeal.companyPhone || "",
         tax_id: newDeal.taxId || "",
+        // Comment: Map Contact Person inputs into Customer attn* fields
+        attn: newDeal.contact || "",
+        attn_mobile: newDeal.phone || "",
+        attn_division: newDeal.division || "",
+        attn_email: newDeal.email || "",
+        attn_position: newDeal.position || "",
+        // Comment: Aggregate additional contacts into Customer cc* CSV fields
+        cc: ccNames,
+        cc_division: ccDivs,
+        cc_mobile: ccMobiles,
+        cc_email: ccEmails,
+        cc_position: ccPositions,
+        // Comment: Send structured extra contacts for backend fallback derivation
+        extra_contacts: nonEmptyExtras,
       }
     } else if (!isEditing) {
-      url = `${API_BASE_URL}/api/customers/`
+      url = `/api/customers/`
       method = "POST"
       payload = {
         company_name: newDeal.company || "",
         branch: newDeal.branch || "",
         address: newDeal.address || "",
-        email: newDeal.email || "",
-        phone: newDeal.phone || "",
+        // Comment: Store company-level contact info to Customer.email/phone
+        email: newDeal.companyEmail || "",
+        phone: newDeal.companyPhone || "",
         tax_id: newDeal.taxId || "",
+        // Comment: Map Contact Person inputs into Customer attn* fields
+        attn: newDeal.contact || "",
+        attn_mobile: newDeal.phone || "",
+        attn_division: newDeal.division || "",
+        attn_email: newDeal.email || "",
+        attn_position: newDeal.position || "",
+        // Comment: Aggregate additional contacts into Customer cc* CSV fields
+        cc: ccNames,
+        cc_division: ccDivs,
+        cc_mobile: ccMobiles,
+        cc_email: ccEmails,
+        cc_position: ccPositions,
+        // Comment: Send structured extra contacts for backend fallback derivation
+        extra_contacts: nonEmptyExtras,
       }
     } else if (isEditing && editingDealInfo) {
       // Fallback for legacy deals without linked customer id: keep old behaviour
@@ -160,7 +263,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
         salesperson: newDeal.salesperson || "",
         branch: newDeal.branch || "",
       }
-      url = `${API_BASE_URL}/api/deals/${editingDealInfo.id}/`
+      url = `/api/deals/${editingDealInfo.id}/`
       method = "PATCH"
       payload = {
         ...baseData,
@@ -179,7 +282,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Token ${token}` } : {}),
       }
-      const res = await fetch(url, {
+      const res = await apiRequest(url, {
         method,
         headers,
         body: JSON.stringify(payload),
@@ -236,35 +339,97 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       })
   }
 
-  const handleDelete = () => {
-    if (onDeleteDeals && selectedRows.length > 0) {
-      const idsToDelete = filteredDeals
-        .filter(d => selectedRows.includes(d.id) && !d.isCustomerOnly)
-        .map(d => d.id)
-      if (idsToDelete.length > 0) {
-        onDeleteDeals(idsToDelete)
+  const handleDelete = async () => {
+    // Comment: Delete pipeline deals via parent handler, and standalone customers via API DELETE
+    const toDeleteDeals = filteredDeals
+      .filter(d => selectedRows.includes(d.id) && !d.isCustomerOnly)
+      .map(d => d.id)
+    if (onDeleteDeals && toDeleteDeals.length > 0) {
+      onDeleteDeals(toDeleteDeals)
+    }
+    // Comment: Delete standalone customers (isCustomerOnly) by calling backend /api/customers/<id>/ DELETE
+    const toDeleteCustomers = filteredDeals
+      .filter(d => selectedRows.includes(d.id) && d.isCustomerOnly && d.customerId)
+      .map(d => d.customerId)
+    if (toDeleteCustomers.length > 0) {
+      try {
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { Authorization: `Token ${token}` } : {}
+        for (const cid of toDeleteCustomers) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/customers/${cid}/`, {
+              method: "DELETE",
+              headers,
+            })
+            // Comment: Remove deleted customer rows from local state to reflect removal in the UI
+            if (res.ok) {
+              setStandaloneCustomers(prev => prev.filter(c => c.customerId !== cid))
+              setSelectedRows(prev => prev.filter(rid => rid !== `customer-${cid}`))
+            } else {
+              const txt = await res.text()
+              console.error("Failed to delete customer:", txt)
+              alert("Failed to delete customer: " + txt)
+            }
+          } catch (err) {
+            console.error("Error deleting customer", err)
+            alert("Error deleting customer: " + err.message)
+          }
+        }
+      } catch (err) {
+        console.error("Delete customers batch error", err)
       }
     }
   }
 
-  const handleEditRow = (deal) => {
+  const handleEditRow = async (deal) => {
     setNewDeal({
       company: deal.customer || deal.company || "",
       branch: deal.branch || "",
+      // Comment: Use primary attn* fields for Contact Person section
       contact: deal.contact || "",
-      opportunity: deal.title || "",
-      email: deal.email || "",
-      phone: deal.phone || "",
+      email: deal.attnEmail || "",
+      phone: deal.attnMobile || "",
+      division: deal.attnDivision || "",
+      position: deal.attnPosition || "",
+      // Comment: Company-level contacts mapped separately for Company Details
+      companyEmail: deal.email || "",
+      companyPhone: deal.phone || "",
       address: deal.address || "",
       taxId: deal.taxId || deal.tax_id || "",
-      poNumber: deal.poNumber || deal.po_number || "",
-      amount: deal.amount || 0,
-      currency: deal.currency || "฿",
-      priority: deal.priority || "none",
-      stageIndex: 0,
-      salesperson: deal.salesperson || deal.salespersonName || "",
     })
-    setExtraContacts(deal.extraContacts || deal.extra_contacts || [])
+    let extras = []
+    if (deal.customerId || deal.customer) {
+      try {
+        const cid = deal.customerId || deal.customer
+        const token = localStorage.getItem("authToken")
+        const headers = token ? { Authorization: `Token ${token}` } : {}
+        const res = await apiRequest(`/api/customers/${cid}/`, { headers })
+        if (res.ok) {
+          const c = await res.json()
+          const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
+          const names = splitCsv(c.cc)
+          const divs = splitCsv(c.cc_division)
+          const emails = splitCsv(c.cc_email)
+          const mobiles = splitCsv(c.cc_mobile)
+          const positions = splitCsv(c.cc_position)
+          const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
+          const persons = []
+          for (let i = 0; i < maxLen; i++) {
+            persons.push({
+              name: names[i] || "",
+              position: positions[i] || "-",
+              division: divs[i] || "",
+              email: emails[i] || "",
+              mobile: mobiles[i] || "",
+            })
+          }
+          extras = persons
+        } else {
+          extras = deal.extraContacts || deal.extra_contacts || []
+        }
+      } catch {}
+    }
+    setExtraContacts(extras)
     setEditingDealInfo({ 
       id: deal.id, 
       stageName: deal.stageName, 
@@ -273,104 +438,88 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
     setShowNewCustomerForm(true)
   }
 
+  // Comment: Define table columns per request; widths adapt to content using ch units
   const columns = [
-    { id: 'index', label: 'Index', width: 'w-16' },
+    { id: 'index', label: 'Index' },
     { id: 'company', label: 'Company Name' },
     { id: 'branch', label: 'Branch' },
+    { id: 'taxId', label: 'Tax ID' },
     { id: 'email', label: 'Email' },
     { id: 'phone', label: 'Phone' },
-    { id: 'address', label: 'Address', defaultClass: 'max-w-xs truncate' },
-    { id: 'contact', label: 'Contact Person' },
-    { id: 'contactEmail', label: 'Contact Email' },
-    { id: 'contactMobile', label: 'Contact Mobile' },
-    { id: 'contactPosition', label: 'Position' },
-    { id: 'contactDivision', label: 'Division' },
-    { id: 'taxId', label: 'Tax ID', defaultClass: 'font-mono text-sm' },
-    { id: 'poNumber', label: 'PO Number' },
-    { id: 'title', label: 'Opportunity Name', defaultClass: 'font-medium' },
-    { id: 'salesperson', label: 'Sales Person' },
-    { id: 'amount', label: 'Amount', defaultClass: 'font-mono' },
-    { id: 'stagesTotal', label: 'Stages Total' },
+    { id: 'address', label: 'Address' },
+    { id: 'contactPersons', label: 'Contact Person' },
   ]
 
-  const toggleMode = (id, mode) => {
-    setColumnModes(prev => ({
-      ...prev,
-      [id]: prev[id] === mode ? undefined : mode
-    }))
+  // Comment: Compute width style based on content length with min/max bounds (in ch units)
+  const widthFor = (text, min = 8, max = 60) => {
+    const len = String(text || '').length
+    const ch = Math.max(min, Math.min(max, len + 2))
+    return { width: `${ch}ch` }
   }
 
+  // Comment: Removed toggleMode; no column folding/expanding
+
   const renderCellContent = (col, deal, index) => {
-    if (columnModes[col.id] === 'folded') return <span className="text-gray-300">•</span>;
 
     switch (col.id) {
       case 'index': return <span className="font-medium text-gray-800">{index + 1}</span>;
-      case 'company': return <span className="font-medium text-gray-800">{deal.customer || deal.company || "-"}</span>;
+      case 'company': {
+        const text = deal.customer || deal.company || "-"
+        // Comment: Make company name clickable to edit; remove row click
+        return (
+          <button
+            type="button"
+            className="font-medium text-[#2D4485] hover:underline"
+            onClick={() => handleEditRow(deal)}
+            title="Edit customer"
+          >
+            {text}
+          </button>
+        )
+      }
       case 'branch': return deal.branch || "-";
-      case 'contactEmail': {
-        const extras = deal.extraContacts || deal.extra_contacts || []
-        const primary = extras[0] || {}
-        return primary.email || deal.email || "-"
-      }
-      case 'contactMobile': {
-        const extras = deal.extraContacts || deal.extra_contacts || []
-        const primary = extras[0] || {}
-        return primary.mobile || deal.phone || "-"
-      }
-      case 'contactPosition': {
-        const extras = deal.extraContacts || deal.extra_contacts || []
-        const primary = extras[0] || {}
-        return primary.position || "-"
-      }
-      case 'contactDivision': {
-        const extras = deal.extraContacts || deal.extra_contacts || []
-        const primary = extras[0] || {}
-        return primary.division || "-"
-      }
-      case 'salesperson': 
-        const name = deal.salesperson || deal.salespersonName;
-        return name ? (
-          <div className="flex items-center gap-1.5" title={name}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-            </svg>
-            {name}
-          </div>
-        ) : "-";
-      case 'amount':
-        return deal.amount ? `${deal.amount.toLocaleString()} ${deal.currency || '฿'}` : "-";
       case 'address': return deal.address || "-";
       case 'email': return deal.email || "-";
       case 'phone': return deal.phone || "-";
-      case 'contact': {
+      case 'taxId': return deal.taxId || "-";
+      case 'contactPersons': {
+        // Comment: Render numbered list: "1. Name, Position, Division, Email, Phone", then 2., 3., etc.
         const extras = deal.extraContacts || deal.extra_contacts || []
-        const names = []
-        if (deal.contact) names.push(deal.contact)
+        const people = []
+        if (deal.contact || deal.attnEmail || deal.attnMobile || deal.attnDivision || deal.attnPosition) {
+          people.push({
+            name: deal.contact || "",
+            position: deal.attnPosition || "-",
+            division: deal.attnDivision || "",
+            email: deal.attnEmail || "",
+            mobile: deal.attnMobile || "",
+          })
+        }
         extras.forEach(c => {
-          if (c && c.name) names.push(c.name)
+          people.push({
+            name: c?.name || "",
+            position: c?.position || "-",
+            division: c?.division || "",
+            email: c?.email || "",
+            mobile: c?.mobile || "",
+          })
         })
-        if (names.length === 0) return "-"
-        if (names.length <= 3) return names.join(", ")
-        const firstLine = names.slice(0, 3).join(", ")
-        const restLine = names.slice(3).join(", ")
+        if (people.length === 0) return "-"
         return (
-          <span>
-            {firstLine}
-            <br />
-            {restLine}
-          </span>
+          <div className="space-y-1">
+            {people.map((p, i) => (
+              <div key={i} className="text-gray-700">
+                <span className="font-mono text-xs text-slate-500">{i + 1}.</span>{" "}
+                <span className="font-medium">{p.name || "-"}</span>
+                {", "}{p.position || "-"}
+                {", "}{p.division || "-"}
+                {", "}{p.email || "-"}
+                {", "}{p.mobile || "-"}
+              </div>
+            ))}
+          </div>
         )
       }
-      case 'taxId': return deal.taxId || "-";
-      case 'poNumber': return deal.poNumber || "-";
-      case 'title': return deal.title || "-";
-      case 'stagesTotal': 
-        return deal.stageName ? (
-          <div className="flex flex-col">
-            <span className="font-medium text-slate-700">{deal.stageName}</span>
-            <span className="text-xs text-slate-500">Total: {deal.stageCount}</span>
-          </div>
-        ) : "-";
       default: return "-";
     }
   }
@@ -448,61 +597,16 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
                   }}
                 />
               </th>
-              {columns.map(col => {
-                const mode = columnModes[col.id]
-                return (
-                  <th 
-                    key={col.id} 
-                    className={`p-4 border-b transition-all duration-300 group relative align-top ${
-                      mode === 'folded' ? 'w-12 max-w-[3rem]' : mode === 'expanded' ? 'min-w-[300px]' : 'whitespace-nowrap'
-                    }`}
-                  >
-                    <div className={`flex items-center justify-between gap-2 ${mode === 'folded' ? 'justify-center' : ''}`}>
-                      {mode !== 'folded' && <span>{col.label}</span>}
-                      
-                      <div className={`flex items-center gap-1 bg-white rounded-md shadow-md border border-gray-300 opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
-                        mode === 'folded' ? 'opacity-100 absolute left-1/2 -translate-x-1/2 top-2' : ''
-                      }`}>
-                        {mode !== 'folded' && (
-                          <button 
-                            onClick={() => toggleMode(col.id, 'folded')}
-                            className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
-                            title="Fold Column"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                        )}
-                        
-                        {mode !== 'expanded' ? (
-                          <button 
-                            onClick={() => toggleMode(col.id, 'expanded')}
-                            className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
-                            title="Fully Expand"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12a1 1 0 01-1-1z" clipRule="evenodd" />
-                              <path fillRule="evenodd" d="M16 16a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L13.586 13.586V12a1 1 0 012 0v4zM4 12a1 1 0 011 1v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 13.586H8a1 1 0 010 2H4a1 1 0 01-1-1v-4a1 1 0 011-1z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={() => toggleMode(col.id, undefined)}
-                            className="p-1.5 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded transition-colors"
-                            title="Reset to Default"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </th>
-                )
-              })}
+              {columns.map(col => (
+                <th 
+                  key={col.id} 
+                  className="p-4 border-b whitespace-nowrap align-top"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{col.label}</span>
+                  </div>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -510,11 +614,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
               <tr 
                 key={deal.id || index} 
                 className={`transition border-b border-gray-100 ${selectedRows.includes(deal.id) ? 'bg-blue-200 hover:bg-blue-300' : 'hover:bg-gray-50'}`}
-                onClick={(e) => {
-                  const tag = e.target.tagName
-                  if (tag === "INPUT" || tag === "BUTTON" || tag === "SVG" || tag === "PATH") return
-                  handleEditRow(deal)
-                }}
+                // Comment: Row click no longer opens editor; use Company Name link only
               >
                 <td className="p-4">
                   <input
@@ -524,23 +624,25 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
                     checked={selectedRows.includes(deal.id)}
                   />
                 </td>
-                {columns.map(col => {
-                  const mode = columnModes[col.id]
-                  return (
-                    <td 
-                      key={col.id} 
-                      className={`p-4 transition-all duration-300 align-top ${
-                        mode === 'folded' 
-                          ? 'w-12 max-w-[3rem] text-center overflow-hidden p-2' 
-                          : mode === 'expanded'
-                            ? 'min-w-[300px] whitespace-normal break-words text-gray-600'
-                            : `whitespace-nowrap text-gray-600 ${col.defaultClass || ''}`
-                      }`}
-                    >
-                      {renderCellContent(col, deal, index)}
-                    </td>
-                  )
-                })}
+                {columns.map(col => (
+                  <td 
+                    key={col.id} 
+                    className={`p-4 align-top whitespace-nowrap text-gray-600 ${col.defaultClass || ''}`}
+                    style={{
+                      ...(col.id === 'index' ? widthFor(index + 1, 6, 10)
+                        : col.id === 'company' ? widthFor(deal.customer || deal.company || "", 12, 40)
+                        : col.id === 'branch' ? widthFor(deal.branch || "-", 8, 24)
+                        : col.id === 'taxId' ? widthFor(deal.taxId || "-", 10, 24)
+                        : col.id === 'email' ? widthFor(deal.email || "-", 12, 34)
+                        : col.id === 'phone' ? widthFor(deal.phone || "-", 10, 24)
+                        : col.id === 'address' ? widthFor(deal.address || "-", 16, 60)
+                        : col.id === 'contactPersons' ? widthFor((deal.contact || (deal.extraContacts || [])[0]?.name || "-"), 20, 60)
+                        : {})
+                    }}
+                  >
+                    {renderCellContent(col, deal, index)}
+                  </td>
+                ))}
               </tr>
             ))}
             {filteredDeals.length === 0 && (
@@ -592,22 +694,33 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
                       placeholder="Branch name"
                     />
                   </div>
+                  {/* Comment: Move Tax ID up to Company Details per request */}
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Opportunity</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Tax ID</label>
                     <input
-                      value={newDeal.opportunity}
-                      onChange={(e) => setNewDeal({ ...newDeal, opportunity: e.target.value })}
+                      value={newDeal.taxId}
+                      onChange={(e) => setNewDeal({ ...newDeal, taxId: e.target.value })}
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
-                      placeholder="Deal opportunity name"
+                      placeholder="Tax ID"
+                    />
+                  </div>
+                  {/* Comment: Add Company Email and Company Phone side-by-side above Address */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Company Email</label>
+                    <input
+                      value={newDeal.companyEmail}
+                      onChange={(e) => setNewDeal({ ...newDeal, companyEmail: e.target.value })}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                      placeholder="Company email"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Salesperson</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Company Phone</label>
                     <input
-                      value={newDeal.salesperson}
-                      onChange={(e) => setNewDeal({ ...newDeal, salesperson: e.target.value })}
+                      value={newDeal.companyPhone}
+                      onChange={(e) => setNewDeal({ ...newDeal, companyPhone: e.target.value })}
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
-                      placeholder="Salesperson name"
+                      placeholder="Company phone"
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -656,6 +769,8 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
                     <div>
                       <label className="block text-xs font-medium text-slate-500 mb-1">Position</label>
                       <input
+                        value={newDeal.position}
+                        onChange={(e) => setNewDeal({ ...newDeal, position: e.target.value })}
                         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                         placeholder="Position"
                       />
@@ -663,6 +778,8 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-medium text-slate-500 mb-1">Division</label>
                       <input
+                        value={newDeal.division}
+                        onChange={(e) => setNewDeal({ ...newDeal, division: e.target.value })}
                         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
                         placeholder="Division"
                       />
@@ -756,112 +873,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
                 </div>
               </div>
 
-              <div>
-                <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Codes</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Tax ID</label>
-                    <input
-                      value={newDeal.taxId}
-                      onChange={(e) => setNewDeal({ ...newDeal, taxId: e.target.value })}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
-                      placeholder="Tax ID"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">PO Number</label>
-                    <input
-                      value={newDeal.poNumber}
-                      onChange={(e) => setNewDeal({ ...newDeal, poNumber: e.target.value })}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
-                      placeholder="Purchase Order Number"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Amount</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="sm:col-span-1">
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
-                        {newDeal.currency}
-                      </span>
-                      <input
-                        type="number"
-                        value={newDeal.amount}
-                        onChange={(e) => setNewDeal({ ...newDeal, amount: Number(e.target.value) })}
-                        className="w-full pl-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
-                      />
-                    </div>
-                  </div>
-                  <div className="sm:col-span-1">
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Currency</label>
-                    <input
-                      value={newDeal.currency}
-                      onChange={(e) => setNewDeal({ ...newDeal, currency: e.target.value })}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all text-center uppercase"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Priority</div>
-                <div className="flex items-center gap-3">
-                  {[1, 2, 3].map((n) => {
-                    const p = n === 1 ? "low" : n === 2 ? "medium" : "high"
-                    const title = n === 1 ? "Low" : n === 2 ? "Medium" : "High"
-                    const active = newDeal.priority === p
-                    const colorClass = n === 1 ? "bg-[#2D4485]" : n === 2 ? "bg-orange-400" : "bg-red-500"
-                    return (
-                      <button
-                        key={n}
-                        type="button"
-                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                          active
-                            ? `${colorClass} text-white border-transparent shadow-md transform scale-105`
-                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                        }`}
-                        onClick={() =>
-                          setNewDeal({
-                            ...newDeal,
-                            priority: active ? "none" : p,
-                          })
-                        }
-                      >
-                        {title} Priority
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Stage</div>
-                <select
-                  value={newDeal.stageIndex}
-                  onChange={(e) =>
-                    setNewDeal({
-                      ...newDeal,
-                      stageIndex: Number(e.target.value),
-                    })
-                  }
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
-                >
-                  {stages.length === 0 ? (
-                    <option value={0}>New</option>
-                  ) : (
-                    stages.map((s, i) => (
-                      <option key={s.id || s.name || i} value={i}>
-                        {s.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
+              {/* Comment: Removed Opportunity, Salesperson, PO Number, Amount, Currency, Priority, Stage inputs per request */}
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
               <button

@@ -130,6 +130,27 @@ class CustomerAdmin(admin.ModelAdmin):
     list_display = ("company_name", "tax_id", "created_at", "updated_at")
     search_fields = ("company_name", "tax_id")
     ordering = ("company_name",)
+    # Comment: Explicitly include cc_position (and attn_position) in the form to ensure visibility in Django Admin
+    fields = (
+        "company_name",
+        "tax_id",
+        "email",
+        "phone",
+        "cus_fax",
+        "branch",
+        "address",
+        "attn",
+        "attn_position",
+        "attn_division",
+        "attn_email",
+        "attn_mobile",
+        "cc",
+        "cc_position",
+        "cc_division",
+        "cc_email",
+        "cc_mobile",
+        "industry",
+    )
 
 @admin.register(Contact)
 class ContactAdmin(admin.ModelAdmin):
