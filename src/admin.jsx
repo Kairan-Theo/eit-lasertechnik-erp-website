@@ -556,6 +556,12 @@ function InvoiceList({ list, refreshData }) {
     // Delete only visible rows in the current tab to avoid cross-org deletion
     const visible = filterByOrg(list, activeOrgTab)
     const itemsToDelete = visible.filter(inv => selectedRows.includes(getUid(inv)))
+    // Collect all invoice numbers we are deleting so we can remove duplicates from localStorage
+    const deletedNumbers = new Set(
+      itemsToDelete
+        .map(inv => (inv.details && inv.details.number ? String(inv.details.number).trim() : ""))
+        .filter(Boolean)
+    )
     
     // API Deletion
     const apiItems = itemsToDelete.filter(inv => inv.sourceKey === 'api')
@@ -605,13 +611,47 @@ function InvoiceList({ list, refreshData }) {
         const item = JSON.parse(localStorage.getItem(key))
         if (item && Array.isArray(item.invoices)) {
           const indicesToDelete = groupedByKey[key]
-          item.invoices = item.invoices.filter((_, idx) => !indicesToDelete.includes(idx))
+          // Remove invoices by index AND by invoice number inside this history entry
+          item.invoices = item.invoices.filter((inv, idx) => {
+            if (indicesToDelete.includes(idx)) return false
+            const num = inv?.details?.number ? String(inv.details.number).trim() : ""
+            return !deletedNumbers.has(num)
+          })
           localStorage.setItem(key, JSON.stringify(item))
         }
       } catch (e) {
         console.error("Error updating localStorage", e)
       }
     })
+
+    // Also scan all history entries to remove any invoices with the same numbers
+    if (deletedNumbers.size) {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)
+          if (!key || !key.startsWith("history:")) continue
+          try {
+            const raw = localStorage.getItem(key)
+            if (!raw) continue
+            const item = JSON.parse(raw)
+            if (!item || !Array.isArray(item.invoices)) continue
+            const before = item.invoices.length
+            // Remove any invoice whose number is in deletedNumbers
+            item.invoices = item.invoices.filter(inv => {
+              const num = inv?.details?.number ? String(inv.details.number).trim() : ""
+              return !deletedNumbers.has(num)
+            })
+            if (item.invoices.length !== before) {
+              localStorage.setItem(key, JSON.stringify(item))
+            }
+          } catch (e) {
+            console.error("Error cleaning local history invoices for key", key, e)
+          }
+        }
+      } catch (e) {
+        console.error("Error scanning localStorage for invoices", e)
+      }
+    }
 
     if (refreshData) {
        await refreshData()
