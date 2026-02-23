@@ -6,7 +6,7 @@ import { Trash, CheckCheck, AlertCircle, User, Info, Truck, Package } from "luci
 import { format } from "date-fns"
 import "./index.css"
 import { API_BASE_URL } from "./config"
-import { Toaster } from "../components/ui/toaster"
+import { Toaster } from "./components/ui/toaster"
 
 function NotificationsPage() {
   const [notifications, setNotifications] = React.useState([])
