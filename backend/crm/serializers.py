@@ -1107,6 +1107,8 @@ class TaxInvoiceSerializer(serializers.ModelSerializer):
     # Read-only nested details for convenience
     customer_details = CustomerSerializer(source='customer', read_only=True)
     eit_details = EITSerializer(source='eit', read_only=True)
+    # Allow client to send a code but handle uniqueness and auto-generation manually
+    tax_invoice_code = serializers.CharField(required=False, allow_blank=True, validators=[])
     # Write using primary keys
     customer = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all(), write_only=True, required=False)
     eit = serializers.PrimaryKeyRelatedField(queryset=EIT.objects.all(), write_only=True, required=False)
@@ -1119,8 +1121,20 @@ class TaxInvoiceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def create(self, validated_data):
-        # Comment: Always auto-generate Tax Invoice code on create to ensure sequential numbering (+1)
-        validated_data['tax_invoice_code'] = _next_sequence(TaxInvoice, 'tax_invoice_code', pad=4, allow_duplicate=False)
+        # Comment: On create, accept a custom code if unique; otherwise auto-generate INV YYYY-xxxx
+        raw_code = (validated_data.get('tax_invoice_code') or '').strip()
+        from datetime import datetime
+        if raw_code:
+            if TaxInvoice.objects.filter(tax_invoice_code=raw_code).exists():
+                numeric = _next_sequence(TaxInvoice, 'tax_invoice_code', pad=4, allow_duplicate=False)
+                year = datetime.now().year
+                validated_data['tax_invoice_code'] = f"INV {year}-{numeric}"
+            else:
+                validated_data['tax_invoice_code'] = raw_code
+        else:
+            numeric = _next_sequence(TaxInvoice, 'tax_invoice_code', pad=4, allow_duplicate=False)
+            year = datetime.now().year
+            validated_data['tax_invoice_code'] = f"INV {year}-{numeric}"
         # Resolve customer by name if FK not provided
         customer_name = validated_data.pop('customer_name', None)
         if not validated_data.get('customer') and customer_name:
