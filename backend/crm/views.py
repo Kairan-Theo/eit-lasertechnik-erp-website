@@ -39,6 +39,14 @@ class TaxInvoiceViewSet(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = [AllowAny]
 
+    # Comment: Helper endpoint for frontend to get the next Tax Invoice code (INV YYYY-000X)
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def next_code(self, request):
+        from datetime import datetime
+        numeric = _next_sequence(TaxInvoice, 'tax_invoice_code', pad=4, allow_duplicate=False)
+        year = datetime.now().year
+        return Response({'next_code': f"INV {year}-{numeric}"})
+
 class SubProjectViewSet(viewsets.ModelViewSet):
     queryset = SubProject.objects.all()
     serializer_class = SubProjectSerializer
