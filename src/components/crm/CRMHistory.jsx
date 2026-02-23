@@ -104,15 +104,27 @@ const CRMHistory = () => {
         </div>
 
         {activeSubTab === 'emails' && (
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
-            />
+          <div className="flex items-center gap-4">
+            {/* Comment: Creative email counter pill showing how many sent emails match the current filter */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-blue-50 via-sky-50 to-emerald-50 border border-blue-100 shadow-sm">
+              <Mail className="w-3.5 h-3.5 text-blue-500" />
+              <span className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+                Emails
+              </span>
+              <span className="text-xs font-bold text-blue-700">
+                {filteredEmails.length}
+              </span>
+            </div>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+              />
+            </div>
           </div>
         )}
       </div>
