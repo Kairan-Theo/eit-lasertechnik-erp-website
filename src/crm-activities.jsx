@@ -149,6 +149,36 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
     return colors[hash % colors.length]
   }
 
+  // Comment: Color palette for day backgrounds by weekday index (0=Sun ... 6=Sat)
+  // Comment: Pastel tones to keep contrast with events; applied only for current month cells
+  const getDayBackground = (day) => {
+    const palette = [
+      "bg-violet-50",   // Sun
+      "bg-blue-50",     // Mon
+      "bg-teal-50",     // Tue
+      "bg-green-50",    // Wed
+      "bg-yellow-50",   // Thu
+      "bg-orange-50",   // Fri
+      "bg-pink-50",     // Sat
+    ]
+    return palette[day.getDay()]
+  }
+  
+  // Comment: Slightly stronger header tint to visually group columns
+  // Comment: Mirrors getDayBackground but uses 100 shade for headers
+  const getWeekdayHeaderBackground = (weekdayIndex) => {
+    const headerPalette = [
+      "bg-violet-100", // Sun
+      "bg-blue-100",   // Mon
+      "bg-teal-100",   // Tue
+      "bg-green-100",  // Wed
+      "bg-yellow-100", // Thu
+      "bg-orange-100", // Fri
+      "bg-pink-100",   // Sat
+    ]
+    return headerPalette[weekdayIndex % 7]
+  }
+
   const handleToggleComplete = async (activity, e) => {
     e.stopPropagation()
     const newStatus = !activity.completed
@@ -229,8 +259,12 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
 
       {/* Weekday Headers */}
       <div className="grid grid-cols-7 border-b border-gray-100">
-        {weekDays.map(day => (
-            <div key={day} className="py-4 text-center text-sm font-semibold text-gray-400 uppercase tracking-wider">
+        {weekDays.map((day, idx) => (
+            <div 
+              key={day} 
+              // Comment: Make weekday names bold to match month title emphasis
+              className={`py-4 text-center text-sm font-bold uppercase tracking-wider text-gray-600 ${getWeekdayHeaderBackground(idx)}`}
+            >
                 {day}
             </div>
         ))}
@@ -252,15 +286,16 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
                 <div 
                     key={day.toString()} 
                     className={`
-                        border-b border-r border-gray-100 p-2 min-h-[120px] flex flex-col gap-1 relative group transition-colors hover:bg-white
-                        ${!isCurrentMonth ? "bg-gray-50/50 text-gray-400" : "bg-white"}
+                        border-b border-r border-gray-100 p-2 min-h-[120px] flex flex-col gap-1 relative group transition-colors
+                        ${!isCurrentMonth ? "bg-gray-50/50 text-gray-400" : `${getDayBackground(day)} hover:bg-white`}
                         ${dayIdx % 7 === 6 ? "border-r-0" : ""}
                     `}
                 >
                     <div className="flex justify-between items-start mb-2">
                         <span 
                             className={`
-                                text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full transition-all
+                                // Comment: Make day numbers bold to match month header styling
+                                text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full transition-all
                                 ${isTodayDate 
                                     ? "bg-[#2D4485] text-white shadow-md transform scale-110" 
                                     : isCurrentMonth ? "text-gray-700 group-hover:bg-gray-100" : "text-gray-300"}
