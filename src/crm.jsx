@@ -153,6 +153,9 @@ function CRMPage() {
   const [menuOpenIndex, setMenuOpenIndex] = React.useState(null)
   const [showNewForm, setShowNewForm] = React.useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = React.useState(null)
+  // Comment: Validation popup state for user-friendly UI alerts (e.g., missing required fields)
+  // Comment: Shape: { title: string, message: string }
+  const [validationModal, setValidationModal] = React.useState(null)
   const [users, setUsers] = React.useState([])
 
   const fetchUsers = async () => {
@@ -284,6 +287,8 @@ function CRMPage() {
     }
   }
   const [openDetail, setOpenDetail] = React.useState(null) // { stageIndex, cardIndex }
+  // Comment: Force re-mount of Customers tab component to reload from backend
+  const [customerRefreshKey, setCustomerRefreshKey] = React.useState(0)
   const [openPriority, setOpenPriority] = React.useState(null) // { stageIndex, cardIndex }
   const priorityClass = (p) => (p==='high' ? 'bg-red-100 text-red-700' : p==='medium' ? 'bg-orange-100 text-orange-700' : p==='low' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-700')
   const priorityLabel = (p) => (p && p!=='none' ? p.charAt(0).toUpperCase()+p.slice(1) : 'Set Priority')
@@ -329,6 +334,12 @@ function CRMPage() {
     company: "",
     branch: "",
     contact: "",
+    // Comment: Track Contact Person division and position (attn columns from Customer)
+    division: "",
+    position: "",
+    // Comment: Separate company-level email/phone from Contact Person email/phone
+    companyEmail: "",
+    companyPhone: "",
     opportunity: "",
     email: "",
     phone: "",
@@ -412,14 +423,41 @@ function CRMPage() {
         const data = await res.json()
         if (!Array.isArray(data)) return
         const mapped = data
-          .map(c => ({
-            name: c.company_name || "",
-            contact: c.attn || "",
-            email: c.email || "",
-            phone: c.phone || "",
-            address: c.address || "",
-            taxId: c.tax_id || "",
-          }))
+          .map(c => {
+            // Comment: Build extra contacts list from Customer cc* CSV fields
+            const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
+            const names = splitCsv(c.cc)
+            const divs = splitCsv(c.cc_division)
+            const emails = splitCsv(c.cc_email)
+            const mobiles = splitCsv(c.cc_mobile)
+            const positions = splitCsv(c.cc_position)
+            const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
+            const extraPersons = []
+            for (let i = 0; i < maxLen; i++) {
+              extraPersons.push({
+                name: names[i] || "",
+                position: positions[i] || "-",
+                division: divs[i] || "",
+                email: emails[i] || "",
+                mobile: mobiles[i] || "",
+              })
+            }
+            return {
+              name: c.company_name || "",
+              contact: c.attn || "",
+              // Comment: Prefer attn email/mobile for Contact Person; fall back to company-level
+              attnEmail: c.attn_email || "",
+              attnMobile: c.attn_mobile || "",
+              email: c.email || "",
+              phone: c.phone || "",
+              address: c.address || "",
+              taxId: c.tax_id || "",
+              branch: c.branch || "",
+              attnDivision: c.attn_division || "",
+              attnPosition: c.attn_position || "",
+              extraContacts: extraPersons,
+            }
+          })
           .filter(c => c.name)
         setCrmCompanyOptions(mapped)
       } catch {}
@@ -988,6 +1026,48 @@ function CRMPage() {
         notes: d.notes || "",
         salesperson: d.salesperson || d.salespersonName || ""
     })
+    // Comment: Fetch latest Customer record to hydrate Company-level and attn fields
+    const cid = d.customerId || d.customer || null
+    if (cid) {
+      (async () => {
+        try {
+          const token = localStorage.getItem("authToken")
+          const headers = token ? { "Authorization": `Token ${token}` } : {}
+          const res = await fetch(`${API_BASE}/customers/${cid}/`, { headers })
+          if (res.ok) {
+            const c = await res.json()
+            // Comment: Build CC contacts list from Customer cc* CSVs
+            const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
+            const names = splitCsv(c.cc)
+            const divs = splitCsv(c.cc_division)
+            const emails = splitCsv(c.cc_email)
+            const mobiles = splitCsv(c.cc_mobile)
+            const positions = splitCsv(c.cc_position)
+            const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
+            const persons = []
+            for (let i = 0; i < maxLen; i++) {
+              persons.push({
+                name: names[i] || "",
+                position: positions[i] || "-",
+                division: divs[i] || "",
+                email: emails[i] || "",
+                mobile: mobiles[i] || "",
+              })
+            }
+            setDetailExtraContacts(persons)
+            // Comment: Hydrate Company Details form with branch, company email/phone, and attn division/position
+            setDetailDeal(prev => ({
+              ...prev,
+              branch: c.branch || prev.branch || "",
+              companyEmail: c.email || "",
+              companyPhone: c.phone || "",
+              division: c.attn_division || prev.division || "",
+              position: c.attn_position || prev.position || "",
+            }))
+          }
+        } catch {}
+      })()
+    }
     setOpenDetail({ stageIndex, cardIndex })
   }
 
@@ -1085,6 +1165,38 @@ function CRMPage() {
             headers,
             body: JSON.stringify(apiBody)
         })
+        // Comment: Trigger Customers tab re-render to fetch latest customer data (including cc CSV updates)
+        setCustomerRefreshKey(prev => prev + 1)
+        // Comment: After saving, reload Customer CC contacts so Company Details reflects latest extras
+        try {
+          const currentDeal = stages[stageIndex].deals[cardIndex]
+          const cid = currentDeal.customerId || currentDeal.customer || null
+          if (cid) {
+            const custHeaders = token ? { "Authorization": `Token ${token}` } : {}
+            const res = await fetch(`${API_BASE}/customers/${cid}/`, { headers: custHeaders })
+            if (res.ok) {
+              const c = await res.json()
+              const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
+              const names = splitCsv(c.cc)
+              const divs = splitCsv(c.cc_division)
+              const emails = splitCsv(c.cc_email)
+              const mobiles = splitCsv(c.cc_mobile)
+              const positions = splitCsv(c.cc_position)
+              const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
+              const persons = []
+              for (let i = 0; i < maxLen; i++) {
+                persons.push({
+                  name: names[i] || "",
+                  position: positions[i] || "-",
+                  division: divs[i] || "",
+                  email: emails[i] || "",
+                  mobile: mobiles[i] || "",
+                })
+              }
+              setDetailExtraContacts(persons)
+            }
+          }
+        } catch {}
     } catch (err) {
         console.error("Failed to update deal details", err)
         showNotification("Failed to update deal details")
@@ -1570,21 +1682,8 @@ function CRMPage() {
         return
     }
 
-    const customerIdsToDelete = []
-    stages.forEach(stage => {
-      stage.deals.forEach(d => {
-        if (!idsToDelete.includes(d.id)) return
-        if (!d.customerId) return
-        const already = customerIdsToDelete.includes(d.customerId)
-        if (already) return
-        const usedElsewhere = stages.some(s =>
-          s.deals.some(other => other.customerId === d.customerId && !idsToDelete.includes(other.id))
-        )
-        if (!usedElsewhere) {
-          customerIdsToDelete.push(d.customerId)
-        }
-      })
-    })
+    // Comment: Do NOT collect related customer IDs for deletion
+    // Comment: Business rule — deleting deals must never delete Customer records
 
     // Optimistic update
     setStages((prev) => prev.map((stage) => ({
@@ -1609,16 +1708,8 @@ function CRMPage() {
         }
     }
 
-    for (const customerId of customerIdsToDelete) {
-      try {
-        await fetch(`${API_BASE}/customers/${customerId}/`, {
-          method: "DELETE",
-          headers
-        })
-      } catch (err) {
-        console.error("Failed to delete customer", customerId, err)
-      }
-    }
+    // Comment: Removed API calls that deleted customers when their last deal was removed
+    // Comment: Customers are preserved in CRM even if they have no active deals
   }
 
 
@@ -2228,7 +2319,25 @@ function CRMPage() {
                                       key={i}
                                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
                                       onClick={() => {
-                                        setEditingDeal({...editingDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || "", taxId: c.taxId || ""})
+                                        // Comment: Prefill edit form from selected Customer (include branch and attn columns)
+                                        setEditingDeal({
+                                          ...editingDeal,
+                                          company: c.name,
+                                          branch: c.branch || "",
+                                          contact: c.contact,
+                                          // Comment: Contact Person email/phone prefer attn_* fields
+                                          email: (c.attnEmail || c.email || ""),
+                                          phone: (c.attnMobile || c.phone || ""),
+                                          address: c.address || "",
+                                          taxId: c.taxId || "",
+                                          division: c.attnDivision || "",
+                                          position: c.attnPosition || "",
+                                          // Comment: Store company-level contact info separately
+                                          companyEmail: c.email || "",
+                                          companyPhone: c.phone || "",
+                                        })
+                                        // Comment: Prefill CC contacts list for Edit modal
+                                        setEditExtraContacts(Array.isArray(c.extraContacts) ? c.extraContacts : [])
                                         setShowCompanySuggestions(false)
                                       }}
                                     >
@@ -2262,10 +2371,43 @@ function CRMPage() {
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Branch</label>
                             <input 
-                              value={newDeal.branch || ""} 
-                              onChange={(e)=>setNewDeal({...newDeal, branch:e.target.value})} 
+                              value={editingDeal.branch || ""} 
+                              onChange={(e)=>setEditingDeal({...editingDeal, branch:e.target.value})} 
                               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
                               placeholder="Branch (e.g. Head Office / Branch 1)"
+                            />
+                          </div>
+                          {/* Comment: Company Email maps to editingDeal.email in Edit modal */}
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Company Email</label>
+                            <input
+                              type="email"
+                              value={editingDeal.email || ""}
+                              onChange={(e)=>setEditingDeal({...editingDeal, email:e.target.value})}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                              placeholder="Company email address"
+                            />
+                          </div>
+                          {/* Comment: Company Phone maps to editingDeal.phone in Edit modal */}
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Company Phone</label>
+                            <input
+                              type="text"
+                              value={editingDeal.phone || ""}
+                              onChange={(e)=>setEditingDeal({...editingDeal, phone:e.target.value})}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                              placeholder="Company phone number"
+                            />
+                          </div>
+                          {/* Comment: Address maps to editingDeal.address and is persisted in the deal */}
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
+                            <input
+                              type="text"
+                              value={editingDeal.address || ""}
+                              onChange={(e)=>setEditingDeal({...editingDeal, address:e.target.value})}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all"
+                              placeholder="Company address"
                             />
                           </div>
                         </div>
@@ -2309,6 +2451,24 @@ function CRMPage() {
                               onChange={(e)=>setEditingDeal({...editingDeal, contact:e.target.value})} 
                               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
                               placeholder="Contact person"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Position</label>
+                            <input 
+                              value={editingDeal.position || ""}
+                              onChange={(e)=>setEditingDeal({...editingDeal, position:e.target.value})}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Position"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Division</label>
+                            <input 
+                              value={editingDeal.division || ""}
+                              onChange={(e)=>setEditingDeal({...editingDeal, division:e.target.value})}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Division"
                             />
                           </div>
                           {editExtraContacts.map((c, index) => {
@@ -2547,7 +2707,25 @@ function CRMPage() {
                                       key={i}
                                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
                                       onClick={() => {
-                                        setDetailDeal({...detailDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || "", taxId: c.taxId || ""})
+                                        // Comment: Prefill details form from selected Customer (include branch and attn columns)
+                                        setDetailDeal({
+                                          ...detailDeal,
+                                          company: c.name,
+                                          branch: c.branch || "",
+                                          contact: c.contact,
+                                          // Comment: Contact Person email/phone prefer attn_* fields
+                                          email: (c.attnEmail || c.email || ""),
+                                          phone: (c.attnMobile || c.phone || ""),
+                                          address: c.address || "",
+                                          taxId: c.taxId || "",
+                                          division: c.attnDivision || "",
+                                          position: c.attnPosition || "",
+                                          // Comment: Store company-level contact info separately
+                                          companyEmail: c.email || "",
+                                          companyPhone: c.phone || "",
+                                        })
+                                        // Comment: Prefill CC contacts list for Company Details modal
+                                        setDetailExtraContacts(Array.isArray(c.extraContacts) ? c.extraContacts : [])
                                         setShowCompanySuggestions(false)
                                       }}
                                     >
@@ -2587,6 +2765,37 @@ function CRMPage() {
                               placeholder="Branch (e.g. Head Office / Branch 1)"
                             />
                           </div>
+                          {/* Comment: Company Email/Phone placed under Company section to match New Deal */}
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Company Email</label>
+                            <input 
+                              type="email"
+                              value={detailDeal.companyEmail || ""} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, companyEmail:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Company email address"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Company Phone</label>
+                            <input 
+                              type="text"
+                              value={detailDeal.companyPhone || ""} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, companyPhone:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Company phone number"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
+                            <input 
+                              type="text"
+                              value={detailDeal.address || ""} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, address:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Company address"
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -2594,33 +2803,7 @@ function CRMPage() {
                         <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">Contact</div>
                         <div className="rounded-2xl border border-[#2D4485]/40 bg-white shadow-md px-5 py-4 space-y-3">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
-                              <input 
-                                value={detailDeal.email} 
-                                onChange={(e)=>setDetailDeal({...detailDeal, email:e.target.value})} 
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                                placeholder="Email address"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
-                              <input 
-                                value={detailDeal.phone} 
-                                onChange={(e)=>setDetailDeal({...detailDeal, phone:e.target.value})} 
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                                placeholder="Phone number"
-                              />
-                            </div>
-                            <div className="sm:col-span-2">
-                              <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
-                              <input 
-                                value={detailDeal.address} 
-                                onChange={(e)=>setDetailDeal({...detailDeal, address:e.target.value})} 
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
-                                placeholder="Company address"
-                              />
-                            </div>
+                            {/* Comment: Email/Phone moved to Company section for consistency */}
                             <div>
                               <label className="block text-xs font-medium text-slate-500 mb-1">Contact Person</label>
                               <input 
@@ -2630,6 +2813,42 @@ function CRMPage() {
                                 placeholder="Contact person"
                               />
                             </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Contact Email</label>
+                            <input 
+                              value={detailDeal.email || ""} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, email:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Email address"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Contact Phone</label>
+                            <input 
+                              value={detailDeal.phone || ""} 
+                              onChange={(e)=>setDetailDeal({...detailDeal, phone:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Phone number"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Position</label>
+                            <input 
+                              value={detailDeal.position || ""}
+                              onChange={(e)=>setDetailDeal({...detailDeal, position:e.target.value})}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Position"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Division</label>
+                            <input 
+                              value={detailDeal.division || ""}
+                              onChange={(e)=>setDetailDeal({...detailDeal, division:e.target.value})}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Division"
+                            />
+                          </div>
                             {detailExtraContacts.map((c, index) => {
                               const update = (field, value) => {
                                 const next = [...detailExtraContacts]
@@ -3133,7 +3352,26 @@ function CRMPage() {
                                       key={i}
                                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-slate-700"
                                       onClick={() => {
-                                        setNewDeal({...newDeal, company: c.name, contact: c.contact, email: c.email || "", phone: c.phone || "", address: c.address || "", taxId: c.taxId || ""})
+                                        // Comment: Prefill all fields from selected Customer record (CRM tab)
+                                        // Comment: Branch and attn columns (division/position) included
+                                        setNewDeal({
+                                          ...newDeal,
+                                          company: c.name,
+                                          branch: c.branch || "",
+                                          contact: c.contact,
+                                          // Comment: Prefer attn email/mobile for Contact Person; fallback to company-level email/phone
+                                          email: (c.attnEmail || c.email || ""),
+                                          phone: (c.attnMobile || c.phone || ""),
+                                          // Comment: Company-level contacts fetched from Customer.email/phone columns
+                                          companyEmail: c.email || "",
+                                          companyPhone: c.phone || "",
+                                          address: c.address || "",
+                                          taxId: c.taxId || "",
+                                          division: c.attnDivision || "",
+                                          position: c.attnPosition || "",
+                                        })
+                                        // Comment: Prefill CC contacts from Customer cc* columns into extraContacts UI
+                                        setExtraContacts(Array.isArray(c.extraContacts) ? c.extraContacts : [])
                                         setShowCompanySuggestions(false)
                                       }}
                                     >
@@ -3173,6 +3411,39 @@ function CRMPage() {
                               placeholder="Branch (e.g. Head Office / Branch 1)"
                             />
                           </div>
+                          {/* Comment: Company Email input under Company section; stored in newDeal.companyEmail */}
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Company Email</label>
+                            <input 
+                              type="email"
+                              value={newDeal.companyEmail || ""} 
+                              onChange={(e)=>setNewDeal({...newDeal, companyEmail:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Company email address"
+                            />
+                          </div>
+                          {/* Comment: Company Phone input under Company section; stored in newDeal.companyPhone */}
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Company Phone</label>
+                            <input 
+                              type="text"
+                              value={newDeal.companyPhone || ""} 
+                              onChange={(e)=>setNewDeal({...newDeal, companyPhone:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Company phone number"
+                            />
+                          </div>
+                          {/* Comment: Company Address input under Company section; stored in newDeal.address */}
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
+                            <input 
+                              type="text"
+                              value={newDeal.address || ""} 
+                              onChange={(e)=>setNewDeal({...newDeal, address:e.target.value})} 
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
+                              placeholder="Company address"
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -3210,6 +3481,8 @@ function CRMPage() {
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Position</label>
                             <input 
+                              value={newDeal.position || ""}
+                              onChange={(e)=>setNewDeal({...newDeal, position:e.target.value})}
                               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
                               placeholder="Position"
                             />
@@ -3217,6 +3490,8 @@ function CRMPage() {
                           <div className="sm:col-span-2">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Division</label>
                             <input 
+                              value={newDeal.division || ""}
+                              onChange={(e)=>setNewDeal({...newDeal, division:e.target.value})}
                               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none transition-all" 
                               placeholder="Division"
                             />
@@ -3407,6 +3682,16 @@ function CRMPage() {
                       type="button"
                       className="px-5 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
                       onClick={async () => {
+                        // Comment: Validate Salesperson before creating a deal
+                        // Comment: Backend requires salesperson to be non-null; show UI popup and block submit if empty
+                        if (!(newDeal.salesperson || "").trim()) {
+                            setValidationModal({
+                              title: "Missing Required Information",
+                              message: "Please complete all required fields to create a deal."
+                            })
+                            showNotification("Please complete all required fields to create a deal.")
+                            return
+                        }
                         if (!newDeal.company || !newDeal.company.trim()) {
                             showNotification("Please enter a company name")
                             return
@@ -3941,6 +4226,7 @@ function CRMPage() {
       ) : activeTab === "Customers" ? (
         <div className="min-h-screen bg-white">
           <CRMCustomers 
+            key={customerRefreshKey}
             deals={stages.flatMap(s => s.deals.map(d => ({ ...d, stageName: s.name, stageCount: s.deals.length }))).sort((a, b) => (a.createdAt ? new Date(a.createdAt).getTime() : 0) - (b.createdAt ? new Date(b.createdAt).getTime() : 0))} 
             onDeleteDeals={handleDeleteDeals}
           />
@@ -3984,6 +4270,46 @@ function CRMPage() {
                   onClick={confirmDelete}
                 >
                   Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {validationModal && (
+        // Comment: Generic UI popup for validation messages (e.g., missing required fields)
+        <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setValidationModal(null)}>
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <h3 className="font-bold text-slate-800 text-lg">{validationModal.title || "Validation"}</h3>
+                {/* Comment: Add close 'X' icon to dismiss validation modal */}
+                <button
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                  onClick={() => setValidationModal(null)}
+                  title="Close"
+                  aria-label="Close validation dialog"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-6">
+                <p className="text-sm text-slate-700">{validationModal.message}</p>
+              </div>
+              <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors text-sm font-medium"
+                  onClick={() => setValidationModal(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="px-5 py-2 rounded-lg bg-[#2D4485] text-white hover:bg-[#3D56A6] shadow-md transition-all text-sm font-medium"
+                  onClick={() => setValidationModal(null)}
+                >
+                  OK
                 </button>
               </div>
             </div>

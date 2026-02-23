@@ -225,6 +225,36 @@ class CustomerViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
     authentication_classes = []
     permission_classes = [AllowAny] # Ideally IsAuthenticated, but sticking to pattern
+    
+    def update(self, request, *args, **kwargs):
+        # Comment: Update Customer and propagate latest fields to linked Deals (two-way sync)
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        customer = serializer.save()
+        # Comment: Push primary contact and company info into all deals referencing this customer
+        from .models import Deal
+        deals = Deal.objects.filter(customer=customer)
+        for d in deals:
+            # Comment: Snapshot primary contact (attn*) into deal fields
+            d.contact = customer.attn or d.contact
+            d.email = (customer.attn_email or d.email)
+            d.phone = (customer.attn_mobile or d.phone)
+            # Comment: Snapshot company-level fields
+            d.address = customer.address or d.address
+            d.tax_id = customer.tax_id or d.tax_id
+            # Comment: Keep existing extra_contacts list; cc* CSVs are displayed via serializer/index
+            d.save(update_fields=['contact', 'email', 'phone', 'address', 'tax_id'])
+        return Response(self.get_serializer(customer).data)
+    
+    def destroy(self, request, *args, **kwargs):
+        # Comment: Do NOT delete related Deals when a Customer is deleted
+        # Comment: Detach (set customer=null) to preserve Sales Pipeline records
+        instance = self.get_object()
+        from .models import Deal
+        Deal.objects.filter(customer=instance).update(customer=None)
+        return super().destroy(request, *args, **kwargs)
 
 # Removed SupportTicketViewSet
 
@@ -304,6 +334,41 @@ class DealViewSet(viewsets.ModelViewSet):
         if updated_instance.customer and (branch_value or branch_value == ""):
             updated_instance.customer.branch = branch_value
             updated_instance.customer.save(update_fields=['branch'])
+        # Comment: Two-way sync — update linked Customer record from Deal update payload
+        cust = updated_instance.customer
+        if cust:
+            # Comment: Prefer provided deal fields; trim whitespace; do not overwrite with empties
+            def _maybe_set(model, field, val):
+                v = (val or "").strip()
+                if v != "":
+                    setattr(model, field, v)
+            _maybe_set(cust, 'attn', data.get('contact'))
+            _maybe_set(cust, 'attn_email', data.get('email'))
+            _maybe_set(cust, 'attn_mobile', data.get('phone'))
+            _maybe_set(cust, 'address', data.get('address'))
+            _maybe_set(cust, 'tax_id', data.get('tax_id'))
+            # Comment: Accept optional company-level fields when present
+            _maybe_set(cust, 'email', data.get('company_email') or data.get('companyEmail'))
+            _maybe_set(cust, 'phone', data.get('company_phone') or data.get('companyPhone'))
+            # Comment: Derive cc* CSV fields from extra_contacts list sent by Company Details
+            extras = data.get('extra_contacts', None)
+            if extras is None:
+                extras = updated_instance.extra_contacts if isinstance(updated_instance.extra_contacts, list) else None
+            if isinstance(extras, list):
+                # Comment: Build CSVs for cc, cc_division, cc_email, cc_mobile, cc_position
+                def _norm_list(vals):
+                    return ",".join([str(v or "").strip() for v in vals if str(v or "").strip()])
+                names = [ (e.get('name') or "").strip() for e in extras ]
+                divs = [ (e.get('division') or "").strip() for e in extras ]
+                emails = [ (e.get('email') or "").strip() for e in extras ]
+                mobiles = [ (e.get('mobile') or "").strip() for e in extras ]
+                positions = [ (e.get('position') or "").strip() for e in extras ]
+                cust.cc = _norm_list(names)
+                cust.cc_division = _norm_list(divs)
+                cust.cc_email = _norm_list(emails)
+                cust.cc_mobile = _norm_list(mobiles)
+                cust.cc_position = _norm_list(positions)
+            cust.save(update_fields=['attn', 'attn_email', 'attn_mobile', 'address', 'tax_id', 'email', 'phone', 'cc', 'cc_division', 'cc_email', 'cc_mobile', 'cc_position'])
         if old_stage != updated_instance.stage:
             Notification.objects.create(
                 message=f"CRM  {updated_instance.customer} ({old_stage} -> {updated_instance.stage})",
@@ -317,10 +382,9 @@ class DealViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_destroy(self, instance):
-        customer = instance.customer
+        # Comment: Delete only the deal from Sales Pipeline
+        # Comment: Preserve the related Customer record in CRM even if no other deals exist
         super().perform_destroy(instance)
-        if customer and not Deal.objects.filter(customer=customer).exists():
-            customer.delete()
 
 class EITViewSet(viewsets.ModelViewSet):
     queryset = EIT.objects.all()
