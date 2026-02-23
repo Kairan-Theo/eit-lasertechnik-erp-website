@@ -12,6 +12,9 @@ import "./index.css"
 
 
 export function useInvoiceState(config = { enableUrlLoading: true }) {
+  // Comment: Determine edit mode synchronously from URL so auto-increment never runs before we know we're editing
+  const initialParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+  const initialIsEditing = initialParams.has('key') && initialParams.has('index')
   const [customer, setCustomer] = React.useState({
     company: "",
     address: "",
@@ -129,6 +132,8 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
   const [items, setItems] = React.useState([{ product: "", description: "", qty: 1, price: 0, tax: 0, unit: "pcs" }])
   const [sourceKey, setSourceKey] = React.useState(null)
   const [sourceIndex, setSourceIndex] = React.useState(null)
+  // make sure not to incerment when it is updated, and not new ly n
+  const [isEditing, setIsEditing] = React.useState(initialIsEditing)
 
   // Initialization: load from URL or confirmedQuotation
   React.useEffect(() => {
@@ -141,6 +146,7 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
     if (key && index) {
       setSourceKey(key)
       setSourceIndex(index)
+      // Comment: isEditing is already initialized from URL; no need to update here
 
       if (key === 'api') {
         fetch(`${API_BASE_URL}/api/invoices/${index}/`)
@@ -262,6 +268,8 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
 
   // Ensure the invoice number is always new: merge API + local history and pick next sequence
   React.useEffect(() => {
+    // Comment: Skip auto-increment when editing an existing invoice (loaded from API)
+    if (isEditing) return
     // We parse codes like "VOI YYYY-XXXX" and "EIT VOI YYYY-XXXX" and pick the highest XXXX for current year.
     const currentYear = new Date().getFullYear()
     const parseSeq = (s) => {
@@ -277,13 +285,16 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
         const token = localStorage.getItem("authToken")
         const headers = token ? { "Authorization": `Token ${token}` } : {}
         const res = await fetch(`${API_BASE_URL}/api/invoices/`, { headers })
-        let maxSeq = parseSeq(details.number) || 0
+        // Comment: Current UI number sequence (if already set); used to avoid double increment
+        const seqCurrent = parseSeq(details.number) || 0
+        // Comment: Highest sequence among existing invoices excluding the current UI number
+        let maxSeqOther = 0
         if (res.ok) {
           const apiInvoices = await res.json()
           if (Array.isArray(apiInvoices)) {
             for (const inv of apiInvoices) {
               const seq = parseSeq(inv.number || inv.details?.number)
-              if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq
+              if (Number.isFinite(seq) && seq !== seqCurrent && seq > maxSeqOther) maxSeqOther = seq
             }
           }
         }
@@ -296,20 +307,22 @@ export function useInvoiceState(config = { enableUrlLoading: true }) {
               if (item && Array.isArray(item.invoices)) {
                 for (const inv of item.invoices) {
                   const seq = parseSeq(inv.number || inv.details?.number)
-                  if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq
+                  if (Number.isFinite(seq) && seq !== seqCurrent && seq > maxSeqOther) maxSeqOther = seq
                 }
               }
             }
           }
         } catch {}
-        // If any sequence found, set next = max + 1
-        if (maxSeq >= 1) {
-          setDetails(prev => ({ ...prev, number: toCode(maxSeq + 1) }))
+        // Comment: If current UI number already greater than all others, keep it; otherwise bump to maxOther + 1
+        if (seqCurrent >= 1 && seqCurrent > maxSeqOther) {
+          // keep existing number — already a valid next candidate
+        } else if (maxSeqOther >= 1) {
+          setDetails(prev => ({ ...prev, number: toCode(maxSeqOther + 1) }))
         }
       } catch {}
     }
     updateFromApi()
-  }, [])
+  }, [isEditing])
 
   // Recalculate dueDate when date or paymentTermsDays change
   React.useEffect(() => {

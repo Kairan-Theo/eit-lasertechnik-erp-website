@@ -7,6 +7,8 @@ import urllib.request
 import mimetypes
 import os, uuid
 from django.contrib.auth.models import User
+import json
+from datetime import datetime
 from .models import Deal, ActivitySchedule, Quotation, QuotationItem, Invoice, Receipt, TaxInvoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, EIT, BillingNote, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
 
 def _next_sequence(model_cls, field_name: str, pad: int = 4, allow_duplicate: bool = False) -> str:
@@ -38,8 +40,35 @@ def _next_sequence(model_cls, field_name: str, pad: int = 4, allow_duplicate: bo
                 code = str(next_num).zfill(pad)
         return code
     except Exception:
-        # Fallback to timestamp-based code when query fails
-        return str(int(uuid.uuid4().hex[:pad], 16)).zfill(pad)
+        return str(1).zfill(pad)
+
+def _next_quotation_code(pad: int = 4) -> str:
+    try:
+        year = datetime.now().year
+        prefix = f"QUO {year}-"
+        import re
+        max_num = 0
+        vals = list(Quotation.objects.filter(qo_code__startswith=prefix).values_list('qo_code', flat=True))
+        for v in vals:
+            if not v:
+                continue
+            s = str(v)
+            m = re.search(rf'^{re.escape(prefix)}(\d+)$', s)
+            if m:
+                try:
+                    num = int(m.group(1))
+                    if num > max_num:
+                        max_num = num
+                except Exception:
+                    pass
+        next_num = max_num + 1
+        code = f"{prefix}{str(next_num).zfill(pad)}"
+        while Quotation.objects.filter(qo_code=code).exists():
+            next_num += 1
+            code = f"{prefix}{str(next_num).zfill(pad)}"
+        return code
+    except Exception:
+        return f"QUO {datetime.now().year}-{str(1).zfill(pad)}"
 
 def _next_item_code_for_quotation(quotation, pad: int = 4) -> str:
     # Comment: Generate a unique numeric item code within a quotation by scanning existing quo_item values
@@ -212,19 +241,27 @@ class InvoiceSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
-        # Comment: Allow editable number but enforce uniqueness (excluding current instance)
-        new_num = (validated_data.get('number') or '').strip()
-        if new_num and Invoice.objects.filter(number=new_num).exclude(pk=instance.pk).exists():
-            raise serializers.ValidationError({'number': 'Invoice number must be unique'})
-        return super().update(instance, validated_data)
-
-    def update(self, instance, validated_data):
+        # Comment: Do NOT auto-increment on update. Preserve existing number unless client explicitly changes it.
+        # - If 'number' is blank or missing, drop it from update payload.
+        # - If a new 'number' is provided, enforce uniqueness (excluding current instance).
+        raw_num = validated_data.get('number')
+        new_num = (raw_num or '').strip() if raw_num is not None else None
+        if new_num is None or new_num == '':
+            validated_data.pop('number', None)
+        else:
+            if new_num != str(instance.number or '').strip():
+                if Invoice.objects.filter(number=new_num).exclude(pk=instance.pk).exists():
+                    raise serializers.ValidationError({'number': 'Invoice number must be unique'})
+                # Comment: Allow setting to the provided unique number
+                validated_data['number'] = new_num
+            else:
+                # Comment: No change — prevent unnecessary write
+                validated_data.pop('number', None)
         # Ignore EIT details in payload; they are derived/display-only
         validated_data.pop('eit_address', '')
         validated_data.pop('eit_mobile', '')
         validated_data.pop('eit_phone', '')
         validated_data.pop('eit_fax', '')
-
         # If no explicit EIT FK provided, fallback by organization_name
         eit_name = validated_data.pop('eit_name', None)
         if not validated_data.get('eit') and eit_name:
@@ -488,6 +525,13 @@ class QuotationSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
+        # Comment: Parse JSON string 'items' if provided; DRF may pass it as a raw string
+        if isinstance(items_data, str):
+            try:
+                parsed = json.loads(items_data)
+                items_data = parsed if isinstance(parsed, list) else []
+            except Exception:
+                items_data = []
         # Comment: If the frontend provides a source_quotation_id, copy QuotationItem rows from that parent
         source_quotation_id = validated_data.pop('source_quotation_id', None)
         # Comment: DRF drops unknown fields; fallback to raw request payload for source_quotation_id
@@ -498,10 +542,9 @@ class QuotationSerializer(serializers.ModelSerializer):
                     source_quotation_id = int(str(raw_id))
             except Exception:
                 source_quotation_id = None
-        # Comment: Auto-generate qo_code when not provided; duplicates allowed for quotations
-        qo = (validated_data.get('qo_code') or '').strip()
-        if not qo:
-            validated_data['qo_code'] = _next_sequence(Quotation, 'qo_code', pad=4, allow_duplicate=True)
+        # Comment: Force server-side auto-generation; remove any client-sent qo_code before generating
+        validated_data.pop('qo_code', None)
+        validated_data['qo_code'] = _next_quotation_code()
         customer_name = validated_data.pop('customer_name', None)
         eit_name = validated_data.pop('eit_name', None)
         
@@ -588,18 +631,10 @@ class QuotationSerializer(serializers.ModelSerializer):
                         quantity=qi.quantity,
                         quo_total=qi.quo_total,
                     )
-                    # Comment: Copy physical image file when present by reading from MEDIA_ROOT path
+                    # Comment: Preserve exact stored filename from parent so both rows reference same file
                     try:
-                        if qi.image and hasattr(qi.image, 'path'):
-                            src_path = qi.image.path
-                            if os.path.exists(src_path) and os.path.getsize(src_path) > 0:
-                                ext = os.path.splitext(src_path)[1] or '.png'
-                                # Comment: ImageField already prefixes upload_to; use filename only
-                                new_name = f"{uuid.uuid4().hex}{ext}"
-                                with open(src_path, 'rb') as fsrc:
-                                    data = fsrc.read()
-                                    if data:
-                                        item_obj.image.save(new_name, ContentFile(data), save=False)
+                        if qi.image and getattr(qi.image, 'name', ''):
+                            item_obj.image.name = qi.image.name
                     except Exception:
                         pass
                     item_obj.save()
@@ -658,8 +693,22 @@ class QuotationSerializer(serializers.ModelSerializer):
             img_input = item.get('image')
             img_path_hint = (item.get('image_path') or '').strip()
             try:
-                if hasattr(img_input, 'read'):
-                    # Save uploaded file directly with a unique name (filename only)
+                # Comment: Prefer image_path when present to reuse the original stored filename exactly
+                if img_path_hint:
+                    # Comment: Preserve original image path EXACTLY for Save As New copies
+                    # Instead of duplicating the file with a new uuid name, reuse the same stored filename.
+                    src = img_path_hint.replace('\\', '/').strip()
+                    if src.startswith('/'):
+                        src = src[1:]
+                    if src.startswith('media/'):
+                        src = src.split('media/', 1)[1]
+                    src = src.replace('quotation_items/quotation_items/', 'quotation_items/')
+                    normalized_src = src.replace('\\', '/').lstrip('/')
+                    # Comment: Assign the existing storage path directly so both quotations reference the same file
+                    if normalized_src:
+                        item_obj.image.name = normalized_src
+                elif hasattr(img_input, 'read'):
+                    # Comment: Uploaded file — keep unique name, this case occurs when user edited image in UI
                     name_hint = getattr(img_input, 'name', '') or 'upload.png'
                     ext = os.path.splitext(name_hint)[1] or '.png'
                     new_name = f"{uuid.uuid4().hex}{ext}"
@@ -668,30 +717,8 @@ class QuotationSerializer(serializers.ModelSerializer):
                     except Exception:
                         pass
                     item_obj.image.save(new_name, img_input, save=False)
-                elif img_path_hint:
-                    # Copy from MEDIA_ROOT when image_path is provided; avoid overwriting if unchanged
-                    src = img_path_hint.replace('\\', '/').strip()
-                    if src.startswith('/'):
-                        src = src[1:]
-                    if src.startswith('media/'):
-                        src = src.split('media/', 1)[1]
-                    src = src.replace('quotation_items/quotation_items/', 'quotation_items/')
-                    current_name = str(getattr(item_obj.image, 'name', '') or '')
-                    normalized_current = current_name.replace('\\', '/').lstrip('/')
-                    normalized_src = src.replace('\\', '/').lstrip('/')
-                    if normalized_src and normalized_current and normalized_src == normalized_current:
-                        pass
-                    else:
-                        abs_path = os.path.join(settings.MEDIA_ROOT, normalized_src)
-                        abs_path = os.path.normpath(abs_path)
-                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                            ext = os.path.splitext(abs_path)[1] or '.png'
-                            new_name = f"{uuid.uuid4().hex}{ext}"
-                            with open(abs_path, 'rb') as fsrc:
-                                data = fsrc.read()
-                                if data:
-                                    item_obj.image.save(new_name, ContentFile(data), save=False)
             except Exception:
+                # Comment: Silently ignore image handling errors during create; base row still persists
                 pass
             item_obj.save()
             
@@ -817,9 +844,12 @@ class QuotationSerializer(serializers.ModelSerializer):
                             target = existing_by_id.get(iid_int)
                     except Exception:
                         target = None
-                # Comment: Fallback by index only when no explicit id/row_id is provided
+                # Comment: Fallback by index only for base rows.
+                # For spec-only rows (qty=0 and no item/model), create a new row instead of mapping by index,
+                # so adding "1.3" after an update does not overwrite an existing child.
                 if not target:
-                    target = existing_items[idx] if idx < len(existing_items) else None
+                    is_spec_only = not (item_title or model or qty > 0)
+                    target = (existing_items[idx] if (idx < len(existing_items) and not is_spec_only) else None)
                 # Comment: Create a new row only when this payload represents a new item (no id/row_id and index beyond existing)
                 if not target:
                     target = QuotationItem(quotation=instance)
@@ -1089,10 +1119,8 @@ class TaxInvoiceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def create(self, validated_data):
-        # Comment: Auto-generate Tax Invoice code when not provided; must remain unique
-        tic = (validated_data.get('tax_invoice_code') or '').strip()
-        if not tic:
-            validated_data['tax_invoice_code'] = _next_sequence(TaxInvoice, 'tax_invoice_code', pad=4, allow_duplicate=False)
+        # Comment: Always auto-generate Tax Invoice code on create to ensure sequential numbering (+1)
+        validated_data['tax_invoice_code'] = _next_sequence(TaxInvoice, 'tax_invoice_code', pad=4, allow_duplicate=False)
         # Resolve customer by name if FK not provided
         customer_name = validated_data.pop('customer_name', None)
         if not validated_data.get('customer') and customer_name:
@@ -1108,19 +1136,13 @@ class TaxInvoiceSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
-        # Comment: Allow editable Tax Invoice code but enforce uniqueness (excluding current instance)
         new_code = (validated_data.get('tax_invoice_code') or '').strip()
         if new_code and TaxInvoice.objects.filter(tax_invoice_code=new_code).exclude(pk=instance.pk).exists():
             raise serializers.ValidationError({'tax_invoice_code': 'Tax Invoice code must be unique'})
-        return super().update(instance, validated_data)
-
-    def update(self, instance, validated_data):
-        # Resolve customer by name if FK not provided
         customer_name = validated_data.pop('customer_name', None)
         if not validated_data.get('customer') and customer_name:
             cust, _ = Customer.objects.get_or_create(company_name=customer_name)
             instance.customer = cust
-        # Resolve EIT by name if FK not provided
         eit_name = validated_data.pop('eit_name', None)
         if not validated_data.get('eit') and eit_name:
             eit = EIT.objects.filter(organization_name=eit_name).first()
