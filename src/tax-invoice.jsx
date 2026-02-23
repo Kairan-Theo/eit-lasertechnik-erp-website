@@ -147,7 +147,8 @@ function useTaxInvoiceState() {
     email: ""
   })
   const [details, setDetails] = React.useState({
-    number: "INV 2026-0001",
+    // Comment: Start empty so we can auto-generate the next Tax Invoice number from backend
+    number: "",
     date: new Date().toISOString().slice(0, 10),
     isTaxInvoice: true,
     paymentType: "",
@@ -261,9 +262,50 @@ function useTaxInvoiceState() {
     }
   }, [details.eit, eitOptions])
 
-  // Set default Tax Invoice number if empty
+  // Comment: For NEW Tax Invoice, load all Tax Invoices and compute next INV code (INV YYYY-000X); keep existing number when editing
   React.useEffect(() => {
-    setDetails(prev => ({ ...prev, number: prev.number || "INV 2026-0001" }))
+    const params = new URLSearchParams(window.location.search)
+    const key = params.get("key")
+    const index = params.get("index")
+    if (key || index) return
+    const token = localStorage.getItem("authToken")
+    const headers = token ? { Authorization: `Token ${token}` } : {}
+    const fallbackCode = `INV ${new Date().getFullYear()}-0001`
+    fetch(`${API_BASE_URL}/api/tax_invoices/`, { headers })
+      .then(r => (r.ok ? r.json() : null))
+      .then(raw => {
+        // Comment: Support both plain list [] and paginated { results: [] } responses
+        const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.results) ? raw.results : [])
+        if (!list.length) {
+          // Comment: No Tax Invoices yet, default to first INV code
+          setDetails(prev => ({ ...prev, number: prev.number || fallbackCode }))
+          return
+        }
+        let maxNum = 0
+        let year = new Date().getFullYear()
+        // Comment: Find the largest running number from existing tax_invoice_code values
+        list.forEach(inv => {
+          const code = String(inv.tax_invoice_code || inv.number || "").trim()
+          if (!code) return
+          const yearMatch = code.match(/(\d{4})-(\d+)$/)
+          if (yearMatch) {
+            const y = parseInt(yearMatch[1], 10)
+            if (!Number.isNaN(y)) year = y
+          }
+          const m = code.match(/(\d+)\s*$/)
+          if (!m) return
+          const n = parseInt(m[1], 10)
+          if (!Number.isNaN(n) && n > maxNum) maxNum = n
+        })
+        const nextNumeric = (maxNum + 1).toString().padStart(4, "0")
+        const code = `INV ${year}-${nextNumeric}`
+        // Comment: For new form, fill number only if user has not typed anything yet
+        setDetails(prev => ({ ...prev, number: prev.number || code }))
+      })
+      .catch(() => {
+        // Comment: On error, keep user-entered number or fall back to INV YYYY-0001
+        setDetails(prev => ({ ...prev, number: prev.number || fallbackCode }))
+      })
   }, [])
 
   const addItem = () => setItems(prev => [...prev, { description: "", qty: 1, price: 0, unit: "pcs", discount: 0 }])
