@@ -299,25 +299,21 @@ function useBillingNoteState() {
       })
   }, [])
 
-  // Load Deal Customers
+  // Comment: Load canonical Customers (not Deals) to drive Company Name selection in Billing Note
   React.useEffect(() => {
-    fetch(`${API_BASE_URL}/api/deals/`)
+    fetch(`${API_BASE_URL}/api/customers/`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          // Extract unique customers from deals
-          const uniqueCustomers = new Map()
-          data.forEach(deal => {
-            if (deal.customer_name) {
-              // We store the first occurrence. 
-              // If we want to be smarter, we could store the one with most info, 
-              // but for now just the name is key.
-              if (!uniqueCustomers.has(deal.customer_name)) {
-                uniqueCustomers.set(deal.customer_name, deal)
-              }
-            }
-          })
-          setDealCustomers(Array.from(uniqueCustomers.values()))
+          // Comment: Normalize shape with label/value for CustomerCombobox ID-based selection
+          const normalized = data.map(c => ({
+            ...c,
+            label: c.company_name || c.customer_name || "",
+            value: c.id
+          }))
+          setDealCustomers(normalized)
+        } else {
+          setDealCustomers([])
         }
       })
       .catch(console.error)
@@ -723,25 +719,72 @@ function BillingNotePage() {
                   value={q.customer.company}
                   options={q.dealCustomers}
                   onChange={(val) => {
-                    const match = q.dealCustomers.find(c => c.customer_name === val)
+                    // Comment: Match by display label (supports legacy customer_name and current company_name)
+                    const match = q.dealCustomers.find(c => (c.customer_name || c.company_name) === val)
                     if (match) {
                       q.setCustomer({
                         ...q.customer,
                         company: val,
-                        // Map tax number if available from deals (tax_id)
+                        // Comment: Preserve branch here; hydrate branch in onSelect via ID fetch
                         taxId: match.tax_id || q.customer.taxId,
                         address: match.address || q.customer.address,
                         telephone: match.phone || q.customer.telephone,
-                        // Note: billing note state has fax/attn/div/mobile/email
-                        // deal object has email, phone, address, contact(attn), tax_id
-                        fax: q.customer.fax, // deal doesn't have fax usually
+                        // Comment: deal usually lacks fax; preserve existing
+                        fax: q.customer.fax,
                         attn: match.contact || q.customer.attn,
-                        mobile: q.customer.mobile, // deal doesn't have separate mobile usually
+                        mobile: q.customer.mobile,
                         email: match.email || q.customer.email
                       })
                     } else {
                       q.setCustomer({ ...q.customer, company: val })
                     }
+                  }}
+                  // Comment: On actual selection (ID available), fetch canonical Customer to hydrate Branch and other fields
+                  onSelect={(payload) => {
+                    const option = typeof payload === 'object' && payload !== null 
+                      ? payload 
+                      : { label: String(payload || ""), value: payload }
+                    if (option?.value == null || option.value === "") return
+                    fetch(`${API_BASE_URL}/api/customers/${option.value}/`)
+                      .then(res => res.ok ? res.json() : null)
+                      .then(c => {
+                        if (!c) return
+                        // Comment: Populate customer top fields including Branch from DB
+                        const nextTop = {
+                          company: option.label || c.company_name || "",
+                          taxId: c.tax_id || "",
+                          branch: c.branch || "",
+                          address: c.address || "",
+                          telephone: c.phone || "",
+                          fax: c.cus_fax || "",
+                          attn: c.attn || "",
+                          div: c.attn_division || "",
+                          mobile: c.attn_mobile || "",
+                          email: c.email || ""
+                        }
+                        // Comment: Fallback Branch from latest Deal when Customer.branch is empty
+                        const needsBranchFallback = !String(nextTop.branch || "").trim()
+                        if (needsBranchFallback) {
+                          fetch(`${API_BASE_URL}/api/deals/`)
+                            .then(r => r.ok ? r.json() : [])
+                            .then(deals => {
+                              const latest = Array.isArray(deals)
+                                ? deals.filter(d => String(d.customer) === String(c.id)).sort((a, b) => (b.id || 0) - (a.id || 0))[0]
+                                : null
+                              const mergedTop = {
+                                ...nextTop,
+                                branch: nextTop.branch || latest?.branch || ""
+                              }
+                              q.setCustomer({ ...q.customer, ...mergedTop })
+                            })
+                            .catch(() => {
+                              q.setCustomer({ ...q.customer, ...nextTop })
+                            })
+                        } else {
+                          q.setCustomer({ ...q.customer, ...nextTop })
+                        }
+                      })
+                      .catch(() => {})
                   }}
                 />
              </div>
