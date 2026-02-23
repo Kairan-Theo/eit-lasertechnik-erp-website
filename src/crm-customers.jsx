@@ -54,6 +54,10 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   const [isSaving, setIsSaving] = useState(false)
   const [editingDealInfo, setEditingDealInfo] = useState(null)
   const [standaloneCustomers, setStandaloneCustomers] = useState([])
+  // Comment: Keep a fast lookup map for latest customer fields by ID
+  const [customerIndex, setCustomerIndex] = useState({})
+  // Comment: Delete confirmation modal visibility state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const filteredDeals = React.useMemo(() => {
     const allRows = [...deals, ...standaloneCustomers]
@@ -75,73 +79,106 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
       setSelectedRows(prev => prev.filter(id => currentIds.has(id)))
   }, [deals])
 
-  React.useEffect(() => {
-    const loadCustomers = async () => {
-      try {
-        const token = localStorage.getItem("authToken")
-        const headers = token ? { Authorization: `Token ${token}` } : {}
-        const res = await apiRequest(`/api/customers/`, { headers })
-        if (!res.ok) return
-        const data = await res.json()
-        if (!Array.isArray(data)) return
-        const dealCustomerIds = new Set(
-          deals
-            .map(d => d.customerId || d.customer)
-            .filter(id => id !== null && id !== undefined)
-        )
-        const transformed = data
-          .filter(c => !dealCustomerIds.has(c.id))
-          .map(c => ({
-            id: `customer-${c.id}`,
-            customer: c.company_name || "",
-            company: c.company_name || "",
-            customerId: c.id,
-            branch: c.branch || "",
-            // Comment: Company-level email/phone displayed in table columns
-            email: c.email || "",
-            phone: c.phone || "",
-            address: c.address || "",
-            // Comment: Primary contact (attn*) kept separate from additional contacts
-            contact: c.attn || "",
-            attnEmail: c.attn_email || "",
-            attnMobile: c.attn_mobile || "",
-            attnDivision: c.attn_division || "",
-            attnPosition: c.attn_position || "",
-            taxId: c.tax_id || "",
-            poNumber: "",
-            amount: 0,
-            currency: "฿",
-            priority: "none",
-            stageName: "",
-            stageCount: "",
-            // Comment: Build additional contacts list from Customer cc* CSV columns
+  // Comment: Shared reload function so we can fetch latest after saving edits
+  const reloadCustomers = React.useCallback(async () => {
+    try {
+      const token = localStorage.getItem("authToken")
+      const headers = token ? { Authorization: `Token ${token}` } : {}
+      const res = await apiRequest(`/api/customers/`, { headers })
+      if (!res.ok) return
+      const data = await res.json()
+      if (!Array.isArray(data)) return
+      // Comment: Build index of all customers (including those linked to deals)
+      const index = {}
+      data.forEach(c => {
+        index[c.id] = {
+          id: c.id,
+          company: c.company_name || "",
+          branch: c.branch || "",
+          email: c.email || "",
+          phone: c.phone || "",
+          address: c.address || "",
+          taxId: c.tax_id || "",
+          // Comment: Primary contact (attn*) and cc* kept for display in table list
+          attn: c.attn || "",
+          attnEmail: c.attn_email || "",
+          attnMobile: c.attn_mobile || "",
+          attnDivision: c.attn_division || "",
+          attnPosition: c.attn_position || "",
+          cc: c.cc || "",
+          cc_division: c.cc_division || "",
+          cc_email: c.cc_email || "",
+          cc_mobile: c.cc_mobile || "",
+          cc_position: c.cc_position || "",
+        }
+      })
+      setCustomerIndex(index)
+      const dealCustomerIds = new Set(
+        deals
+          .map(d => d.customerId || d.customer)
+          .filter(id => id !== null && id !== undefined)
+      )
+      const transformed = data
+        .filter(c => !dealCustomerIds.has(c.id))
+        .map(c => ({
+          id: `customer-${c.id}`,
+          customer: c.company_name || "",
+          company: c.company_name || "",
+          customerId: c.id,
+          branch: c.branch || "",
+          // Comment: Company-level email/phone displayed in table columns
+          email: c.email || "",
+          phone: c.phone || "",
+          address: c.address || "",
+          // Comment: Primary contact (attn*) kept separate from additional contacts
+          contact: c.attn || "",
+          attnEmail: c.attn_email || "",
+          attnMobile: c.attn_mobile || "",
+          attnDivision: c.attn_division || "",
+          attnPosition: c.attn_position || "",
+          taxId: c.tax_id || "",
+          poNumber: "",
+          amount: 0,
+          currency: "฿",
+          priority: "none",
+          stageName: "",
+          stageCount: "",
+          // Comment: Build additional contacts list from Customer cc* CSV columns
             extraContacts: (() => {
-              const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
-              const names = splitCsv(c.cc)
-              const divs = splitCsv(c.cc_division)
-              const emails = splitCsv(c.cc_email)
-              const mobiles = splitCsv(c.cc_mobile)
-              const positions = splitCsv(c.cc_position)
-              const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
-              const persons = []
-              for (let i = 0; i < maxLen; i++) {
-                persons.push({
+            const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
+            const names = splitCsv(c.cc)
+            const divs = splitCsv(c.cc_division)
+            const emails = splitCsv(c.cc_email)
+            const mobiles = splitCsv(c.cc_mobile)
+            const positions = splitCsv(c.cc_position)
+            const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
+            const persons = []
+            for (let i = 0; i < maxLen; i++) {
+                const p = {
                   name: names[i] || "",
-                  position: positions[i] || "-",
+                  position: positions[i] || "",
                   division: divs[i] || "",
                   email: emails[i] || "",
                   mobile: mobiles[i] || "",
-                })
-              }
-              return persons
-            })(),
-            isCustomerOnly: true,
-          }))
-        setStandaloneCustomers(transformed)
-      } catch {}
-    }
-    loadCustomers()
+                }
+                // Comment: Skip empty rows (all fields blank) to avoid ghost contacts like "-, -, -, -"
+                if (p.name || p.email || p.mobile || p.division || p.position) {
+                  // Comment: Normalize missing position to "-" only when row is meaningful
+                  if (!p.position) p.position = "-"
+                  persons.push(p)
+                }
+            }
+            return persons
+          })(),
+          isCustomerOnly: true,
+        }))
+      setStandaloneCustomers(transformed)
+    } catch {}
   }, [deals])
+
+  React.useEffect(() => {
+    reloadCustomers()
+  }, [reloadCustomers])
 
   React.useEffect(() => {
     if (!showNewCustomerForm || stages.length > 0) return
@@ -288,6 +325,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
         body: JSON.stringify(payload),
       })
       if (res.ok) {
+        // Comment: Close form, reset state, and immediately refresh customers to show updated values
         setShowNewCustomerForm(false)
         setNewDeal({
           company: "",
@@ -307,7 +345,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
         })
         setExtraContacts([])
         setEditingDealInfo(null)
-        alert(isEditing ? "Customer updated. Refresh CRM to see changes." : "Customer added. Refresh CRM to see it in the list.")
+        await reloadCustomers()
       } else {
         const errorText = await res.text()
         console.error("Failed to create customer:", errorText)
@@ -382,58 +420,102 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
   }
 
   const handleEditRow = async (deal) => {
-    setNewDeal({
-      company: deal.customer || deal.company || "",
-      branch: deal.branch || "",
-      // Comment: Use primary attn* fields for Contact Person section
-      contact: deal.contact || "",
-      email: deal.attnEmail || "",
-      phone: deal.attnMobile || "",
-      division: deal.attnDivision || "",
-      position: deal.attnPosition || "",
-      // Comment: Company-level contacts mapped separately for Company Details
-      companyEmail: deal.email || "",
-      companyPhone: deal.phone || "",
-      address: deal.address || "",
-      taxId: deal.taxId || deal.tax_id || "",
-    })
+    // Comment: Determine linked Customer ID from row (pipeline deal or standalone)
+    const cid = deal.customerId || deal.customer
+    // Comment: Prefer latest fields from customerIndex (kept in sync with backend)
+    const latest = cid ? customerIndex[cid] : null
+    // Comment: Build base form state using latest values when available, fallback to row snapshot
+    const baseForm = {
+      company: (latest?.company ?? (deal.customer || deal.company)) || "",
+      branch: (latest?.branch ?? deal.branch) || "",
+      // Comment: Contact Person fields map to attn* columns
+      contact: (latest?.attn ?? deal.contact) || "",
+      email: (latest?.attnEmail ?? deal.attnEmail) || "",
+      phone: (latest?.attnMobile ?? deal.attnMobile) || "",
+      division: (latest?.attnDivision ?? deal.attnDivision) || "",
+      position: (latest?.attnPosition ?? deal.attnPosition) || "",
+      // Comment: Company-level email/phone stored separately for clarity
+      companyEmail: (latest?.email ?? deal.email) || "",
+      companyPhone: (latest?.phone ?? deal.phone) || "",
+      address: (latest?.address ?? deal.address) || "",
+      taxId: (latest?.taxId ?? deal.taxId ?? deal.tax_id) || "",
+    }
+    // Comment: Initialize form immediately for fast UX
+    setNewDeal(baseForm)
+    // Comment: Build additional contacts (CC) — use latest from index if present
     let extras = []
-    if (deal.customerId || deal.customer) {
+    const csvToPersons = (c) => {
+      const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
+      const names = splitCsv(c.cc)
+      const divs = splitCsv(c.cc_division)
+      const emails = splitCsv(c.cc_email)
+      const mobiles = splitCsv(c.cc_mobile)
+      const positions = splitCsv(c.cc_position)
+      const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
+      const persons = []
+      for (let i = 0; i < maxLen; i++) {
+        const p = {
+          name: names[i] || "",
+          position: positions[i] || "",
+          division: divs[i] || "",
+          email: emails[i] || "",
+          mobile: mobiles[i] || "",
+        }
+        // Comment: Skip empty rows to prevent showing deleted/blank contacts
+        if (p.name || p.email || p.mobile || p.division || p.position) {
+          if (!p.position) p.position = "-"
+          persons.push(p)
+        }
+      }
+      return persons
+    }
+    if (latest) {
+      // Comment: Use already-fetched latest values
+      extras = csvToPersons({
+        cc: latest.cc,
+        cc_division: latest.cc_division,
+        cc_email: latest.cc_email,
+        cc_mobile: latest.cc_mobile,
+        cc_position: latest.cc_position,
+      })
+    } else if (cid) {
+      // Comment: Fallback fetch when latest not in index
       try {
-        const cid = deal.customerId || deal.customer
         const token = localStorage.getItem("authToken")
         const headers = token ? { Authorization: `Token ${token}` } : {}
         const res = await apiRequest(`/api/customers/${cid}/`, { headers })
         if (res.ok) {
           const c = await res.json()
-          const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
-          const names = splitCsv(c.cc)
-          const divs = splitCsv(c.cc_division)
-          const emails = splitCsv(c.cc_email)
-          const mobiles = splitCsv(c.cc_mobile)
-          const positions = splitCsv(c.cc_position)
-          const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
-          const persons = []
-          for (let i = 0; i < maxLen; i++) {
-            persons.push({
-              name: names[i] || "",
-              position: positions[i] || "-",
-              division: divs[i] || "",
-              email: emails[i] || "",
-              mobile: mobiles[i] || "",
-            })
-          }
-          extras = persons
+          // Comment: Replace base form with fetched values to avoid stale deal snapshot
+          setNewDeal({
+            company: c.company_name || "",
+            branch: c.branch || "",
+            contact: c.attn || "",
+            email: c.attn_email || "",
+            phone: c.attn_mobile || "",
+            division: c.attn_division || "",
+            position: c.attn_position || "",
+            companyEmail: c.email || "",
+            companyPhone: c.phone || "",
+            address: c.address || "",
+            taxId: c.tax_id || "",
+          })
+          extras = csvToPersons(c)
         } else {
           extras = deal.extraContacts || deal.extra_contacts || []
         }
-      } catch {}
+      } catch {
+        extras = deal.extraContacts || deal.extra_contacts || []
+      }
+    } else {
+      // Comment: No customer id case — fallback to any existing extras present on row
+      extras = deal.extraContacts || deal.extra_contacts || []
     }
     setExtraContacts(extras)
     setEditingDealInfo({ 
       id: deal.id, 
       stageName: deal.stageName, 
-      customerId: deal.customerId || deal.customer 
+      customerId: cid || null,
     })
     setShowNewCustomerForm(true)
   }
@@ -477,22 +559,78 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
           </button>
         )
       }
-      case 'branch': return deal.branch || "-";
-      case 'address': return deal.address || "-";
-      case 'email': return deal.email || "-";
-      case 'phone': return deal.phone || "-";
-      case 'taxId': return deal.taxId || "-";
+      case 'branch': {
+        // Comment: Prefer latest from customerIndex when available (covers admin edits)
+        const cid = deal.customerId || deal.customerId || null
+        const latest = cid && customerIndex[cid]
+        return (latest?.branch ?? deal.branch) || "-"
+      }
+      case 'address': {
+        const cid = deal.customerId || deal.customerId || null
+        const latest = cid && customerIndex[cid]
+        return (latest?.address ?? deal.address) || "-"
+      }
+      case 'email': {
+        const cid = deal.customerId || deal.customerId || null
+        const latest = cid && customerIndex[cid]
+        return (latest?.email ?? deal.email) || "-"
+      }
+      case 'phone': {
+        const cid = deal.customerId || deal.customerId || null
+        const latest = cid && customerIndex[cid]
+        return (latest?.phone ?? deal.phone) || "-"
+      }
+      case 'taxId': {
+        const cid = deal.customerId || deal.customerId || null
+        const latest = cid && customerIndex[cid]
+        return (latest?.taxId ?? deal.taxId) || "-"
+      }
       case 'contactPersons': {
         // Comment: Render numbered list: "1. Name, Position, Division, Email, Phone", then 2., 3., etc.
-        const extras = deal.extraContacts || deal.extra_contacts || []
+        const cid = deal.customerId || deal.customerId || null
+        const latest = cid && customerIndex[cid]
+        // Comment: Prefer latest attn and cc from index for deal rows
+        const extrasRaw = deal.extraContacts || deal.extra_contacts || (() => {
+          if (!latest) return []
+          const splitCsv = (s) => String(s || "").split(",").map(v => v.trim()).filter(Boolean)
+          const names = splitCsv(latest.cc)
+          const divs = splitCsv(latest.cc_division)
+          const emails = splitCsv(latest.cc_email)
+          const mobiles = splitCsv(latest.cc_mobile)
+          const positions = splitCsv(latest.cc_position)
+          const maxLen = Math.max(names.length, divs.length, emails.length, mobiles.length, positions.length)
+          const persons = []
+          for (let i = 0; i < maxLen; i++) {
+            const p = {
+              name: names[i] || "",
+              position: positions[i] || "",
+              division: divs[i] || "",
+              email: emails[i] || "",
+              mobile: mobiles[i] || "",
+            }
+            if (p.name || p.email || p.mobile || p.division || p.position) {
+              if (!p.position) p.position = "-"
+              persons.push(p)
+            }
+          }
+          return persons
+        })()
+        const extras = Array.isArray(extrasRaw) ? extrasRaw.filter((e) => e && (e.name || e.email || e.mobile || e.division || (e.position && e.position !== "-"))) : []
         const people = []
-        if (deal.contact || deal.attnEmail || deal.attnMobile || deal.attnDivision || deal.attnPosition) {
+        const primary = {
+          name: (latest?.attn ?? deal.contact) || "",
+          position: (latest?.attnPosition ?? deal.attnPosition) || "-",
+          division: (latest?.attnDivision ?? deal.attnDivision) || "",
+          email: (latest?.attnEmail ?? deal.attnEmail) || "",
+          mobile: (latest?.attnMobile ?? deal.attnMobile) || "",
+        }
+        if (primary.name || primary.email || primary.mobile || primary.division || primary.position) {
           people.push({
-            name: deal.contact || "",
-            position: deal.attnPosition || "-",
-            division: deal.attnDivision || "",
-            email: deal.attnEmail || "",
-            mobile: deal.attnMobile || "",
+            name: primary.name || "",
+            position: primary.position || "-",
+            division: primary.division || "",
+            email: primary.email || "",
+            mobile: primary.mobile || "",
           })
         }
         extras.forEach(c => {
@@ -531,7 +669,7 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
         <div className="flex items-center gap-6">
           {selectedRows.length > 0 && (
             <button
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -655,6 +793,36 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
           </tbody>
         </table>
       </div>
+      {/* Comment: Delete confirmation modal for Customer tab */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] max-w-[92vw] rounded-2xl bg-white shadow-xl border border-slate-200">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800">Delete customers</h3>
+              <button className="text-slate-400 hover:text-slate-600" onClick={() => setShowDeleteConfirm(false)}>✕</button>
+            </div>
+            <div className="px-6 py-5 text-slate-700">
+              {/* Comment: Show counts of selected items by type */}
+              <p className="mb-2">Are you sure you want to delete the selected rows?</p>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
+                onClick={() => { setShowDeleteConfirm(false); handleDelete(); }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showNewCustomerForm && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
