@@ -157,11 +157,27 @@ const CRMHistory = () => {
                 {/* Body Content: Displayed in a distinct box with whitespace preservation */}
                 <div className="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed whitespace-pre-wrap border border-slate-100 font-mono">
                    {/* 
-                      We strip HTML tags to show the text content safely. 
-                      whitespace-pre-wrap ensures line breaks from the email are respected.
-                      Also replace &nbsp; with regular space.
+                      Comment: Render the saved email body as HTML when it contains tags
+                      so that Gmail-style <div> and <br> structures are preserved exactly.
+                      For plain-text bodies, convert newline characters into <br /> tags.
                    */}
-                   {log.body.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ')}
+                   {(() => {
+                     if (!log.body) return null;
+                     const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(log.body);
+                     let html;
+                     if (hasHtmlTags) {
+                       // Comment: Body already HTML (from our editor or email client) — use as-is
+                       html = log.body;
+                     } else {
+                       // Comment: Plain text body — keep original line breaks by turning \n into <br />
+                       const normalized = log.body.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                       html = normalized
+                         .split('\n')
+                         .map(line => (line === "" ? "&nbsp;" : line))
+                         .join("<br />");
+                     }
+                     return <span dangerouslySetInnerHTML={{ __html: html }} />;
+                   })()}
                 </div>
 
                 {/* Attachments Section: Display any files attached to the email */}
