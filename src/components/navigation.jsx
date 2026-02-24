@@ -61,6 +61,10 @@ export default function Navigation({ require }) {
   const [newPassword, setNewPassword] = React.useState("")
   const [confirmPassword, setConfirmPassword] = React.useState("")
 
+  // Comment: Popup state for warning when notification count grows too large
+  const [showNotifCleanupPopup, setShowNotifCleanupPopup] = React.useState(false)
+  const [hasShownNotifCleanupPopup, setHasShownNotifCleanupPopup] = React.useState(false)
+
   React.useEffect(() => {
     if (!require) return
     try {
@@ -198,6 +202,14 @@ export default function Navigation({ require }) {
   const [dueCount, setDueCount] = React.useState(0)
   const [notificationsCount, setNotificationsCount] = React.useState(0)
   const [notifications, setNotifications] = React.useState([])
+
+  // Comment: When bell notifications reach 50 or more, show a one-time popup suggesting cleanup
+  React.useEffect(() => {
+    if (notificationsCount >= 50 && !hasShownNotifCleanupPopup) {
+      setShowNotifCleanupPopup(true)
+      setHasShownNotifCleanupPopup(true)
+    }
+  }, [notificationsCount, hasShownNotifCleanupPopup])
 
   const markAsRead = async (id, e) => {
     if (e) e.stopPropagation()
@@ -795,6 +807,49 @@ export default function Navigation({ require }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {showNotifCleanupPopup && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4 relative">
+            {/* Comment: Popup warning when notification bell count reaches 50 or more */}
+            <button
+              type="button"
+              onClick={() => setShowNotifCleanupPopup(false)}
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"
+              aria-label="Close notification cleanup warning"
+            >
+              ×
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Too many notifications
+                </h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  You have reached {notificationsCount} notifications. Please consider deleting old items to keep things organized and reduce confusion.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowNotifCleanupPopup(false)}
+                className="px-4 py-2 text-xs font-medium text-slate-600 rounded-lg border border-slate-200 hover:bg-slate-50"
+              >
+                Later
+              </button>
+              <button
+                onClick={() => setShowNotifCleanupPopup(false)}
+                className="px-4 py-2 text-xs font-medium text-white rounded-lg bg-red-500 hover:bg-red-600 shadow-sm"
+              >
+                OK, I&apos;ll clean up
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   )
 }

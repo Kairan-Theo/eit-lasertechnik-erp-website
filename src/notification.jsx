@@ -14,6 +14,8 @@ function NotificationsPage() {
   const [notifications, setNotifications] = React.useState([])
   const [query, setQuery] = React.useState("")
   const [confirmClear, setConfirmClear] = React.useState(false)
+  // Track which notifications are selected for bulk actions
+  const [selectedIds, setSelectedIds] = React.useState([])
 
   const fetchNotifications = async () => {
     try {
@@ -205,6 +207,21 @@ function NotificationsPage() {
     }
   }
 
+  // Toggle selection for a single notification (used by checkboxes)
+  const toggleSelect = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  // Delete all currently selected notifications
+  const deleteSelectedNotifications = async () => {
+    if (selectedIds.length === 0) return
+    // Perform deletes one by one, reusing existing deleteNotification logic
+    await Promise.all(selectedIds.map((id) => deleteNotification(id)))
+    setSelectedIds([])
+  }
+
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return notifications
@@ -229,37 +246,49 @@ function NotificationsPage() {
               </p>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 justify-end">
               <button
                 onClick={fetchNotifications}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 shadow-sm"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium transition-colors bg-white/90 text-slate-700 border border-slate-200 hover:bg-white shadow-sm"
               >
                 Refresh
               </button>
                <button
                 onClick={markAllAsRead}
                 disabled={unreadCount === 0}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition-colors shadow-sm
                   ${unreadCount === 0 
                     ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
-                    : "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"}`}
+                    : "bg-blue-600 text-white hover:bg-blue-700"}`}
               >
                 <CheckCheck className="w-4 h-4" />
                 Mark all read
               </button>
 
+              <button
+                onClick={deleteSelectedNotifications}
+                disabled={selectedIds.length === 0}
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium transition-colors border
+                  ${selectedIds.length === 0
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200"
+                    : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"}`}
+              >
+                <Trash className="w-4 h-4" />
+                Delete selected
+              </button>
+
               {confirmClear ? (
-                <div className="flex items-center gap-2 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100">
+                <div className="flex items-center gap-2 bg-red-50 px-3 py-1.5 rounded-full border border-red-100">
                   <span className="text-sm text-red-600 font-medium">Are you sure?</span>
                   <button
                     onClick={clearAllNotifications}
-                    className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700"
+                    className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full hover:bg-red-700"
                   >
                     Yes
                   </button>
                   <button
                     onClick={() => setConfirmClear(false)}
-                    className="px-3 py-1 bg-white text-slate-600 text-xs font-bold rounded border hover:bg-slate-50"
+                    className="px-3 py-1 bg-white text-slate-600 text-xs font-bold rounded-full border hover:bg-slate-50"
                   >
                     No
                   </button>
@@ -268,10 +297,10 @@ function NotificationsPage() {
                 <button
                   onClick={() => setConfirmClear(true)}
                   disabled={notifications.length === 0}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium transition-colors border
                     ${notifications.length === 0
-                      ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                      : "bg-white text-red-600 border border-red-200 hover:bg-red-50"}`}
+                      ? "bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200"
+                      : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"}`}
                 >
                   <Trash className="w-4 h-4" />
                   Clear all
@@ -298,6 +327,13 @@ function NotificationsPage() {
                     className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer group flex gap-4 items-center
                       ${!n.is_read ? "bg-blue-50/50" : ""}`}
                   >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(n.id)}
+                      onChange={() => toggleSelect(n.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-4 h-4 accent-blue-600 rounded border-slate-300"
+                    />
                     <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
                         n.type === 'alert' || n.type === 'activity_schedule_reminder' ? 'bg-red-100 text-red-600' : 
                         n.type === 'billing_note_reminder' ? 'bg-orange-100 text-orange-600' :
