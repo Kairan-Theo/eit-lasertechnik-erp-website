@@ -6,6 +6,8 @@ import { Trash, CheckCheck, AlertCircle, User, Info, Truck, Package } from "luci
 import { format } from "date-fns"
 import "./index.css"
 import { API_BASE_URL } from "./config"
+// Comment: Fix incorrect relative path; notification.jsx is in src/, components also in src/
+// Comment: Import Toaster from the shared UI components directory
 import { Toaster } from "./components/ui/toaster"
 
 function NotificationsPage() {

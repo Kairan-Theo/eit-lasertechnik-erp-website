@@ -4,6 +4,8 @@ import { Combobox } from "./combobox"
 import { CustomerCombobox } from "./customer-combobox"
 import { DateField } from "./ui/date-field"
 import { THBText } from "../utils/currency"
+// Comment: Import API base to hydrate customer fields (including Branch) by ID selection
+import { API_BASE_URL } from "../config"
 
 export function InvoiceForm({ inv }) {
   return (
@@ -95,13 +97,15 @@ export function InvoiceForm({ inv }) {
                   value={inv.customer?.company || ""}
                   options={inv.customerOptions}
                   onChange={(val) => {
-                    const match = inv.customerOptions.find(c => c.customer_name === val)
+                    // Comment: Match by display label (supports legacy customer_name and current company_name)
+                    const match = inv.customerOptions.find(c => (c.customer_name || c.company_name) === val)
                     if (match) {
                       inv.setCustomer({
                         ...(inv.customer || {}),
                         company: val,
                         taxId: match.tax_id || inv.customer?.taxId || "",
-                        branch: "",
+                        // Comment: Preserve existing branch here; hydrate branch via onSelect (ID-based)
+                        branch: inv.customer?.branch || "",
                         address: match.address || inv.customer?.address || "",
                         telephone: match.phone || inv.customer?.telephone || "",
                         fax: match.fax || match.cus_fax || inv.customer?.fax || "",
@@ -111,6 +115,51 @@ export function InvoiceForm({ inv }) {
                     } else {
                       inv.setCustomer({ ...(inv.customer || {}), company: val })
                     }
+                  }}
+                  // Comment: On actual selection (ID available), fetch canonical Customer to hydrate Branch and other fields
+                  onSelect={(payload) => {
+                    const option = typeof payload === 'object' && payload !== null 
+                      ? payload 
+                      : { label: String(payload || ""), value: payload }
+                    if (option?.value == null || option.value === "") return
+                    fetch(`${API_BASE_URL}/api/customers/${option.value}/`)
+                      .then(res => res.ok ? res.json() : null)
+                      .then(c => {
+                        if (!c) return
+                        // Comment: Populate customer top fields including Branch from DB
+                        const nextTop = {
+                          company: option.label || c.company_name || "",
+                          taxId: c.tax_id || "",
+                          branch: c.branch || "",
+                          address: c.address || "",
+                          telephone: c.phone || "",
+                          fax: c.cus_fax || "",
+                          attn: c.attn || "",
+                          email: c.email || ""
+                        }
+                        // Comment: Fallback Branch from latest Deal when Customer.branch is empty
+                        const needsBranchFallback = !String(nextTop.branch || "").trim()
+                        if (needsBranchFallback) {
+                          fetch(`${API_BASE_URL}/api/deals/`)
+                            .then(r => r.ok ? r.json() : [])
+                            .then(deals => {
+                              const latest = Array.isArray(deals)
+                                ? deals.filter(d => String(d.customer) === String(c.id)).sort((a, b) => (b.id || 0) - (a.id || 0))[0]
+                                : null
+                              const mergedTop = {
+                                ...nextTop,
+                                branch: nextTop.branch || latest?.branch || ""
+                              }
+                              inv.setCustomer({ ...(inv.customer || {}), ...mergedTop })
+                            })
+                            .catch(() => {
+                              inv.setCustomer({ ...(inv.customer || {}), ...nextTop })
+                            })
+                        } else {
+                          inv.setCustomer({ ...(inv.customer || {}), ...nextTop })
+                        }
+                      })
+                      .catch(() => {})
                   }}
                 />
              </div>

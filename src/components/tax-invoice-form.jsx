@@ -4,6 +4,8 @@ import { Combobox } from "./combobox"
 import { CustomerCombobox } from "./customer-combobox"
 import { DateField } from "./ui/date-field"
 import { THBText } from "../utils/currency"
+// Comment: Import API base to fetch canonical Customer by ID for Branch hydration
+import { API_BASE_URL } from "../config"
 
 export function TaxInvoiceForm({ ti }) {
   return (
@@ -68,7 +70,8 @@ export function TaxInvoiceForm({ ti }) {
                     company: val,
                     // Map known fields from backend Customer model
                     taxId: match.tax_id || ti.customer?.taxId || "",
-                    branch: "",
+                    // Comment: Do not set branch here; hydrate in onSelect by ID fetch to avoid stale data
+                    branch: ti.customer?.branch || "",
                     address: match.address || ti.customer?.address || "",
                     telephone: match.phone || ti.customer?.telephone || "",
                     // Map fax from 'cus_fax' if present
@@ -80,6 +83,51 @@ export function TaxInvoiceForm({ ti }) {
                 } else {
                   ti.setCustomer({ ...(ti.customer || {}), company: val })
                 }
+              }}
+              // Comment: On selection (ID-based), fetch canonical Customer and hydrate Branch and other fields
+              onSelect={(payload) => {
+                const option = typeof payload === 'object' && payload !== null 
+                  ? payload 
+                  : { label: String(payload || ""), value: payload }
+                if (option?.value == null || option.value === "") return
+                fetch(`${API_BASE_URL}/api/customers/${option.value}/`)
+                  .then(res => res.ok ? res.json() : null)
+                  .then(c => {
+                    if (!c) return
+                    // Comment: Populate customer top fields including Branch from DB
+                    const nextTop = {
+                      company: option.label || c.company_name || "",
+                      taxId: c.tax_id || "",
+                      branch: c.branch || "",
+                      address: c.address || "",
+                      telephone: c.phone || "",
+                      fax: c.cus_fax || "",
+                      attn: c.attn || "",
+                      email: c.email || ""
+                    }
+                    // Comment: Fallback Branch from latest Deal when Customer.branch is empty
+                    const needsBranchFallback = !String(nextTop.branch || "").trim()
+                    if (needsBranchFallback) {
+                      fetch(`${API_BASE_URL}/api/deals/`)
+                        .then(r => r.ok ? r.json() : [])
+                        .then(deals => {
+                          const latest = Array.isArray(deals)
+                            ? deals.filter(d => String(d.customer) === String(c.id)).sort((a, b) => (b.id || 0) - (a.id || 0))[0]
+                            : null
+                          const mergedTop = {
+                            ...nextTop,
+                            branch: nextTop.branch || latest?.branch || ""
+                          }
+                          ti.setCustomer({ ...(ti.customer || {}), ...mergedTop })
+                        })
+                        .catch(() => {
+                          ti.setCustomer({ ...(ti.customer || {}), ...nextTop })
+                        })
+                    } else {
+                      ti.setCustomer({ ...(ti.customer || {}), ...nextTop })
+                    }
+                  })
+                  .catch(() => {})
               }}
             />
           </div>

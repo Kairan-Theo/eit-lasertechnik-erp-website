@@ -347,6 +347,33 @@ class CustomerSerializer(serializers.ModelSerializer):
     
     # Comment: Accept extra_contacts list as a fallback source for cc* fields
     def to_internal_value(self, data):
+        # Comment: Normalize alternate frontend field names into canonical model fields
+        # Comment: Support "companyEmail"/"companyPhone" -> Customer.email/phone, and attn* camelCase keys
+        try:
+            if hasattr(data, 'dict'):
+                data = data.dict()
+            elif hasattr(data, 'copy'):
+                data = data.copy()
+        except Exception:
+            pass
+        # Comment: Map company-level contact aliases
+        if 'companyEmail' in data and not data.get('email'):
+            data['email'] = data.get('companyEmail')
+        if 'companyPhone' in data and not data.get('phone'):
+            data['phone'] = data.get('companyPhone')
+        # Comment: Map primary contact (attn*) aliases used by some UI panels
+        alias_map = {
+            'attnEmail': 'attn_email',
+            'attnMobile': 'attn_mobile',
+            'attnDivision': 'attn_division',
+            'attnPosition': 'attn_position',
+        }
+        for k_alias, k_real in alias_map.items():
+            if k_alias in data and not data.get(k_real):
+                data[k_real] = data.get(k_alias)
+        # Comment: Trim branch input (string) to avoid storing stray whitespace
+        if 'branch' in data and isinstance(data.get('branch'), str):
+            data['branch'] = data.get('branch').strip()
         if 'extra_contacts' in data and isinstance(data.get('extra_contacts'), str):
             import json
             try:
@@ -414,6 +441,10 @@ class CustomerSerializer(serializers.ModelSerializer):
         for k in ['attn', 'attn_division', 'attn_email', 'attn_mobile', 'attn_position']:
             if k in validated_data:
                 validated_data[k] = str(validated_data.get(k) or "").strip()
+        # Comment: Ensure email/phone/branch saved when provided (trim whitespace)
+        for k in ['email', 'phone', 'branch']:
+            if k in validated_data and isinstance(validated_data.get(k), str):
+                validated_data[k] = validated_data.get(k).strip()
         validated_data = self._derive_cc_from_extras(validated_data)
         # Comment: Normalize cc* CSV fields
         for k in ['cc', 'cc_division', 'cc_email', 'cc_mobile', 'cc_position']:
