@@ -7,6 +7,7 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db.models import Q
 from .models import Deal, UserProfile, Notification, ActivitySchedule, Quotation, Invoice, Receipt, TaxInvoice, PurchaseOrder, Project, Task, Customer, ManufacturingOrder, Product, ProductVersion, ProductType, System, Component, SystemComponent, ComponentEntry, EmailLog, EmailAttachment, DealHistory, BillingNote, EIT, CustomerPurchaseOrder, Stage, Inventory, Delivery, ProjectManagement, SubProject, PermissionControl, PDMachine, PDSystem, PDWire, PDSparepart, PDService, PDSystemChildproduct, PMProject, PMTask
 from .serializers import DealSerializer, UserSerializer, ActivityScheduleSerializer, QuotationSerializer, InvoiceSerializer, ReceiptSerializer, TaxInvoiceSerializer, PurchaseOrderSerializer, ProjectSerializer, TaskSerializer, CustomerSerializer, ManufacturingOrderSerializer, ProductSerializer, ProductVersionSerializer, ProductTypeSerializer, SystemSerializer, ComponentSerializer, SystemComponentSerializer, ComponentEntrySerializer, EmailLogSerializer, DealHistorySerializer, BillingNoteSerializer, EITSerializer, CustomerPurchaseOrderSerializer, StageSerializer, InventorySerializer, DeliverySerializer, ProjectManagementSerializer, SubProjectSerializer, PDMachineSerializer, PDSystemSerializer, PDWireSerializer, PDSparepartSerializer, PDServiceSerializer, PDSystemChildproductSerializer, PMProjectSerializer, PMTaskSerializer, _next_quotation_code
 import json
@@ -17,6 +18,8 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 import mimetypes
 from decimal import Decimal
+# Comment: Global suppression set to prevent re-generation of deleted notifications (in-memory, no migration)
+SUPPRESSED_NOTIFICATIONS = set()
 
 class ProjectManagementViewSet(viewsets.ModelViewSet):
     queryset = ProjectManagement.objects.all().order_by('-created_at')
@@ -1382,7 +1385,9 @@ def check_activity_reminders():
             customer_name = activity.deal.customer.company_name
             
         msg = f'To do: "{customer_name}": "{activity.activity_name}" is due on "{due_str}"'
-        Notification.objects.create(message=msg, type='activity_schedule_reminder')
+        # Comment: Skip if user explicitly deleted this notification previously
+        if ('activity_schedule_reminder', msg) not in SUPPRESSED_NOTIFICATIONS:
+            Notification.objects.create(message=msg, type='activity_schedule_reminder')
         activity.reminder_sent = True
         activity.save()
 
@@ -1400,7 +1405,8 @@ def check_activity_reminders():
         msg = f'Missed activity: "{customer_name}": "{activity.activity_name}"'
         # Avoid duplicates
         if not Notification.objects.filter(message=msg, type='activity_schedule_reminder').exists():
-            Notification.objects.create(message=msg, type='activity_schedule_reminder')
+            if ('activity_schedule_reminder', msg) not in SUPPRESSED_NOTIFICATIONS:
+                Notification.objects.create(message=msg, type='activity_schedule_reminder')
 
 def check_billing_note_reminders():
     """
@@ -1428,7 +1434,8 @@ def check_billing_note_reminders():
         # or we could rely on a flag if we added one to the model.
         # Since we can't easily add fields, we check for the specific message existence.
         if not Notification.objects.filter(message=msg, type='billing_note_reminder').exists():
-            Notification.objects.create(message=msg, type='billing_note_reminder')
+            if ('billing_note_reminder', msg) not in SUPPRESSED_NOTIFICATIONS:
+                Notification.objects.create(message=msg, type='billing_note_reminder')
 
 def check_manufacturing_finish_notifications():
     """
@@ -1452,7 +1459,8 @@ def check_manufacturing_finish_notifications():
         
         # Avoid duplicates
         if not Notification.objects.filter(message=msg, type='manufacturing_finish').exists():
-            Notification.objects.create(message=msg, type='manufacturing_finish')
+            if ('manufacturing_finish', msg) not in SUPPRESSED_NOTIFICATIONS:
+                Notification.objects.create(message=msg, type='manufacturing_finish')
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -1526,8 +1534,7 @@ def get_notifications(request):
             # Requires: 'manufacturing', 'inventory', or 'project_management' in allowed_apps
             ops_types = ['manufacturing_finish', 'delivery_updates', 'inventory_updates']
             ops_access = any(app in allowed_apps for app in ['manufacturing', 'inventory', 'project_management'])
-
-            from django.db.models import Q
+            
             q_filter = Q()
             restricted_types = crm_types + ops_types
             
@@ -1585,10 +1592,34 @@ def mark_notification_read(request):
 def delete_notification(request, pk):
     try:
         n = Notification.objects.get(id=pk)
+        # Comment: Record suppression key before deleting to prevent re-generation on next poll
+        try:
+            SUPPRESSED_NOTIFICATIONS.add((n.type, n.message))
+        except Exception as e:
+            print(f"DEBUG: Failed to add suppression key: {e}")
         n.delete()
         return Response({'success': True})
     except Notification.DoesNotExist:
         return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['DELETE'])
+@permission_classes([AllowAny])
+def clear_notifications(request):
+    """
+    Comment: Delete all notifications in the database.
+    Also record suppression keys for existing notifications to prevent immediate regeneration.
+    """
+    try:
+        existing = list(Notification.objects.values('type', 'message'))
+        for item in existing:
+            try:
+                SUPPRESSED_NOTIFICATIONS.add((item.get('type'), item.get('message')))
+            except Exception as e:
+                print(f"DEBUG: Failed to add suppression key for clear-all: {e}")
+        Notification.objects.all().delete()
+        return Response({'success': True, 'deleted': len(existing)})
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

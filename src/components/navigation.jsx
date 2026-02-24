@@ -203,13 +203,14 @@ export default function Navigation({ require }) {
   const [notificationsCount, setNotificationsCount] = React.useState(0)
   const [notifications, setNotifications] = React.useState([])
 
-  // Comment: When bell notifications reach 50 or more, show a one-time popup suggesting cleanup
+  // Comment: When total notifications (read + unread) reach 50 or more, show a one-time cleanup reminder
   React.useEffect(() => {
-    if (notificationsCount >= 50 && !hasShownNotifCleanupPopup) {
+    const totalNotifications = Array.isArray(notifications) ? notifications.length : 0
+    if (totalNotifications >= 50 && !hasShownNotifCleanupPopup) {
       setShowNotifCleanupPopup(true)
       setHasShownNotifCleanupPopup(true)
     }
-  }, [notificationsCount, hasShownNotifCleanupPopup])
+  }, [notifications, hasShownNotifCleanupPopup])
 
   const markAsRead = async (id, e) => {
     if (e) e.stopPropagation()
@@ -829,7 +830,7 @@ export default function Navigation({ require }) {
                   Too many notifications
                 </h3>
                 <p className="text-xs text-slate-600 mt-1">
-                  You have reached {notificationsCount} notifications. Please consider deleting old items to keep things organized and reduce confusion.
+                  You have reached {Array.isArray(notifications) ? notifications.length : 0} notifications. Please consider deleting old items to keep things organized and reduce confusion.
                 </p>
               </div>
             </div>

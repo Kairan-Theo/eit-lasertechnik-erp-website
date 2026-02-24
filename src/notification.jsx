@@ -27,20 +27,27 @@ function NotificationsPage() {
       const response = await fetch(`${API_BASE_URL}/api/notifications/`, { headers })
       if (response.ok) {
         const data = await response.json()
-        if (Array.isArray(data) && data.length > 0) {
-          setNotifications(data)
+        if (Array.isArray(data)) {
+          // Comment: Filter out IDs that were client-cleared when backend delete is unavailable
+          let deletedIds = []
+          try { deletedIds = JSON.parse(localStorage.getItem("notification_deleted_ids") || "[]") } catch {}
+          const filteredApi = data.filter(n => !deletedIds.includes(n.id))
+          setNotifications(filteredApi)
           return
         }
       }
       const raw = JSON.parse(localStorage.getItem("notifications") || "[]")
       const list = Array.isArray(raw) ? raw : []
+      // Comment: Apply client-side deleted IDs to local notifications as well
+      let deletedIds = []
+      try { deletedIds = JSON.parse(localStorage.getItem("notification_deleted_ids") || "[]") } catch {}
       const data = list.map(n => ({
         id: n.id,
         message: n.message,
         created_at: n.timestamp,
         is_read: !n.unread,
         type: n.type || "info"
-      }))
+      })).filter(n => !deletedIds.includes(n.id))
       setNotifications(data)
     } catch (error) {
       console.error("Failed to fetch notifications:", error)
@@ -51,13 +58,15 @@ function NotificationsPage() {
         list = Array.isArray(raw) ? raw : []
       } catch {}
       
+      let deletedIds = []
+      try { deletedIds = JSON.parse(localStorage.getItem("notification_deleted_ids") || "[]") } catch {}
       const data = list.map(n => ({
         id: n.id,
         message: n.message,
         created_at: n.timestamp,
         is_read: !n.unread,
         type: n.type || "info"
-      }))
+      })).filter(n => !deletedIds.includes(n.id))
       setNotifications(data)
     }
   }
@@ -181,30 +190,28 @@ function NotificationsPage() {
   }
 
   const clearAllNotifications = async () => {
-    setNotifications([])
     setConfirmClear(false)
-    
-    // Always clear local storage
     try {
-        localStorage.setItem("notifications", JSON.stringify([]))
-    } catch {}
-
-    try {
+      // Comment: Prefer backend bulk CLEAR endpoint for reliable DB deletion
       const token = localStorage.getItem("authToken")
       const headers = token ? { "Authorization": `Token ${token}` } : {}
-      
-      await Promise.all(notifications.map(n => 
-        fetch(`${API_BASE_URL}/api/notifications/${n.id}/`, {
-            method: "DELETE",
-            headers
-        })
-      ))
-      
-      window.dispatchEvent(new Event("notificationUpdated"))
+      const res = await fetch(`${API_BASE_URL}/api/notifications/clear_all/`, {
+        method: "DELETE",
+        headers
+      })
+      if (!res.ok) {
+        console.warn("Bulk clear failed on backend; fallback to local clear")
+      }
     } catch (err) {
-      console.error("Failed to clear all", err)
-      fetchNotifications()
+      console.error("Failed to call bulk clear endpoint", err)
     }
+    // Comment: Clear local mirror regardless to ensure UI consistency
+    try {
+      localStorage.setItem("notifications", JSON.stringify([]))
+      localStorage.setItem("notification_deleted_ids", JSON.stringify([]))
+    } catch {}
+    setNotifications([])
+    window.dispatchEvent(new Event("notificationUpdated"))
   }
 
   // Toggle selection for a single notification (used by checkboxes)
