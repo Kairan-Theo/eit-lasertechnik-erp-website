@@ -237,6 +237,18 @@ function ManufacturingOrderPage() {
   const toggleSelected = (id) => setOrders(orders.map(o => o.id===id ? { ...o, selected: !o.selected } : o))
   const totalQty = orders.reduce((a,b)=>a+(parseInt(b.quantity,10)||0),0)
   const totalTotalQty = orders.reduce((a,b)=>a+(parseInt(b.totalQuantity,10)||0),0)
+  // Comment: Tabs config for top navigation — replaces buttons with tab-style placement
+  const currentPath = typeof window !== "undefined" ? window.location.pathname : ""
+  const tabsNav = React.useMemo(() => ([
+    { id: "manufacturing", label: "Manufacturing Order", href: "/manufacturing.html" },
+    { id: "bom", label: "Bill of Materials", href: "/bom.html" },
+    { id: "components", label: "Components", href: "/products.html" },
+  ]), [])
+  const activeTabId = React.useMemo(() => {
+    if (currentPath.includes("bom")) return "bom"
+    if (currentPath.includes("product")) return "components"
+    return "manufacturing"
+  }, [currentPath])
   const relStart = (iso) => {
     const d = new Date(iso)
     const today = new Date()
@@ -564,54 +576,27 @@ function ManufacturingOrderPage() {
       <section className="w-full bg-gray-50">
         <div className="w-full mx-auto p-6 min-h-full">
           <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-gray-800">Manufacturing Orders</h2>
-              <button
-                className="inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
-                title="New MO"
-                onClick={() => { window.location.href = "/new-mo.html" }}
-              >
-                New MO
-              </button>
-              <div className="relative">
-                <button
-                  onClick={() => setOpenSortMenu(v => !v)}
-                  //className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-                  className="inline-flex items-center justify-center gap-2 px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                  title="Sort"
-                >
-                  <span>Sort</span>
-                  <ArrowUpDown className="w-4 h-4" />
-                  
-                </button>
-                {openSortMenu && (
-                  <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-md z-20 w-44">
-                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("default"); setOpenSortMenu(false)}}>Default</button>
-                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("start_asc"); setOpenSortMenu(false)}}>Start Date ↑</button>
-                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("start_desc"); setOpenSortMenu(false)}}>Start Date ↓</button>
-                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("quantity_asc"); setOpenSortMenu(false)}}>Quantity ↑</button>
-                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("quantity_desc"); setOpenSortMenu(false)}}>Quantity ↓</button>
-                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("product_az"); setOpenSortMenu(false)}}>Product A–Z</button>
-                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("product_za"); setOpenSortMenu(false)}}>Product Z–A</button>
-                  </div>
-                )}
+            <div className="flex items-center gap-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Manufacturing Orders</h2>
+                {/* Comment: Tab header below the page title for MO / BOM / Components */}
+                <div className="mt-2 flex border-b border-gray-200 overflow-x-auto">
+                  {tabsNav.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => { window.location.href = tab.href }}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                        activeTabId === tab.id
+                          ? "border-[#2D4485] text-[#2D4485]"
+                          : "border-transparent text-gray-500 hover:text-gray-700"
+                      }`}
+                      title={tab.label}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <button
-                //className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                title="Bills of Materials"
-                onClick={() => window.location.href = "/bom.html"}
-              >
-                Bill of Materials
-              </button>
-              <button
-                //className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                title="Components"
-                onClick={() => window.location.href = "/products.html"}
-              >
-                Components
-              </button>
             </div>
             <div className="flex items-center gap-6">
               {selectedRows.length > 0 && (
@@ -625,6 +610,35 @@ function ManufacturingOrderPage() {
                   <span className="font-medium">Delete ({selectedRows.length})</span>
                 </button>
               )}
+              {/* Comment: Place New MO and Sort next to Search for proximity */}
+              <button
+                className="inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
+                title="New MO"
+                onClick={() => { window.location.href = "/new-mo.html" }}
+              >
+                New MO
+              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setOpenSortMenu(v => !v)}
+                  className="inline-flex items-center justify-center gap-2 px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
+                  title="Sort"
+                >
+                  <span>Sort</span>
+                  <ArrowUpDown className="w-4 h-4" />
+                </button>
+                {openSortMenu && (
+                  <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-md z-20 w-44">
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("default"); setOpenSortMenu(false)}}>Default</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("start_asc"); setOpenSortMenu(false)}}>Start Date ↑</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("start_desc"); setOpenSortMenu(false)}}>Start Date ↓</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("quantity_asc"); setOpenSortMenu(false)}}>Quantity ↑</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("quantity_desc"); setOpenSortMenu(false)}}>Quantity ↓</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("product_az"); setOpenSortMenu(false)}}>Product A–Z</button>
+                    <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{setSortKey("product_za"); setOpenSortMenu(false)}}>Product Z–A</button>
+                  </div>
+                )}
+              </div>
               <div className="relative">
                 <input
                   type="text"

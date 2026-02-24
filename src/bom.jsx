@@ -185,6 +185,18 @@ function BOMPage() {
   React.useEffect(() => {
     reloadBoms()
   }, [reloadBoms])
+  // Comment: Tabs config for manufacturing navigation — consistent across MO/BOM/Components
+  const currentPath = typeof window !== "undefined" ? window.location.pathname : ""
+  const tabsNav = React.useMemo(() => ([
+    { id: "manufacturing", label: "Manufacturing Order", href: "/manufacturing.html" },
+    { id: "bom", label: "Bill of Materials", href: "/bom.html" },
+    { id: "components", label: "Components", href: "/products.html" },
+  ]), [])
+  const activeTabId = React.useMemo(() => {
+    if (currentPath.includes("bom")) return "bom"
+    if (currentPath.includes("product")) return "components"
+    return "manufacturing"
+  }, [currentPath])
 
   const updateBomTree = (bomId, newTree) => {
     const next = boms.map(b => b.id === bomId ? { ...b, productTree: newTree } : b)
@@ -318,8 +330,35 @@ function BOMPage() {
       <section className="w-full bg-gray-50">
         <div className="w-full mx-auto p-6 min-h-full">
           <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-gray-800">Bill of Materials</h2>
+            <div className="flex items-center gap-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Bill of Materials</h2>
+                {/* Comment: Tab header below the page title for MO / BOM / Components */}
+                <div className="mt-2 flex border-b border-gray-200 overflow-x-auto">
+                  {tabsNav.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => { window.location.href = tab.href }}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                        activeTabId === tab.id
+                          ? "border-[#2D4485] text-[#2D4485]"
+                          : "border-transparent text-gray-500 hover:text-gray-700"
+                      }`}
+                      title={tab.label}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                className="hidden"
+                style={{ display: "none" }}
+                aria-hidden="true"
+              />
+            </div>
+            <div className="flex items-center gap-6">
+              {/* Comment: Place New BOM next to Search for better proximity */}
               <button
                 className="inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                 title="New BOM"
@@ -327,27 +366,6 @@ function BOMPage() {
               >
                 New BOM
               </button>
-              <button
-                className="hidden"
-                style={{ display: "none" }}
-                aria-hidden="true"
-              />
-              <button
-                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                title="Manufacturing Order"
-                onClick={() => window.location.href = "/manufacturing.html"}
-              >
-                Manufacturing Orders
-              </button>
-              <button
-                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                title="Component"
-                onClick={() => window.location.href = "/products.html"}
-              >
-                Component
-              </button>
-            </div>
-            <div className="flex items-center gap-6">
               {selectedRows.length > 0 && (
                 <button
                   onClick={() => setOpenBulkDelete(true)}

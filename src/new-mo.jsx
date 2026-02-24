@@ -7,6 +7,8 @@ import { API_BASE_URL } from "./config"
 import { JobOrderTemplate } from "./components/job-order-template.jsx"
 import { DateField } from "./components/ui/date-field"
 import { Plus, Trash, ArrowLeft } from "lucide-react"
+// Comment: Import customer combobox to enable typing + select against Customer DB
+import { CustomerCombobox } from "./components/customer-combobox"
 
 function computeComponentStatusFromItems(items, inventory) {
   if (!Array.isArray(items) || !items.length) return ""
@@ -54,6 +56,8 @@ function NewMOPage() {
   const [showPoSuggestions, setShowPoSuggestions] = React.useState(false)
   const [showBomSuggestions, setShowBomSuggestions] = React.useState(false)
   const bomSuggestionRef = React.useRef(null)
+  // Comment: Customer options loaded from Customer DB for Company combobox
+  const [customerOptions, setCustomerOptions] = React.useState([])
   const [newOrder, setNewOrder] = React.useState({
     product: "",
     productNo: "",
@@ -384,6 +388,33 @@ function NewMOPage() {
     })()
   }, [])
 
+  // Comment: Load canonical customers for Company input; normalize to {label,value}
+  React.useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/customers/`)
+        if (!res.ok) {
+          setCustomerOptions([])
+          return
+        }
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          const normalized = data.map(c => ({
+            ...c,
+            label: c.company_name || c.customer_name || "",
+            value: c.id
+          }))
+          setCustomerOptions(normalized)
+        } else {
+          setCustomerOptions([])
+        }
+      } catch {
+        setCustomerOptions([])
+      }
+    }
+    loadCustomers()
+  }, [])
+
   const applyPoSuggestion = React.useCallback((val) => {
     const s = String(val || "").trim()
     let next = { ...newOrder, purchaseOrder: s }
@@ -672,7 +703,17 @@ function NewMOPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
-                  <input value={newOrder.customer} onChange={(e)=>setNewOrder({...newOrder, customer:e.target.value})} placeholder="Company name" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" />
+                  {/* Comment: Replace plain input with CustomerCombobox (typing + select from Customer DB) */}
+                  <CustomerCombobox
+                    value={newOrder.customer || ""}
+                    options={customerOptions}
+                    // Comment: onChange supports free typing; keep text as-is
+                    onChange={(val) => setNewOrder({ ...newOrder, customer: val })}
+                    // Comment: onSelect gives ID; store label and keep ID for later if needed
+                    onSelect={({ label, value }) => {
+                      setNewOrder(prev => ({ ...prev, customer: label, selectedCustomerId: value }))
+                    }}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">PO File</label>

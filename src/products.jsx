@@ -113,8 +113,42 @@ function ProductsPage() {
       <section className="w-full bg-gray-50">
         <div className="w-full mx-auto p-6 min-h-full">
           <div className="mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Component</h1>
+            <div className="flex items-center gap-6">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Component</h1>
+                {/* Comment: Tab header below the page title for MO / BOM / Components */}
+                {(() => {
+                  // Comment: Tabs config for manufacturing navigation — consistent across pages
+                  const currentPath = typeof window !== "undefined" ? window.location.pathname : ""
+                  const tabsNav = [
+                    { id: "manufacturing", label: "Manufacturing Order", href: "/manufacturing.html" },
+                    { id: "bom", label: "Bill of Materials", href: "/bom.html" },
+                    { id: "components", label: "Components", href: "/products.html" },
+                  ]
+                  const activeTabId = currentPath.includes("bom") ? "bom" : (currentPath.includes("product") ? "components" : "manufacturing")
+                  return (
+                    <div className="mt-2 flex border-b border-gray-200 overflow-x-auto">
+                      {tabsNav.map(tab => (
+                        <button
+                          key={tab.id}
+                          onClick={() => { window.location.href = tab.href }}
+                          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                            activeTabId === tab.id
+                              ? "border-[#2D4485] text-[#2D4485]"
+                              : "border-transparent text-gray-500 hover:text-gray-700"
+                          }`}
+                          title={tab.label}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              {/* Comment: Place New Component next to Search for better proximity */}
               <button
                 className="inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                 title="New component"
@@ -122,22 +156,6 @@ function ProductsPage() {
               >
                 New component
               </button>
-              <button
-                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                title="Manufacturing Orders"
-                onClick={() => window.location.href = "/manufacturing.html"}
-              >
-                Manufacturing Orders
-              </button>
-              <button
-                className="px-2 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                title="Bill of Materials"
-                onClick={() => window.location.href = "/bom.html"}
-              >
-                Bill of Materials
-              </button>
-            </div>
-            <div className="flex items-center gap-6">
               {selectedRows.length > 0 && (
                 <button
                   onClick={() => setOpenBulkDelete(true)}
