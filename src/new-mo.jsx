@@ -56,6 +56,8 @@ function NewMOPage() {
   const [showPoSuggestions, setShowPoSuggestions] = React.useState(false)
   const [showBomSuggestions, setShowBomSuggestions] = React.useState(false)
   const bomSuggestionRef = React.useRef(null)
+  // Comment: Container ref for PO suggestions to support click-outside dismissal
+  const poSuggestionRef = React.useRef(null)
   // Comment: Customer options loaded from Customer DB for Company combobox
   const [customerOptions, setCustomerOptions] = React.useState([])
   const [newOrder, setNewOrder] = React.useState({
@@ -193,6 +195,18 @@ function NewMOPage() {
       document.removeEventListener("mousedown", handleClickOutside)
     }
   }, [showBomSuggestions])
+  // Comment: When PO suggestions are open, clicking outside the PO input/suggestion panel hides them
+  React.useEffect(() => {
+    if (!showPoSuggestions) return
+    const handleClickOutside = (event) => {
+      const el = poSuggestionRef.current
+      if (el && !el.contains(event.target)) {
+        setShowPoSuggestions(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [showPoSuggestions])
   const [openCreateConfirm, setOpenCreateConfirm] = React.useState(false)
 
   React.useEffect(() => {
@@ -663,7 +677,8 @@ function NewMOPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">PO Number</label>
-                  <div className="relative">
+                  {/* Comment: Wrap PO input and suggestion list; used for click-outside detection */}
+                  <div className="relative" ref={poSuggestionRef}>
                     <input
                       value={newOrder.purchaseOrder}
                       onChange={(e)=>{ setNewOrder({...newOrder, purchaseOrder:e.target.value}); setShowPoSuggestions(true) }}
