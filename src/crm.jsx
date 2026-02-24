@@ -512,6 +512,16 @@ function CRMPage() {
     })
   }
 
+  // Comment: After highlighting a deal from search, dismiss highlight on next click anywhere
+  React.useEffect(() => {
+    if (!highlightedDealKey) return
+    const handleClickOutside = () => {
+      setHighlightedDealKey(null)
+    }
+    document.addEventListener("mousedown", handleClickOutside, { once: true })
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [highlightedDealKey])
+
   const saveEmailConfig = (cfg) => {
     setEmailConfig(cfg)
     localStorage.setItem("email_config", JSON.stringify(cfg))
