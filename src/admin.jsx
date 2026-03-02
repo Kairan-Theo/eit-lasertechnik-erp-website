@@ -388,7 +388,7 @@ function QuotationList({ list, refreshData }) {
   const handleDelete = async () => {
     const itemsToDelete = list.filter(q => selectedRows.includes(getUid(q)))
     
-    // API Deletion
+ 
     const apiItems = itemsToDelete.filter(q => q.sourceKey === 'api')
     for (const item of apiItems) {
       try {
