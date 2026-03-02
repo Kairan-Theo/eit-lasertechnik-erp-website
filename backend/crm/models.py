@@ -317,6 +317,8 @@ class Notification(models.Model):
         ('activity_schedule_reminder', 'Activity Schedule Reminder'),
         ('billing_note_reminder', 'Billing Note Reminder'),
         ('manufacturing_finish', 'Manufacturing Finish'),
+        # Comment: Emitted when a Manufacturing Order is cancelled
+        ('manufacturing_cancelled', 'Manufacturing Cancelled'),
         ('delivery_updates', 'Delivery Updates'),
         ('inventory_updates', 'Inventory Updates'),
         ('signup', 'Signup'), # For legacy compatibility if needed
@@ -668,6 +670,17 @@ def update_inventory_on_mo_finish(sender, instance, created, **kwargs):
     # Comment: Transition to Finished (case-insensitive) should add finished goods to Inventory
     new_state = (instance.state or "").strip().lower()
     old_state_norm = (old_state or "").strip().lower() if old_state is not None else None
+    # Comment: On cancellation transition, emit a cancellation notification (no stock change)
+    if new_state == 'cancelled' and old_state_norm != 'cancelled':
+        try:
+            prod_display = (instance.product or instance.product_no or "N/A").strip()
+            jo = (instance.job_order_code or "").strip()
+            cancel_msg = f'Manufacturing cancelled: {prod_display} under {jo}'
+            if not Notification.objects.filter(message=cancel_msg, type='manufacturing_cancelled').exists():
+                Notification.objects.create(message=cancel_msg, type='manufacturing_cancelled')
+        except Exception:
+            pass
+        return
     if new_state == 'finished' and old_state_norm != 'finished':
         # Comment: Prefer Product Name (product) and fall back to product_no for legacy data
         name = (instance.product or instance.product_no or "").strip()
@@ -690,6 +703,8 @@ def update_inventory_on_mo_finish(sender, instance, created, **kwargs):
             except Exception:
                 qty = 0
             inv.inventory_stock = int(inv.inventory_stock or 0) + max(qty, 0)
+            # Comment: Mark to suppress generic stock-change notification (we'll emit a specific MO-added one)
+            setattr(inv, '_skip_stock_notification', True)
             inv.save()
             # Comment: Emit notifications for MO finished and inventory increment
             try:
@@ -776,6 +791,9 @@ def inventory_pre_save_stock_check(sender, instance, **kwargs):
 
 @receiver(post_save, sender=Inventory)
 def notify_inventory_stock_change(sender, instance, created, **kwargs):
+    # Comment: If upstream explicitly marked to skip, do nothing (used by MO-finish stock add)
+    if getattr(instance, '_skip_stock_notification', False):
+        return
     old_stock = getattr(instance, '_old_stock', None)
     new_stock = instance.inventory_stock
     
