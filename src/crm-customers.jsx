@@ -560,34 +560,34 @@ export default function CRMCustomers({ deals = [], onDeleteDeals }) {
         )
       }
       case 'branch': {
-        // Comment: Prefer latest from customerIndex when available (covers admin edits)
-        const cid = deal.customerId || deal.customerId || null
+        // Prefer latest from customerIndex when available (covers admin edits)
+        const cid = deal.customerId || deal.customer || null
         const latest = cid && customerIndex[cid]
         return (latest?.branch ?? deal.branch) || "-"
       }
       case 'address': {
-        const cid = deal.customerId || deal.customerId || null
+        const cid = deal.customerId || deal.customer || null
         const latest = cid && customerIndex[cid]
         return (latest?.address ?? deal.address) || "-"
       }
       case 'email': {
-        const cid = deal.customerId || deal.customerId || null
+        const cid = deal.customerId || deal.customer || null
         const latest = cid && customerIndex[cid]
         return (latest?.email ?? deal.email) || "-"
       }
       case 'phone': {
-        const cid = deal.customerId || deal.customerId || null
+        const cid = deal.customerId || deal.customer || null
         const latest = cid && customerIndex[cid]
         return (latest?.phone ?? deal.phone) || "-"
       }
       case 'taxId': {
-        const cid = deal.customerId || deal.customerId || null
+        const cid = deal.customerId || deal.customer || null
         const latest = cid && customerIndex[cid]
         return (latest?.taxId ?? deal.taxId) || "-"
       }
       case 'contactPersons': {
         // Comment: Render numbered list: "1. Name, Position, Division, Email, Phone", then 2., 3., etc.
-        const cid = deal.customerId || deal.customerId || null
+        const cid = deal.customerId || deal.customer || null
         const latest = cid && customerIndex[cid]
         // Comment: Prefer latest attn and cc from index for deal rows
         const extrasRaw = deal.extraContacts || deal.extra_contacts || (() => {
