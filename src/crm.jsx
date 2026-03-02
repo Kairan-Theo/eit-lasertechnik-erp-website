@@ -3733,11 +3733,64 @@ function CRMPage() {
                         }
 
                         try {
+                          // Link Deal to Customer: ensure we have a customerId for the company
+                          let customerId = null
+                          try {
+                            const token = localStorage.getItem("authToken")
+                            const headersLite = token ? { "Authorization": `Token ${token}` } : {}
+                            const resList = await fetch(`${API_BASE}/customers/`, { headers: headersLite })
+                            if (resList.ok) {
+                              const list = await resList.json()
+                              const name = String(newDeal.company || "").trim().toLowerCase()
+                              const matched = Array.isArray(list) ? list.find(c => String(c.company_name || "").trim().toLowerCase() === name) : null
+                              if (matched) {
+                                customerId = matched.id
+                              } else if (name) {
+                                const headersCreate = {
+                                  "Content-Type": "application/json",
+                                  ...(token ? { "Authorization": `Token ${token}` } : {})
+                                }
+                                const payloadCustomer = {
+                                  company_name: newDeal.company || "",
+                                  branch: newDeal.branch || "",
+                                  address: newDeal.address || "",
+                                  email: newDeal.companyEmail || "",
+                                  phone: newDeal.companyPhone || "",
+                                  tax_id: newDeal.taxId || "",
+                                  attn: newDeal.contact || "",
+                                  attn_email: newDeal.email || "",
+                                  attn_mobile: newDeal.phone || "",
+                                  attn_division: newDeal.division || "",
+                                  attn_position: newDeal.position || ""
+                                }
+                                const resCreate = await fetch(`${API_BASE}/customers/`, {
+                                  method: "POST",
+                                  headers: headersCreate,
+                                  body: JSON.stringify(payloadCustomer)
+                                })
+                                if (resCreate.ok) {
+                                  const created = await resCreate.json()
+                                  customerId = created.id
+                                }
+                              }
+                            }
+                          } catch {}
+                          if (customerId) {
+                            dealData.customer = customerId
+                          }
                           const token = localStorage.getItem("authToken")
                           const headers = {
                             "Content-Type": "application/json",
                             ...(token ? { "Authorization": `Token ${token}` } : {})
                           }
+                          // Ensure all filled fields are persisted to the deal record
+                          dealData.branch = newDeal.branch || ""
+                          dealData.po_number = newDeal.poNumber || ""
+                          dealData.amount = Number(newDeal.amount) || 0
+                          dealData.currency = newDeal.currency || "฿"
+                          dealData.priority = newDeal.priority || "none"
+                          dealData.customer_name = newDeal.company || dealData.write_customer_name || ""
+                          
                           const res = await fetch(`${API_BASE}/deals/`, {
                             method: "POST",
                             headers,
