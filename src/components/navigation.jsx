@@ -65,6 +65,107 @@ export default function Navigation({ require }) {
   const [showNotifCleanupPopup, setShowNotifCleanupPopup] = React.useState(false)
   const [hasShownNotifCleanupPopup, setHasShownNotifCleanupPopup] = React.useState(false)
 
+  // Comment: Small auth popup state anchored under header buttons
+  const [isAuthPopupOpen, setIsAuthPopupOpen] = React.useState(false)
+  const [authMode, setAuthMode] = React.useState("login") // 'login' | 'signup'
+  const [popupStyle, setPopupStyle] = React.useState({ top: 0, left: 0 })
+  const authGoogleRef = React.useRef(null)
+  const loginBtnRef = React.useRef(null)
+  const signupBtnRef = React.useRef(null)
+
+  // Comment: Reuse same Google auth flow; sign-up does NOT auto-login
+  const handleGoogleCallback = async (response) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/google/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        if (authMode === "signup") {
+          // Comment: On sign-up, do NOT auto-login; show success and keep popup closed
+          toast({
+            title: "Sign up successful",
+            description: "Please log in using the Log in button.",
+          })
+          setIsAuthPopupOpen(false)
+        } else {
+          // Comment: Login flow remains unchanged
+          localStorage.setItem("isAuthenticated", "true")
+          localStorage.setItem("userRole", data.role)
+          localStorage.setItem("authToken", data.token)
+          localStorage.setItem("allowedApps", data.allowed_apps)
+          localStorage.setItem("currentUser", JSON.stringify({
+            email: data.email, role: data.role, name: data.name,
+            profile_picture: data.profile_picture, company: data.company,
+            account_type: data.account_type
+          }))
+          window.location.href = "/apps.html"
+        }
+      } else {
+        alert(data.error || "Google auth failed")
+      }
+    } catch (err) {
+      console.error("Google auth error:", err)
+      alert("Unable to connect to server")
+    }
+  }
+
+  // Comment: Load GIS script and render button when auth popup opens
+  React.useEffect(() => {
+    if (!isAuthPopupOpen) return
+    let script
+    const init = async () => {
+      const { GOOGLE_CLIENT_ID } = await import("../config.js")
+      if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID === "YOUR_GOOGLE_CLIENT_ID" || GOOGLE_CLIENT_ID.includes("placeholder")) {
+        // Dev: render simple mock button
+        if (authGoogleRef.current) {
+          const btn = document.createElement("button")
+          btn.type = "button"
+          btn.className = "w-full flex items-center justify-center gap-3 px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          const label = authMode === "signup" ? "Sign up with Google" : "Continue with Google"
+          btn.innerHTML = `<svg viewBox="0 0 24 24" class="w-5 h-5"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> ${label}`
+          btn.onclick = () => handleGoogleCallback({ credential: "mock_token_dev_user" })
+          authGoogleRef.current.innerHTML = ''
+          authGoogleRef.current.appendChild(btn)
+        }
+        return
+      }
+      // Real Google buttons
+      script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
+      if (!script) {
+        script = document.createElement("script")
+        script.src = "https://accounts.google.com/gsi/client"
+        script.async = true
+        script.defer = true
+        document.body.appendChild(script)
+      }
+      const renderButtons = () => {
+        if (window.google) {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleCallback,
+            auto_select: false,
+            cancel_on_tap_outside: true
+          })
+          if (authGoogleRef.current) {
+            const text = authMode === "signup" ? "signup_with" : "continue_with"
+            window.google.accounts.id.renderButton(authGoogleRef.current, {
+              theme: "outline", size: "large", text, shape: "rectangular", logo_alignment: "left",
+              width: authGoogleRef.current.offsetWidth || 320
+            })
+          }
+        }
+      }
+      if (script && !script.onload) script.onload = renderButtons
+      else renderButtons()
+    }
+    init()
+    return () => {
+      // Comment: popup cleanup minimal; script remains for reuse
+    }
+  }, [isAuthPopupOpen, authMode])
   React.useEffect(() => {
     if (!require) return
     try {
@@ -203,6 +304,18 @@ export default function Navigation({ require }) {
   const [notificationsCount, setNotificationsCount] = React.useState(0)
   const [notifications, setNotifications] = React.useState([])
 
+  // Comment: Sanitize notification text to hide verification codes/auth info
+  const getSafeNotifMessage = (n) => {
+    const msg = typeof n.message === "string" ? n.message : ""
+    const authLike = ['signup', 'user_registration', 'login', 'login_attempt', 'email_verification', 'verification'].includes(n.type)
+      || /verify|verification\s*code|otp|auth|login|sign\s*up|signup/i.test(msg)
+    if (authLike) {
+      if (n.type === 'signup' || n.type === 'user_registration') return "New user registration"
+      if (/verify|verification\s*code|otp/i.test(msg)) return "Email verification requested"
+      return "Account notification"
+    }
+    return msg.replace(/\b(code|otp)\s*[:\-]?\s*\d+\b/ig, "$1: *****")
+  }
   // Comment: When total notifications (read + unread) reach 50 or more, show a one-time cleanup reminder
   React.useEffect(() => {
     const totalNotifications = Array.isArray(notifications) ? notifications.length : 0
@@ -411,17 +524,11 @@ export default function Navigation({ require }) {
                   else if (n.type === 'activity_schedule_reminder') title = "Activity Reminder"
                   else if (['signup', 'user_registration'].includes(n.type)) title = "New Registration"
 
-                  toast({
-                    title: title,
-                    description: (typeof n.message === "string" && n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message,
-                  })
+                  toast({ title: title, description: getSafeNotifMessage(n) })
                 })
                 initialToastShownRef.current = true
               }
               lastNotifIdRef.current = newestId
-
-              const unread = list.reduce((acc, n) => acc + (n && n.is_read === false ? 1 : 0), 0)
-              setNotificationsCount(unread)
               setNotifications(list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
               return
             }
@@ -430,16 +537,13 @@ export default function Navigation({ require }) {
               const local = Array.isArray(raw) ? raw : []
               const unread = local.reduce((acc, n) => acc + (n && n.unread === true ? 1 : 0), 0)
               setNotificationsCount(unread)
-              setNotifications(local.map(n => {
-                const msg = typeof n.message === "string" && (n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message
-                return {
-                  id: n.id,
-                  message: msg,
-                  created_at: n.timestamp || n.created_at,
-                  is_read: !n.unread,
-                  type: n.type || "info"
-                }
-              }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+              setNotifications(local.map(n => ({
+                id: n.id,
+                message: getSafeNotifMessage({ type: n.type, message: n.message }),
+                created_at: n.timestamp || n.created_at,
+                is_read: !n.unread,
+                type: n.type || "info"
+              })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
             } catch {
               setNotificationsCount(0)
               setNotifications([])
@@ -455,16 +559,13 @@ export default function Navigation({ require }) {
               const local = Array.isArray(raw) ? raw : []
               const unread = local.reduce((acc, n) => acc + (n && (n.unread === true || n.is_read === false) ? 1 : 0), 0)
               setNotificationsCount(unread)
-              setNotifications(local.map(n => {
-                const msg = typeof n.message === "string" && (n.type === "signup") ? n.message.replace("New Google user:", "New user:") : n.message
-                return {
-                  id: n.id,
-                  message: msg,
-                  created_at: n.timestamp || n.created_at,
-                  is_read: !n.unread,
-                  type: n.type || "info"
-                }
-              }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+              setNotifications(local.map(n => ({
+                id: n.id,
+                message: getSafeNotifMessage({ type: n.type, message: n.message }),
+                created_at: n.timestamp || n.created_at,
+                is_read: !n.unread,
+                type: n.type || "info"
+              })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
             } catch {
               setNotificationsCount(0)
               setNotifications([])
@@ -579,7 +680,7 @@ export default function Navigation({ require }) {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                  <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
-                                                    {n.message}
+                                                    {getSafeNotifMessage(n)}
                                                  </p>
                                                  <p className="text-xs text-gray-400 mt-1">
                                                     {(() => {
@@ -671,12 +772,29 @@ export default function Navigation({ require }) {
               </div>
             ) : (
               <>
-                <a href="/login.html" className="rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition">
+                {/* Comment: Only Log in kept; Sign up button removed */}
+                <button
+                  type="button"
+                  ref={loginBtnRef}
+                  onClick={(e) => {
+                    setAuthMode("login")
+                    const rect = loginBtnRef.current?.getBoundingClientRect()
+                    if (rect) {
+                      // Comment: center under button and clamp within viewport
+                      const popupW = 320
+                      const margin = 12
+                      const center = rect.left + rect.width / 2
+                      const minLeft = margin + popupW / 2
+                      const maxLeft = (window.innerWidth - margin) - popupW / 2
+                      const clamped = Math.max(minLeft, Math.min(maxLeft, center))
+                      setPopupStyle({ top: rect.bottom + 8, left: clamped })
+                    }
+                    setIsAuthPopupOpen(true)
+                  }}
+                  className="rounded-full px-3 py-1.5 text-sm font-medium bg-white/10 hover:bg-white/20 transition"
+                >
                   Log in
-                </a>
-                <a href="/signup.html" className="bg-white text-[#3D56A6] hover:bg-gray-100 rounded-full px-4 py-1.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5">
-                  Sign up
-                </a>
+                </button>
               </>
             )}
           </div>
@@ -848,6 +966,29 @@ export default function Navigation({ require }) {
                 OK, I&apos;ll clean up
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comment: Small anchored auth popup showing one Google option */}
+      {isAuthPopupOpen && (
+        <div
+          className="fixed z-[96]"
+          style={{ top: popupStyle.top, left: popupStyle.left, transform: "translateX(-50%)" }}
+        >
+          <div className="bg-white rounded-lg shadow-lg border border-slate-200 w-[320px] p-3 relative">
+            <button
+              type="button"
+              className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"
+              aria-label="Close auth popup"
+              onClick={() => setIsAuthPopupOpen(false)}
+            >
+              ×
+            </button>
+            <div className="text-xs font-medium text-slate-600 mb-2">
+              {authMode === "signup" ? "Sign up with Google" : "Continue with Google"}
+            </div>
+            <div ref={authGoogleRef} className="w-full flex justify-center"></div>
           </div>
         </div>
       )}
