@@ -529,6 +529,9 @@ export default function Navigation({ require }) {
                 initialToastShownRef.current = true
               }
               lastNotifIdRef.current = newestId
+              // Comment: Update bell badge from backend payload (count unread by is_read=false)
+              const unreadCount = Array.isArray(list) ? list.reduce((acc, n) => acc + (!n.is_read ? 1 : 0), 0) : 0
+              setNotificationsCount(unreadCount)
               setNotifications(list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
               return
             }
