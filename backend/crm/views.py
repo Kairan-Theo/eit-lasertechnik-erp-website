@@ -1446,19 +1446,22 @@ def check_manufacturing_finish_notifications():
     # We'll check for "Finished" or "Completed" in either (case-insensitive usually safe, but let's guess standard terms).
     # Common statuses: 'Finished', 'Completed', 'Done'.
     
+    # Comment: Use case-insensitive matching and include common synonyms
     finished_mos = ManufacturingOrder.objects.filter(
-        state__in=['Finished', 'Completed', 'Done']
+        state__iexact='Finished'
     ) | ManufacturingOrder.objects.filter(
-        component_status__in=['Finished', 'Completed', 'Done']
+        component_status__iexact='Finished'
     )
     
     for mo in finished_mos:
-        # Format: Manufacturing finished: Product No. under Job Order Code is complete.
-        product_no = mo.product_no if mo.product_no else "N/A"
-        msg = f'Manufacturing finished: {product_no} under {mo.job_order_code} is complete.'
+        # Comment: Align message with model signal: prefer product name then product_no
+        product_display = mo.product if mo.product else (mo.product_no if mo.product_no else "N/A")
+        msg = f'Manufacturing finished: {product_display} under {mo.job_order_code} is complete.'
         
-        # Avoid duplicates
-        if not Notification.objects.filter(message=msg, type='manufacturing_finish').exists():
+        # Avoid duplicates: check exact message and also by job order code substring
+        jo = mo.job_order_code or ""
+        exists_for_jo = Notification.objects.filter(type='manufacturing_finish', message__icontains=jo).exists()
+        if not exists_for_jo and not Notification.objects.filter(message=msg, type='manufacturing_finish').exists():
             if ('manufacturing_finish', msg) not in SUPPRESSED_NOTIFICATIONS:
                 Notification.objects.create(message=msg, type='manufacturing_finish')
 
@@ -1480,7 +1483,8 @@ def get_notifications(request):
 
             # Manufacturing/Ops Group: Notifications related to production and inventory
             # Requires: 'manufacturing', 'inventory', or 'project_management' in allowed_apps
-            ops_types = ['manufacturing_finish', 'delivery_updates', 'inventory_updates']
+            # Comment: Include manufacturing_cancelled in ops notifications
+            ops_types = ['manufacturing_finish', 'manufacturing_cancelled', 'delivery_updates', 'inventory_updates']
             ops_access = any(app in allowed_apps for app in ['manufacturing', 'inventory', 'project_management'])
             
             # Manufacturing Finish should be visible to "users who has access to any apps" per user request.
@@ -1665,7 +1669,7 @@ def clear_notifications(request):
                 if 'crm' in allowed_apps or 'admin' in allowed_apps:
                     types_to_delete.update(['crm_created', 'user_registration', 'activity_schedule_reminder', 'billing_note_reminder'])
                 if 'manufacturing' in allowed_apps or 'project_management' in allowed_apps or 'admin' in allowed_apps:
-                    types_to_delete.update(['manufacturing_finish'])
+                    types_to_delete.update(['manufacturing_finish', 'manufacturing_cancelled'])
                 if 'inventory' in allowed_apps or 'admin' in allowed_apps:
                     # Comment: Treat delivery updates as inventory-related for scoping
                     types_to_delete.update(['inventory_updates', 'delivery_updates'])
