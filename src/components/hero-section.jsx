@@ -13,14 +13,7 @@ export default function HeroSection() {
             </p>
           </div>
  
-          <div className="flex flex-col sm:flex-row gap-3">
-            <a href="/apps.html" className="btn-primary">
-              Open modules
-            </a>
-            <a href="/admin.html" className="btn-outline">
-              Admin panel
-            </a>
-          </div>
+          {/* UI removed per request: hide bottom action buttons (Open modules, Admin panel) */}
         </div>
       </div>
     </section>
