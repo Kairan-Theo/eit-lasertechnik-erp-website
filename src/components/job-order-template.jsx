@@ -215,8 +215,9 @@ export function JobOrderTemplate({ order }) {
           <tr>
             <td style={{ borderTop: "2px solid black", borderRight: "2px solid black" }}>
               <div className="label-th">สินค้าที่รับงาน</div>
-              <div className="value-text">{o.productNo || ""}</div>
-              <div className="label-en">Product No.</div>
+              {/* Comment: Prefer Product Name, fall back to Product No for legacy records */}
+              <div className="value-text">{o.productName || o.product || o.productNo || ""}</div>
+              <div className="label-en">Product Name</div>
             </td>
             <td colSpan={2} style={{ borderTop: "2px solid black" }}>
               <div className="label-th">วันที่ทำชิ้นงานเสร็จ</div>
