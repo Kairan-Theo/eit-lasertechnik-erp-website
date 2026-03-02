@@ -152,8 +152,9 @@ function ManufacturingOrderPage() {
             ref: m.job_order_code,
             jobOrderCode: m.job_order_code || "",
             purchaseOrder: m.po_number || "",
-            productNo: m.product_no || "",
+            // Comment: Prefer 'product' (Product Name) and fall back to 'product_no'
             product: m.product || "",
+            productNo: m.product || m.product_no || "",
             quantity: Number(m.quantity) || 1,
             totalQuantity: Number(m.quantity) || Number(m.totalQuantity) || Number(m.quantity) || 1,
             start: m.start_date || "",
@@ -198,6 +199,8 @@ function ManufacturingOrderPage() {
           job_order_code: m.job_order_code || "",
           po_number: m.po_number || "",
           customer_name: m.customer_name || "",
+          // Comment: For editing, show Product Name in the field while keeping product_no available
+          product: m.product || "",
           product_no: m.product_no || "",
           quantity: Number(m.quantity) || 1,
           start_date: m.start_date || "",
@@ -458,10 +461,11 @@ function ManufacturingOrderPage() {
       setSelectedRows([])
     }
   }
+  // Comment: UI-only rename — keep data id 'productNo' but display 'Product Name'
   const columns = [
     { id: 'index', label: 'Index', width: 'w-16' },
     { id: 'ref', label: 'Job Order' },
-    { id: 'productNo', label: 'Product No', defaultClass: 'max-w-xs truncate' },
+    { id: 'productNo', label: 'Product Name', defaultClass: 'max-w-xs truncate' },
     { id: 'quantity', label: 'Quantity', defaultClass: 'font-mono text-sm' },
     { id: 'componentStatus', label: 'Component Status' },
     { id: 'state', label: 'State' },
@@ -507,7 +511,9 @@ function ManufacturingOrderPage() {
           </div>
         ) : <span className="text-gray-400">-</span>
       )
-      case 'productNo': return <span className="text-gray-800">{o.productNo || "-"}</span>
+      case 'productNo': 
+        // Comment: Display Product Name if present; fall back to Product No for legacy rows
+        return <span className="text-gray-800">{o.product || o.productNo || "-"}</span>
       case 'quantity': return <span className="text-gray-800">{String(parseInt(o.quantity, 10) || 0)}</span>
       case 'start': return <span className="text-gray-700">{o.start ? fmtFullDate(new Date(o.start).getTime()) : "-"}</span>
       case 'completedDate': return <span className="text-gray-700">{o.completedDate ? fmtFullDate(new Date(o.completedDate).getTime()) : "-"}</span>
@@ -889,8 +895,9 @@ function ManufacturingOrderPage() {
                     <input value={jobForm.quantity} onChange={(e)=>setJobForm({...jobForm, quantity:e.target.value})} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
                   </div>
                   <div>
-                    <div className="text-xs font-medium text-slate-500 mb-1">Product No</div>
-                    <input value={jobForm.product_no} onChange={(e)=>setJobForm({...jobForm, product_no:e.target.value})} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  {/* Comment: UI wording — rename to 'Product Name' and bind to 'product' (name) */}
+                    <div className="text-xs font-medium text-slate-500 mb-1">Product Name</div>
+                    <input value={jobForm.product} onChange={(e)=>setJobForm({...jobForm, product:e.target.value})} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
                   </div>
                   <div>
                     <div className="text-xs font-medium text-slate-500 mb-1">Completed Date</div>
@@ -982,6 +989,8 @@ function ManufacturingOrderPage() {
                         job_order_code: String(jobForm.job_order_code || "").trim(),
                         po_number: String(jobForm.po_number || "").trim(),
                         write_customer_name: String(jobForm.customer_name || "").trim(),
+                        // Comment: Persist Product Name in 'product' and keep legacy 'product_no'
+                        product: String(jobForm.product || "").trim(),
                         product_no: String(jobForm.product_no || "").trim(),
                         quantity: Number(jobForm.quantity) || 1,
                         start_date: jobForm.start_date || null,
@@ -1020,7 +1029,9 @@ function ManufacturingOrderPage() {
                           ...x,
                           jobOrderCode: updated.job_order_code || x.jobOrderCode,
                           purchaseOrder: updated.po_number || x.purchaseOrder,
-                          productNo: updated.product_no || x.productNo,
+                          // Comment: Reflect Product Name change in list view; fall back to product_no
+                          product: updated.product || x.product,
+                          productNo: updated.product || updated.product_no || x.productNo,
                           quantity: Number(updated.quantity) || x.quantity,
                           start: updated.start_date || x.start,
                           completedDate: updated.complete_date || x.completedDate,

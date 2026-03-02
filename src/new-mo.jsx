@@ -39,6 +39,8 @@ function computeComponentStatusFromItems(items, inventory) {
 
 function NewMOPage() {
   const [inventory, setInventory] = React.useState({})
+  // Comment: Component Entry names to power item description suggestions
+  const [componentNames, setComponentNames] = React.useState([])
   const [bomList, setBomList] = React.useState([])
   const [moList, setMoList] = React.useState([])
   
@@ -62,7 +64,7 @@ function NewMOPage() {
   const [customerOptions, setCustomerOptions] = React.useState([])
   const [newOrder, setNewOrder] = React.useState({
     product: "",
-    productNo: "",
+    productName: "",
     jobOrderCode: "",
     purchaseOrder: "",
     quantity: 1,
@@ -109,7 +111,8 @@ function NewMOPage() {
   }, [])
 
   const syncItemsFromBOM = React.useCallback(() => {
-    const key = String(newOrder.productNo || "").trim().toLowerCase()
+    // Comment: Use Product Name as the matching key to auto-fill item descriptions from BOM
+    const key = String(newOrder.productName || "").trim().toLowerCase()
     console.log("syncItemsFromBOM called with key:", key)
     if (!key) {
       setItems([])
@@ -164,21 +167,18 @@ function NewMOPage() {
       console.error("Error in syncItemsFromBOM:", e)
       return false
     }
-  }, [newOrder.productNo, bomList])
+  }, [newOrder.productName, bomList])
 
   React.useEffect(() => {
+    // Comment: When Product Name changes and user hasn't edited items manually, try to auto-fill from BOM
     if (isEditMode) return
-    const key = String(newOrder.productNo || "").trim()
+    const key = String(newOrder.productName || "").trim()
     if (!key) {
-      if (!itemsTouched) {
-        setItems([])
-      }
+      if (!itemsTouched) setItems([])
     } else if (!itemsTouched) {
-      // If items haven't been manually modified, try to sync from BOM if a match is found.  
-      // This will check if the entered product name matches any BOM product and populate items.
       syncItemsFromBOM()
     }
-  }, [newOrder.productNo, itemsTouched, isEditMode, syncItemsFromBOM])
+  }, [newOrder.productName, itemsTouched, isEditMode, syncItemsFromBOM])
 
 
 
@@ -286,7 +286,8 @@ function NewMOPage() {
               jobOrderCode: m.job_order_code || prev.jobOrderCode,
               purchaseOrder: m.po_number || prev.purchaseOrder,
               customer: m.customer_name || prev.customer,
-              productNo: m.product_no || prev.productNo,
+              // Comment: Prefill Product Name from 'product' (preferred) or fall back to legacy 'product_no'/'product_name'
+              productName: (m.product || m.product_no || m.product_name || prev.productName || ""),
               quantity: Number(m.quantity) || prev.quantity,
               scheduledDate: m.start_date || prev.scheduledDate,
               completedDate: m.complete_date || prev.completedDate,
@@ -325,11 +326,17 @@ function NewMOPage() {
       .then(res => res.json())
       .then(data => {
          const map = {}
+         const names = new Set()
          for (const p of (Array.isArray(data) ? data : [])) {
-           const key = String(p.component_name || "").trim().toLowerCase()
-           if (key) map[key] = (map[key] || 0) + (Number(p.quantity) || 0)
+           const raw = String(p.component_name || "").trim()
+           const key = raw.toLowerCase()
+           if (key) {
+             map[key] = (map[key] || 0) + (Number(p.quantity) || 0)
+             names.add(raw)
+           }
          }
          setInventory(map)
+         setComponentNames(Array.from(names))
       })
       .catch(console.error)
 
@@ -496,8 +503,8 @@ function NewMOPage() {
     formData.append("job_order_code", String(newOrder.jobOrderCode || "").trim())
     formData.append("po_number", String(newOrder.purchaseOrder || "").trim())
     formData.append("write_customer_name", String(newOrder.customer || "").trim())
-    formData.append("product", String(newOrder.product || "").trim())
-    formData.append("product_no", String(newOrder.productNo || "").trim())
+    // Comment: Persist selected Product Name into Django field 'product'
+    formData.append("product", String(newOrder.productName || newOrder.product || "").trim())
     formData.append("quantity", String(Number(newOrder.quantity) || 1))
     
     if (newOrder.scheduledDate) formData.append("start_date", newOrder.scheduledDate)
@@ -572,7 +579,8 @@ function NewMOPage() {
           : normalizedItems
         const orderData = {
           jobOrderCode: result.job_order_code || newOrder.jobOrderCode,
-          productNo: result.product_no || newOrder.productNo,
+          // Comment: Server returns 'product' field; map to UI productName for printing/preview
+          productName: result.product || newOrder.productName,
           customer: result.customer_name || newOrder.customer,
           start: result.start_date || newOrder.scheduledDate,
           completedDate: result.complete_date || newOrder.completedDate,
@@ -595,7 +603,7 @@ function NewMOPage() {
       } else {
         const orderData = {
           jobOrderCode: newOrder.jobOrderCode,
-          productNo: newOrder.productNo,
+          productName: newOrder.productName,
           customer: newOrder.customer,
           start: newOrder.scheduledDate,
           completedDate: newOrder.completedDate,
@@ -646,6 +654,19 @@ function NewMOPage() {
   const addItem = () => { setItems(prev => [...prev, { itemCode: String(prev.length + 1), description: "", qty: "1", unit: "Unit" }]); setItemsTouched(true) }
   const removeItem = (i) => { setItems(prev => prev.filter((_, idx) => idx !== i).map((row, idx) => ({ ...row, itemCode: row.itemCode || String(idx + 1) }))); setItemsTouched(true) }
   const updateItem = (i, field, value) => { setItems(prev => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row))); setItemsTouched(true) }
+  // Comment: Which item row is showing description suggestions
+  const [openDescIndex, setOpenDescIndex] = React.useState(null)
+  const descMenuRef = React.useRef(null)
+  React.useEffect(() => {
+    if (openDescIndex === null) return
+    const onDocClick = (e) => {
+      if (descMenuRef.current && !descMenuRef.current.contains(e.target)) {
+        setOpenDescIndex(null)
+      }
+    }
+    document.addEventListener("mousedown", onDocClick)
+    return () => document.removeEventListener("mousedown", onDocClick)
+  }, [openDescIndex])
 
   return (
     <main className="min-h-screen bg-white">
@@ -849,12 +870,14 @@ function NewMOPage() {
               <div className="text-xs font-bold text-blue-900 uppercase tracking-wide mb-2">Product</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Product No</label>
+                  {/* Comment: UI wording — show 'Product Name' instead of 'Product No' without changing data keys */}
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Product Name</label>
                   <div className="relative" ref={bomSuggestionRef}>
                     <input
-                      value={newOrder.productNo}
+                      // Comment: Bind to productName for clarity; backend keys remain unchanged
+                      value={newOrder.productName}
                       onChange={(e) => {
-                        setNewOrder({ ...newOrder, productNo: e.target.value })
+                        setNewOrder({ ...newOrder, productName: e.target.value })
                         setShowBomSuggestions(true)
                       }}
                       onFocus={() => setShowBomSuggestions(true)}
@@ -864,8 +887,8 @@ function NewMOPage() {
                       placeholder="e.g. Laser Marking Machine"
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
                     />
-                    {showBomSuggestions && String(newOrder.productNo || "").trim() && (() => {
-                      const q = String(newOrder.productNo || "").trim().toLowerCase()
+                    {showBomSuggestions && String(newOrder.productName || "").trim() && (() => {
+                      const q = String(newOrder.productName || "").trim().toLowerCase()
                       // Use bomList state
                       const candidates = Array.from(new Set(
                         (Array.isArray(bomList) ? bomList : [])
@@ -882,10 +905,32 @@ function NewMOPage() {
                               type="button"
                               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
                               onClick={() => {
-                                setNewOrder({ ...newOrder, productNo: val })
-                                setItems([])
-                                setItemsTouched(false)
+                                // Comment: Selecting Product Name sets value and auto-fills items from BOM
+                                const next = { ...newOrder, productName: val }
+                                setNewOrder(next)
+                                setItemsTouched(false) // allow auto-fill to run
                                 setShowBomSuggestions(false)
+                                // Fire immediate auto-fill without waiting for useEffect
+                                setTimeout(() => {
+                                  let pt = null
+                                  const match = (Array.isArray(bomList) ? bomList : []).find(b => String(b.product||"").trim() === val)
+                                  if (match) {
+                                    pt = typeof match.productTree === 'string' ? (() => { try { return JSON.parse(match.productTree) } catch { return null } })() : match.productTree
+                                  }
+                                  const systems = pt && !Array.isArray(pt) ? (pt.systems || []) : Array.isArray(pt) ? pt : []
+                                  const comps = systems.flatMap(s => (s.components||[]).map(c => ({
+                                    itemCode: "",
+                                    description: String(c.name || "").trim(),
+                                    qty: String(Number(c.qty) || 1),
+                                    unit: "Unit",
+                                  })))
+                                  if (comps.length) {
+                                    setItems(comps.map((x, idx) => ({ ...x, itemCode: x.itemCode || String(idx + 1) })))
+                                  } else {
+                                    // Fallback to effect-based fill if parsing failed
+                                    syncItemsFromBOM()
+                                  }
+                                }, 0)
                               }}
                             >
                               {val}
@@ -981,7 +1026,36 @@ function NewMOPage() {
                           <input value={it.itemCode} onChange={(e)=>updateItem(i, "itemCode", e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Code" />
                         </td>
                         <td className="p-3">
-                          <input value={it.description} onChange={(e)=>updateItem(i, "description", e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="Item description" />
+                          {/* Comment: Description combobox – user can type or select from Component Entries */}
+                          <div className="relative" ref={i===openDescIndex ? descMenuRef : null}>
+                            <input
+                              value={it.description}
+                              onChange={(e)=>{ updateItem(i, "description", e.target.value); setOpenDescIndex(i) }}
+                              onFocus={() => setOpenDescIndex(i)}
+                              onKeyDown={(e)=>{ if (e.key==="Escape") setOpenDescIndex(null) }}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none"
+                              placeholder="Item description"
+                            />
+                            {openDescIndex===i && (() => {
+                              const q = String(it.description || "").toLowerCase().trim()
+                              const options = (q ? componentNames.filter(n => n.toLowerCase().includes(q)) : componentNames).slice(0, 8)
+                              return options.length ? (
+                                // Comment: Render suggestions above the input so it overlays the table and is easy to select
+                                <div className="absolute left-0 right-0 bottom-full mb-1 bg-white border border-gray-200 rounded-xl shadow-2xl z-[120] ring-1 ring-black/5 max-h-56 overflow-y-auto">
+                                  {options.map((name, idx) => (
+                                    <button
+                                      key={`${name}-${idx}`}
+                                      type="button"
+                                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+                                      onClick={() => { updateItem(i, "description", name); setOpenDescIndex(null) }}
+                                    >
+                                      {name}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null
+                            })()}
+                          </div>
                         </td>
                         <td className="p-3">
                           <input value={it.qty} onChange={(e)=>updateItem(i, "qty", e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[#2D4485]/20 focus:border-[#2D4485] outline-none" placeholder="1" />
