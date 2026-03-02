@@ -1516,8 +1516,24 @@ def get_notifications(request):
         if hasattr(user, 'profile'):
             allowed_apps_str = user.profile.allowed_apps
         
-        # Parse allowed apps (comma-separated string)
-        allowed_apps = [app.strip() for app in allowed_apps_str.split(',') if app.strip()]
+        # Parse allowed apps (comma-separated string) and normalize to lowercase tokens
+        # Comment: Normalize labels like "Project Management" -> "project_management"
+        raw_tokens = [app.strip() for app in allowed_apps_str.split(',') if app.strip()]
+        norm_map = {
+            'manufacturing': 'manufacturing',
+            'inventory': 'inventory',
+            'crm': 'crm',
+            'admin': 'admin',
+            'permission': 'admin',          # Treat "Permission" as admin-level for visibility rules
+            'project management': 'project_management',
+            'project_management': 'project_management',
+            'all': 'all',
+        }
+        allowed_apps = []
+        for t in raw_tokens:
+            key = t.lower()
+            key = norm_map.get(key, key.replace(' ', '_'))
+            allowed_apps.append(key)
         
         # If 'all' is in allowed_apps, show everything
         if 'all' in allowed_apps:
@@ -1533,7 +1549,8 @@ def get_notifications(request):
             # Manufacturing/Ops Group: Notifications related to production and inventory
             # Requires: 'manufacturing', 'inventory', or 'project_management' in allowed_apps
             ops_types = ['manufacturing_finish', 'delivery_updates', 'inventory_updates']
-            ops_access = any(app in allowed_apps for app in ['manufacturing', 'inventory', 'project_management'])
+            # Comment: Allow ops notifications for any of the ops apps
+            ops_access = any(app in allowed_apps for app in ['manufacturing', 'inventory', 'project_management', 'admin'])
             
             q_filter = Q()
             restricted_types = crm_types + ops_types
@@ -1603,21 +1620,68 @@ def delete_notification(request, pk):
         return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['DELETE'])
-@permission_classes([AllowAny])
+# Comment: Require authentication so we can scope deletion to the caller's allowed apps
+@permission_classes([IsAuthenticated])
 def clear_notifications(request):
     """
-    Comment: Delete all notifications in the database.
-    Also record suppression keys for existing notifications to prevent immediate regeneration.
+    Comment: Delete notifications scoped to the caller's allowed apps.
+    - If caller has 'all' (or is admin/permission-control), delete EVERYTHING.
+    - Otherwise, delete only notifications that belong to the caller's app domains.
+    Also record suppression keys for the deleted notifications to prevent immediate regeneration.
     """
     try:
-        existing = list(Notification.objects.values('type', 'message'))
+        user = request.user
+        # Admins and permission-control can clear everything
+        is_pc = hasattr(user, 'profile') and user.profile.account_type == 'permission_control'
+        if user.is_staff or is_pc:
+            qs = Notification.objects.all()
+        else:
+            # Parse and normalize allowed apps
+            allowed_apps_str = ""
+            if hasattr(user, 'profile'):
+                allowed_apps_str = user.profile.allowed_apps or ""
+            raw_tokens = [app.strip() for app in allowed_apps_str.split(',') if app.strip()]
+            norm_map = {
+                'manufacturing': 'manufacturing',
+                'inventory': 'inventory',
+                'crm': 'crm',
+                'admin': 'admin',
+                'permission': 'admin',
+                'project management': 'project_management',
+                'project_management': 'project_management',
+                'all': 'all',
+            }
+            allowed_apps = []
+            for t in raw_tokens:
+                key = t.lower()
+                key = norm_map.get(key, key.replace(' ', '_'))
+                allowed_apps.append(key)
+            # If user has 'all', clear everything
+            if 'all' in allowed_apps:
+                qs = Notification.objects.all()
+            else:
+                # Map app domains to notification types for deletion
+                types_to_delete = set()
+                if 'crm' in allowed_apps or 'admin' in allowed_apps:
+                    types_to_delete.update(['crm_created', 'user_registration', 'activity_schedule_reminder', 'billing_note_reminder'])
+                if 'manufacturing' in allowed_apps or 'project_management' in allowed_apps or 'admin' in allowed_apps:
+                    types_to_delete.update(['manufacturing_finish'])
+                if 'inventory' in allowed_apps or 'admin' in allowed_apps:
+                    # Comment: Treat delivery updates as inventory-related for scoping
+                    types_to_delete.update(['inventory_updates', 'delivery_updates'])
+                # Always allow clearing unrestricted/general types to avoid clutter, if desired:
+                # (Leave them intact unless explicitly included)
+                qs = Notification.objects.filter(type__in=list(types_to_delete))
+
+        existing = list(qs.values('type', 'message'))
         for item in existing:
             try:
                 SUPPRESSED_NOTIFICATIONS.add((item.get('type'), item.get('message')))
             except Exception as e:
                 print(f"DEBUG: Failed to add suppression key for clear-all: {e}")
-        Notification.objects.all().delete()
-        return Response({'success': True, 'deleted': len(existing)})
+        deleted_count = qs.count()
+        qs.delete()
+        return Response({'success': True, 'deleted': deleted_count})
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

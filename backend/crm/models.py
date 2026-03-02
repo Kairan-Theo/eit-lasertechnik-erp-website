@@ -665,19 +665,47 @@ def mo_pre_save_inventory_check(sender, instance, **kwargs):
 @receiver(post_save, sender=ManufacturingOrder)
 def update_inventory_on_mo_finish(sender, instance, created, **kwargs):
     old_state = getattr(instance, '_old_state', None)
-    # Check if transitioning to 'Finished'
-    # Note: Using case-insensitive check if needed, but 'Finished' is the standard per context
-    if instance.state == 'Finished' and old_state != 'Finished':
-        if instance.product_no:
-            # Import/Add to Inventory
-            # Use get_or_create to handle existence
-            inv, _ = Inventory.objects.get_or_create(
-                inventory_product_name=instance.product_no,
-                defaults={'inventory_stock': 0}
-            )
-            # Add the quantity from Manufacturing Order
-            inv.inventory_stock += int(instance.quantity or 0)
+    # Comment: Transition to Finished (case-insensitive) should add finished goods to Inventory
+    new_state = (instance.state or "").strip().lower()
+    old_state_norm = (old_state or "").strip().lower() if old_state is not None else None
+    if new_state == 'finished' and old_state_norm != 'finished':
+        # Comment: Prefer Product Name (product) and fall back to product_no for legacy data
+        name = (instance.product or instance.product_no or "").strip()
+        if name:
+            # Normalize name to avoid duplicate entries with different casing
+            # We treat inventory_product_name as case-sensitive but write a consistent value
+            try:
+                inv, created_inv = Inventory.objects.get_or_create(
+                    inventory_product_name=name,
+                    defaults={'inventory_stock': 0}
+                )
+            except Exception:
+                # Comment: As a safety, retry with case-insensitive match to merge accidental duplicates
+                inv = Inventory.objects.filter(inventory_product_name__iexact=name).first()
+                if inv is None:
+                    inv = Inventory.objects.create(inventory_product_name=name, inventory_stock=0)
+            qty = 0
+            try:
+                qty = int(instance.quantity or 0)
+            except Exception:
+                qty = 0
+            inv.inventory_stock = int(inv.inventory_stock or 0) + max(qty, 0)
             inv.save()
+            # Comment: Emit notifications for MO finished and inventory increment
+            try:
+                prod_display = name
+                jo = (instance.job_order_code or "").strip()
+                # Manufacturing finished notification (guard against duplicates)
+                mfg_msg = f'Manufacturing finished: {prod_display} under {jo} is complete.'
+                if not Notification.objects.filter(message=mfg_msg, type='manufacturing_finish').exists():
+                    Notification.objects.create(message=mfg_msg, type='manufacturing_finish')
+                # Inventory update notification with quantity
+                inv_msg = f'Inventory: Added {qty} of "{prod_display}" from MO {jo}'
+                if not Notification.objects.filter(message=inv_msg, type='inventory_updates').exists():
+                    Notification.objects.create(message=inv_msg, type='inventory_updates')
+            except Exception:
+                # Silently ignore notification failures to not block save
+                pass
 
 class Delivery(models.Model):
     STATUS_CHOICES = [
