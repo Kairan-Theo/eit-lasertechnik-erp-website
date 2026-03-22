@@ -92,7 +92,7 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
           localStorage.removeItem("userRole")
           localStorage.removeItem("currentUser")
           localStorage.removeItem("authToken")
-          window.location.href = "/"
+          window.location.href = "index.html"
           return
       }
 
@@ -207,7 +207,7 @@ export default function CRMActivities({ deals = [], onDeleteActivity, onActivity
           localStorage.removeItem("userRole")
           localStorage.removeItem("currentUser")
           localStorage.removeItem("authToken")
-          window.location.href = "/"
+          window.location.href = "index.html"
           return
       }
 

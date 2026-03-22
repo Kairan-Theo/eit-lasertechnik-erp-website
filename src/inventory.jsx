@@ -984,7 +984,7 @@ function InventoryTable({ inv }) {
     switch (col.id) {
       case "sku":
         return (
-          <a href={`/inventory-detail.html?sku=${encodeURIComponent(p.sku)}`} className="text-[#3D56A6] hover:underline font-medium">
+          <a href={`inventory-detail.html?sku=${encodeURIComponent(p.sku)}`} className="text-[#3D56A6] hover:underline font-medium">
             {p.sku}
           </a>
         )

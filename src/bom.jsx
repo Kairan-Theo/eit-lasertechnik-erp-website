@@ -188,9 +188,9 @@ function BOMPage() {
   // Comment: Tabs config for manufacturing navigation — consistent across MO/BOM/Components
   const currentPath = typeof window !== "undefined" ? window.location.pathname : ""
   const tabsNav = React.useMemo(() => ([
-    { id: "manufacturing", label: "Manufacturing Order", href: "/manufacturing.html" },
-    { id: "bom", label: "Bill of Materials", href: "/bom.html" },
-    { id: "components", label: "Components", href: "/products.html" },
+    { id: "manufacturing", label: "Manufacturing Order", href: "manufacturing.html" },
+    { id: "bom", label: "Bill of Materials", href: "bom.html" },
+    { id: "components", label: "Components", href: "products.html" },
   ]), [])
   const activeTabId = React.useMemo(() => {
     if (currentPath.includes("bom")) return "bom"

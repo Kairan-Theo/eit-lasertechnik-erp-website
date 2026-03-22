@@ -11,7 +11,14 @@ export default [
         console: "readonly",
         fetch: "readonly",
         setTimeout: "readonly",
+        setInterval: "readonly",
+        clearTimeout: "readonly",
+        clearInterval: "readonly",
         URLSearchParams: "readonly",
+        URL: "readonly",
+        FormData: "readonly",
+        Event: "readonly",
+        AbortController: "readonly",
         localStorage: "readonly",
         confirm: "readonly",
         alert: "readonly",
@@ -25,7 +32,7 @@ export default [
       }
     },
     rules: {
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_|^[A-Z]" }],
       "no-undef": "error",
       "no-console": ["warn", { allow: ["warn", "error"] }]
     }

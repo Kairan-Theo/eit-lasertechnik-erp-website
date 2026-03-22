@@ -6,7 +6,7 @@ export default function CTABanner() {
           Internal system — for EIT Lasertechnik use only.
         </h2>
         <div className="flex gap-3">
-          <a href="/apps.html" className="btn-primary">Open modules</a>
+          <a href="apps.html" className="btn-primary">Open modules</a>
           <a href="mailto:it-support@eit.local" className="btn-outline">Contact support</a>
         </div>
       </div>    

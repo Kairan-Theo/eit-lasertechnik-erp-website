@@ -121,9 +121,9 @@ function ProductsPage() {
                   // Comment: Tabs config for manufacturing navigation — consistent across pages
                   const currentPath = typeof window !== "undefined" ? window.location.pathname : ""
                   const tabsNav = [
-                    { id: "manufacturing", label: "Manufacturing Order", href: "/manufacturing.html" },
-                    { id: "bom", label: "Bill of Materials", href: "/bom.html" },
-                    { id: "components", label: "Components", href: "/products.html" },
+                    { id: "manufacturing", label: "Manufacturing Order", href: "manufacturing.html" },
+                    { id: "bom", label: "Bill of Materials", href: "bom.html" },
+                    { id: "components", label: "Components", href: "products.html" },
                   ]
                   const activeTabId = currentPath.includes("bom") ? "bom" : (currentPath.includes("product") ? "components" : "manufacturing")
                   return (

@@ -9,7 +9,7 @@ const apps = [
     icon: Factory,
     color: "text-orange-600",
     bgColor: "bg-orange-50",
-    href: "/manufacturing.html"
+    href: "manufacturing.html"
   },
   {
     name: "Inventory",
@@ -17,7 +17,7 @@ const apps = [
     icon: Package,
     color: "text-emerald-600",
     bgColor: "bg-emerald-50",
-    href: "/inventory.html"
+    href: "inventory.html"
   },
   {
     name: "CRM",
@@ -25,7 +25,7 @@ const apps = [
     icon: Users,
     color: "text-blue-600",
     bgColor: "bg-blue-50",
-    href: "/crm.html"
+    href: "crm.html"
   },
   {
     name: "Project Management",
@@ -33,7 +33,7 @@ const apps = [
     icon: Briefcase,
     color: "text-purple-600",
     bgColor: "bg-purple-50",
-    href: "/project.html"
+    href: "project.html"
   },
   {
     name: "Admin",
@@ -41,7 +41,7 @@ const apps = [
     icon: Settings,
     color: "text-slate-600",
     bgColor: "bg-slate-50",
-    href: "/admin.html"
+    href: "admin.html"
   },
 ]
 

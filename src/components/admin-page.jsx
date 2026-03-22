@@ -305,7 +305,7 @@ function QuotationList({ list, refreshData }) {
             </button>
           )}
         </div>
-        <a href="/quotation.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+        <a href="quotation.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
           New Quotation
         </a>
@@ -345,7 +345,7 @@ function QuotationList({ list, refreshData }) {
                   </td>
                   <td className="p-3 text-gray-500">{i + 1}</td>
                   <td className="p-3 font-medium">
-                    <a href={`/quotation.html?key=${encodeURIComponent(q.sourceKey)}&index=${q.sourceIndex}`} className="text-[#2D4485] hover:underline">
+                    <a href={`quotation.html?key=${encodeURIComponent(q.sourceKey)}&index=${q.sourceIndex}`} className="text-[#2D4485] hover:underline">
                       {q.details?.number}
                     </a>
                   </td>
@@ -398,7 +398,7 @@ function TaxInvoiceList({ list }) {
     <div className="bg-white rounded-xl border shadow-sm p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-semibold text-gray-900">Tax Invoices</h2>
-        <a href="/receipt.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+        <a href="receipt.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
           New Tax Invoice
         </a>
@@ -516,7 +516,7 @@ function BillingNoteList({ list, refreshData }) {
             </button>
           )}
         </div>
-        <a href="/billing-note.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
+        <a href="billing-note.html" className="flex items-center gap-2 px-4 py-2 bg-[#2D4485] text-white rounded-lg hover:bg-[#1e2f5c] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
           New Billing Note
         </a>
@@ -566,7 +566,7 @@ function BillingNoteList({ list, refreshData }) {
                   </td>
                   <td className="p-3 text-gray-500">{i + 1}</td>
                   <td className="p-3 font-medium">
-                    <a href={`/billing-note.html?key=${encodeURIComponent(bn.sourceKey)}&index=${bn.sourceIndex}`} className="text-[#2D4485] hover:underline">
+                    <a href={`billing-note.html?key=${encodeURIComponent(bn.sourceKey)}&index=${bn.sourceIndex}`} className="text-[#2D4485] hover:underline">
                       {bn.details?.number}
                     </a>
                   </td>
@@ -778,7 +778,7 @@ export function PermissionsManager() {
           alert("Session expired. Please log in again.")
           localStorage.removeItem("isAuthenticated")
           localStorage.removeItem("authToken")
-          window.location.href = "/login.html"
+          window.location.href = "login.html"
           return
         }
         const txt = await r.text()

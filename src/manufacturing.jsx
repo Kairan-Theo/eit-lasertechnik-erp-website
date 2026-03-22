@@ -243,9 +243,9 @@ function ManufacturingOrderPage() {
   // Comment: Tabs config for top navigation — replaces buttons with tab-style placement
   const currentPath = typeof window !== "undefined" ? window.location.pathname : ""
   const tabsNav = React.useMemo(() => ([
-    { id: "manufacturing", label: "Manufacturing Order", href: "/manufacturing.html" },
-    { id: "bom", label: "Bill of Materials", href: "/bom.html" },
-    { id: "components", label: "Components", href: "/products.html" },
+    { id: "manufacturing", label: "Manufacturing Order", href: "manufacturing.html" },
+    { id: "bom", label: "Bill of Materials", href: "bom.html" },
+    { id: "components", label: "Components", href: "products.html" },
   ]), [])
   const activeTabId = React.useMemo(() => {
     if (currentPath.includes("bom")) return "bom"
@@ -490,7 +490,7 @@ function ManufacturingOrderPage() {
       case 'ref': return (
         <button
           className="text-[#3D56A6] hover:underline font-medium"
-          onClick={() => { window.location.href = `/new-mo.html?mfgId=${o.id}` }}
+          onClick={() => { window.location.href = `new-mo.html?mfgId=${o.id}` }}
         >
           {o.jobOrderCode || "-"}
         </button>
@@ -620,7 +620,7 @@ function ManufacturingOrderPage() {
               <button
                 className="inline-flex items-center justify-center px-6 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]"
                 title="New MO"
-                onClick={() => { window.location.href = "/new-mo.html" }}
+                onClick={() => { window.location.href = "new-mo.html" }}
               >
                 New MO
               </button>

@@ -592,7 +592,7 @@ function BillingNotePage() {
 
       if (response.ok) {
           alert("Billing Note saved successfully!")
-          window.location.href = "/admin.html"
+          window.location.href = "admin.html"
       } else {
           const errData = await response.json()
           console.error("Error saving billing note:", errData)
@@ -611,7 +611,7 @@ function BillingNotePage() {
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => window.location.href = "/admin.html"}
+              onClick={() => window.location.href = "admin.html"}
               className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
               title="Back to List"
             >
@@ -977,7 +977,7 @@ function BillingNotePage() {
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-3">
-          <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href="/admin.html"}>Cancel</button>
+          <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href="admin.html"}>Cancel</button>
           <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={() => setOpenCreateConfirm(true)}>Create BN Form</button>
         </div>
 
@@ -995,7 +995,7 @@ function BillingNotePage() {
               <div className="p-4 grid grid-cols-3 gap-4">
                 <button
                   className="w-full px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                  onClick={() => { setOpenCreateConfirm(false); window.location.href = "/admin.html" }}
+                  onClick={() => { setOpenCreateConfirm(false); window.location.href = "admin.html" }}
                 >
                   Discard
                 </button>

@@ -85,7 +85,7 @@ function InventoryDetailPage() {
         <Navigation />
         <div className="max-w-5xl mx-auto px-6 py-12">
           <h1 className="text-2xl font-semibold text-gray-900 mb-2">Item Not Found</h1>
-          <a href="/inventory.html" className="text-sm text-blue-600 hover:underline">← Back to Inventory</a>
+          <a href="inventory.html" className="text-sm text-blue-600 hover:underline">← Back to Inventory</a>
         </div>
       </main>
     )
@@ -202,7 +202,7 @@ function InventoryDetailPage() {
       <div className="max-w-5xl mx-auto px-6 py-12">
         {/* Top Navigation */}
         <div className="mb-4">
-          <a href="/inventory.html" className="text-sm text-gray-400 hover:text-gray-900 transition-colors">
+          <a href="inventory.html" className="text-sm text-gray-400 hover:text-gray-900 transition-colors">
             ← Back
           </a>
         </div>

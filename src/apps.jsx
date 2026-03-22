@@ -16,7 +16,7 @@ function AppsPage() {
       try {
         const isAuthenticated = localStorage.getItem("isAuthenticated") === "true"
         if (!isAuthenticated) {
-          window.location.href = "/"
+          window.location.href = "index.html"
           return
         }
 
@@ -94,7 +94,7 @@ function AppsPage() {
               >
                 Refresh Permissions
               </button>
-              <a href="/" className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition">
+              <a href="index.html" className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition">
                 Return to Dashboard
               </a>
             </div>

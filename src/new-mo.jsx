@@ -629,7 +629,7 @@ function NewMOPage() {
       if (msg.includes("Invalid token") || msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
         alert("Your session has expired. Please log in again.")
         localStorage.removeItem("authToken")
-        window.location.href = "/login.html"
+        window.location.href = "login.html"
         return null
       }
       alert("Failed to create Manufacturing Order: " + msg)
@@ -647,7 +647,7 @@ function NewMOPage() {
     const orderData = await createOrderData()
     if (orderData) {
       setOpenCreateConfirm(false)
-      window.location.href = "/manufacturing.html"
+      window.location.href = "manufacturing.html"
     }
   }
 
@@ -677,7 +677,7 @@ function NewMOPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <button
-                  onClick={() => window.location.href = "/manufacturing.html"}
+                  onClick={() => window.location.href = "manufacturing.html"}
                   className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
                   title="Back to List"
                 >
@@ -1087,7 +1087,7 @@ function NewMOPage() {
             </div>
           </div>
           <div className="mt-6 flex items-center justify-end gap-3">
-            <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href="/manufacturing.html"}>Cancel</button>
+            <button className="px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10" onClick={() => window.location.href="manufacturing.html"}>Cancel</button>
             <button className="px-4 py-2 rounded-md bg-[#2D4485] text-white hover:bg-[#3D56A6]" onClick={() => setOpenCreateConfirm(true)}>Create MO Form</button>
           </div>
         </div>
@@ -1106,7 +1106,7 @@ function NewMOPage() {
               <div className="p-4 grid grid-cols-3 gap-4">
                 <button
                   className="w-full px-4 py-2 rounded-md border border-[#2D4485] text-[#2D4485] hover:bg-[#2D4485]/10 min-w-[140px]"
-                  onClick={() => { setOpenCreateConfirm(false); window.location.href = "/manufacturing.html" }}
+                  onClick={() => { setOpenCreateConfirm(false); window.location.href = "manufacturing.html" }}
                 >
                   Discard
                 </button>
